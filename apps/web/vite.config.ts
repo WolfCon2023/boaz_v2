@@ -5,6 +5,13 @@ import { fileURLToPath, URL } from 'node:url'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  preview: {
+    host: true,
+    // Allow Railway preview hostnames
+    allowedHosts: [
+      '.up.railway.app',
+    ],
+  },
   server: {
     proxy: {
       '/api': {
