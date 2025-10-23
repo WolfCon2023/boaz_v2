@@ -1,6 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom'
 import App from '@/App'
-import Home from '@/pages/Home'
+// Home removed from initial routes; Dashboard is the index
 import NotFound from '@/pages/NotFound'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'

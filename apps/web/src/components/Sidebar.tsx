@@ -1,4 +1,4 @@
-import { Link, NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { Home, Grid3X3, Store, Settings } from 'lucide-react'
 
 const linkBase = 'flex items-center gap-2 px-3 py-2 rounded-xl text-sm hover:bg-[color:var(--color-muted)]'

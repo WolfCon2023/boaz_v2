@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Bell, Search, User2 } from 'lucide-react'
+import { Bell, User2 } from 'lucide-react'
 
 export function Topbar() {
   return (
