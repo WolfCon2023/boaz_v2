@@ -1,0 +1,32 @@
+{
+  "name": "boaz_v2",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:api": "npm run dev -w apps/api",
+    "dev": "npm run dev:web",
+    "build:web": "npm run build -w apps/web",
+    "build:api": "npm run build -w apps/api",
+    "build:shared": "npm run build -w packages/shared",
+    "build:ui": "npm run build -w packages/ui",
+    "dev:shared": "npm run dev -w packages/shared",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "private": "true",
+  "workspaces": [
+    "apps/web",
+    "apps/api",
+    "packages/shared",
+    "packages/ui"
+  ],
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  }
+}

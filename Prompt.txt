@@ -1,0 +1,1 @@
+Let's begin creating Mongo DB queries for the merics on the dashboard first. I will need your complete assistance onm how to set it up in the Mongo DB. I have pgAdmin v4 installed. I will need to set the service up in Railway as well, so the DB connection will be established. Then once that's done, we can begin developing the first application (CRM).  

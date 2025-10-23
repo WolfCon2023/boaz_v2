@@ -1,0 +1,103 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/typography";
+@plugin "@tailwindcss/aspect-ratio";
+@plugin "@tailwindcss/container-queries";
+@plugin "tailwindcss-animate";
+
+/* Design tokens and theming */
+:root, html[data-theme="dark"] {
+  --bg: #0B0F1A;
+  --panel: #0F1628;
+  --muted: #1A2236;
+  --text: #E6E9F2;
+  --text-muted: #A9B3CC; /* slightly darker for contrast on dark bg */
+  --primary: #4F8BFF;
+  --primary-600: #3F74D1;
+  --primary-700: #2F5CA6;
+  --success: #17C964;
+  --warning: #F5A524;
+  --danger: #F31260;
+  --info: #06B6D4;
+  --border: #2A3A5B; /* slightly stronger for contrast */
+  --accent: #7C3AED;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,.15);
+  --shadow-2: 0 6px 24px rgba(0,0,0,.22);
+}
+
+html[data-theme="light"] {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --muted: #F5F7FB;
+  --text: #0B0F1A;
+  --text-muted: #51607F;
+  --primary: #4F8BFF;
+  --primary-600: #3F74D1;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #06B6D4;
+  --border: #E2E8F0;
+  --accent: #7C3AED;
+}
+
+@theme {
+  /* Map CSS vars to Tailwind tokens */
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-muted: var(--muted);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+
+  /* Spacing aliases */
+  --spacing-xxs: 2px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+}
+
+/* Base app background/text */
+html, body, #root {
+  height: 100%;
+}
+body { 
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Ensure base typography is visible on dark backgrounds */
+@layer base {
+  h1,h2,h3,h4,h5,h6 { color: var(--text); }
+  p, small, span, a, li, div { color: inherit; }
+}
+
+/* Visually hidden but accessible text */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Skip link visible on focus */
+.skip-link{position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden}
+.skip-link:focus{left:1rem;top:1rem;width:auto;height:auto;padding:0.5rem 0.75rem;background:var(--primary);color:white;border-radius:0.5rem;z-index:50}
