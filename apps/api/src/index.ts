@@ -1,7 +1,8 @@
 import express from 'express'
 import cors from 'cors'
 import { env } from './env'
-import { createHealthResponse } from '@boaz/shared'
+// Local health response to avoid depending on workspace packages during deployment
+const createHealthResponse = (service: string = 'api') => ({ ok: true, service, timestamp: Date.now() })
 import { authRouter } from './auth/routes'
 import { getDb } from './db'
 
