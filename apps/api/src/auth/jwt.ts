@@ -1,6 +1,10 @@
 import jwt from 'jsonwebtoken'
-import type { AuthTokenPayload } from '@boaz/shared'
-import { env } from '../env'
+import { env } from '../env.js'
+
+export type AuthTokenPayload = {
+  sub: string
+  email: string
+}
 
 export function signToken(payload: AuthTokenPayload): string {
   return jwt.sign(payload, env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '7d' })

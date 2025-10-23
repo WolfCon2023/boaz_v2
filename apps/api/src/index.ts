@@ -1,10 +1,10 @@
 import express from 'express'
 import cors from 'cors'
-import { env } from './env'
+import { env } from './env.js'
 // Local health response to avoid depending on workspace packages during deployment
 const createHealthResponse = (service: string = 'api') => ({ ok: true, service, timestamp: Date.now() })
-import { authRouter } from './auth/routes'
-import { getDb } from './db'
+import { authRouter } from './auth/routes.js'
+import { getDb } from './db.js'
 
 const app = express()
 app.use(cors({ origin: env.ORIGIN, credentials: true }))

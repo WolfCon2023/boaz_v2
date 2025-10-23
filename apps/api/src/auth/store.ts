@@ -1,6 +1,12 @@
 import bcrypt from 'bcryptjs'
 import { randomUUID } from 'node:crypto'
-import type { User } from '@boaz/shared'
+
+export type User = {
+  id: string
+  email: string
+  name?: string
+  createdAt: number
+}
 
 type StoredUser = User & { passwordHash: string }
 
