@@ -15,7 +15,7 @@ export default function CRMContacts() {
   const qc = useQueryClient()
   const q = ''
   const create = useMutation({
-    mutationFn: async (payload: { name: string; email?: string; company?: string }) => {
+    mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean }) => {
       const res = await fetch('/api/crm/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       return res.json()
     },

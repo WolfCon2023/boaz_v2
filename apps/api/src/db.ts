@@ -1,4 +1,4 @@
-import { MongoClient, Db } from 'mongodb'
+import { MongoClient, Db, ObjectId, FindOneAndUpdateOptions } from 'mongodb'
 import { env } from './env.js'
 
 let client: MongoClient | null = null
@@ -25,7 +25,7 @@ export async function getNextSequence(key: string): Promise<number> {
   const res = await database.collection('counters').findOneAndUpdate(
     { _id: key },
     { $inc: { seq: 1 } },
-    { upsert: true, returnDocument: 'after' }
+    { upsert: true, returnDocument: 'after' } as FindOneAndUpdateOptions
   )
   // Initialize start if newly created
   if (res.value && typeof res.value.seq === 'number') {
@@ -34,12 +34,12 @@ export async function getNextSequence(key: string): Promise<number> {
   const doc = await database.collection('counters').findOneAndUpdate(
     { _id: key },
     { $setOnInsert: { seq: 998800 } },
-    { upsert: true, returnDocument: 'after' }
+    { upsert: true, returnDocument: 'after' } as FindOneAndUpdateOptions
   )
   const next = await database.collection('counters').findOneAndUpdate(
     { _id: key },
     { $inc: { seq: 1 } },
-    { returnDocument: 'after' }
+    { returnDocument: 'after' } as FindOneAndUpdateOptions
   )
   return (next.value?.seq as number) ?? 998801
 }
