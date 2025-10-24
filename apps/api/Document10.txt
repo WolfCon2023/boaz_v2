@@ -1,0 +1,22 @@
+npm --prefix apps/api install --no-audit --no-fund && npm --prefix apps/api run build
+
+npm warn config production Use `--omit=dev` instead.
+
+
+added 119 packages in 5s
+
+npm warn config production Use `--omit=dev` instead.
+
+
+> api@0.0.0 build
+> tsc -b
+
+
+src/auth/jwt.ts(1,17): error TS7016: Could not find a declaration file for module 'jsonwebtoken'. '/app/apps/api/node_modules/jsonwebtoken/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/jsonwebtoken` if it exists or add a new declaration (.d.ts) file containing `declare module 'jsonwebtoken';`
+
+src/auth/store.ts(1,20): error TS7016: Could not find a declaration file for module 'bcryptjs'. '/app/apps/api/node_modules/bcryptjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/bcryptjs` if it exists or add a new declaration (.d.ts) file containing `declare module 'bcryptjs';`
+src/index.ts(2,18): error TS7016: Could not find a declaration file for module 'cors'. '/app/apps/api/node_modules/cors/lib/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/cors` if it exists or add a new declaration (.d.ts) file containing `declare module 'cors';`
+tsconfig.json(7,12): error TS5024: Compiler option 'jsx' requires a value of type string.
