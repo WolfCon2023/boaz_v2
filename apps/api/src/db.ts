@@ -23,26 +23,13 @@ export async function getNextSequence(key: string): Promise<number> {
   const database = await getDb()
   if (!database) throw new Error('DB unavailable')
   const counters = database.collection<{ _id: string; seq: number }>('counters')
-  const res = await counters.findOneAndUpdate(
+  const result = await counters.findOneAndUpdate(
     { _id: key },
-    { $inc: { seq: 1 } },
+    { $setOnInsert: { seq: 998800 }, $inc: { seq: 1 } },
     { upsert: true, returnDocument: 'after' } as FindOneAndUpdateOptions
   )
-  // Initialize start if newly created
-  if (res.value && typeof res.value.seq === 'number') {
-    return res.value.seq as number
-  }
-  const doc = await counters.findOneAndUpdate(
-    { _id: key },
-    { $setOnInsert: { seq: 998800 } },
-    { upsert: true, returnDocument: 'after' } as FindOneAndUpdateOptions
-  )
-  const next = await counters.findOneAndUpdate(
-    { _id: key },
-    { $inc: { seq: 1 } },
-    { returnDocument: 'after' } as FindOneAndUpdateOptions
-  )
-  return (next.value?.seq as number) ?? 998801
+  const seq = (result as any)?.value?.seq
+  return typeof seq === 'number' ? seq : 998801
 }
 
 
