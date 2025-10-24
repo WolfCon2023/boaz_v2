@@ -10,7 +10,17 @@ import { dealsRouter } from './crm/deals.js'
 import { getDb } from './db.js'
 
 const app = express()
-app.use(cors({ origin: env.ORIGIN, credentials: true }))
+const allowedOrigins = env.ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true)
+      if (allowedOrigins.includes(origin)) return callback(null, true)
+      return callback(null, false)
+    },
+    credentials: true,
+  })
+)
 app.use(express.json())
 app.use('/auth', authRouter)
 app.use('/api/crm', crmRouter)
