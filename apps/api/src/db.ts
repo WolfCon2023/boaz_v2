@@ -1,4 +1,4 @@
-import { MongoClient, Db, ObjectId, FindOneAndUpdateOptions } from 'mongodb'
+import { MongoClient, Db, FindOneAndUpdateOptions } from 'mongodb'
 import { env } from './env.js'
 
 let client: MongoClient | null = null
@@ -22,7 +22,8 @@ export async function closeDb() {
 export async function getNextSequence(key: string): Promise<number> {
   const database = await getDb()
   if (!database) throw new Error('DB unavailable')
-  const res = await database.collection('counters').findOneAndUpdate(
+  const counters = database.collection<{ _id: string; seq: number }>('counters')
+  const res = await counters.findOneAndUpdate(
     { _id: key },
     { $inc: { seq: 1 } },
     { upsert: true, returnDocument: 'after' } as FindOneAndUpdateOptions
@@ -31,12 +32,12 @@ export async function getNextSequence(key: string): Promise<number> {
   if (res.value && typeof res.value.seq === 'number') {
     return res.value.seq as number
   }
-  const doc = await database.collection('counters').findOneAndUpdate(
+  const doc = await counters.findOneAndUpdate(
     { _id: key },
     { $setOnInsert: { seq: 998800 } },
     { upsert: true, returnDocument: 'after' } as FindOneAndUpdateOptions
   )
-  const next = await database.collection('counters').findOneAndUpdate(
+  const next = await counters.findOneAndUpdate(
     { _id: key },
     { $inc: { seq: 1 } },
     { returnDocument: 'after' } as FindOneAndUpdateOptions
