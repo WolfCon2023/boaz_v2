@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import App from '@/App'
 // Home removed from initial routes; Dashboard is the index
 import NotFound from '@/pages/NotFound'
@@ -7,6 +7,10 @@ import Register from '@/pages/Register'
 import Dashboard from '@/pages/Dashboard'
 import Marketplace from '@/pages/Marketplace'
 import Workspace from '@/pages/Workspace'
+import CRMContacts from '@/pages/CRMContacts'
+import CRMAccounts from '@/pages/CRMAccounts'
+import CRMDeals from '@/pages/CRMDeals'
+import CRMHub from '@/pages/CRMHub'
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +24,10 @@ export const router = createBrowserRouter([
       { path: 'login', element: <Login /> },
       { path: 'register', element: <Register /> },
       { path: 'dashboard', element: <Dashboard /> },
+      { path: 'apps/crm', element: <CRMHub /> },
+      { path: 'apps/crm/contacts', element: <CRMContacts /> },
+      { path: 'apps/crm/accounts', element: <CRMAccounts /> },
+      { path: 'apps/crm/deals', element: <CRMDeals /> },
     ],
   },
   { path: '*', element: <NotFound /> },

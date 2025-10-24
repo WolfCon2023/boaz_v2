@@ -4,12 +4,18 @@ import { env } from './env.js'
 // Local health response to avoid depending on workspace packages during deployment
 const createHealthResponse = (service: string = 'api') => ({ ok: true, service, timestamp: Date.now() })
 import { authRouter } from './auth/routes.js'
+import { crmRouter } from './crm/routes.js'
+import { accountsRouter } from './crm/accounts.js'
+import { dealsRouter } from './crm/deals.js'
 import { getDb } from './db.js'
 
 const app = express()
 app.use(cors({ origin: env.ORIGIN, credentials: true }))
 app.use(express.json())
 app.use('/auth', authRouter)
+app.use('/api/crm', crmRouter)
+app.use('/api/crm/accounts', accountsRouter)
+app.use('/api/crm/deals', dealsRouter)
 
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))

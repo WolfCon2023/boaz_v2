@@ -18,6 +18,10 @@ async function main() {
 
   await db.collection('appointments').deleteMany({})
   await db.collection('tasks').deleteMany({})
+  await db.collection('contacts').deleteMany({})
+  await db.collection('accounts').deleteMany({})
+  await db.collection('deals').deleteMany({})
+  await db.collection('activities').deleteMany({})
 
   await db.collection('appointments').insertMany([
     { title: 'Intro call', startsAt: new Date(today.getTime() + 60 * 60 * 1000) },
@@ -28,6 +32,54 @@ async function main() {
     { title: 'Prepare proposal', dueAt: new Date(today.getTime() + 2 * 60 * 60 * 1000), status: 'todo' },
     { title: 'Send invoice', dueAt: new Date(today.getTime() + 4 * 60 * 60 * 1000), status: 'in_progress' },
     { title: 'Follow-up email', completedAt: new Date(today.getTime() + 30 * 60 * 1000), status: 'done' },
+  ])
+
+  await db.collection('contacts').insertMany([
+    { name: 'Ada Lovelace', email: 'ada@example.com', company: 'Analytical Engines' },
+    { name: 'Grace Hopper', email: 'grace@example.com', company: 'US Navy' },
+    { name: 'Alan Turing', email: 'alan@example.com', company: 'Bletchley Park' },
+    { name: 'Katherine Johnson', email: 'katherine@example.com', company: 'NASA' },
+  ])
+
+  // Accounts
+  const accounts = await db.collection('accounts').insertMany([
+    { name: 'Acme Corp', domain: 'acme.com', industry: 'Manufacturing' },
+    { name: 'Globex', domain: 'globex.com', industry: 'Technology' },
+    { name: 'Initech', domain: 'initech.com', industry: 'Software' },
+  ])
+
+  const acmeId = accounts.insertedIds['0']
+  const globexId = accounts.insertedIds['1']
+
+  // Deals
+  await db.collection('deals').insertMany([
+    { title: 'ACME ERP rollout', accountId: acmeId, amount: 125000, stage: 'negotiation', closeDate: new Date(Date.now() + 14*24*60*60*1000) },
+    { title: 'Globex CRM expansion', accountId: globexId, amount: 78000, stage: 'proposal', closeDate: new Date(Date.now() + 30*24*60*60*1000) },
+  ])
+
+  // Activities
+  await db.collection('activities').insertMany([
+    { type: 'call', subject: 'Discovery call', accountId: acmeId, at: new Date() },
+    { type: 'email', subject: 'Send proposal', accountId: globexId, at: new Date() },
+  ])
+
+  // Indexes
+  await db.collection('contacts').createIndexes([
+    { key: { email: 1 }, unique: false },
+    { key: { name: 1 } },
+  ])
+  await db.collection('accounts').createIndexes([
+    { key: { name: 1 } },
+    { key: { domain: 1 }, unique: false },
+  ])
+  await db.collection('deals').createIndexes([
+    { key: { stage: 1 } },
+    { key: { accountId: 1 } },
+    { key: { closeDate: -1 } },
+  ])
+  await db.collection('activities').createIndexes([
+    { key: { accountId: 1 } },
+    { key: { at: -1 } },
   ])
 
   console.log('Seeded sample data')
