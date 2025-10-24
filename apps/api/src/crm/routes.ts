@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { getDb } from '../db.js'
 import { ObjectId } from 'mongodb'
+import { z } from 'zod'
 
 export const crmRouter = Router()
 
@@ -41,6 +42,25 @@ crmRouter.get('/contacts', async (req, res) => {
   } catch (e) {
     res.status(500).json({ data: null, error: 'contacts_error' })
   }
+})
+
+// POST /api/crm/contacts
+crmRouter.post('/contacts', async (req, res) => {
+  const schema = z.object({
+    name: z.string().min(1),
+    company: z.string().optional(),
+    primaryContactName: z.string().optional(),
+    primaryContactEmail: z.string().email().optional(),
+    primaryContactPhone: z.string().optional(),
+  })
+  const parsed = schema.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload' })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const { name, company, primaryContactName, primaryContactEmail, primaryContactPhone } = parsed.data
+  const doc: any = { name, company, primaryContactName, primaryContactEmail, primaryContactPhone }
+  const result = await db.collection('contacts').insertOne(doc)
+  res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
 

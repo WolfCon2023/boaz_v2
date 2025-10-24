@@ -1,14 +1,22 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 type Deal = { _id: string; title?: string; amount?: number; stage?: string; closeDate?: string }
 
 export default function CRMDeals() {
+  const qc = useQueryClient()
   const { data } = useQuery({
     queryKey: ['deals'],
     queryFn: async () => {
       const res = await fetch('/api/crm/deals')
       return res.json() as Promise<{ data: { items: Deal[] } }>
     },
+  })
+  const create = useMutation({
+    mutationFn: async (payload: { title: string; accountId: string; amount?: number; stage?: string; closeDate?: string }) => {
+      const res = await fetch('/api/crm/deals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      return res.json()
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['deals'] }),
   })
 
   const items = data?.data.items ?? []
@@ -17,6 +25,14 @@ export default function CRMDeals() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Deals</h1>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+        <form className="flex flex-wrap gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ title: String(fd.get('title')||''), accountId: String(fd.get('accountId')||''), amount: fd.get('amount') ? Number(fd.get('amount')) : undefined, stage: String(fd.get('stage')||'')|| undefined, closeDate: String(fd.get('closeDate')||'')|| undefined }); (e.currentTarget as HTMLFormElement).reset() }}>
+          <input name="title" required placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="accountId" required placeholder="Account ID" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="amount" type="number" step="1" placeholder="Amount" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="stage" placeholder="Stage" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="closeDate" type="date" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add deal</button>
+        </form>
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]">
             <tr>

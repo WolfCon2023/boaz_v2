@@ -19,4 +19,29 @@ export async function closeDb() {
   db = null
 }
 
+export async function getNextSequence(key: string): Promise<number> {
+  const database = await getDb()
+  if (!database) throw new Error('DB unavailable')
+  const res = await database.collection('counters').findOneAndUpdate(
+    { _id: key },
+    { $inc: { seq: 1 } },
+    { upsert: true, returnDocument: 'after' }
+  )
+  // Initialize start if newly created
+  if (res.value && typeof res.value.seq === 'number') {
+    return res.value.seq as number
+  }
+  const doc = await database.collection('counters').findOneAndUpdate(
+    { _id: key },
+    { $setOnInsert: { seq: 998800 } },
+    { upsert: true, returnDocument: 'after' }
+  )
+  const next = await database.collection('counters').findOneAndUpdate(
+    { _id: key },
+    { $inc: { seq: 1 } },
+    { returnDocument: 'after' }
+  )
+  return (next.value?.seq as number) ?? 998801
+}
+
 

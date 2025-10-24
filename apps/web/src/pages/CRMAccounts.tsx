@@ -1,14 +1,22 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-type Account = { _id: string; name?: string; domain?: string; industry?: string }
+type Account = { _id: string; accountNumber?: number; name?: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }
 
 export default function CRMAccounts() {
+  const qc = useQueryClient()
   const { data } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => {
       const res = await fetch('/api/crm/accounts')
       return res.json() as Promise<{ data: { items: Account[] } }>
     },
+  })
+  const create = useMutation({
+    mutationFn: async (payload: { name: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }) => {
+      const res = await fetch('/api/crm/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      return res.json()
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
   })
 
   const items = data?.data.items ?? []
@@ -17,20 +25,34 @@ export default function CRMAccounts() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Accounts</h1>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+        <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ name: String(fd.get('name')||''), companyName: String(fd.get('companyName')||'')|| undefined, primaryContactName: String(fd.get('primaryContactName')||'')|| undefined, primaryContactEmail: String(fd.get('primaryContactEmail')||'')|| undefined, primaryContactPhone: String(fd.get('primaryContactPhone')||'')|| undefined }); (e.currentTarget as HTMLFormElement).reset() }}>
+          <input name="name" required placeholder="Account name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="companyName" placeholder="Company name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="primaryContactName" placeholder="Primary contact name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="primaryContactEmail" placeholder="Primary contact email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="primaryContactPhone" placeholder="Primary contact phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add account</button>
+        </form>
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]">
             <tr>
+              <th className="px-4 py-2">Account #</th>
               <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Domain</th>
-              <th className="px-4 py-2">Industry</th>
+              <th className="px-4 py-2">Company</th>
+              <th className="px-4 py-2">Primary contact</th>
+              <th className="px-4 py-2">Email</th>
+              <th className="px-4 py-2">Phone</th>
             </tr>
           </thead>
           <tbody>
             {items.map((a) => (
               <tr key={a._id} className="border-t border-[color:var(--color-border)]">
+                <td className="px-4 py-2">{a.accountNumber ?? '-'}</td>
                 <td className="px-4 py-2">{a.name ?? '-'}</td>
-                <td className="px-4 py-2">{a.domain ?? '-'}</td>
-                <td className="px-4 py-2">{a.industry ?? '-'}</td>
+                <td className="px-4 py-2">{a.companyName ?? '-'}</td>
+                <td className="px-4 py-2">{a.primaryContactName ?? '-'}</td>
+                <td className="px-4 py-2">{a.primaryContactEmail ?? '-'}</td>
+                <td className="px-4 py-2">{a.primaryContactPhone ?? '-'}</td>
               </tr>
             ))}
           </tbody>
