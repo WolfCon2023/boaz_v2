@@ -12,6 +12,20 @@ accountsRouter.get('/', async (req, res) => {
   res.json({ data: { items }, error: null })
 })
 
+// DELETE /api/crm/accounts/:id
+accountsRouter.delete('/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const { ObjectId } = await import('mongodb')
+    const _id = new ObjectId(req.params.id)
+    await db.collection('accounts').deleteOne({ _id })
+    res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 accountsRouter.post('/', async (req, res) => {
   const schema = z.object({
     name: z.string().min(1),

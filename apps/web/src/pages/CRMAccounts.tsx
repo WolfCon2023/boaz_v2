@@ -20,6 +20,13 @@ export default function CRMAccounts() {
   })
 
   const items = data?.data.items ?? []
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/crm/accounts/${id}`, { method: 'DELETE' })
+      return res.json()
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+  })
 
   return (
     <div className="space-y-4">
@@ -42,6 +49,7 @@ export default function CRMAccounts() {
               <th className="px-4 py-2">Primary contact</th>
               <th className="px-4 py-2">Email</th>
               <th className="px-4 py-2">Phone</th>
+              <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -53,6 +61,7 @@ export default function CRMAccounts() {
                 <td className="px-4 py-2">{a.primaryContactName ?? '-'}</td>
                 <td className="px-4 py-2">{a.primaryContactEmail ?? '-'}</td>
                 <td className="px-4 py-2">{a.primaryContactPhone ?? '-'}</td>
+                <td className="px-4 py-2"><button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => remove.mutate(a._id)}>Delete</button></td>
               </tr>
             ))}
           </tbody>

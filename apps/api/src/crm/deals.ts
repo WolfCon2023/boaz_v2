@@ -37,4 +37,20 @@ dealsRouter.post('/', async (req, res) => {
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
+// PATCH /api/crm/deals/:id/stage
+dealsRouter.patch('/:id/stage', async (req, res) => {
+  const schema = z.object({ stage: z.string().min(1) })
+  const parsed = schema.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload' })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    await db.collection('deals').updateOne({ _id }, { $set: { stage: parsed.data.stage } })
+    res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 
