@@ -49,18 +49,32 @@ crmRouter.post('/contacts', async (req, res) => {
   const schema = z.object({
     name: z.string().min(1),
     company: z.string().optional(),
-    primaryContactName: z.string().optional(),
-    primaryContactEmail: z.string().email().optional(),
-    primaryContactPhone: z.string().optional(),
+    email: z.string().email().optional(),
+    mobilePhone: z.string().optional(),
+    officePhone: z.string().optional(),
+    isPrimary: z.boolean().optional(),
   })
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload' })
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  const { name, company, primaryContactName, primaryContactEmail, primaryContactPhone } = parsed.data
-  const doc: any = { name, company, primaryContactName, primaryContactEmail, primaryContactPhone }
+  const { name, company, email, mobilePhone, officePhone, isPrimary } = parsed.data
+  const doc: any = { name, company, email, mobilePhone, officePhone, isPrimary: Boolean(isPrimary) }
   const result = await db.collection('contacts').insertOne(doc)
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
+})
+
+// DELETE /api/crm/contacts/:id
+crmRouter.delete('/contacts/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    await db.collection('contacts').deleteOne({ _id })
+    res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
 })
 
 
