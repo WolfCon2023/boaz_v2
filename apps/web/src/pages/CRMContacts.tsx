@@ -50,6 +50,19 @@ export default function CRMContacts() {
   })
 
   const [editing, setEditing] = React.useState<Contact | null>(null)
+  const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
+  React.useEffect(() => {
+    if (!editing) return
+    const el = document.createElement('div')
+    el.setAttribute('data-overlay', 'contact-editor')
+    Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' })
+    document.body.appendChild(el)
+    setPortalEl(el)
+    return () => {
+      try { document.body.removeChild(el) } catch {}
+      setPortalEl(null)
+    }
+  }, [editing])
 
   const items = data?.pages.flatMap((p) => p.data.items) ?? []
   const total = data?.pages[0]?.data.total
@@ -87,8 +100,20 @@ export default function CRMContacts() {
           <button
             className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-sm hover:bg-[color:var(--color-muted)]"
             onClick={() => {
-              const rows = items.map((c) => [c.name ?? '', c.email ?? '', c.company ?? ''])
-              const csv = ['Name,Email,Company', ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
+              const headers = ['Name','Email','Company','Mobile','Office','Primary','Primary phone']
+              const rows = items.map((c) => [
+                c.name ?? '',
+                c.email ?? '',
+                c.company ?? '',
+                c.mobilePhone ?? '',
+                c.officePhone ?? '',
+                c.isPrimary ? 'Yes' : 'No',
+                c.primaryPhone ?? '',
+              ])
+              const csv = [
+                headers.join(','),
+                ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(',')),
+              ].join('\n')
               const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
               const url = URL.createObjectURL(blob)
               const a = document.createElement('a')
@@ -146,9 +171,11 @@ export default function CRMContacts() {
           </div>
         </div>
       </div>
-      {editing && createPortal(
-        <div className="fixed inset-0 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
-          <div className="w-full max-w-xl rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+      {editing && portalEl && createPortal(
+        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
+          <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
             <div className="mb-3 text-base font-semibold">Edit contact</div>
             <form
               className="grid gap-2 sm:grid-cols-2"
@@ -193,9 +220,10 @@ export default function CRMContacts() {
                 <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
               </div>
             </form>
+            </div>
           </div>
         </div>,
-        document.getElementById('portal-root') as HTMLElement
+        portalEl
       )}
     </div>
   )
