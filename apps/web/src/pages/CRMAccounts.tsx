@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 
 type Account = { _id: string; accountNumber?: number; name?: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }
@@ -92,51 +93,48 @@ export default function CRMAccounts() {
                 <td className="px-4 py-2">{a.primaryContactName ?? '-'}</td>
                 <td className="px-4 py-2">{a.primaryContactEmail ?? '-'}</td>
                 <td className="px-4 py-2">{a.primaryContactPhone ?? '-'}</td>
-                <td className="px-4 py-2"><button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => remove.mutate(a._id)}>Delete</button></td>
+                <td className="px-4 py-2"><button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={(e) => { e.stopPropagation(); remove.mutate(a._id) }}>Delete</button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {editing && portalEl && (
-        portalEl.appendChild(document.createElement('div')),
-        portalEl.lastChild && (
-          (portalEl.lastChild as HTMLElement).outerHTML = `
-            <div style="position:fixed;inset:0;z-index:2147483647">
-              <div style="position:absolute;inset:0;background:rgba(0,0,0,.6)"></div>
-              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px">
-                <div class="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl w-[min(90vw,40rem)]">
-                  <div class="mb-3 text-base font-semibold">Edit account</div>
-                  <form id="account-edit-form" class="grid gap-2 sm:grid-cols-2">
-                    <input name="name" placeholder="Account name" class="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" value="${editing.name ?? ''}">
-                    <input name="companyName" placeholder="Company name" class="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" value="${editing.companyName ?? ''}">
-                    <input name="primaryContactName" placeholder="Primary contact name" class="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" value="${editing.primaryContactName ?? ''}">
-                    <input name="primaryContactEmail" placeholder="Primary contact email" class="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" value="${editing.primaryContactEmail ?? ''}">
-                    <input name="primaryContactPhone" placeholder="Primary contact phone" class="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" value="${editing.primaryContactPhone ?? ''}">
-                    <div class="col-span-full mt-2 flex items-center justify-end gap-2">
-                      <button type="button" id="account-edit-cancel" class="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Cancel</button>
-                      <button type="submit" class="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
-                    </div>
-                  </form>
+      {editing && portalEl && createPortal(
+        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
+          <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+              <div className="mb-3 text-base font-semibold">Edit account</div>
+              <form
+                className="grid gap-2 sm:grid-cols-2"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const fd = new FormData(e.currentTarget)
+                  update.mutate({
+                    _id: editing._id,
+                    name: String(fd.get('name')||'')||undefined,
+                    companyName: String(fd.get('companyName')||'')||undefined,
+                    primaryContactName: String(fd.get('primaryContactName')||'')||undefined,
+                    primaryContactEmail: String(fd.get('primaryContactEmail')||'')||undefined,
+                    primaryContactPhone: String(fd.get('primaryContactPhone')||'')||undefined,
+                  })
+                  setEditing(null)
+                }}
+              >
+                <input name="name" defaultValue={editing.name ?? ''} placeholder="Account name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <input name="companyName" defaultValue={editing.companyName ?? ''} placeholder="Company name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <input name="primaryContactName" defaultValue={editing.primaryContactName ?? ''} placeholder="Primary contact name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <input name="primaryContactEmail" defaultValue={editing.primaryContactEmail ?? ''} placeholder="Primary contact email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <input name="primaryContactPhone" defaultValue={editing.primaryContactPhone ?? ''} placeholder="Primary contact phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="col-span-full mt-2 flex items-center justify-end gap-2">
+                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
+                  <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
                 </div>
-              </div>
+              </form>
             </div>
-          `,
-          (document.getElementById('account-edit-form') as HTMLFormElement | null)?.addEventListener('submit', (ev) => {
-            ev.preventDefault()
-            const fd = new FormData(ev.currentTarget as HTMLFormElement)
-            update.mutate({
-              _id: editing._id,
-              name: String(fd.get('name')||'')||undefined,
-              companyName: String(fd.get('companyName')||'')||undefined,
-              primaryContactName: String(fd.get('primaryContactName')||'')||undefined,
-              primaryContactEmail: String(fd.get('primaryContactEmail')||'')||undefined,
-              primaryContactPhone: String(fd.get('primaryContactPhone')||'')||undefined,
-            })
-            setEditing(null)
-          }),
-          document.getElementById('account-edit-cancel')?.addEventListener('click', () => setEditing(null))
-        )
+          </div>
+        </div>,
+        portalEl
       )}
     </div>
   )
