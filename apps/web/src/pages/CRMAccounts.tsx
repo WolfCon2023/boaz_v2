@@ -53,6 +53,11 @@ export default function CRMAccounts() {
     })
     return rows
   }, [items, query, sort, dir])
+  const [page, setPage] = React.useState(0)
+  const [pageSize, setPageSize] = React.useState(10)
+  React.useEffect(() => { setPage(0) }, [query, sort, dir, pageSize])
+  const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize))
+  const pageItems = React.useMemo(() => visibleItems.slice(page * pageSize, page * pageSize + pageSize), [visibleItems, page, pageSize])
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const res = await http.delete(`/api/crm/accounts/${id}`)
@@ -124,7 +129,7 @@ export default function CRMAccounts() {
             </tr>
           </thead>
           <tbody>
-            {visibleItems.map((a) => (
+            {pageItems.map((a) => (
               <tr key={a._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(a)}>
                 <td className="px-4 py-2">{a.accountNumber ?? '-'}</td>
                 <td className="px-4 py-2">{a.name ?? '-'}</td>
@@ -137,6 +142,24 @@ export default function CRMAccounts() {
             ))}
           </tbody>
         </table>
+        <div className="flex items-center justify-between p-4 text-sm">
+          <div className="flex items-center gap-2">
+            <span>Rows: {visibleItems.length}</span>
+            <label className="ml-4 flex items-center gap-1">Page size
+              <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1">
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page <= 0}>Prev</button>
+            <span>Page {page + 1} / {totalPages}</span>
+            <button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page + 1 >= totalPages}>Next</button>
+          </div>
+        </div>
       </div>
       {editing && portalEl && createPortal(
         <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
