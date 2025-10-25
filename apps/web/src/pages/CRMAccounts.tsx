@@ -7,10 +7,13 @@ type Account = { _id: string; accountNumber?: number; name?: string; companyName
 
 export default function CRMAccounts() {
   const qc = useQueryClient()
-  const { data } = useQuery({
-    queryKey: ['accounts'],
+  const [query, setQuery] = React.useState('')
+  const [sort, setSort] = React.useState<'name'|'companyName'|'accountNumber'>('name')
+  const [dir, setDir] = React.useState<'asc'|'desc'>('asc')
+  const { data, isFetching } = useQuery({
+    queryKey: ['accounts', query, sort, dir],
     queryFn: async () => {
-      const res = await http.get('/api/crm/accounts')
+      const res = await http.get('/api/crm/accounts', { params: { q: query, sort, dir } })
       return res.data as { data: { items: Account[] } }
     },
   })
@@ -28,6 +31,27 @@ export default function CRMAccounts() {
   })
 
   const items = data?.data.items ?? []
+  const visibleItems = React.useMemo(() => {
+    const ql = query.trim().toLowerCase()
+    let rows = items
+    if (ql) {
+      rows = rows.filter((a) =>
+        [a.name, a.companyName, a.primaryContactName, a.primaryContactEmail, a.primaryContactPhone]
+          .some((v) => (v ?? '').toString().toLowerCase().includes(ql))
+      )
+    }
+    const dirMul = dir === 'desc' ? -1 : 1
+    rows = [...rows].sort((a: any, b: any) => {
+      const av = a[sort]
+      const bv = b[sort]
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dirMul
+      return String(av).localeCompare(String(bv)) * dirMul
+    })
+    return rows
+  }, [items, query, sort, dir])
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const res = await http.delete(`/api/crm/accounts/${id}`)
@@ -64,6 +88,19 @@ export default function CRMAccounts() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Accounts</h1>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+        <div className="flex flex-wrap items-center gap-2 p-4">
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search accounts..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <select value={sort} onChange={(e) => setSort(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm">
+            <option value="name">Name</option>
+            <option value="companyName">Company</option>
+            <option value="accountNumber">Account #</option>
+          </select>
+          <select value={dir} onChange={(e) => setDir(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm">
+            <option value="asc">Asc</option>
+            <option value="desc">Desc</option>
+          </select>
+          {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
+        </div>
         <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ name: String(fd.get('name')||''), companyName: String(fd.get('companyName')||'')|| undefined, primaryContactName: String(fd.get('primaryContactName')||'')|| undefined, primaryContactEmail: String(fd.get('primaryContactEmail')||'')|| undefined, primaryContactPhone: String(fd.get('primaryContactPhone')||'')|| undefined }); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="name" required placeholder="Account name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <input name="companyName" placeholder="Company name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
@@ -85,7 +122,7 @@ export default function CRMAccounts() {
             </tr>
           </thead>
           <tbody>
-            {items.map((a) => (
+            {visibleItems.map((a) => (
               <tr key={a._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(a)}>
                 <td className="px-4 py-2">{a.accountNumber ?? '-'}</td>
                 <td className="px-4 py-2">{a.name ?? '-'}</td>

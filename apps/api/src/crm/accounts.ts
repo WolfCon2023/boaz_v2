@@ -7,8 +7,20 @@ export const accountsRouter = Router()
 accountsRouter.get('/', async (req, res) => {
   const db = await getDb()
   if (!db) return res.json({ data: { items: [] }, error: null })
-  const limit = Math.max(1, Math.min(100, Number(req.query.limit ?? 20)))
-  const items = await db.collection('accounts').find({}).sort({ name: 1 }).limit(limit).toArray()
+  const limit = Math.max(1, Math.min(100, Number(req.query.limit ?? 50)))
+  const q = String((req.query.q as string) ?? '').trim()
+  const sortKey = (req.query.sort as string) ?? 'name'
+  const dir = ((req.query.dir as string) ?? 'asc').toLowerCase() === 'desc' ? -1 : 1
+  const allowedSort: Record<string, 1 | -1> = {
+    name: dir,
+    companyName: dir,
+    accountNumber: dir,
+  }
+  const sort: Record<string, 1 | -1> = allowedSort[sortKey] ? { [sortKey]: allowedSort[sortKey] } : { name: 1 }
+  const filter: Record<string, unknown> = q
+    ? { $or: [ { name: { $regex: q, $options: 'i' } }, { companyName: { $regex: q, $options: 'i' } } ] }
+    : {}
+  const items = await db.collection('accounts').find(filter).sort(sort).limit(limit).toArray()
   res.json({ data: { items }, error: null })
 })
 

@@ -16,7 +16,9 @@ async function fetchContacts({ pageParam, queryKey }: { pageParam?: string; quer
 
 export default function CRMContacts() {
   const qc = useQueryClient()
-  const q = ''
+  const [q, setQ] = React.useState('')
+  const [sort, setSort] = React.useState<'name'|'email'|'company'>('name')
+  const [dir, setDir] = React.useState<'asc'|'desc'>('asc')
   const [page, setPage] = React.useState(0)
   const create = useMutation({
     mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }) => {
@@ -69,6 +71,27 @@ export default function CRMContacts() {
   const pageSize = data?.pages[0]?.data.pageSize ?? 25
   const totalPages = total ? Math.ceil(total / pageSize) : 0
 
+  const visibleItems = React.useMemo(() => {
+    const ql = q.trim().toLowerCase()
+    let rows = items
+    if (ql) {
+      rows = rows.filter((c) =>
+        [c.name, c.email, c.company, c.mobilePhone, c.officePhone]
+          .some((v) => (v ?? '').toString().toLowerCase().includes(ql))
+      )
+    }
+    const dirMul = dir === 'desc' ? -1 : 1
+    rows = [...rows].sort((a: any, b: any) => {
+      const av = a[sort]
+      const bv = b[sort]
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      return String(av).localeCompare(String(bv)) * dirMul
+    })
+    return rows
+  }, [items, q, sort, dir])
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Contacts</h1>
@@ -95,8 +118,27 @@ export default function CRMContacts() {
           </div>
           <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add contact</button>
         </form>
-        <div className="flex items-center justify-between px-4">
-          <div className="text-sm text-[color:var(--color-text-muted)]">Filter and export coming soon</div>
+        <div className="flex items-center justify-between px-4 gap-2">
+          <div className="flex items-center gap-2">
+            <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); refetch() }} placeholder="Search contacts..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as any)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold [&>option]:text-[color:var(--color-text)] [&>option]:bg-[color:var(--color-panel)]"
+            >
+              <option value="name">Name</option>
+              <option value="email">Email</option>
+              <option value="company">Company</option>
+            </select>
+            <select
+              value={dir}
+              onChange={(e) => setDir(e.target.value as any)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold [&>option]:text-[color:var(--color-text)] [&>option]:bg-[color:var(--color-panel)]"
+            >
+              <option value="asc">Asc</option>
+              <option value="desc">Desc</option>
+            </select>
+          </div>
           <button
             className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-sm hover:bg-[color:var(--color-muted)]"
             onClick={() => {
@@ -138,7 +180,7 @@ export default function CRMContacts() {
             </tr>
           </thead>
           <tbody>
-            {items.map((c) => (
+            {visibleItems.map((c) => (
               <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(c)}>
                 <td className="px-4 py-2">{c.name ?? '-'}</td>
                 <td className="px-4 py-2">{c.email ?? '-'}</td>
