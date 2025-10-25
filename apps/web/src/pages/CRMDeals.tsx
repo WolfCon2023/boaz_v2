@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
+import { CRMNav } from '@/components/CRMNav'
 
 type Deal = { _id: string; title?: string; amount?: number; stage?: string; closeDate?: string }
 
@@ -24,6 +25,7 @@ export default function CRMDeals() {
 
   return (
     <div className="space-y-4">
+      <CRMNav />
       <h1 className="text-xl font-semibold">Deals</h1>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <form className="flex flex-wrap gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ title: String(fd.get('title')||''), accountId: String(fd.get('accountId')||''), amount: fd.get('amount') ? Number(fd.get('amount')) : undefined, stage: String(fd.get('stage')||'')|| undefined, closeDate: String(fd.get('closeDate')||'')|| undefined }); (e.currentTarget as HTMLFormElement).reset() }}>

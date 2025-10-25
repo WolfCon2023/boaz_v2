@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
+import { CRMNav } from '@/components/CRMNav'
 
 type Account = { _id: string; accountNumber?: number; name?: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }
 
@@ -86,16 +87,17 @@ export default function CRMAccounts() {
 
   return (
     <div className="space-y-4">
+      <CRMNav />
       <h1 className="text-xl font-semibold">Accounts</h1>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search accounts..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <select value={sort} onChange={(e) => setSort(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm">
+          <select value={sort} onChange={(e) => setSort(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold [&>option]:text-[color:var(--color-text)] [&>option]:bg-[color:var(--color-panel)]">
             <option value="name">Name</option>
             <option value="companyName">Company</option>
             <option value="accountNumber">Account #</option>
           </select>
-          <select value={dir} onChange={(e) => setDir(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm">
+          <select value={dir} onChange={(e) => setDir(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold [&>option]:text-[color:var(--color-text)] [&>option]:bg-[color:var(--color-panel)]">
             <option value="asc">Asc</option>
             <option value="desc">Desc</option>
           </select>

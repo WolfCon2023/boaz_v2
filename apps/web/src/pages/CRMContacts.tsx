@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-q
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
+import { CRMNav } from '@/components/CRMNav'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
 
@@ -94,6 +95,7 @@ export default function CRMContacts() {
 
   return (
     <div className="space-y-4">
+      <CRMNav />
       <h1 className="text-xl font-semibold">Contacts</h1>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ name: String(fd.get('name')||''), email: String(fd.get('email')||'' )|| undefined, company: String(fd.get('company')||'')|| undefined, mobilePhone: String(fd.get('mobilePhone')||'')|| undefined, officePhone: String(fd.get('officePhone')||'')|| undefined, isPrimary: fd.get('isPrimary') === 'on', primaryPhone: (fd.get('primaryPhone') as 'mobile'|'office'|null) || undefined }); (e.currentTarget as HTMLFormElement).reset() }}>
