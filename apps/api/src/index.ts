@@ -15,8 +15,15 @@ const allowedOriginsRaw = env.ORIGIN.split(',').map((o) => o.trim()).filter(Bool
 const allowedOrigins = allowedOriginsRaw.map(normalize)
 const isAllowed = (origin: string) => {
   const o = normalize(origin)
+  // Wildcard
+  if (allowedOrigins.includes('*')) return true
+  // Exact match
   if (allowedOrigins.includes(o)) return true
-  // Allow Railway preview domains if configured host is a Railway host
+  // Suffix match for any entry beginning with '.' (e.g., '.up.railway.app')
+  for (const entry of allowedOrigins) {
+    if (entry.startsWith('.') && o.endsWith(entry)) return true
+  }
+  // Always allow Railway preview domains as a convenience
   if (o.endsWith('.up.railway.app')) return true
   return false
 }
@@ -32,6 +39,7 @@ const corsMiddleware = cors({
 app.use(corsMiddleware)
 app.options('*', corsMiddleware)
 app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
 app.use('/auth', authRouter)
 app.use('/api/crm', crmRouter)
 app.use('/api/crm/accounts', accountsRouter)
@@ -66,6 +74,16 @@ app.get('/api/metrics/summary', async (_req, res) => {
 app.listen(env.PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${env.PORT}`)
+})
+
+// Global error handler to ensure CORS headers are present on errors
+// Must be registered after routes
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // eslint-disable-next-line no-console
+  console.error('Unhandled error:', err)
+  if (res.headersSent) return
+  res.status(500).json({ data: null, error: 'internal_error' })
 })
 
 
