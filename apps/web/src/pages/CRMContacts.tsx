@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
@@ -47,6 +48,8 @@ export default function CRMContacts() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   })
+
+  const [editing, setEditing] = React.useState<Contact | null>(null)
 
   const items = data?.pages.flatMap((p) => p.data.items) ?? []
   const total = data?.pages[0]?.data.total
@@ -111,13 +114,7 @@ export default function CRMContacts() {
           </thead>
           <tbody>
             {items.map((c) => (
-              <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => {
-                const name = prompt('Name', c.name ?? '')
-                if (name === null) return
-                const email = prompt('Email', c.email ?? '')
-                if (email === null) return
-                update.mutate({ _id: c._id, name: name || undefined, email: email || undefined })
-              }}>
+              <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(c)}>
                 <td className="px-4 py-2">{c.name ?? '-'}</td>
                 <td className="px-4 py-2">{c.email ?? '-'}</td>
                 <td className="px-4 py-2">{c.company ?? '-'}</td>
@@ -149,6 +146,57 @@ export default function CRMContacts() {
           </div>
         </div>
       </div>
+      {editing && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-xl rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+            <div className="mb-3 text-base font-semibold">Edit contact</div>
+            <form
+              className="grid gap-2 sm:grid-cols-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const fd = new FormData(e.currentTarget)
+                update.mutate({
+                  _id: editing._id,
+                  name: String(fd.get('name') || '') || undefined,
+                  email: String(fd.get('email') || '') || undefined,
+                  company: String(fd.get('company') || '') || undefined,
+                  mobilePhone: String(fd.get('mobilePhone') || '') || undefined,
+                  officePhone: String(fd.get('officePhone') || '') || undefined,
+                  isPrimary: fd.get('isPrimary') === 'on',
+                  primaryPhone: (fd.get('primaryPhone') as 'mobile' | 'office' | null) || undefined,
+                })
+                setEditing(null)
+              }}
+            >
+              <input name="name" defaultValue={editing.name ?? ''} placeholder="Name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+              <input name="email" defaultValue={editing.email ?? ''} placeholder="Email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+              <input name="company" defaultValue={editing.company ?? ''} placeholder="Company" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+              <input name="mobilePhone" defaultValue={editing.mobilePhone ?? ''} placeholder="Mobile phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+              <input name="officePhone" defaultValue={editing.officePhone ?? ''} placeholder="Office phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="isPrimary" defaultChecked={Boolean(editing.isPrimary)} /> Primary contact
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                Primary phone:
+                <select
+                  name="primaryPhone"
+                  defaultValue={editing.primaryPhone ?? ''}
+                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)] font-semibold [&>option]:text-[color:var(--color-text)] [&>option]:bg-[color:var(--color-panel)]"
+                >
+                  <option value="">Select</option>
+                  <option value="mobile">Mobile</option>
+                  <option value="office">Office</option>
+                </select>
+              </label>
+              <div className="col-span-full mt-2 flex items-center justify-end gap-2">
+                <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
+                <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.getElementById('portal-root') as HTMLElement
+      )}
     </div>
   )
 }
