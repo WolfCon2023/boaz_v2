@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { http } from '@/lib/http'
 
 type Account = { _id: string; accountNumber?: number; name?: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }
 
@@ -7,14 +8,14 @@ export default function CRMAccounts() {
   const { data } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => {
-      const res = await fetch('/api/crm/accounts')
-      return res.json() as Promise<{ data: { items: Account[] } }>
+      const res = await http.get('/api/crm/accounts')
+      return res.data as { data: { items: Account[] } }
     },
   })
   const create = useMutation({
     mutationFn: async (payload: { name: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }) => {
-      const res = await fetch('/api/crm/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      return res.json()
+      const res = await http.post('/api/crm/accounts', payload)
+      return res.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
   })
@@ -22,8 +23,8 @@ export default function CRMAccounts() {
   const items = data?.data.items ?? []
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/crm/accounts/${id}`, { method: 'DELETE' })
-      return res.json()
+      const res = await http.delete(`/api/crm/accounts/${id}`)
+      return res.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
   })

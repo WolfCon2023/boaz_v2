@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { http } from '@/lib/http'
 
 type Deal = { _id: string; title?: string; amount?: number; stage?: string; closeDate?: string }
 
@@ -7,14 +8,14 @@ export default function CRMDeals() {
   const { data } = useQuery({
     queryKey: ['deals'],
     queryFn: async () => {
-      const res = await fetch('/api/crm/deals')
-      return res.json() as Promise<{ data: { items: Deal[] } }>
+      const res = await http.get('/api/crm/deals')
+      return res.data as { data: { items: Deal[] } }
     },
   })
   const create = useMutation({
     mutationFn: async (payload: { title: string; accountId: string; amount?: number; stage?: string; closeDate?: string }) => {
-      const res = await fetch('/api/crm/deals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      return res.json()
+      const res = await http.post('/api/crm/deals', payload)
+      return res.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['deals'] }),
   })

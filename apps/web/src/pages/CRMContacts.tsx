@@ -1,14 +1,12 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { http } from '@/lib/http'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean }
 
 async function fetchContacts({ pageParam, queryKey }: { pageParam?: string; queryKey: any[] }) {
   const [_key, q] = queryKey as [string, string]
-  const url = new URL('/api/crm/contacts', window.location.origin)
-  if (q) url.searchParams.set('q', q)
-  if (pageParam) url.searchParams.set('cursor', pageParam)
-  const res = await fetch(url.toString())
-  return res.json() as Promise<{ data: { items: Contact[]; nextCursor: string | null } }>
+  const res = await http.get('/api/crm/contacts', { params: { q, cursor: pageParam } })
+  return res.data as { data: { items: Contact[]; nextCursor: string | null } }
 }
 
 export default function CRMContacts() {
@@ -16,8 +14,8 @@ export default function CRMContacts() {
   const q = ''
   const create = useMutation({
     mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean }) => {
-      const res = await fetch('/api/crm/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      return res.json()
+      const res = await http.post('/api/crm/contacts', payload)
+      return res.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   })
@@ -30,8 +28,8 @@ export default function CRMContacts() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/crm/contacts/${id}`, { method: 'DELETE' })
-      return res.json()
+      const res = await http.delete(`/api/crm/contacts/${id}`)
+      return res.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   })

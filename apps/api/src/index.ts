@@ -10,17 +10,27 @@ import { dealsRouter } from './crm/deals.js'
 import { getDb } from './db.js'
 
 const app = express()
-const allowedOrigins = env.ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true)
-      if (allowedOrigins.includes(origin)) return callback(null, true)
-      return callback(null, false)
-    },
-    credentials: true,
-  })
-)
+const normalize = (s: string) => s.trim().replace(/\/$/, '').toLowerCase()
+const allowedOriginsRaw = env.ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+const allowedOrigins = allowedOriginsRaw.map(normalize)
+const isAllowed = (origin: string) => {
+  const o = normalize(origin)
+  if (allowedOrigins.includes(o)) return true
+  // Allow Railway preview domains if configured host is a Railway host
+  if (o.endsWith('.up.railway.app')) return true
+  return false
+}
+
+const corsMiddleware = cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true)
+    return callback(null, isAllowed(origin))
+  },
+  credentials: true,
+})
+
+app.use(corsMiddleware)
+app.options('*', corsMiddleware)
 app.use(express.json())
 app.use('/auth', authRouter)
 app.use('/api/crm', crmRouter)

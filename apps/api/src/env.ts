@@ -9,7 +9,27 @@ const EnvSchema = z.object({
     .default('3000'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   JWT_SECRET: z.string().min(24).default('devsecret_devsecret_devsecret_devsecret'),
-  ORIGIN: z.string().url().default('http://localhost:5173'),
+  ORIGIN: z
+    .string()
+    .min(1)
+    .refine(
+      (val) =>
+        val
+          .split(',')
+          .map((s) => s.trim())
+          .every((o) => {
+            try {
+              // throws if invalid
+              // eslint-disable-next-line no-new
+              new URL(o)
+              return true
+            } catch {
+              return false
+            }
+          }),
+      { message: 'Invalid url' }
+    )
+    .default('http://localhost:5173'),
   MONGO_URL: z.string().url().optional(),
 })
 
