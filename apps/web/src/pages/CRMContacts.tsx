@@ -1,17 +1,22 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import * as React from 'react'
 import { http } from '@/lib/http'
 
-type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean }
+type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
 
 async function fetchContacts({ pageParam, queryKey }: { pageParam?: string; queryKey: any[] }) {
-  const [_key, q] = queryKey as [string, string]
-  const res = await http.get('/api/crm/contacts', { params: { q, cursor: pageParam } })
-  return res.data as { data: { items: Contact[]; nextCursor: string | null } }
+  const [_key, q, page] = queryKey as [string, string, number]
+  const params: any = { q }
+  if (pageParam !== undefined) params.cursor = pageParam
+  else params.page = page
+  const res = await http.get('/api/crm/contacts', { params })
+  return res.data as { data: { items: Contact[]; nextCursor?: string | null; page?: number; pageSize?: number; total?: number } }
 }
 
 export default function CRMContacts() {
   const qc = useQueryClient()
   const q = ''
+  const [page, setPage] = React.useState(0)
   const create = useMutation({
     mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean }) => {
       const res = await http.post('/api/crm/contacts', payload)
@@ -19,8 +24,8 @@ export default function CRMContacts() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   })
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ['contacts', q],
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch, isFetching } = useInfiniteQuery({
+    queryKey: ['contacts', q, page],
     queryFn: fetchContacts,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.data.nextCursor ?? undefined,
@@ -34,19 +39,44 @@ export default function CRMContacts() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   })
 
+  const update = useMutation({
+    mutationFn: async (payload: Partial<Contact> & { _id: string }) => {
+      const { _id, ...rest } = payload
+      const res = await http.put(`/api/crm/contacts/${_id}`, rest)
+      return res.data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+  })
+
   const items = data?.pages.flatMap((p) => p.data.items) ?? []
+  const total = data?.pages[0]?.data.total
+  const pageSize = data?.pages[0]?.data.pageSize ?? 25
+  const totalPages = total ? Math.ceil(total / pageSize) : 0
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Contacts</h1>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
-        <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ name: String(fd.get('name')||''), email: String(fd.get('email')||'' )|| undefined, company: String(fd.get('company')||'')|| undefined, mobilePhone: String(fd.get('mobilePhone')||'')|| undefined, officePhone: String(fd.get('officePhone')||'')|| undefined, isPrimary: fd.get('isPrimary') === 'on' }); (e.currentTarget as HTMLFormElement).reset() }}>
+        <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ name: String(fd.get('name')||''), email: String(fd.get('email')||'' )|| undefined, company: String(fd.get('company')||'')|| undefined, mobilePhone: String(fd.get('mobilePhone')||'')|| undefined, officePhone: String(fd.get('officePhone')||'')|| undefined, isPrimary: fd.get('isPrimary') === 'on', primaryPhone: (fd.get('primaryPhone') as 'mobile'|'office'|null) || undefined }); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="name" required placeholder="Name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <input name="email" placeholder="Email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <input name="company" placeholder="Company" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <input name="mobilePhone" placeholder="Mobile phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <input name="officePhone" placeholder="Office phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isPrimary" /> Primary contact</label>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isPrimary" /> Primary contact</label>
+            <label className="flex items-center gap-2 text-sm">
+              Primary phone:
+              <select
+                name="primaryPhone"
+                className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)] font-semibold [&>option]:text-[color:var(--color-text)] [&>option]:bg-[color:var(--color-panel)]"
+              >
+                <option value="">Select</option>
+                <option value="mobile">Mobile</option>
+                <option value="office">Office</option>
+              </select>
+            </label>
+          </div>
           <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add contact</button>
         </form>
         <div className="flex items-center justify-between px-4">
@@ -75,20 +105,28 @@ export default function CRMContacts() {
               <th className="px-4 py-2">Mobile</th>
               <th className="px-4 py-2">Office</th>
               <th className="px-4 py-2">Primary</th>
+              <th className="px-4 py-2">Primary phone</th>
               <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {items.map((c) => (
-              <tr key={c._id} className="border-t border-[color:var(--color-border)]">
+              <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => {
+                const name = prompt('Name', c.name ?? '')
+                if (name === null) return
+                const email = prompt('Email', c.email ?? '')
+                if (email === null) return
+                update.mutate({ _id: c._id, name: name || undefined, email: email || undefined })
+              }}>
                 <td className="px-4 py-2">{c.name ?? '-'}</td>
                 <td className="px-4 py-2">{c.email ?? '-'}</td>
                 <td className="px-4 py-2">{c.company ?? '-'}</td>
                 <td className="px-4 py-2">{c.mobilePhone ?? '-'}</td>
                 <td className="px-4 py-2">{c.officePhone ?? '-'}</td>
                 <td className="px-4 py-2">{c.isPrimary ? 'Yes' : 'No'}</td>
+                <td className="px-4 py-2">{c.primaryPhone ?? '-'}</td>
                 <td className="px-4 py-2">
-                  <button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => remove.mutate(c._id)}>
+                  <button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={(e) => { e.stopPropagation(); remove.mutate(c._id) }}>
                     Delete
                   </button>
                 </td>
@@ -96,12 +134,19 @@ export default function CRMContacts() {
             ))}
           </tbody>
         </table>
-        <div className="p-4">
-          {hasNextPage && (
-            <button className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
-              {isFetchingNextPage ? 'Loading…' : 'Load more'}
+        <div className="flex items-center justify-between p-4 text-sm">
+          <div>
+            {typeof total === 'number' ? `Total: ${total}` : ''}
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]" onClick={() => { setPage((p) => Math.max(0, p - 1)); refetch() }} disabled={isFetching || page <= 0}>
+              Prev
             </button>
-          )}
+            <span>Page {page + 1}{totalPages ? ` / ${totalPages}` : ''}</span>
+            <button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]" onClick={() => { setPage((p) => p + 1); refetch() }} disabled={isFetching || (totalPages ? page + 1 >= totalPages : false)}>
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -18,8 +18,8 @@ const EnvSchema = z.object({
           .split(',')
           .map((s) => s.trim())
           .every((o) => {
+            if (o === '*' || o.startsWith('.')) return true
             try {
-              // throws if invalid
               // eslint-disable-next-line no-new
               new URL(o)
               return true
