@@ -54,6 +54,21 @@ accountsRouter.post('/', async (req, res) => {
     const { getNextSequence } = await import('../db.js')
     accountNumber = await getNextSequence('accountNumber')
   } catch {}
+  // Fallback if counter not initialized
+  if (accountNumber === undefined) {
+    try {
+      const last = await db
+        .collection('accounts')
+        .find({ accountNumber: { $type: 'number' } })
+        .project({ accountNumber: 1 })
+        .sort({ accountNumber: -1 })
+        .limit(1)
+        .toArray()
+      accountNumber = Number((last[0] as any)?.accountNumber ?? 998800) + 1
+    } catch {
+      accountNumber = 998801
+    }
+  }
   const doc = { ...parsed.data, accountNumber }
   const result = await db.collection('accounts').insertOne(doc)
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
