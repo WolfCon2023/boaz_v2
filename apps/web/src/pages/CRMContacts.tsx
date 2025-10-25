@@ -19,13 +19,13 @@ export default function CRMContacts() {
   const q = ''
   const [page, setPage] = React.useState(0)
   const create = useMutation({
-    mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean }) => {
+    mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }) => {
       const res = await http.post('/api/crm/contacts', payload)
       return res.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   })
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch, isFetching } = useInfiniteQuery({
+  const { data, refetch, isFetching } = useInfiniteQuery({
     queryKey: ['contacts', q, page],
     queryFn: fetchContacts,
     initialPageParam: undefined as string | undefined,
