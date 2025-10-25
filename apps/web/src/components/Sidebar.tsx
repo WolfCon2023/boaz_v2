@@ -5,8 +5,8 @@ const linkBase = 'flex items-center gap-2 px-3 py-2 rounded-xl text-sm hover:bg-
 
 export function Sidebar() {
   return (
-    <aside className="bg-[color:var(--color-panel)] border-r border-[color:var(--color-border)] h-full">
-      <div className="p-4">
+    <aside className="bg-[color:var(--color-panel)] border-r border-[color:var(--color-border)] h-full flex flex-col">
+      <div className="p-4 flex-1">
         <div className="text-xs uppercase text-[color:var(--color-text-muted)] mb-2">Main</div>
         <nav className="grid gap-1">
           <NavLink to="/" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>
@@ -25,6 +25,9 @@ export function Sidebar() {
             <Settings className="w-4 h-4" /> Settings
           </NavLink>
         </nav>
+      </div>
+      <div className="p-4 border-t border-[color:var(--color-border)]">
+        <img src="/boaz-os-logo.png" alt="BOAZ-OS" className="mx-auto h-14 md:h-16 w-auto opacity-90" />
       </div>
     </aside>
   )
