@@ -14,10 +14,55 @@ outreachSendRouter.post('/email', async (req, res) => {
     // Log sent event immediately
     await db.collection('outreach_events').insertOne({ channel: 'email', event: 'sent', recipient: to, variant: variant ?? null, at: new Date() })
   } catch {}
-  // Integrate with provider (SendGrid/Mailgun) — stubbed for now
-  // If SENDGRID_API_KEY present, you could call @sendgrid/mail here
-  // If MAILGUN_API_KEY/DOMAIN present, call Mailgun REST here
-  res.status(202).json({ data: { queued: true }, error: null })
+  // Provider: SendGrid first, else Mailgun, else accept without external send
+  try {
+    if (env.SENDGRID_API_KEY && env.OUTBOUND_EMAIL_FROM) {
+      const sgPayload = {
+        personalizations: [{ to: [{ email: to }] }],
+        from: { email: env.OUTBOUND_EMAIL_FROM },
+        subject: subject ?? undefined,
+        content: [
+          html ? { type: 'text/html', value: String(html) } : undefined,
+          text ? { type: 'text/plain', value: String(text) } : undefined,
+        ].filter(Boolean),
+      }
+      const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sgPayload),
+      })
+      if (!r.ok) {
+        const body = await r.text()
+        return res.status(202).json({ data: { queued: false, provider: 'sendgrid', status: r.status, body }, error: null })
+      }
+      return res.status(202).json({ data: { queued: true, provider: 'sendgrid' }, error: null })
+    }
+    if (env.MAILGUN_API_KEY && env.MAILGUN_DOMAIN && env.OUTBOUND_EMAIL_FROM) {
+      const form = new URLSearchParams({
+        to,
+        from: env.OUTBOUND_EMAIL_FROM,
+        subject: subject || '',
+        text: text || '',
+        html: html || '',
+      })
+      const r = await fetch(`https://api.mailgun.net/v3/${env.MAILGUN_DOMAIN}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Basic ' + Buffer.from('api:' + env.MAILGUN_API_KEY).toString('base64'),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: form.toString(),
+      })
+      const body = await r.text()
+      return res.status(202).json({ data: { queued: r.ok, provider: 'mailgun', status: r.status, body }, error: null })
+    }
+    return res.status(202).json({ data: { queued: true, provider: 'none' }, error: null })
+  } catch (e: any) {
+    return res.status(202).json({ data: { queued: false, error: 'provider_error' }, error: null })
+  }
 })
 
 // POST /api/crm/outreach/send/sms { to, text }
@@ -29,8 +74,28 @@ outreachSendRouter.post('/sms', async (req, res) => {
   try {
     await db.collection('outreach_events').insertOne({ channel: 'sms', event: 'sent', recipient: to, at: new Date() })
   } catch {}
-  // Integrate with Twilio here if creds exist
-  res.status(202).json({ data: { queued: true }, error: null })
+  try {
+    if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM_NUMBER) {
+      const form = new URLSearchParams({
+        To: to,
+        From: env.TWILIO_FROM_NUMBER,
+        Body: text,
+      })
+      const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Basic ' + Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString('base64'),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: form.toString(),
+      })
+      const body = await r.text()
+      return res.status(202).json({ data: { queued: r.ok, provider: 'twilio', status: r.status, body }, error: null })
+    }
+    return res.status(202).json({ data: { queued: true, provider: 'none' }, error: null })
+  } catch {
+    return res.status(202).json({ data: { queued: false, error: 'provider_error' }, error: null })
+  }
 })
 
 // Webhooks
