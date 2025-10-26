@@ -8,6 +8,7 @@ import { crmRouter } from './crm/routes.js'
 import { accountsRouter } from './crm/accounts.js'
 import { dealsRouter } from './crm/deals.js'
 import { quotesRouter } from './crm/quotes.js'
+import { invoicesRouter } from './crm/invoices.js'
 import { getDb } from './db.js'
 
 const app = express()
@@ -46,6 +47,7 @@ app.use('/api/crm', crmRouter)
 app.use('/api/crm/accounts', accountsRouter)
 app.use('/api/crm/deals', dealsRouter)
 app.use('/api/crm/quotes', quotesRouter)
+app.use('/api/crm/invoices', invoicesRouter)
 
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))

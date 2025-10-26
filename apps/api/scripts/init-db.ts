@@ -22,6 +22,7 @@ async function main() {
   await ensure('accounts')
   await ensure('deals')
   await ensure('quotes')
+  await ensure('invoices')
   await ensure('activities')
   await ensure('appointments')
   await ensure('tasks')
@@ -46,6 +47,13 @@ async function main() {
     { key: { updatedAt: -1 } },
     { key: { status: 1 } },
   ])
+  await db.collection('invoices').createIndexes([
+    { key: { invoiceNumber: 1 }, name: 'invoiceNumber_1' },
+    { key: { accountId: 1 } },
+    { key: { updatedAt: -1 } },
+    { key: { status: 1 } },
+    { key: { dueDate: 1 } },
+  ])
   await db.collection('activities').createIndexes([
     { key: { accountId: 1 } },
     { key: { at: -1 } },
@@ -61,6 +69,11 @@ async function main() {
   await db.collection('counters').updateOne(
     { _id: 'quoteNumber' },
     { $setOnInsert: { seq: 500000 } },
+    { upsert: true }
+  )
+  await db.collection('counters').updateOne(
+    { _id: 'invoiceNumber' },
+    { $setOnInsert: { seq: 700000 } },
     { upsert: true }
   )
 

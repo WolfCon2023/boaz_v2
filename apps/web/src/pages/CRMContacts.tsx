@@ -123,6 +123,8 @@ export default function CRMContacts() {
         <div className="flex items-center justify-between px-4 gap-2">
           <div className="flex items-center gap-2">
             <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); refetch() }} placeholder="Search contacts..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            <button type="button" onClick={() => { setQ(''); setPage(0); refetch() }} disabled={!q}
+              className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">Clear</button>
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as any)}

@@ -16,6 +16,9 @@ type Quote = {
   status?: string
   version?: number
   updatedAt?: string
+  approver?: string
+  signerName?: string
+  signerEmail?: string
 }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
 
@@ -104,6 +107,8 @@ export default function CRMQuotes() {
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search quotes..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <button type="button" onClick={() => setQ('')} disabled={!q}
+            className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">Clear</button>
           <select value={sort} onChange={(e) => setSort(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="updatedAt">Updated</option>
             <option value="quoteNumber">Quote #</option>
@@ -119,11 +124,11 @@ export default function CRMQuotes() {
           <button
             className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
             onClick={() => {
-              const headers = ['Quote #','Title','Account','Total','Status','Version','Updated']
+              const headers = ['Quote #','Title','Account','Total','Status','Approver','Signer Name','Signer Email','Version','Updated']
               const rows = visible.map((q) => {
                 const acc = q.accountId && acctById.get(q.accountId)
                 const accLabel = acc ? `${acc.accountNumber ?? '—'} — ${acc.name ?? 'Account'}` : (q.accountNumber ?? '')
-                return [q.quoteNumber ?? '', q.title ?? '', accLabel, q.total ?? '', q.status ?? '', q.version ?? '', q.updatedAt ? new Date(q.updatedAt).toISOString() : '']
+                return [q.quoteNumber ?? '', q.title ?? '', accLabel, q.total ?? '', q.status ?? '', q.approver ?? '', q.signerName ?? '', q.signerEmail ?? '', q.version ?? '', q.updatedAt ? new Date(q.updatedAt).toISOString() : '']
               })
               const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
               const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -171,6 +176,9 @@ export default function CRMQuotes() {
               <th className="px-4 py-2">Account</th>
               <th className="px-4 py-2">Total</th>
               <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2">Approver</th>
+              <th className="px-4 py-2">Signer</th>
+              <th className="px-4 py-2">Signer Email</th>
               <th className="px-4 py-2">Version</th>
               <th className="px-4 py-2">Updated</th>
             </tr>
@@ -183,6 +191,9 @@ export default function CRMQuotes() {
                 <td className="px-4 py-2">{(() => { const a = q.accountId && acctById.get(q.accountId!); return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (q.accountNumber ?? '—') })()}</td>
                 <td className="px-4 py-2">{typeof q.total === 'number' ? `$${q.total.toLocaleString()}` : '-'}</td>
                 <td className="px-4 py-2">{q.status ?? '-'}</td>
+                <td className="px-4 py-2">{q.approver ?? '-'}</td>
+                <td className="px-4 py-2">{q.signerName ?? '-'}</td>
+                <td className="px-4 py-2">{q.signerEmail ?? '-'}</td>
                 <td className="px-4 py-2">{q.version ?? '-'}</td>
                 <td className="px-4 py-2">{q.updatedAt ? new Date(q.updatedAt).toLocaleString() : '-'}</td>
               </tr>
@@ -260,9 +271,9 @@ export default function CRMQuotes() {
                     ))}
                   </select>
                 </label>
-                <input name="approver" defaultValue={''} placeholder="Approver" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <input name="signerName" defaultValue={''} placeholder="Signer name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <input name="signerEmail" defaultValue={''} placeholder="Signer email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <input name="approver" defaultValue={editing.approver ?? ''} placeholder="Approver" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <input name="signerName" defaultValue={editing.signerName ?? ''} placeholder="Signer name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <input name="signerEmail" defaultValue={editing.signerEmail ?? ''} placeholder="Signer email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>

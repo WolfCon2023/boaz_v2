@@ -12,6 +12,7 @@ import CRMAccounts from '@/pages/CRMAccounts'
 import CRMDeals from '@/pages/CRMDeals'
 import CRMHub from '@/pages/CRMHub'
 import CRMQuotes from '@/pages/CRMQuotes'
+import CRMInvoices from '@/pages/CRMInvoices'
 
 export const router = createBrowserRouter([
   {
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/contacts', element: <CRMContacts /> },
       { path: 'apps/crm/accounts', element: <CRMAccounts /> },
       { path: 'apps/crm/quotes', element: <CRMQuotes /> },
+      { path: 'apps/crm/invoices', element: <CRMInvoices /> },
       { path: 'apps/crm/deals', element: <CRMDeals /> },
     ],
   },

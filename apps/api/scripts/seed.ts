@@ -70,6 +70,14 @@ async function main() {
     { type: 'email', subject: 'Send proposal', accountId: globexId, at: new Date() },
   ])
 
+  // Invoices
+  await db.collection('invoices').deleteMany({})
+  const now = new Date()
+  await db.collection('invoices').insertMany([
+    { title: 'ACME Invoice Jan', accountId: acmeId, items: [], subtotal: 1000, tax: 70, total: 1070, balance: 1070, currency: 'USD', status: 'open', dueDate: new Date(Date.now()+7*24*60*60*1000), issuedAt: now, paidAt: null, createdAt: now, updatedAt: now, payments: [], refunds: [] },
+    { title: 'Globex Invoice Q1', accountId: globexId, items: [], subtotal: 15000, tax: 1050, total: 16050, balance: 16050, currency: 'USD', status: 'draft', dueDate: new Date(Date.now()+30*24*60*60*1000), issuedAt: now, paidAt: null, createdAt: now, updatedAt: now, payments: [], refunds: [] },
+  ])
+
   // Indexes
   await db.collection('contacts').createIndexes([
     { key: { email: 1 }, unique: false },
