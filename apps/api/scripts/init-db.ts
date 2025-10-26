@@ -21,6 +21,7 @@ async function main() {
   await ensure('contacts')
   await ensure('accounts')
   await ensure('deals')
+  await ensure('quotes')
   await ensure('activities')
   await ensure('appointments')
   await ensure('tasks')
@@ -39,6 +40,12 @@ async function main() {
     { key: { accountId: 1 } },
     { key: { closeDate: -1 } },
   ])
+  await db.collection('quotes').createIndexes([
+    { key: { quoteNumber: 1 }, name: 'quoteNumber_1' },
+    { key: { accountId: 1 } },
+    { key: { updatedAt: -1 } },
+    { key: { status: 1 } },
+  ])
   await db.collection('activities').createIndexes([
     { key: { accountId: 1 } },
     { key: { at: -1 } },
@@ -49,6 +56,13 @@ async function main() {
     { key: { completedAt: 1 } },
     { key: { status: 1 } },
   ])
+
+  // Initialize counters for quote numbers (idempotent)
+  await db.collection('counters').updateOne(
+    { _id: 'quoteNumber' },
+    { $setOnInsert: { seq: 500000 } },
+    { upsert: true }
+  )
 
   console.log('Database initialized')
   await client.close()

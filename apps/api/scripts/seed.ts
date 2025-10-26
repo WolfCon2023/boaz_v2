@@ -57,6 +57,13 @@ async function main() {
     { title: 'Globex CRM expansion', accountId: globexId, amount: 78000, stage: 'proposal', closeDate: new Date(Date.now() + 30*24*60*60*1000) },
   ])
 
+  // Quotes
+  await db.collection('quotes').deleteMany({})
+  await db.collection('quotes').insertMany([
+    { title: 'ACME ERP Phase 1', accountId: acmeId, items: [], subtotal: 100000, tax: 7000, total: 107000, status: 'Draft', version: 1, createdAt: new Date(), updatedAt: new Date() },
+    { title: 'Globex CRM Add-ons', accountId: globexId, items: [], subtotal: 60000, tax: 4200, total: 64200, status: 'Submitted for Review', version: 1, createdAt: new Date(), updatedAt: new Date() },
+  ])
+
   // Activities
   await db.collection('activities').insertMany([
     { type: 'call', subject: 'Discovery call', accountId: acmeId, at: new Date() },
