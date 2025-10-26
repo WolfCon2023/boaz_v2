@@ -62,7 +62,8 @@ dealsRouter.post('/', async (req, res) => {
       stage: stageRaw || 'new',
     }
     if (typeof accountNumberValue === 'number') doc.accountNumber = accountNumberValue
-    if (closeDateRaw) doc.closeDate = new Date(closeDateRaw)
+    // Normalize date-only strings to midday UTC to avoid timezone shifting one day back
+    if (closeDateRaw) doc.closeDate = new Date(`${closeDateRaw}T12:00:00Z`)
     if (!doc.closeDate && doc.stage === closedWon) doc.closeDate = new Date()
     // Assign incremental dealNumber starting at 100001
     try {
@@ -147,7 +148,7 @@ dealsRouter.put('/:id', async (req, res) => {
     const update: any = { ...parsed.data }
     if (update.accountId) update.accountId = new ObjectId(update.accountId)
     const closedWon = 'Contract Signed / Closed Won'
-    if (update.closeDate) update.closeDate = new Date(update.closeDate)
+    if (update.closeDate) update.closeDate = new Date(`${update.closeDate}T12:00:00Z`)
 
     // Auto-populate closeDate when moving to Closed Won
     if (update.stage === closedWon && !update.closeDate) {

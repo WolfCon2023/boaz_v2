@@ -107,6 +107,28 @@ export default function CRMAccounts() {
             <option value="desc">Desc</option>
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
+          <button
+            className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            onClick={() => {
+              const headers = ['Account #','Name','Company','Primary contact','Email','Phone']
+              const rows = visibleItems.map((a) => [
+                a.accountNumber ?? '',
+                a.name ?? '',
+                a.companyName ?? '',
+                a.primaryContactName ?? '',
+                a.primaryContactEmail ?? '',
+                a.primaryContactPhone ?? '',
+              ])
+              const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = 'accounts.csv'
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+          >Export CSV</button>
         </div>
         <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ name: String(fd.get('name')||''), companyName: String(fd.get('companyName')||'')|| undefined, primaryContactName: String(fd.get('primaryContactName')||'')|| undefined, primaryContactEmail: String(fd.get('primaryContactEmail')||'')|| undefined, primaryContactPhone: String(fd.get('primaryContactPhone')||'')|| undefined }); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="name" required placeholder="Account name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />

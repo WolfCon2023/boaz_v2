@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 
-type Deal = { _id: string; dealNumber?: number; title?: string; amount?: number; stage?: string; closeDate?: string }
+type Deal = { _id: string; dealNumber?: number; title?: string; amount?: number; stage?: string; closeDate?: string; accountId?: string; accountNumber?: number }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
 
 export default function CRMDeals() {
@@ -26,6 +26,8 @@ export default function CRMDeals() {
       return res.data as { data: { items: AccountPick[] } }
     },
   })
+  const accounts = accountsQ.data?.data.items ?? []
+  const acctById = React.useMemo(() => new Map(accounts.map((a) => [a._id, a])), [accounts])
   const create = useMutation({
     mutationFn: async (payload: { title: string; accountId: string; amount?: number; stage?: string; closeDate?: string }) => {
       const res = await http.post('/api/crm/deals', payload)
@@ -96,6 +98,27 @@ export default function CRMDeals() {
             <option value="asc">Asc</option>
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
+          <button
+            className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            onClick={() => {
+              const headers = ['Deal #','Title','Amount','Stage','Close date']
+              const rows = visibleItems.map((d) => [
+                d.dealNumber ?? '',
+                d.title ?? '',
+                typeof d.amount === 'number' ? d.amount : '',
+                d.stage ?? '',
+                d.closeDate ? new Date(d.closeDate).toISOString().slice(0,10) : '',
+              ])
+              const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = 'deals.csv'
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+          >Export CSV</button>
         </div>
         <form className="flex flex-wrap gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = String(fd.get('title')||''); const accNumStr = String(fd.get('accountNumber')||''); const accNum = accNumStr ? Number(accNumStr) : undefined; const amount = fd.get('amount') ? Number(fd.get('amount')) : undefined; const stage = String(fd.get('stage')||'')|| undefined; const closeDate = String(fd.get('closeDate')||'')|| undefined; const acc = (accountsQ.data?.data.items ?? []).find(a => a.accountNumber === accNum); const payload: any = { title, amount, stage, closeDate }; if (acc?._id) payload.accountId = acc._id; else if (typeof accNum === 'number' && Number.isFinite(accNum)) payload.accountNumber = accNum; create.mutate(payload); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="title" required placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
@@ -127,6 +150,7 @@ export default function CRMDeals() {
           <thead className="text-left text-[color:var(--color-text-muted)]">
             <tr>
               <th className="px-4 py-2">Deal #</th>
+              <th className="px-4 py-2">Account</th>
               <th className="px-4 py-2">Title</th>
               <th className="px-4 py-2">Amount</th>
               <th className="px-4 py-2">Stage</th>
@@ -137,6 +161,12 @@ export default function CRMDeals() {
             {pageItems.map((d) => (
               <tr key={d._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(d)}>
                 <td className="px-4 py-2">{d.dealNumber ?? '-'}</td>
+                <td className="px-4 py-2">{
+                  (() => {
+                    const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
+                    return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
+                  })()
+                }</td>
                 <td className="px-4 py-2">{d.title ?? '-'}</td>
                 <td className="px-4 py-2">{typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'}</td>
                 <td className="px-4 py-2">{d.stage ?? '-'}</td>
@@ -178,9 +208,10 @@ export default function CRMDeals() {
                   const title = String(fd.get('title')||'') || undefined
                   const amount = fd.get('amount') ? Number(fd.get('amount')) : undefined
                   const stage = String(fd.get('stage')||'') || undefined
-                  const closeDate = String(fd.get('closeDate')||'') || undefined
+                  const closeDateRaw = String(fd.get('closeDate')||'') || undefined
                   const accSel = String(fd.get('accountId')||'')
-                  const payload: any = { _id: editing._id, title, amount, stage, closeDate }
+                  const payload: any = { _id: editing._id, title, amount, stage }
+                  if (closeDateRaw) payload.closeDate = closeDateRaw
                   if (accSel) payload.accountId = accSel
                   update.mutate(payload)
                   setEditing(null)
