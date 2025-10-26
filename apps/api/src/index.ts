@@ -52,7 +52,6 @@ app.use('/api/crm/invoices', invoicesRouter)
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))
 })
-
 // Simple metrics placeholder; replace with real queries when DB is connected
 app.get('/api/metrics/summary', async (_req, res) => {
   try {

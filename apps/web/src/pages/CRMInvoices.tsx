@@ -155,7 +155,10 @@ export default function CRMInvoices() {
                 <td className="px-4 py-2">{typeof inv.total === 'number' ? `$${inv.total.toLocaleString()}` : '-'}</td>
                 <td className="px-4 py-2">{typeof inv.balance === 'number' ? `$${inv.balance.toLocaleString()}` : '-'}</td>
                 <td className="px-4 py-2">{inv.status ?? '-'}</td>
-                <td className="px-4 py-2">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '-'}</td>
+                <td className="px-4 py-2 flex items-center gap-2">
+                  <span>{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '-'}</span>
+                  <a href={`/apps/crm/invoices/${inv._id}/print`} onClick={(e) => e.stopPropagation()} className="ml-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]">Generate PDF</a>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -17,6 +17,20 @@ type InvoiceDoc = {
 
 export const invoicesRouter = Router()
 
+// GET /api/crm/invoices/:id
+invoicesRouter.get('/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const inv = await db.collection<InvoiceDoc>('invoices').findOne({ _id })
+    if (!inv) return res.status(404).json({ data: null, error: 'not_found' })
+    res.json({ data: inv, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 // GET /api/crm/invoices?q=&sort=&dir=
 invoicesRouter.get('/', async (req, res) => {
   const db = await getDb()
