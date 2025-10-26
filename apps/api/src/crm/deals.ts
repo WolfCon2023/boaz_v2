@@ -54,6 +54,7 @@ dealsRouter.post('/', async (req, res) => {
       return res.status(400).json({ data: null, error: 'missing_account' })
     }
 
+    const closedWon = 'Contract Signed / Closed Won'
     const doc: any = {
       title,
       accountId: accountObjectId,
@@ -62,6 +63,7 @@ dealsRouter.post('/', async (req, res) => {
     }
     if (typeof accountNumberValue === 'number') doc.accountNumber = accountNumberValue
     if (closeDateRaw) doc.closeDate = new Date(closeDateRaw)
+    if (!doc.closeDate && doc.stage === closedWon) doc.closeDate = new Date()
     // Assign incremental dealNumber starting at 100001
     try {
       const { getNextSequence } = await import('../db.js')
@@ -144,8 +146,21 @@ dealsRouter.put('/:id', async (req, res) => {
     const _id = new ObjectId(req.params.id)
     const update: any = { ...parsed.data }
     if (update.accountId) update.accountId = new ObjectId(update.accountId)
+    const closedWon = 'Contract Signed / Closed Won'
     if (update.closeDate) update.closeDate = new Date(update.closeDate)
-    await db.collection('deals').updateOne({ _id }, { $set: update })
+
+    // Auto-populate closeDate when moving to Closed Won
+    if (update.stage === closedWon && !update.closeDate) {
+      update.closeDate = new Date()
+    }
+
+    // Build update doc with optional $unset when moving away from Closed Won
+    const updateDoc: any = { $set: update }
+    if (update.stage && update.stage !== closedWon) {
+      updateDoc.$unset = { closeDate: '' }
+    }
+
+    await db.collection('deals').updateOne({ _id }, updateDoc)
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
