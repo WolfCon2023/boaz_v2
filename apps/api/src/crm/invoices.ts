@@ -10,6 +10,9 @@ type InvoiceDoc = {
   balance?: number
   payments?: Payment[]
   refunds?: Refund[]
+  subscription?: { interval: 'monthly' | 'annual'; active: boolean; startedAt?: Date; canceledAt?: Date; nextInvoiceAt?: Date }
+  dunningState?: 'none' | 'first_notice' | 'second_notice' | 'final_notice' | 'collections'
+  lastDunningAt?: Date
 }
 
 export const invoicesRouter = Router()
@@ -174,6 +177,60 @@ invoicesRouter.post('/:id/refunds', async (req, res) => {
     await db.collection<InvoiceDoc>('invoices').updateOne(
       { _id },
       { $push: { refunds: { amount, reason, refundedAt } }, $set: { updatedAt: new Date(), balance: newBalance } },
+    )
+    res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// POST /api/crm/invoices/:id/subscribe { interval, startAt }
+invoicesRouter.post('/:id/subscribe', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const interval = (String(req.body?.interval || 'monthly') as 'monthly' | 'annual')
+    const startAt = req.body?.startAt ? new Date(req.body.startAt) : new Date()
+    const next = new Date(startAt)
+    if (interval === 'monthly') next.setMonth(next.getMonth() + 1)
+    else next.setFullYear(next.getFullYear() + 1)
+    await db.collection<InvoiceDoc>('invoices').updateOne(
+      { _id },
+      { $set: { updatedAt: new Date(), subscription: { interval, active: true, startedAt: startAt, nextInvoiceAt: next } } as any },
+    )
+    res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// POST /api/crm/invoices/:id/cancel-subscription
+invoicesRouter.post('/:id/cancel-subscription', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    await db.collection<InvoiceDoc>('invoices').updateOne(
+      { _id },
+      { $set: { updatedAt: new Date(), 'subscription.active': false, 'subscription.canceledAt': new Date() } as any },
+    )
+    res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// POST /api/crm/invoices/:id/dunning { state }
+invoicesRouter.post('/:id/dunning', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const state = (String(req.body?.state || 'none') as InvoiceDoc['dunningState'])
+    await db.collection<InvoiceDoc>('invoices').updateOne(
+      { _id },
+      { $set: { updatedAt: new Date(), dunningState: state, lastDunningAt: new Date() } as any },
     )
     res.json({ data: { ok: true }, error: null })
   } catch {

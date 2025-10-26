@@ -39,6 +39,20 @@ export default function CRMInvoices() {
     mutationFn: async (payload: any) => { const { _id, ...rest } = payload; const res = await http.put(`/api/crm/invoices/${_id}`, rest); return res.data },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
   })
+  const pay = useMutation({
+    mutationFn: async ({ id, amount, method }: { id: string; amount: number; method?: string }) => {
+      const res = await http.post(`/api/crm/invoices/${id}/payments`, { amount, method })
+      return res.data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+  })
+  const refund = useMutation({
+    mutationFn: async ({ id, amount, reason }: { id: string; amount: number; reason?: string }) => {
+      const res = await http.post(`/api/crm/invoices/${id}/refunds`, { amount, reason })
+      return res.data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+  })
 
   const visible = React.useMemo(() => {
     const ql = q.trim().toLowerCase()
@@ -190,6 +204,20 @@ export default function CRMInvoices() {
                     {accounts.map((a) => (<option key={a._id} value={a._id}>{(a.accountNumber ?? '—')} — {a.name ?? 'Account'}</option>))}
                   </select>
                 </label>
+                <div className="col-span-full mt-2 flex items-center gap-2">
+                  <input id="payAmount" type="number" step="0.01" placeholder="Payment amount" className="w-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => {
+                    const input = (document.getElementById('payAmount') as HTMLInputElement)
+                    const amt = Number(input.value)
+                    if (amt > 0) pay.mutate({ id: editing._id, amount: amt })
+                  }}>Apply payment</button>
+                  <input id="refundAmount" type="number" step="0.01" placeholder="Refund amount" className="w-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => {
+                    const input = (document.getElementById('refundAmount') as HTMLInputElement)
+                    const amt = Number(input.value)
+                    if (amt > 0) refund.mutate({ id: editing._id, amount: amt })
+                  }}>Issue refund</button>
+                </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
