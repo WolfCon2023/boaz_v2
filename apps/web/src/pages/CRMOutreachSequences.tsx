@@ -35,6 +35,8 @@ export default function CRMOutreachSequences() {
   const [editing, setEditing] = React.useState<Sequence | null>(null)
   const [showDef, setShowDef] = React.useState(true)
   const [showGuide, setShowGuide] = React.useState(true)
+  const [createError, setCreateError] = React.useState<string | null>(null)
+  const [editError, setEditError] = React.useState<string | null>(null)
 
   const visible = React.useMemo(() => {
     const ql = q.trim().toLowerCase()
@@ -88,7 +90,7 @@ export default function CRMOutreachSequences() {
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
         </div>
-        <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const name = String(fd.get('name')||''); const abGroup = String(fd.get('abGroup')||'') || undefined; const stepsRaw = String(fd.get('steps')||'').trim(); const steps = stepsRaw ? JSON.parse(stepsRaw) : []; create.mutate({ name, abGroup, steps }); (e.currentTarget as HTMLFormElement).reset() }}>
+        <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); setCreateError(null); const fd = new FormData(e.currentTarget); const name = String(fd.get('name')||''); const abGroup = String(fd.get('abGroup')||'') || undefined; const stepsRaw = String(fd.get('steps')||'').trim(); let steps: any[] = []; if (stepsRaw) { try { steps = JSON.parse(stepsRaw) } catch { setCreateError('Invalid JSON for Steps. Please ensure it is a valid JSON array.'); return } } create.mutate({ name, abGroup, steps }); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="name" required placeholder="Sequence name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="abGroup" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="">A/B Group (optional)</option>
@@ -97,6 +99,7 @@ export default function CRMOutreachSequences() {
           </select>
           <textarea name="steps" placeholder='Steps JSON (e.g., [{"dayOffset":0,"channel":"email"}])' className="sm:col-span-2 h-28 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
           <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add sequence</button>
+          {createError && <div className="sm:col-span-2 text-xs text-red-500">{createError}</div>}
         </form>
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]"><tr>
@@ -127,7 +130,7 @@ export default function CRMOutreachSequences() {
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
               <div className="mb-3 text-base font-semibold">Edit sequence</div>
-              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, name: String(fd.get('name')||'')||undefined, abGroup: String(fd.get('abGroup')||'')||undefined }; const stepsRaw = String(fd.get('steps')||'').trim(); if (stepsRaw) payload.steps = JSON.parse(stepsRaw); update.mutate(payload); setEditing(null) }}>
+              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setEditError(null); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, name: String(fd.get('name')||'')||undefined, abGroup: String(fd.get('abGroup')||'')||undefined }; const stepsRaw = String(fd.get('steps')||'').trim(); if (stepsRaw) { try { payload.steps = JSON.parse(stepsRaw) } catch { setEditError('Invalid JSON for Steps. Please ensure it is a valid JSON array.'); return } } update.mutate(payload); setEditing(null) }}>
                 <input name="name" defaultValue={editing.name ?? ''} placeholder="Sequence name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <select name="abGroup" defaultValue={editing.abGroup ?? ''} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                   <option value="">(none)</option>
@@ -135,6 +138,7 @@ export default function CRMOutreachSequences() {
                   <option value="B">B</option>
                 </select>
                 <textarea name="steps" defaultValue={JSON.stringify(editing.steps ?? [], null, 0)} placeholder='Steps JSON' className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+                {editError && <div className="sm:col-span-2 text-xs text-red-500">{editError}</div>}
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>

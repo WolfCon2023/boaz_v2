@@ -158,6 +158,7 @@ export default function CRMInvoices() {
                 <td className="px-4 py-2 flex items-center gap-2">
                   <span>{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '-'}</span>
                   <a href={`/apps/crm/invoices/${inv._id}/print`} onClick={(e) => e.stopPropagation()} className="ml-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]">Generate PDF</a>
+                  
                 </td>
               </tr>
             ))}
@@ -222,6 +223,7 @@ export default function CRMInvoices() {
                   }}>Issue refund</button>
                 </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
+                  <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) http.delete(`/api/crm/invoices/${editing._id}`).then(() => { qc.invalidateQueries({ queryKey: ['invoices'] }); setEditing(null) }) }}>Delete</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
                 </div>

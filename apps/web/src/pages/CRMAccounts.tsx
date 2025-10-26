@@ -151,7 +151,7 @@ export default function CRMAccounts() {
               <th className="px-4 py-2">Primary contact</th>
               <th className="px-4 py-2">Email</th>
               <th className="px-4 py-2">Phone</th>
-              <th className="px-4 py-2">Actions</th>
+              
             </tr>
           </thead>
           <tbody>
@@ -163,7 +163,7 @@ export default function CRMAccounts() {
                 <td className="px-4 py-2">{a.primaryContactName ?? '-'}</td>
                 <td className="px-4 py-2">{a.primaryContactEmail ?? '-'}</td>
                 <td className="px-4 py-2">{a.primaryContactPhone ?? '-'}</td>
-                <td className="px-4 py-2"><button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={(e) => { e.stopPropagation(); remove.mutate(a._id) }}>Delete</button></td>
+                
               </tr>
             ))}
           </tbody>
@@ -215,6 +215,7 @@ export default function CRMAccounts() {
                 <input name="primaryContactEmail" defaultValue={editing.primaryContactEmail ?? ''} placeholder="Primary contact email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="primaryContactPhone" defaultValue={editing.primaryContactPhone ?? ''} placeholder="Primary contact phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
+                  <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) remove.mutate(editing._id); setEditing(null) }}>Delete</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
                 </div>

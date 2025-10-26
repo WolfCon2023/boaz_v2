@@ -31,6 +31,19 @@ invoicesRouter.get('/:id', async (req, res) => {
   }
 })
 
+// DELETE /api/crm/invoices/:id
+invoicesRouter.delete('/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    await db.collection<InvoiceDoc>('invoices').deleteOne({ _id })
+    res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 // GET /api/crm/invoices?q=&sort=&dir=
 invoicesRouter.get('/', async (req, res) => {
   const db = await getDb()

@@ -130,6 +130,19 @@ dealsRouter.patch('/:id/stage', async (req, res) => {
   }
 })
 
+// DELETE /api/crm/deals/:id
+dealsRouter.delete('/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    await db.collection('deals').deleteOne({ _id })
+    res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 // PUT /api/crm/deals/:id
 dealsRouter.put('/:id', async (req, res) => {
   const schema = z.object({

@@ -78,6 +78,14 @@ async function main() {
     { title: 'Globex Invoice Q1', accountId: globexId, items: [], subtotal: 15000, tax: 1050, total: 16050, balance: 16050, currency: 'USD', status: 'draft', dueDate: new Date(Date.now()+30*24*60*60*1000), issuedAt: now, paidAt: null, createdAt: now, updatedAt: now, payments: [], refunds: [] },
   ])
 
+  // Outreach events sample
+  await db.collection('outreach_events').deleteMany({})
+  await db.collection('outreach_events').insertMany([
+    { channel: 'email', event: 'sent', recipient: 'john@example.com', at: new Date() },
+    { channel: 'email', event: 'opened', recipient: 'john@example.com', at: new Date() },
+    { channel: 'sms', event: 'delivered', recipient: '+15555550123', at: new Date() },
+  ])
+
   // Indexes
   await db.collection('contacts').createIndexes([
     { key: { email: 1 }, unique: false },

@@ -11,6 +11,7 @@ import { quotesRouter } from './crm/quotes.js'
 import { invoicesRouter } from './crm/invoices.js'
 import { outreachTemplatesRouter } from './crm/outreach_templates.js'
 import { outreachSequencesRouter } from './crm/outreach_sequences.js'
+import { outreachEventsRouter } from './crm/outreach_events.js'
 import { getDb } from './db.js'
 
 const app = express()
@@ -52,6 +53,7 @@ app.use('/api/crm/quotes', quotesRouter)
 app.use('/api/crm/invoices', invoicesRouter)
 app.use('/api/crm/outreach/templates', outreachTemplatesRouter)
 app.use('/api/crm/outreach/sequences', outreachSequencesRouter)
+app.use('/api/crm/outreach/events', outreachEventsRouter)
 
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))

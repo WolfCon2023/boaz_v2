@@ -25,6 +25,7 @@ async function main() {
   await ensure('invoices')
   await ensure('outreach_templates')
   await ensure('outreach_sequences')
+  await ensure('outreach_events')
   await ensure('activities')
   await ensure('appointments')
   await ensure('tasks')
@@ -64,6 +65,11 @@ async function main() {
   await db.collection('outreach_sequences').createIndexes([
     { key: { updatedAt: -1 } },
     { key: { name: 1 } },
+  ])
+  await db.collection('outreach_events').createIndexes([
+    { key: { at: -1 }, name: 'at_-1' },
+    { key: { event: 1 }, name: 'event_1' },
+    { key: { channel: 1 }, name: 'channel_1' },
   ])
   await db.collection('activities').createIndexes([
     { key: { accountId: 1 } },
