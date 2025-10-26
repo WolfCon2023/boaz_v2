@@ -2,6 +2,16 @@ import { Router } from 'express'
 import { ObjectId, Sort, SortDirection } from 'mongodb'
 import { getDb } from '../db.js'
 
+type Payment = { amount: number; method: string; paidAt: Date }
+type Refund = { amount: number; reason: string; refundedAt: Date }
+type InvoiceDoc = {
+  _id: ObjectId
+  total?: number
+  balance?: number
+  payments?: Payment[]
+  refunds?: Refund[]
+}
+
 export const invoicesRouter = Router()
 
 // GET /api/crm/invoices?q=&sort=&dir=
@@ -23,7 +33,7 @@ invoicesRouter.get('/', async (req, res) => {
       ] }
     : {}
 
-  const items = await db.collection('invoices').find(filter).sort(sort).limit(200).toArray()
+  const items = await db.collection<InvoiceDoc>('invoices').find(filter as any).sort(sort).limit(200).toArray()
   res.json({ data: { items }, error: null })
 })
 
@@ -84,7 +94,7 @@ invoicesRouter.post('/', async (req, res) => {
     } catch { doc.invoiceNumber = 700001 }
   }
 
-  const result = await db.collection('invoices').insertOne(doc)
+  const result = await db.collection<InvoiceDoc>('invoices').insertOne(doc as any)
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
@@ -106,13 +116,13 @@ invoicesRouter.put('/:id', async (req, res) => {
       update.tax = Number(raw.tax) || 0
       update.total = Number(raw.total) || (update.subtotal + update.tax)
       // Adjust balance if payments exist: balance = total - sum(payments) + sum(refunds)
-      const inv = await db.collection('invoices').findOne({ _id }, { projection: { payments: 1, refunds: 1 } })
+      const inv = await db.collection<InvoiceDoc>('invoices').findOne({ _id }, { projection: { payments: 1, refunds: 1 } })
       const paid = (inv?.payments ?? []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
       const refunded = (inv?.refunds ?? []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
       update.balance = Math.max(0, update.total - paid + refunded)
     }
     if (raw.accountId && ObjectId.isValid(raw.accountId)) update.accountId = new ObjectId(raw.accountId)
-    await db.collection('invoices').updateOne({ _id }, { $set: update })
+    await db.collection<InvoiceDoc>('invoices').updateOne({ _id }, { $set: update })
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
@@ -129,7 +139,7 @@ invoicesRouter.post('/:id/payments', async (req, res) => {
     if (!(amount > 0)) return res.status(400).json({ data: null, error: 'invalid_amount' })
     const method = String(req.body?.method || 'card')
     const paidAt = req.body?.paidAt ? new Date(req.body.paidAt) : new Date()
-    const inv = await db.collection('invoices').findOne({ _id }, { projection: { total: 1, balance: 1, payments: 1 } })
+    const inv = await db.collection<InvoiceDoc>('invoices').findOne({ _id }, { projection: { total: 1, balance: 1, payments: 1 } })
     if (!inv) return res.status(404).json({ data: null, error: 'not_found' })
     const newBalance = Math.max(0, Number(inv.balance ?? inv.total ?? 0) - amount)
     const fields: any = {
@@ -137,7 +147,7 @@ invoicesRouter.post('/:id/payments', async (req, res) => {
       balance: newBalance,
     }
     if (newBalance === 0) fields.paidAt = paidAt
-    await db.collection('invoices').updateOne(
+    await db.collection<InvoiceDoc>('invoices').updateOne(
       { _id },
       { $push: { payments: { amount, method, paidAt } }, $set: fields },
     )
@@ -157,11 +167,11 @@ invoicesRouter.post('/:id/refunds', async (req, res) => {
     if (!(amount > 0)) return res.status(400).json({ data: null, error: 'invalid_amount' })
     const reason = String(req.body?.reason || 'refund')
     const refundedAt = req.body?.refundedAt ? new Date(req.body.refundedAt) : new Date()
-    const inv = await db.collection('invoices').findOne({ _id }, { projection: { balance: 1 } })
+    const inv = await db.collection<InvoiceDoc>('invoices').findOne({ _id }, { projection: { balance: 1 } })
     if (!inv) return res.status(404).json({ data: null, error: 'not_found' })
     // Refunds increase balance (merchant owes customer) — we keep balance non-negative for simplicity
     const newBalance = Number(inv.balance ?? 0) + amount
-    await db.collection('invoices').updateOne(
+    await db.collection<InvoiceDoc>('invoices').updateOne(
       { _id },
       { $push: { refunds: { amount, reason, refundedAt } }, $set: { updatedAt: new Date(), balance: newBalance } },
     )
