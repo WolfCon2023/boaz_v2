@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { getDb } from '../db.js'
-import { ObjectId } from 'mongodb'
+import { ObjectId, Sort, SortDirection } from 'mongodb'
 
 export const quotesRouter = Router()
 
@@ -9,10 +9,12 @@ quotesRouter.get('/', async (req, res) => {
   const db = await getDb()
   if (!db) return res.json({ data: { items: [] }, error: null })
   const q = String((req.query.q as string) ?? '').trim()
-  const sortKey = (req.query.sort as string) ?? 'createdAt'
-  const dir = ((req.query.dir as string) ?? 'desc').toLowerCase() === 'asc' ? 1 : -1
-  const allowed: Record<string, 1 | -1> = { createdAt: dir, updatedAt: dir, quoteNumber: dir, status: dir, total: dir, title: dir }
-  const sort = allowed[sortKey] ? { [sortKey]: allowed[sortKey] } : { createdAt: -1 }
+  const sortKeyRaw = (req.query.sort as string) ?? 'createdAt'
+  const dirParam = ((req.query.dir as string) ?? 'desc').toLowerCase()
+  const dir: SortDirection = dirParam === 'asc' ? 1 : -1
+  const allowedKeys = new Set(['createdAt','updatedAt','quoteNumber','status','total','title'])
+  const sortField = allowedKeys.has(sortKeyRaw) ? sortKeyRaw : 'createdAt'
+  const sort: Sort = { [sortField]: dir }
   const filter: Record<string, unknown> = q
     ? { $or: [
         { title: { $regex: q, $options: 'i' } },
