@@ -18,13 +18,13 @@ export default function CRMOutreachEvents() {
   const [q, setQ] = React.useState('')
   const [eventFilter, setEventFilter] = React.useState('')
   const [channel, setChannel] = React.useState('')
-  const [sort, setSort] = React.useState<'at'>('at')
+  // Sorting is fixed by time (at)
   const [dir, setDir] = React.useState<'asc'|'desc'>('desc')
 
   const { data, isFetching } = useQuery({
-    queryKey: ['outreach-events', q, eventFilter, channel, sort, dir],
+    queryKey: ['outreach-events', q, eventFilter, channel, 'at', dir],
     queryFn: async () => {
-      const res = await http.get('/api/crm/outreach/events', { params: { q, event: eventFilter, channel, sort, dir } })
+      const res = await http.get('/api/crm/outreach/events', { params: { q, event: eventFilter, channel, sort: 'at', dir } })
       return res.data as { data: { items: EventItem[] } }
     },
   })
@@ -32,7 +32,7 @@ export default function CRMOutreachEvents() {
 
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
-  React.useEffect(() => { setPage(0) }, [q, eventFilter, channel, sort, dir, pageSize, isFetching])
+  React.useEffect(() => { setPage(0) }, [q, eventFilter, channel, dir, pageSize, isFetching])
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
   const pageItems = React.useMemo(() => items.slice(page * pageSize, page * pageSize + pageSize), [items, page, pageSize])
 
