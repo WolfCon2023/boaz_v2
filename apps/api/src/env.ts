@@ -31,6 +31,13 @@ const EnvSchema = z.object({
     )
     .default('http://localhost:5173'),
   MONGO_URL: z.string().url().optional(),
+  SENDGRID_API_KEY: z.string().optional(),
+  MAILGUN_API_KEY: z.string().optional(),
+  MAILGUN_DOMAIN: z.string().optional(),
+  OUTBOUND_EMAIL_FROM: z.string().email().optional(),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM_NUMBER: z.string().optional(),
 })
 
 const parsed = EnvSchema.safeParse(process.env)
