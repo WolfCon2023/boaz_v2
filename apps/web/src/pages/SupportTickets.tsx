@@ -17,6 +17,7 @@ type Ticket = {
   slaDueAt?: string | null
   createdAt?: string
   updatedAt?: string
+  comments?: { author?: string; body?: string; at?: string }[]
 }
 
 export default function SupportTickets() {
@@ -41,6 +42,10 @@ export default function SupportTickets() {
   })
   const update = useMutation({
     mutationFn: async (payload: any) => { const { _id, ...rest } = payload; const res = await http.put(`/api/crm/support/tickets/${_id}`, rest); return res.data },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['support-tickets'] }),
+  })
+  const addComment = useMutation({
+    mutationFn: async (payload: { _id: string, body: string }) => { const res = await http.post(`/api/crm/support/tickets/${payload._id}/comments`, { body: payload.body }); return res.data },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['support-tickets'] }),
   })
 
@@ -68,6 +73,20 @@ export default function SupportTickets() {
     setSlaValue(slaEditing.slaDueAt ? slaEditing.slaDueAt.slice(0, 16) : '')
     return () => { try { document.body.removeChild(el) } catch {}; setSlaPortal(null) }
   }, [slaEditing])
+
+  // Create-form SLA modal picker
+  const [createSlaOpen, setCreateSlaOpen] = React.useState(false)
+  const [createSlaPortal, setCreateSlaPortal] = React.useState<HTMLElement | null>(null)
+  const [createSlaValue, setCreateSlaValue] = React.useState('')
+  React.useEffect(() => {
+    if (!createSlaOpen) return
+    const el = document.createElement('div')
+    el.setAttribute('data-overlay', 'ticket-sla-create')
+    Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' })
+    document.body.appendChild(el)
+    setCreateSlaPortal(el)
+    return () => { try { document.body.removeChild(el) } catch {}; setCreateSlaPortal(null) }
+  }, [createSlaOpen])
 
   return (
     <div className="space-y-4">
@@ -104,11 +123,17 @@ export default function SupportTickets() {
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
         </div>
-        <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = String(fd.get('title')||''); const description = String(fd.get('description')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const slaDueAt = String(fd.get('slaDueAt')||'') || undefined; create.mutate({ title, description, status, priority, slaDueAt }); (e.currentTarget as HTMLFormElement).reset() }}>
+        <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = String(fd.get('title')||''); const description = String(fd.get('description')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const slaDueAt = createSlaValue || String(fd.get('slaDueAt')||'') || undefined; create.mutate({ title, description, status, priority, slaDueAt }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue('') }}>
           <input name="title" required placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="status" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option></select>
           <select name="priority" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select>
-          <input name="slaDueAt" type="datetime-local" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <div className="flex items-center gap-2">
+            <input name="slaDueAt" type="hidden" value={createSlaValue} readOnly />
+            <div className="text-sm text-[color:var(--color-text-muted)]">
+              {createSlaValue ? new Date(createSlaValue).toLocaleString() : 'SLA due (optional)'}
+            </div>
+            <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setCreateSlaOpen(true)}>Set</button>
+          </div>
           <input name="description" placeholder="Description" className="sm:col-span-2 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Create ticket</button>
         </form>
@@ -167,8 +192,30 @@ export default function SupportTickets() {
                 <select name="status" defaultValue={editing.status ?? 'open'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option></select>
                 <select name="priority" defaultValue={editing.priority ?? 'normal'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>low</option><option>normal</option><option>high</option><option>urgent</option></select>
                 <input name="assignee" defaultValue={editing.assignee ?? ''} placeholder="Assignee" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <input name="slaDueAt" type="datetime-local" defaultValue={editing.slaDueAt ? editing.slaDueAt.slice(0,16) : ''} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="flex items-center gap-2">
+                  <input name="slaDueAt" type="datetime-local" defaultValue={editing.slaDueAt ? editing.slaDueAt.slice(0,16) : ''} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                  <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">OK</button>
+                </div>
                 <input name="description" defaultValue={editing.description ?? ''} placeholder="Description" className="sm:col-span-2 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="sm:col-span-2 mt-2">
+                  <div className="mb-2 text-sm font-semibold">History</div>
+                  <div className="space-y-2 max-h-48 overflow-auto rounded-lg border border-[color:var(--color-border)] p-2">
+                    <div className="text-xs text-[color:var(--color-text-muted)]">Created: {editing.createdAt ? new Date(editing.createdAt).toLocaleString() : '-'}</div>
+                    {(editing.comments ?? []).map((c, idx) => (
+                      <div key={idx} className="text-sm">
+                        <div className="text-xs text-[color:var(--color-text-muted)]">{c.at ? new Date(c.at).toLocaleString() : ''} • {c.author || 'system'}</div>
+                        <div>{c.body}</div>
+                      </div>
+                    ))}
+                    {(!editing.comments || editing.comments.length === 0) && (
+                      <div className="text-xs text-[color:var(--color-text-muted)]">No comments yet.</div>
+                    )}
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-semibold">Add comment</label>
+                  <AddComment editing={editing} onAdded={(comment) => { setEditing((prev) => prev ? { ...prev, comments: [...(prev.comments ?? []), comment] } : prev) }} addComment={addComment} />
+                </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
@@ -185,15 +232,55 @@ export default function SupportTickets() {
             <div className="w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
               <div className="mb-3 text-base font-semibold">Set SLA due date/time</div>
               <div className="grid gap-2">
-                <input type="datetime-local" value={slaValue} onChange={(e) => setSlaValue(e.target.value)} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="flex items-center gap-2">
+                  <input type="datetime-local" value={slaValue} onChange={(e) => setSlaValue(e.target.value)} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                  <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={() => { if (slaEditing?._id) { update.mutate({ _id: slaEditing._id, slaDueAt: slaValue }); setSlaEditing(null) } }}>OK</button>
+                </div>
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <button className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setSlaEditing(null)}>Cancel</button>
-                  <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={() => { if (slaEditing?._id) { update.mutate({ _id: slaEditing._id, slaDueAt: slaValue }); setSlaEditing(null) } }}>OK</button>
                 </div>
               </div>
             </div>
           </div>
         </div>, slaPortal)}
+
+      {createSlaOpen && createSlaPortal && createPortal(
+        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
+          <div className="absolute inset-0 bg-black/60" onClick={() => setCreateSlaOpen(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+              <div className="mb-3 text-base font-semibold">Set SLA due date/time</div>
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <input type="datetime-local" value={createSlaValue} onChange={(e) => setCreateSlaValue(e.target.value)} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                  <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={() => setCreateSlaOpen(false)}>OK</button>
+                </div>
+                <div className="mt-2 flex items-center justify-end gap-2">
+                  <button className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => { setCreateSlaValue(''); setCreateSlaOpen(false) }}>Clear</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>, createSlaPortal)}
+    </div>
+  )
+}
+
+function AddComment({ editing, onAdded, addComment }: { editing: Ticket, onAdded: (c: { author?: string; body?: string; at?: string }) => void, addComment: ReturnType<typeof useMutation> }) {
+  const [value, setValue] = React.useState('')
+  return (
+    <div className="flex items-start gap-2">
+      <textarea value={value} onChange={(e) => setValue(e.target.value)} placeholder="Write a comment..." className="min-h-[72px] flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+      <div className="flex flex-col gap-2">
+        <button type="button" disabled={!value.trim()} className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50" onClick={async () => {
+          if (!value.trim()) return
+          await addComment.mutateAsync({ _id: editing._id, body: value.trim() })
+          const newComment = { author: 'you', body: value.trim(), at: new Date().toISOString() }
+          onAdded(newComment)
+          setValue('')
+        }}>Add</button>
+        <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setValue('')}>Clear</button>
+      </div>
     </div>
   )
 }
