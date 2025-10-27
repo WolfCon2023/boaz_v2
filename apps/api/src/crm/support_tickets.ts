@@ -87,7 +87,11 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
           // Align counter to current max then try once more
           const max = await coll.find({}, { projection: { ticketNumber: 1 } as any }).sort({ ticketNumber: -1 } as any).limit(1).toArray()
           const maxNum = max[0]?.ticketNumber ?? 200000
-          await db.collection('counters').updateOne({ _id: 'ticketNumber' }, { $set: { seq: maxNum } }, { upsert: true })
+          await db.collection<{ _id: string; seq: number }>('counters').updateOne(
+            { _id: 'ticketNumber' },
+            { $set: { seq: maxNum } },
+            { upsert: true }
+          )
           try {
             const { getNextSequence } = await import('../db.js')
             doc.ticketNumber = await getNextSequence('ticketNumber')
