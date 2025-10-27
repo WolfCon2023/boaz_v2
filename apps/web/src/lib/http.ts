@@ -15,6 +15,7 @@ if (typeof window !== 'undefined') {
 }
 
 export const http = axios.create({ baseURL })
+export const apiBaseURL = baseURL
 
 http.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')

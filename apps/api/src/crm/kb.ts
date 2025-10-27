@@ -60,6 +60,20 @@ kbRouter.get('/kb', async (req, res) => {
   res.json({ data: { items }, error: null })
 })
 
+// GET /api/crm/support/kb/:id
+kbRouter.get('/kb/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const item = await db.collection('kb_articles').findOne({ _id })
+    if (!item) return res.status(404).json({ data: null, error: 'not_found' })
+    res.json({ data: { item }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 // POST /api/crm/support/kb
 kbRouter.post('/kb', async (req, res) => {
   const db = await getDb()

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { CRMNav } from '@/components/CRMNav'
-import { http } from '@/lib/http'
+import { http, apiBaseURL } from '@/lib/http'
 
 type Article = { _id: string; title?: string; body?: string; tags?: string[]; category?: string; updatedAt?: string; attachments?: { _id: string; filename: string; contentType?: string; size?: number }[] }
 
@@ -167,7 +167,7 @@ export default function KnowledgeBase() {
                     )}
                     {(editing.attachments ?? []).map((att) => (
                       <div key={att._id} className="flex items-center justify-between gap-2">
-                        <a href={`/api/crm/support/kb/${editing._id}/attachments/${att._id}`} target="_blank" rel="noopener noreferrer" className="truncate text-[color:var(--color-primary-600)] hover:underline">
+                        <a href={`${apiBaseURL}/api/crm/support/kb/${editing._id}/attachments/${att._id}`} target="_blank" rel="noopener noreferrer" className="truncate text-[color:var(--color-primary-600)] hover:underline">
                           {att.filename}
                         </a>
                         <div className="flex items-center gap-2">
