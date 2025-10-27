@@ -81,19 +81,18 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
         return res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
       } catch (errInsert: any) {
         if (errInsert && typeof errInsert === 'object' && 'code' in errInsert && errInsert.code === 11000) {
-          // Align counter to current max then fetch a fresh sequence
-          const max = await coll
+          // Align counter and pick next number deterministically from current max
+          const maxDocs = await coll
             .find({}, { projection: { ticketNumber: 1 } as any })
             .sort({ ticketNumber: -1 } as any)
             .limit(1)
             .toArray()
-          const maxNum = max[0]?.ticketNumber ?? 200000
+          const maxNum = maxDocs[0]?.ticketNumber ?? 200000
           await db
             .collection<{ _id: string; seq: number }>('counters')
-            .updateOne({ _id: 'ticketNumber', seq: { $lt: maxNum } }, { $set: { seq: maxNum } }, { upsert: true })
-          try {
-            doc.ticketNumber = await getNextSequence('ticketNumber')
-          } catch {}
+            .updateOne({ _id: 'ticketNumber' }, [{ $set: { seq: { $max: [ '$seq', maxNum ] } } }] as any, { upsert: true })
+          // Set next candidate directly to max+1 to break tie immediately
+          doc.ticketNumber = (maxNum ?? 200000) + 1
           continue
         }
         throw errInsert
