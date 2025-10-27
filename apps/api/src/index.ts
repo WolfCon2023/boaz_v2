@@ -13,6 +13,8 @@ import { outreachTemplatesRouter } from './crm/outreach_templates.js'
 import { outreachSequencesRouter } from './crm/outreach_sequences.js'
 import { outreachEventsRouter } from './crm/outreach_events.js'
 import { outreachSendRouter } from './crm/outreach_send.js'
+import { outreachEnrollmentsRouter } from './crm/outreach_enrollments.js'
+import { outreachSchedulerRouter } from './crm/outreach_scheduler.js'
 import { getDb } from './db.js'
 
 const app = express()
@@ -56,6 +58,8 @@ app.use('/api/crm/outreach/templates', outreachTemplatesRouter)
 app.use('/api/crm/outreach/sequences', outreachSequencesRouter)
 app.use('/api/crm/outreach/events', outreachEventsRouter)
 app.use('/api/crm/outreach/send', outreachSendRouter)
+app.use('/api/crm/outreach/enroll', outreachEnrollmentsRouter)
+app.use('/api/crm/outreach/scheduler', outreachSchedulerRouter)
 
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))

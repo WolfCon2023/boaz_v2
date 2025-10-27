@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
@@ -93,6 +93,23 @@ export default function CRMContacts() {
     return rows
   }, [items, q, sort, dir])
 
+  // Outreach: sequences list for enroll action
+  const seqs = useQuery({
+    queryKey: ['outreach-sequences-pick'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/outreach/sequences', { params: { sort: 'name', dir: 'asc' } })
+      return res.data as { data: { items: Array<{ _id: string; name?: string }> } }
+    },
+  })
+  const enrollmentsQ = useQuery({
+    queryKey: ['outreach-enrollments', editing?._id],
+    enabled: Boolean(editing?._id),
+    queryFn: async () => {
+      const res = await http.get('/api/crm/outreach/enroll', { params: { contactId: editing?._id } })
+      return res.data as { data: { items: Array<{ _id: string; sequenceId: string; startedAt: string; lastStepIndex?: number; completedAt?: string | null }> } }
+    },
+  })
+
   return (
     <div className="space-y-4">
       <CRMNav />
@@ -123,8 +140,6 @@ export default function CRMContacts() {
         <div className="flex items-center justify-between px-4 gap-2">
           <div className="flex items-center gap-2">
             <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); refetch() }} placeholder="Search contacts..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-            <button type="button" onClick={() => { setQ(''); setPage(0); refetch() }} disabled={!q}
-              className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">Clear</button>
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as any)}
@@ -180,7 +195,6 @@ export default function CRMContacts() {
               <th className="px-4 py-2">Office</th>
               <th className="px-4 py-2">Primary</th>
               <th className="px-4 py-2">Primary phone</th>
-              
             </tr>
           </thead>
           <tbody>
@@ -193,7 +207,6 @@ export default function CRMContacts() {
                 <td className="px-4 py-2">{c.officePhone ?? '-'}</td>
                 <td className="px-4 py-2">{c.isPrimary ? 'Yes' : 'No'}</td>
                 <td className="px-4 py-2">{c.primaryPhone ?? '-'}</td>
-                
               </tr>
             ))}
           </tbody>
@@ -257,6 +270,34 @@ export default function CRMContacts() {
                   <option value="office">Office</option>
                 </select>
               </label>
+
+              <div className="col-span-full mt-4 rounded-xl border border-[color:var(--color-border)] p-3">
+                <div className="mb-2 text-sm font-semibold">Outreach actions</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); http.post('/api/crm/outreach/enroll', { contactId: editing._id, sequenceId: String(fd.get('sequenceId')||'') }).then(() => alert('Enrolled')); }}>
+                    <label className="text-xs">Enroll in sequence</label>
+                    <select name="sequenceId" className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+                      {(seqs.data?.data.items ?? []).map((s) => (<option key={s._id} value={s._id}>{s.name ?? 'Sequence'}</option>))}
+                    </select>
+                    <button className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]">Enroll</button>
+                  </form>
+                  <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); const to = editing.email || ''; const text = String(fd.get('text')||''); if (text) http.post('/api/crm/outreach/send/email', { to, subject: 'Message', text }).then(() => alert('Sent')); }}>
+                    <label className="text-xs">Send one‑off email</label>
+                    <input name="text" placeholder="Body" className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
+                    <button className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]">Send</button>
+                  </form>
+                </div>
+                <div className="mt-3 text-xs">
+                  <div className="mb-1 font-semibold">Current enrollments</div>
+                  <ul className="list-disc pl-5">
+                    {(enrollmentsQ.data?.data.items ?? []).map((en) => (
+                      <li key={en._id}>Seq: {en.sequenceId} • Started: {new Date(en.startedAt).toLocaleDateString()} • Step: {(en.lastStepIndex ?? -1) + 1} {en.completedAt ? '• Completed' : ''}</li>
+                    ))}
+                    {((enrollmentsQ.data?.data.items ?? []).length === 0) && <li>None</li>}
+                  </ul>
+                </div>
+              </div>
+
               <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                 <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) remove.mutate(editing._id); setEditing(null) }}>Delete</button>
                 <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>

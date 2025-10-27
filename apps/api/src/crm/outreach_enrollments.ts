@@ -1,0 +1,35 @@
+import { Router } from 'express'
+import { getDb } from '../db.js'
+import { ObjectId } from 'mongodb'
+
+export const outreachEnrollmentsRouter = Router()
+
+// GET /api/crm/outreach/enroll?contactId=...
+outreachEnrollmentsRouter.get('/', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.json({ data: { items: [] }, error: null })
+  const contactId = String(req.query.contactId || '')
+  if (!contactId || !ObjectId.isValid(contactId)) return res.json({ data: { items: [] }, error: null })
+  const items = await db
+    .collection('outreach_enrollments')
+    .find({ contactId: new ObjectId(contactId) })
+    .sort({ startedAt: -1 })
+    .limit(50)
+    .toArray()
+  res.json({ data: { items }, error: null })
+})
+
+// POST /api/crm/outreach/enroll { contactId, sequenceId, startAt }
+outreachEnrollmentsRouter.post('/', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const { contactId, sequenceId, startAt } = req.body ?? {}
+  if (!ObjectId.isValid(contactId) || !ObjectId.isValid(sequenceId)) return res.status(400).json({ data: null, error: 'invalid_payload' })
+  const doc: any = { contactId: new ObjectId(contactId), sequenceId: new ObjectId(sequenceId), startedAt: startAt ? new Date(startAt) : new Date(), lastStepIndex: -1, completedAt: null }
+  const r = await db.collection('outreach_enrollments').insertOne(doc)
+  res.status(201).json({ data: { _id: r.insertedId }, error: null })
+})
+
+// (scheduler moved to outreach_scheduler.ts)
+
+

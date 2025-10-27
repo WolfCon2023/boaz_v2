@@ -37,6 +37,16 @@ export default function CRMOutreachSequences() {
   const [showGuide, setShowGuide] = React.useState(true)
   const [createError, setCreateError] = React.useState<string | null>(null)
   const [editError, setEditError] = React.useState<string | null>(null)
+  const [editName, setEditName] = React.useState('')
+  const [editAB, setEditAB] = React.useState('')
+  const [editSteps, setEditSteps] = React.useState('[]')
+
+  React.useEffect(() => {
+    if (!editing) return
+    setEditName(editing.name ?? '')
+    setEditAB(editing.abGroup ?? '')
+    try { setEditSteps(JSON.stringify(editing.steps ?? [], null, 0)) } catch { setEditSteps('[]') }
+  }, [editing])
 
   const visible = React.useMemo(() => {
     const ql = q.trim().toLowerCase()
@@ -130,14 +140,14 @@ export default function CRMOutreachSequences() {
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
               <div className="mb-3 text-base font-semibold">Edit sequence</div>
-              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); setEditError(null); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, name: String(fd.get('name')||'')||undefined, abGroup: String(fd.get('abGroup')||'')||undefined }; const stepsRaw = String(fd.get('steps')||'').trim(); if (stepsRaw) { try { payload.steps = JSON.parse(stepsRaw) } catch { setEditError('Invalid JSON for Steps. Please ensure it is a valid JSON array.'); return } } update.mutate(payload); setEditing(null) }}>
-                <input name="name" defaultValue={editing.name ?? ''} placeholder="Sequence name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <select name="abGroup" defaultValue={editing.abGroup ?? ''} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+              <form className="grid gap-2 sm:grid-cols-2" onSubmit={async (e) => { e.preventDefault(); setEditError(null); const payload: any = { _id: editing._id, name: editName || undefined, abGroup: editAB ? editAB : null }; const stepsRaw = editSteps.trim(); if (stepsRaw) { try { payload.steps = JSON.parse(stepsRaw) } catch { setEditError('Invalid JSON for Steps. Please ensure it is a valid JSON array.'); return } } try { await update.mutateAsync(payload); setEditing(null) } catch { setEditError('Save failed. Please try again.'); } }}>
+                <input name="name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Sequence name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <select name="abGroup" value={editAB} onChange={(e) => setEditAB(e.target.value)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                   <option value="">(none)</option>
                   <option value="A">A</option>
                   <option value="B">B</option>
                 </select>
-                <textarea name="steps" defaultValue={JSON.stringify(editing.steps ?? [], null, 0)} placeholder='Steps JSON' className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+                <textarea name="steps" value={editSteps} onChange={(e) => setEditSteps(e.target.value)} placeholder='Steps JSON' className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
                 {editError && <div className="sm:col-span-2 text-xs text-red-500">{editError}</div>}
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
