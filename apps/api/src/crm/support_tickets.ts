@@ -109,7 +109,16 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
     if (err && typeof err === 'object' && 'code' in err && (err as any).code === 11000) {
       return res.status(409).json({ data: null, error: 'duplicate_ticketNumber' })
     }
-    return res.status(500).json({ data: null, error: 'insert_failed' })
+    const details: any = {}
+    if (err && typeof err === 'object') {
+      if ('message' in err && typeof (err as any).message === 'string') details.message = (err as any).message
+      if ('code' in err && typeof (err as any).code !== 'undefined') details.code = (err as any).code
+      if ('name' in err && typeof (err as any).name === 'string') details.name = (err as any).name
+      if ('errmsg' in err && typeof (err as any).errmsg === 'string') details.errmsg = (err as any).errmsg
+      if ('keyPattern' in err) details.keyPattern = (err as any).keyPattern
+      if ('keyValue' in err) details.keyValue = (err as any).keyValue
+    }
+    return res.status(500).json({ data: null, error: 'insert_failed', details })
   }
 })
 
