@@ -76,6 +76,15 @@ export default function CRMAccounts() {
   })
 
   const [editing, setEditing] = React.useState<Account | null>(null)
+  const [showHistory, setShowHistory] = React.useState(false)
+  const historyQ = useQuery({
+    queryKey: ['account-history', editing?._id, showHistory],
+    enabled: Boolean(editing?._id && showHistory),
+    queryFn: async () => {
+      const res = await http.get(`/api/crm/accounts/${editing?._id}/history`)
+      return res.data as { data: { createdAt: string; deals: any[]; quotes: any[]; invoices: any[]; activities: any[] } }
+    },
+  })
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   React.useEffect(() => {
     if (!editing) return
@@ -216,9 +225,36 @@ export default function CRMAccounts() {
                 <input name="primaryContactPhone" defaultValue={editing.primaryContactPhone ?? ''} placeholder="Primary contact phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) remove.mutate(editing._id); setEditing(null) }}>Delete</button>
+                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
                 </div>
+                {showHistory && (
+                  <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs">
+                    {historyQ.isLoading && <div>Loading…</div>}
+                    {historyQ.data && (
+                      <div className="space-y-2">
+                        <div>Created: {new Date(historyQ.data.data.createdAt).toLocaleString()}</div>
+                        <div>
+                          <div className="font-semibold">Deals</div>
+                          <ul className="list-disc pl-5">{historyQ.data.data.deals.map((d, i) => (<li key={i}>{d.dealNumber ?? ''} {d.title ?? ''} {d.amount ? `$${d.amount}` : ''} {d.stage ?? ''} {d.closeDate ? `• Close: ${new Date(d.closeDate).toLocaleDateString()}` : ''}</li>))}{historyQ.data.data.deals.length===0 && <li>None</li>}</ul>
+                        </div>
+                        <div>
+                          <div className="font-semibold">Quotes</div>
+                          <ul className="list-disc pl-5">{historyQ.data.data.quotes.map((q, i) => (<li key={i}>{q.quoteNumber ?? ''} {q.title ?? ''} ${q.total ?? ''} {q.status ?? ''} {q.updatedAt ? `• Updated: ${new Date(q.updatedAt).toLocaleString()}` : ''}</li>))}{historyQ.data.data.quotes.length===0 && <li>None</li>}</ul>
+                        </div>
+                        <div>
+                          <div className="font-semibold">Invoices</div>
+                          <ul className="list-disc pl-5">{historyQ.data.data.invoices.map((inv, i) => (<li key={i}>{inv.invoiceNumber ?? ''} {inv.title ?? ''} ${inv.total ?? ''} {inv.status ?? ''} {inv.issuedAt ? `• Issued: ${new Date(inv.issuedAt).toLocaleDateString()}` : ''} {inv.dueDate ? `• Due: ${new Date(inv.dueDate).toLocaleDateString()}` : ''}</li>))}{historyQ.data.data.invoices.length===0 && <li>None</li>}</ul>
+                        </div>
+                        <div>
+                          <div className="font-semibold">Activities</div>
+                          <ul className="list-disc pl-5">{historyQ.data.data.activities.map((a, i) => (<li key={i}>{new Date(a.at).toLocaleString()} — {a.type ?? ''} {a.subject ?? ''}</li>))}{historyQ.data.data.activities.length===0 && <li>None</li>}</ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </form>
             </div>
           </div>

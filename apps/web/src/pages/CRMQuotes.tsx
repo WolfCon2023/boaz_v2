@@ -88,6 +88,12 @@ export default function CRMQuotes() {
   const pageItems = React.useMemo(() => visible.slice(page * pageSize, page * pageSize + pageSize), [visible, page, pageSize])
 
   const [editing, setEditing] = React.useState<Quote | null>(null)
+  const [showHistory, setShowHistory] = React.useState(false)
+  const historyQ = useQuery({
+    queryKey: ['quote-history', editing?._id, showHistory],
+    enabled: Boolean(editing?._id && showHistory),
+    queryFn: async () => { const res = await http.get(`/api/crm/quotes/${editing?._id}/history`); return res.data as { data: { createdAt: string; quote: any } } },
+  })
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   React.useEffect(() => {
     if (!editing) return
@@ -276,9 +282,17 @@ export default function CRMQuotes() {
                 <input name="signerEmail" defaultValue={editing.signerEmail ?? ''} placeholder="Signer email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) http.delete(`/api/crm/quotes/${editing._id}`).then(() => { qc.invalidateQueries({ queryKey: ['quotes'] }); setEditing(null) }) }}>Delete</button>
+                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
                 </div>
+                {showHistory && historyQ.data && (
+                  <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs">
+                    <div>Created: {new Date(historyQ.data.data.createdAt).toLocaleString()}</div>
+                    <div className="mt-1">Title: {historyQ.data.data.quote?.title ?? ''} • Status: {historyQ.data.data.quote?.status ?? ''} • Total: {historyQ.data.data.quote?.total ?? ''}</div>
+                    <div>Updated: {historyQ.data.data.quote?.updatedAt ? new Date(historyQ.data.data.quote.updatedAt).toLocaleString() : ''}</div>
+                  </div>
+                )}
               </form>
             </div>
           </div>

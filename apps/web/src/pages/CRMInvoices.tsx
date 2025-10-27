@@ -78,6 +78,12 @@ export default function CRMInvoices() {
   const pageItems = React.useMemo(() => visible.slice(page * pageSize, page * pageSize + pageSize), [visible, page, pageSize])
 
   const [editing, setEditing] = React.useState<Invoice | null>(null)
+  const [showHistory, setShowHistory] = React.useState(false)
+  const historyQ = useQuery({
+    queryKey: ['invoice-history', editing?._id, showHistory],
+    enabled: Boolean(editing?._id && showHistory),
+    queryFn: async () => { const res = await http.get(`/api/crm/invoices/${editing?._id}/history`); return res.data as { data: { createdAt: string; payments: any[]; refunds: any[]; invoice: any } } },
+  })
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   React.useEffect(() => { if (!editing) return; const el = document.createElement('div'); el.setAttribute('data-overlay', 'invoice-editor'); Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' }); document.body.appendChild(el); setPortalEl(el); return () => { try { document.body.removeChild(el) } catch {}; setPortalEl(null) } }, [editing])
 
@@ -224,9 +230,20 @@ export default function CRMInvoices() {
                 </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) http.delete(`/api/crm/invoices/${editing._id}`).then(() => { qc.invalidateQueries({ queryKey: ['invoices'] }); setEditing(null) }) }}>Delete</button>
+                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
                 </div>
+                {showHistory && historyQ.data && (
+                  <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs">
+                    <div>Created: {new Date(historyQ.data.data.createdAt).toLocaleString()}</div>
+                    <div className="mt-1">Invoice: {historyQ.data.data.invoice?.invoiceNumber ?? ''} {historyQ.data.data.invoice?.title ?? ''} • Status: {historyQ.data.data.invoice?.status ?? ''}</div>
+                    <div className="mt-2 font-semibold">Payments</div>
+                    <ul className="list-disc pl-5">{historyQ.data.data.payments.map((p, i) => (<li key={i}>${p.amount ?? ''} • {p.method ?? ''} • {p.paidAt ? new Date(p.paidAt).toLocaleString() : ''}</li>))}{historyQ.data.data.payments.length===0 && <li>None</li>}</ul>
+                    <div className="mt-2 font-semibold">Refunds</div>
+                    <ul className="list-disc pl-5">{historyQ.data.data.refunds.map((r, i) => (<li key={i}>${r.amount ?? ''} • {r.reason ?? ''} • {r.refundedAt ? new Date(r.refundedAt).toLocaleString() : ''}</li>))}{historyQ.data.data.refunds.length===0 && <li>None</li>}</ul>
+                  </div>
+                )}
               </form>
             </div>
           </div>

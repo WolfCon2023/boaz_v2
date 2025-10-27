@@ -27,6 +27,8 @@ async function main() {
   await ensure('outreach_sequences')
   await ensure('outreach_events')
   await ensure('outreach_enrollments')
+  await ensure('support_tickets')
+  await ensure('kb_articles')
   await ensure('activities')
   await ensure('appointments')
   await ensure('tasks')
@@ -78,6 +80,19 @@ async function main() {
     { key: { startedAt: -1 }, name: 'startedAt_-1' },
     { key: { completedAt: 1 }, name: 'completedAt_1' },
   ])
+  await db.collection('support_tickets').createIndexes([
+    { key: { ticketNumber: 1 }, name: 'ticketNumber_1' },
+    { key: { status: 1 }, name: 'status_1' },
+    { key: { priority: 1 }, name: 'priority_1' },
+    { key: { accountId: 1 }, name: 'accountId_1' },
+    { key: { contactId: 1 }, name: 'contactId_1' },
+    { key: { createdAt: -1 }, name: 'createdAt_-1' },
+  ])
+  await db.collection('kb_articles').createIndexes([
+    { key: { updatedAt: -1 }, name: 'updatedAt_-1' },
+    { key: { title: 1 }, name: 'title_1' },
+    { key: { tags: 1 }, name: 'tags_1' },
+  ])
   await db.collection('activities').createIndexes([
     { key: { accountId: 1 } },
     { key: { at: -1 } },
@@ -98,6 +113,11 @@ async function main() {
   await db.collection('counters').updateOne(
     { _id: 'invoiceNumber' },
     { $setOnInsert: { seq: 700000 } },
+    { upsert: true }
+  )
+  await db.collection('counters').updateOne(
+    { _id: 'ticketNumber' },
+    { $setOnInsert: { seq: 200000 } },
     { upsert: true }
   )
 
