@@ -47,29 +47,37 @@ supportTicketsRouter.get('/tickets', async (req, res) => {
 supportTicketsRouter.post('/tickets', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  const raw = req.body ?? {}
-  const title = typeof raw.title === 'string' ? raw.title.trim() : ''
-  if (!title) return res.status(400).json({ data: null, error: 'invalid_payload' })
-  const doc: any = {
-    title,
-    description: typeof raw.description === 'string' ? raw.description : '',
-    status: (raw.status as string) || 'open', // open, pending, resolved, closed
-    priority: (raw.priority as string) || 'normal', // low, normal, high, urgent
-    accountId: ObjectId.isValid(raw.accountId) ? new ObjectId(raw.accountId) : null,
-    contactId: ObjectId.isValid(raw.contactId) ? new ObjectId(raw.contactId) : null,
-    assignee: raw.assignee || null,
-    slaDueAt: raw.slaDueAt ? new Date(raw.slaDueAt) : null,
-    comments: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }
   try {
-    const { getNextSequence } = await import('../db.js')
-    doc.ticketNumber = await getNextSequence('ticketNumber')
-  } catch {}
-  if (doc.ticketNumber == null) doc.ticketNumber = 200001
-  const result = await db.collection<TicketDoc>('support_tickets').insertOne(doc)
-  res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
+    const raw = req.body ?? {}
+    const title = typeof raw.title === 'string' ? raw.title.trim() : ''
+    if (!title) return res.status(400).json({ data: null, error: 'invalid_payload' })
+    const doc: TicketDoc = {
+      title,
+      description: typeof raw.description === 'string' ? raw.description : '',
+      status: (raw.status as string) || 'open',
+      priority: (raw.priority as string) || 'normal',
+      accountId: ObjectId.isValid(raw.accountId) ? new ObjectId(raw.accountId) : null,
+      contactId: ObjectId.isValid(raw.contactId) ? new ObjectId(raw.contactId) : null,
+      assignee: (raw.assignee as any) || null,
+      slaDueAt: raw.slaDueAt ? new Date(raw.slaDueAt) : null,
+      comments: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+    try {
+      const { getNextSequence } = await import('../db.js')
+      doc.ticketNumber = await getNextSequence('ticketNumber')
+    } catch {}
+    if (doc.ticketNumber == null) doc.ticketNumber = 200001
+    const result = await db.collection<TicketDoc>('support_tickets').insertOne(doc)
+    return res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
+  } catch (err: any) {
+    console.error('create_ticket_error', err)
+    if (err && typeof err === 'object' && 'code' in err && (err as any).code === 11000) {
+      return res.status(409).json({ data: null, error: 'duplicate_ticketNumber' })
+    }
+    return res.status(500).json({ data: null, error: 'insert_failed' })
+  }
 })
 
 // PUT /api/crm/support/tickets/:id
