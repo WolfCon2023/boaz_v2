@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { getDb } from '../db.js'
+import { getDb, getNextSequence } from '../db.js'
 import { ObjectId, Sort } from 'mongodb'
 
 export const supportTicketsRouter = Router()
@@ -65,7 +65,6 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
       updatedAt: new Date(),
     }
     try {
-      const { getNextSequence } = await import('../db.js')
       doc.ticketNumber = await getNextSequence('ticketNumber')
     } catch {}
     if (doc.ticketNumber == null) doc.ticketNumber = 200001
@@ -78,7 +77,6 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
       // Retry on duplicate ticketNumber by fetching a new sequence
       if (e1 && typeof e1 === 'object' && 'code' in e1 && e1.code === 11000) {
         try {
-          const { getNextSequence } = await import('../db.js')
           doc.ticketNumber = await getNextSequence('ticketNumber')
           const r2 = await coll.insertOne(doc)
           return res.status(201).json({ data: { _id: r2.insertedId, ...doc }, error: null })
@@ -93,7 +91,6 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
             { upsert: true }
           )
           try {
-            const { getNextSequence } = await import('../db.js')
             doc.ticketNumber = await getNextSequence('ticketNumber')
             const r3 = await coll.insertOne(doc)
             return res.status(201).json({ data: { _id: r3.insertedId, ...doc }, error: null })
