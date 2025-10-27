@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { getDb } from '../db.js'
-import { ObjectId } from 'mongodb'
+import { ObjectId, Sort } from 'mongodb'
 
 export const kbRouter = Router()
 
@@ -12,7 +12,7 @@ kbRouter.get('/kb', async (req, res) => {
   const tag = String((req.query.tag as string) ?? '')
   const dir = ((req.query.dir as string) ?? 'desc').toLowerCase() === 'asc' ? 1 : -1
   const sortKey = (req.query.sort as string) ?? 'updatedAt'
-  const sort = { [sortKey]: dir }
+  const sort: Sort = { [sortKey]: dir as 1 | -1 }
   const filter: any = {}
   if (q) filter.$or = [{ title: { $regex: q, $options: 'i' } }, { body: { $regex: q, $options: 'i' } }]
   if (tag) filter.tags = tag
