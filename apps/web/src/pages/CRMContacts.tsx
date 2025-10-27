@@ -105,7 +105,7 @@ export default function CRMContacts() {
     queryKey: ['outreach-enrollments', editing?._id],
     enabled: Boolean(editing?._id),
     queryFn: async () => {
-      const res = await http.get('/api/crm/outreach/enroll', { params: { contactId: editing?._id } })
+      const res = await http.get('/api/crm/outreach/enroll', { params: { contactId: editing?._id, includeCompleted: false } })
       return res.data as { data: { items: Array<{ _id: string; sequenceId: string; startedAt: string; lastStepIndex?: number; completedAt?: string | null }> } }
     },
   })

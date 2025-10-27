@@ -10,9 +10,12 @@ outreachEnrollmentsRouter.get('/', async (req, res) => {
   if (!db) return res.json({ data: { items: [] }, error: null })
   const contactId = String(req.query.contactId || '')
   if (!contactId || !ObjectId.isValid(contactId)) return res.json({ data: { items: [] }, error: null })
+  const includeCompleted = String(req.query.includeCompleted || 'false').toLowerCase() === 'true' || String(req.query.includeCompleted) === '1'
+  const filter: any = { contactId: new ObjectId(contactId) }
+  if (!includeCompleted) filter.completedAt = null
   const items = await db
     .collection('outreach_enrollments')
-    .find({ contactId: new ObjectId(contactId) })
+    .find(filter)
     .sort({ startedAt: -1 })
     .limit(50)
     .toArray()
