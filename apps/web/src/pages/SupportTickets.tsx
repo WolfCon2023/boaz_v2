@@ -266,7 +266,7 @@ export default function SupportTickets() {
   )
 }
 
-function AddComment({ editing, onAdded, addComment }: { editing: Ticket, onAdded: (c: { author?: string; body?: string; at?: string }) => void, addComment: ReturnType<typeof useMutation> }) {
+function AddComment({ editing, onAdded, addComment }: { editing: Ticket, onAdded: (c: { author?: string; body?: string; at?: string }) => void, addComment: { mutateAsync: (vars: { _id: string; body: string }) => Promise<any> } }) {
   const [value, setValue] = React.useState('')
   return (
     <div className="flex items-start gap-2">
