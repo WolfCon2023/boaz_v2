@@ -69,8 +69,40 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
       doc.ticketNumber = await getNextSequence('ticketNumber')
     } catch {}
     if (doc.ticketNumber == null) doc.ticketNumber = 200001
-    const result = await db.collection<TicketDoc>('support_tickets').insertOne(doc)
-    return res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
+
+    const coll = db.collection<TicketDoc>('support_tickets')
+    try {
+      const result = await coll.insertOne(doc)
+      return res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
+    } catch (e1: any) {
+      // Retry on duplicate ticketNumber by fetching a new sequence
+      if (e1 && typeof e1 === 'object' && 'code' in e1 && e1.code === 11000) {
+        try {
+          const { getNextSequence } = await import('../db.js')
+          doc.ticketNumber = await getNextSequence('ticketNumber')
+          const r2 = await coll.insertOne(doc)
+          return res.status(201).json({ data: { _id: r2.insertedId, ...doc }, error: null })
+        } catch (e2: any) {
+          if (!(e2 && typeof e2 === 'object' && 'code' in e2 && e2.code === 11000)) throw e2
+          // Align counter to current max then try once more
+          const max = await coll.find({}, { projection: { ticketNumber: 1 } as any }).sort({ ticketNumber: -1 } as any).limit(1).toArray()
+          const maxNum = max[0]?.ticketNumber ?? 200000
+          await db.collection('counters').updateOne({ _id: 'ticketNumber' }, { $set: { seq: maxNum } }, { upsert: true })
+          try {
+            const { getNextSequence } = await import('../db.js')
+            doc.ticketNumber = await getNextSequence('ticketNumber')
+            const r3 = await coll.insertOne(doc)
+            return res.status(201).json({ data: { _id: r3.insertedId, ...doc }, error: null })
+          } catch (e3: any) {
+            if (e3 && typeof e3 === 'object' && 'code' in e3 && e3.code === 11000) {
+              return res.status(409).json({ data: null, error: 'duplicate_ticketNumber' })
+            }
+            throw e3
+          }
+        }
+      }
+      throw e1
+    }
   } catch (err: any) {
     console.error('create_ticket_error', err)
     if (err && typeof err === 'object' && 'code' in err && (err as any).code === 11000) {
