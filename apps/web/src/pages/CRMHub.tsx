@@ -6,6 +6,8 @@ export default function CRMHub() {
     { label: 'Quotes', desc: 'Quotes, proposals, and e-sign', href: '/apps/crm/quotes' },
     { label: 'Invoices', desc: 'Billing, payments, and refunds', href: '/apps/crm/invoices' },
     { label: 'Outreach', desc: 'Email/SMS templates, sequences, events', href: '/apps/crm/outreach/templates' },
+    { label: 'Tickets', desc: 'Support tickets and SLAs', href: '/apps/crm/support/tickets' },
+    { label: 'Knowledge Base', desc: 'Articles and self‑service help', href: '/apps/crm/support/kb' },
   ]
 
   return (

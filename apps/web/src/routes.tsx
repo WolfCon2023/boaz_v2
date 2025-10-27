@@ -17,6 +17,8 @@ import CRMInvoicePrint from '@/pages/CRMInvoicePrint'
 import CRMOutreachTemplates from '@/pages/CRMOutreachTemplates'
 import CRMOutreachSequences from '@/pages/CRMOutreachSequences'
 import CRMOutreachEvents from '@/pages/CRMOutreachEvents'
+import SupportTickets from '@/pages/SupportTickets'
+import KnowledgeBase from '@/pages/KnowledgeBase'
 
 export const router = createBrowserRouter([
   {
@@ -40,6 +42,8 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/outreach/templates', element: <CRMOutreachTemplates /> },
       { path: 'apps/crm/outreach/sequences', element: <CRMOutreachSequences /> },
       { path: 'apps/crm/outreach/events', element: <CRMOutreachEvents /> },
+      { path: 'apps/crm/support/tickets', element: <SupportTickets /> },
+      { path: 'apps/crm/support/kb', element: <KnowledgeBase /> },
     ],
   },
   { path: '*', element: <NotFound /> },
