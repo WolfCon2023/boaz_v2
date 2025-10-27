@@ -109,4 +109,24 @@ accountsRouter.put('/:id', async (req, res) => {
   }
 })
 
+// GET /api/crm/accounts/:id/history
+accountsRouter.get('/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const { ObjectId } = await import('mongodb')
+    const _id = new ObjectId(req.params.id)
+    const account = await db.collection('accounts').findOne({ _id })
+    if (!account) return res.status(404).json({ data: null, error: 'not_found' })
+    const createdAt = _id.getTimestamp()
+    const deals = await db.collection('deals').find({ accountId: _id }).project({ title: 1, amount: 1, stage: 1, dealNumber: 1, closeDate: 1 }).sort({ _id: -1 }).limit(200).toArray()
+    const quotes = await db.collection('quotes').find({ accountId: _id }).project({ title: 1, status: 1, quoteNumber: 1, total: 1, updatedAt: 1, createdAt: 1 }).sort({ updatedAt: -1 }).limit(200).toArray()
+    const invoices = await db.collection('invoices').find({ accountId: _id }).project({ title: 1, invoiceNumber: 1, total: 1, status: 1, issuedAt: 1, dueDate: 1, updatedAt: 1 }).sort({ updatedAt: -1 }).limit(200).toArray()
+    const activities = await db.collection('activities').find({ accountId: _id }).project({ type: 1, subject: 1, at: 1 }).sort({ at: -1 }).limit(200).toArray()
+    res.json({ data: { createdAt, deals, quotes, invoices, activities }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 

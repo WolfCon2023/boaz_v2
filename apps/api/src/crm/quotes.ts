@@ -122,6 +122,22 @@ quotesRouter.put('/:id', async (req, res) => {
   }
 })
 
+// GET /api/crm/quotes/:id/history
+quotesRouter.get('/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const q = await db.collection('quotes').findOne({ _id })
+    if (!q) return res.status(404).json({ data: null, error: 'not_found' })
+    const createdAt = (q as any).createdAt || _id.getTimestamp()
+    // Any events by account (if denormalized) could be added here
+    res.json({ data: { createdAt, quote: { title: (q as any).title, status: (q as any).status, total: (q as any).total, quoteNumber: (q as any).quoteNumber, updatedAt: (q as any).updatedAt } }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 // DELETE /api/crm/quotes/:id
 quotesRouter.delete('/:id', async (req, res) => {
   const db = await getDb()
