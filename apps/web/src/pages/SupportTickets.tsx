@@ -124,10 +124,10 @@ export default function SupportTickets() {
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
         </div>
-        <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = String(fd.get('assignee')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const slaDueAt = createSlaValue || String(fd.get('slaDueAt')||'') || undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue('') }}>
+        <form className="grid items-start gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = String(fd.get('assignee')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const slaDueAt = createSlaValue || String(fd.get('slaDueAt')||'') || undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue('') }}>
           <input name="shortDescription" required placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="status" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option></select>
-          <input name="assignee" placeholder="Assignee" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="assignee" placeholder="Assignee" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] px-3 py-2 text-sm" />
           
           <select name="priority" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select>
           <div className="flex items-center gap-2">
@@ -138,12 +138,12 @@ export default function SupportTickets() {
             <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setCreateSlaOpen(true)}>Set</button>
           </div>
           <textarea name="description" placeholder="Description" maxLength={2500} className="sm:col-span-2 h-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <button className="inline-flex w-fit justify-center rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Create ticket</button>
+          <button className="inline-flex w-fit self-start justify-center rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Create ticket</button>
         </form>
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]"><tr>
             <th className="px-4 py-2">Ticket #</th>
-            <th className="px-4 py-2">Title</th>
+            <th className="px-4 py-2">Short description</th>
             <th className="px-4 py-2">Status</th>
             <th className="px-4 py-2">Priority</th>
             <th className="px-4 py-2">SLA Due</th>
@@ -153,7 +153,7 @@ export default function SupportTickets() {
             {pageItems.map((t) => (
               <tr key={t._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(t)}>
                 <td className="px-4 py-2">{t.ticketNumber ?? '-'}</td>
-                <td className="px-4 py-2">{t.title ?? '-'}</td>
+                <td className="px-4 py-2">{t.shortDescription ?? t.title ?? '-'}</td>
                 <td className="px-4 py-2">{t.status ?? '-'}</td>
                 <td className="px-4 py-2">{t.priority ?? '-'}</td>
                 <td className="px-4 py-2 flex items-center gap-2">
@@ -194,7 +194,7 @@ export default function SupportTickets() {
                 <input name="shortDescription" defaultValue={editing.shortDescription ?? editing.title ?? ''} placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <select name="status" defaultValue={editing.status ?? 'open'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option></select>
                 <select name="priority" defaultValue={editing.priority ?? 'normal'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>low</option><option>normal</option><option>high</option><option>urgent</option></select>
-                <input name="assignee" defaultValue={editing.assignee ?? ''} placeholder="Assignee" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <input name="assignee" defaultValue={editing.assignee ?? ''} placeholder="Assignee" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] px-3 py-2 text-sm" />
                 <div className="flex items-center gap-2">
                   <input name="slaDueAt" type="datetime-local" defaultValue={editing.slaDueAt ? editing.slaDueAt.slice(0,16) : ''} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">OK</button>

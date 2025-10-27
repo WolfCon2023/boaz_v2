@@ -74,40 +74,32 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
     if (doc.ticketNumber == null) doc.ticketNumber = 200001
 
     const coll = db.collection<TicketDoc>('support_tickets')
-    try {
-      const result = await coll.insertOne(doc)
-      return res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
-    } catch (e1: any) {
-      // Retry on duplicate ticketNumber by fetching a new sequence
-      if (e1 && typeof e1 === 'object' && 'code' in e1 && e1.code === 11000) {
-        try {
-          doc.ticketNumber = await getNextSequence('ticketNumber')
-          const r2 = await coll.insertOne(doc)
-          return res.status(201).json({ data: { _id: r2.insertedId, ...doc }, error: null })
-        } catch (e2: any) {
-          if (!(e2 && typeof e2 === 'object' && 'code' in e2 && e2.code === 11000)) throw e2
-          // Align counter to current max then try once more
-          const max = await coll.find({}, { projection: { ticketNumber: 1 } as any }).sort({ ticketNumber: -1 } as any).limit(1).toArray()
+    // Robust retry loop to avoid duplicate numbers under contention
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const result = await coll.insertOne(doc)
+        return res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
+      } catch (errInsert: any) {
+        if (errInsert && typeof errInsert === 'object' && 'code' in errInsert && errInsert.code === 11000) {
+          // Align counter to current max then fetch a fresh sequence
+          const max = await coll
+            .find({}, { projection: { ticketNumber: 1 } as any })
+            .sort({ ticketNumber: -1 } as any)
+            .limit(1)
+            .toArray()
           const maxNum = max[0]?.ticketNumber ?? 200000
-          await db.collection<{ _id: string; seq: number }>('counters').updateOne(
-            { _id: 'ticketNumber' },
-            { $set: { seq: maxNum } },
-            { upsert: true }
-          )
+          await db
+            .collection<{ _id: string; seq: number }>('counters')
+            .updateOne({ _id: 'ticketNumber', seq: { $lt: maxNum } }, { $set: { seq: maxNum } }, { upsert: true })
           try {
             doc.ticketNumber = await getNextSequence('ticketNumber')
-            const r3 = await coll.insertOne(doc)
-            return res.status(201).json({ data: { _id: r3.insertedId, ...doc }, error: null })
-          } catch (e3: any) {
-            if (e3 && typeof e3 === 'object' && 'code' in e3 && e3.code === 11000) {
-              return res.status(409).json({ data: null, error: 'duplicate_ticketNumber' })
-            }
-            throw e3
-          }
+          } catch {}
+          continue
         }
+        throw errInsert
       }
-      throw e1
     }
+    return res.status(409).json({ data: null, error: 'duplicate_ticketNumber' })
   } catch (err: any) {
     console.error('create_ticket_error', err)
     if (err && typeof err === 'object' && 'code' in err && (err as any).code === 11000) {
