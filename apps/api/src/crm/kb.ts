@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import multer from 'multer'
+import multer, { FileFilterCallback } from 'multer'
 import fs from 'fs'
 import path from 'path'
 import { getDb } from '../db.js'
@@ -12,8 +12,8 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
 
 // Multer storage to Railway volume
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
+  destination: (_req: any, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => cb(null, uploadDir),
+  filename: (_req: any, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_')
     const ts = Date.now()
     cb(null, `${ts}-${safe}`)
@@ -22,7 +22,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req: any, file: Express.Multer.File, cb: FileFilterCallback) => {
     const allowed = [
       'application/pdf',
       'application/msword',
@@ -37,6 +37,10 @@ const upload = multer({
     return cb(new Error('unsupported_file_type'))
   },
 })
+
+// Types for strong updates
+type KbAttachment = { _id: ObjectId | string; filename: string; contentType?: string; size?: number; path?: string; storage?: 'volume' | 'gridfs' | 's3' }
+type KbArticle = { _id?: ObjectId; title: string; body: string; tags?: string[]; category?: string; attachments?: KbAttachment[]; createdAt?: Date; updatedAt?: Date; author?: any }
 
 // GET /api/crm/support/kb?q=&tag=&category=&sort=&dir=
 kbRouter.get('/kb', async (req, res) => {
@@ -108,16 +112,18 @@ kbRouter.post('/kb/:id/attachments', upload.single('file'), async (req, res) => 
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
     const _id = new ObjectId(req.params.id)
-    if (!req.file) return res.status(400).json({ data: null, error: 'no_file' })
-    const att = {
+    const file = (req as any).file as Express.Multer.File | undefined
+    if (!file) return res.status(400).json({ data: null, error: 'no_file' })
+    const att: KbAttachment = {
       _id: new ObjectId(),
-      filename: req.file.originalname,
-      contentType: req.file.mimetype,
-      size: req.file.size,
-      path: req.file.path,
+      filename: file.originalname,
+      contentType: file.mimetype,
+      size: file.size,
+      path: file.path,
       storage: 'volume' as const,
     }
-    await db.collection('kb_articles').updateOne({ _id }, { $push: { attachments: att }, $set: { updatedAt: new Date() } })
+    const coll = db.collection<KbArticle>('kb_articles')
+    await coll.updateOne({ _id }, { $push: { attachments: att }, $set: { updatedAt: new Date() } })
     res.status(201).json({ data: { attachment: att }, error: null })
   } catch (e: any) {
     res.status(400).json({ data: null, error: 'upload_failed' })
@@ -151,12 +157,14 @@ kbRouter.delete('/kb/:id/attachments/:attId', async (req, res) => {
   try {
     const _id = new ObjectId(req.params.id)
     const attId = req.params.attId
-    const art = await db.collection('kb_articles').findOne({ _id }, { projection: { attachments: 1 } }) as any
+    const coll = db.collection<KbArticle>('kb_articles')
+    const art = await coll.findOne({ _id }, { projection: { attachments: 1 } as any })
     const att = (art?.attachments || []).find((a: any) => String(a._id) === attId)
     if (att?.path && fs.existsSync(att.path)) {
       try { fs.unlinkSync(att.path) } catch {}
     }
-    await db.collection('kb_articles').updateOne({ _id }, { $pull: { attachments: { _id: new ObjectId(attId).toString() } }, $set: { updatedAt: new Date() } } as any)
+    const pullId: any = att?. _id ?? attId
+    await coll.updateOne({ _id }, { $pull: { attachments: { _id: pullId } } as any, $set: { updatedAt: new Date() } as any })
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })

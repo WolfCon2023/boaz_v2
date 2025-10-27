@@ -1,0 +1,196 @@
+import { Router } from 'express';
+import { getDb } from '../db.js';
+import { z } from 'zod';
+import { ObjectId } from 'mongodb';
+export const dealsRouter = Router();
+dealsRouter.get('/', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.json({ data: { items: [] }, error: null });
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit ?? 50)));
+    const q = String(req.query.q ?? '').trim();
+    const filter = q ? { title: { $regex: q, $options: 'i' } } : {};
+    const sortKey = req.query.sort ?? 'closeDate';
+    const dir = (req.query.dir ?? 'desc').toLowerCase() === 'asc' ? 1 : -1;
+    const allowed = { title: dir, stage: dir, amount: dir, closeDate: dir };
+    const sort = allowed[sortKey] ? { [sortKey]: allowed[sortKey] } : { closeDate: -1 };
+    const items = await db.collection('deals').find(filter).sort(sort).limit(limit).toArray();
+    res.json({ data: { items }, error: null });
+});
+dealsRouter.post('/', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const raw = req.body ?? {};
+    const title = typeof raw.title === 'string' ? raw.title.trim() : '';
+    if (!title)
+        return res.status(400).json({ data: null, error: 'invalid_payload' });
+    const accountIdRaw = typeof raw.accountId === 'string' ? raw.accountId.trim() : undefined;
+    const accountNumberRaw = raw.accountNumber;
+    const amountRaw = raw.amount;
+    const stageRaw = typeof raw.stage === 'string' ? raw.stage.trim() : undefined;
+    const closeDateRaw = typeof raw.closeDate === 'string' ? raw.closeDate.trim() : undefined;
+    const accountNumberParsed = accountNumberRaw === undefined || accountNumberRaw === '' ? undefined : Number(accountNumberRaw);
+    const amountParsed = amountRaw === undefined || amountRaw === '' ? undefined : Number(amountRaw);
+    try {
+        let accountObjectId = null;
+        let accountNumberValue;
+        if (accountIdRaw) {
+            if (!ObjectId.isValid(accountIdRaw)) {
+                return res.status(400).json({ data: null, error: 'invalid_accountId' });
+            }
+            accountObjectId = new ObjectId(accountIdRaw);
+            // Fetch accountNumber for denormalization
+            const acc = await db.collection('accounts').findOne({ _id: accountObjectId });
+            if (typeof acc?.accountNumber === 'number') {
+                accountNumberValue = acc.accountNumber;
+            }
+        }
+        else if (typeof accountNumberParsed === 'number' && Number.isFinite(accountNumberParsed)) {
+            const acc = await db.collection('accounts').findOne({ accountNumber: accountNumberParsed });
+            if (!acc?._id)
+                return res.status(400).json({ data: null, error: 'account_not_found' });
+            accountObjectId = acc._id;
+            accountNumberValue = accountNumberParsed;
+        }
+        else {
+            return res.status(400).json({ data: null, error: 'missing_account' });
+        }
+        const closedWon = 'Contract Signed / Closed Won';
+        const doc = {
+            title,
+            accountId: accountObjectId,
+            amount: typeof amountParsed === 'number' && Number.isFinite(amountParsed) ? amountParsed : undefined,
+            stage: stageRaw || 'new',
+        };
+        if (typeof accountNumberValue === 'number')
+            doc.accountNumber = accountNumberValue;
+        // Normalize date-only strings to midday UTC to avoid timezone shifting one day back
+        if (closeDateRaw)
+            doc.closeDate = new Date(`${closeDateRaw}T12:00:00Z`);
+        if (!doc.closeDate && doc.stage === closedWon)
+            doc.closeDate = new Date();
+        // Assign incremental dealNumber starting at 100001
+        try {
+            const { getNextSequence } = await import('../db.js');
+            doc.dealNumber = await getNextSequence('dealNumber');
+        }
+        catch { }
+        if (doc.dealNumber === undefined) {
+            try {
+                const last = await db
+                    .collection('deals')
+                    .find({ dealNumber: { $type: 'number' } })
+                    .project({ dealNumber: 1 })
+                    .sort({ dealNumber: -1 })
+                    .limit(1)
+                    .toArray();
+                doc.dealNumber = Number(last[0]?.dealNumber ?? 100000) + 1;
+            }
+            catch {
+                doc.dealNumber = 100001;
+            }
+        }
+        const result = await db.collection('deals').insertOne(doc);
+        if (doc.dealNumber == null) {
+            // Emergency fallback: assign after insert
+            try {
+                const { getNextSequence } = await import('../db.js');
+                const n = await getNextSequence('dealNumber');
+                await db.collection('deals').updateOne({ _id: result.insertedId }, { $set: { dealNumber: n } });
+                doc.dealNumber = n;
+            }
+            catch {
+                // Secondary fallback: derive from current max
+                try {
+                    const last = await db
+                        .collection('deals')
+                        .find({ dealNumber: { $type: 'number' } })
+                        .project({ dealNumber: 1 })
+                        .sort({ dealNumber: -1 })
+                        .limit(1)
+                        .toArray();
+                    const n = Number(last[0]?.dealNumber ?? 100000) + 1;
+                    await db.collection('deals').updateOne({ _id: result.insertedId }, { $set: { dealNumber: n } });
+                    doc.dealNumber = n;
+                }
+                catch { }
+            }
+        }
+        return res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null });
+    }
+    catch (e) {
+        return res.status(500).json({ data: null, error: 'deals_insert_error' });
+    }
+});
+// PATCH /api/crm/deals/:id/stage
+dealsRouter.patch('/:id/stage', async (req, res) => {
+    const schema = z.object({ stage: z.string().min(1) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success)
+        return res.status(400).json({ data: null, error: 'invalid_payload' });
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const _id = new ObjectId(req.params.id);
+        await db.collection('deals').updateOne({ _id }, { $set: { stage: parsed.data.stage } });
+        res.json({ data: { ok: true }, error: null });
+    }
+    catch {
+        res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+});
+// DELETE /api/crm/deals/:id
+dealsRouter.delete('/:id', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const _id = new ObjectId(req.params.id);
+        await db.collection('deals').deleteOne({ _id });
+        res.json({ data: { ok: true }, error: null });
+    }
+    catch {
+        res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+});
+// PUT /api/crm/deals/:id
+dealsRouter.put('/:id', async (req, res) => {
+    const schema = z.object({
+        title: z.string().min(1).optional(),
+        accountId: z.string().min(1).optional(),
+        amount: z.number().optional(),
+        stage: z.string().optional(),
+        closeDate: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success)
+        return res.status(400).json({ data: null, error: 'invalid_payload' });
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const _id = new ObjectId(req.params.id);
+        const update = { ...parsed.data };
+        if (update.accountId)
+            update.accountId = new ObjectId(update.accountId);
+        const closedWon = 'Contract Signed / Closed Won';
+        if (update.closeDate)
+            update.closeDate = new Date(`${update.closeDate}T12:00:00Z`);
+        // Auto-populate closeDate when moving to Closed Won
+        if (update.stage === closedWon && !update.closeDate) {
+            update.closeDate = new Date();
+        }
+        // Build update doc with optional $unset when moving away from Closed Won
+        const updateDoc = { $set: update };
+        if (update.stage && update.stage !== closedWon) {
+            updateDoc.$unset = { closeDate: '' };
+        }
+        await db.collection('deals').updateOne({ _id }, updateDoc);
+        res.json({ data: { ok: true }, error: null });
+    }
+    catch {
+        res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+});

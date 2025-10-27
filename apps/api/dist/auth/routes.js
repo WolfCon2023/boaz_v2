@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { createUser, getUserByEmail, verifyCredentials } from './store';
-import { signToken, verifyToken } from './jwt';
+import { createUser, getUserByEmail, verifyCredentials } from './store.js';
+import { signToken, verifyToken } from './jwt.js';
 const credentialsSchema = z.object({
     email: z.string().email(),
     password: z.string().min(6),
