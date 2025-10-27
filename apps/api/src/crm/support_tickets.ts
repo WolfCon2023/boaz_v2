@@ -9,6 +9,7 @@ type TicketDoc = {
   _id?: ObjectId
   ticketNumber?: number
   title: string
+  shortDescription: string
   description: string
   status: string
   priority: string
@@ -53,6 +54,7 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
     if (!title) return res.status(400).json({ data: null, error: 'invalid_payload' })
     const doc: TicketDoc = {
       title,
+      shortDescription: typeof raw.shortDescription === 'string' ? raw.shortDescription : '',
       description: typeof raw.description === 'string' ? raw.description : '',
       status: (raw.status as string) || 'open',
       priority: (raw.priority as string) || 'normal',
@@ -129,7 +131,7 @@ supportTicketsRouter.put('/tickets/:id', async (req, res) => {
   try {
     const _id = new ObjectId(req.params.id)
     const update: any = { updatedAt: new Date() }
-    for (const k of ['title','description','status','priority','assignee']) if (typeof (req.body ?? {})[k] === 'string') update[k] = (req.body as any)[k]
+    for (const k of ['title','shortDescription','description','status','priority','assignee']) if (typeof (req.body ?? {})[k] === 'string') update[k] = (req.body as any)[k]
     if (req.body?.slaDueAt) update.slaDueAt = new Date(req.body.slaDueAt)
     if (req.body?.accountId && ObjectId.isValid(req.body.accountId)) update.accountId = new ObjectId(req.body.accountId)
     if (req.body?.contactId && ObjectId.isValid(req.body.contactId)) update.contactId = new ObjectId(req.body.contactId)
