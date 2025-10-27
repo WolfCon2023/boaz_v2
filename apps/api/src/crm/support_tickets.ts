@@ -8,7 +8,6 @@ type TicketComment = { author: any; body: string; at: Date }
 type TicketDoc = {
   _id?: ObjectId
   ticketNumber?: number
-  title: string
   shortDescription: string
   description: string
   status: string
@@ -50,12 +49,15 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
     const raw = req.body ?? {}
-    const title = typeof raw.title === 'string' ? raw.title.trim() : ''
-    if (!title) return res.status(400).json({ data: null, error: 'invalid_payload' })
+    const shortDescription = typeof raw.shortDescription === 'string' && raw.shortDescription.trim()
+      ? raw.shortDescription.trim()
+      : (typeof raw.title === 'string' ? raw.title.trim() : '')
+    if (!shortDescription) return res.status(400).json({ data: null, error: 'invalid_payload' })
+    const descRaw = typeof raw.description === 'string' ? raw.description : ''
+    const description = descRaw.length > 2500 ? descRaw.slice(0, 2500) : descRaw
     const doc: TicketDoc = {
-      title,
-      shortDescription: typeof raw.shortDescription === 'string' ? raw.shortDescription : '',
-      description: typeof raw.description === 'string' ? raw.description : '',
+      shortDescription,
+      description,
       status: (raw.status as string) || 'open',
       priority: (raw.priority as string) || 'normal',
       accountId: ObjectId.isValid(raw.accountId) ? new ObjectId(raw.accountId) : null,
@@ -131,7 +133,14 @@ supportTicketsRouter.put('/tickets/:id', async (req, res) => {
   try {
     const _id = new ObjectId(req.params.id)
     const update: any = { updatedAt: new Date() }
-    for (const k of ['title','shortDescription','description','status','priority','assignee']) if (typeof (req.body ?? {})[k] === 'string') update[k] = (req.body as any)[k]
+    // Accept both 'shortDescription' and legacy 'title' for compatibility
+    if (typeof (req.body ?? {}).shortDescription === 'string') update.shortDescription = (req.body as any).shortDescription
+    else if (typeof (req.body ?? {}).title === 'string') update.shortDescription = (req.body as any).title
+    for (const k of ['status','priority','assignee']) if (typeof (req.body ?? {})[k] === 'string') update[k] = (req.body as any)[k]
+    if (typeof (req.body ?? {}).description === 'string') {
+      const d = String((req.body as any).description)
+      update.description = d.length > 2500 ? d.slice(0, 2500) : d
+    }
     if (req.body?.slaDueAt) update.slaDueAt = new Date(req.body.slaDueAt)
     if (req.body?.accountId && ObjectId.isValid(req.body.accountId)) update.accountId = new ObjectId(req.body.accountId)
     if (req.body?.contactId && ObjectId.isValid(req.body.contactId)) update.contactId = new ObjectId(req.body.contactId)
