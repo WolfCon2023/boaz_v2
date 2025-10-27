@@ -169,16 +169,17 @@ export default function CRMContacts() {
           <button
             className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-sm hover:bg-[color:var(--color-muted)]"
             onClick={async () => {
-              const headers = ['Name','Email','Company','Mobile','Office','Primary','Primary phone','Enrollments']
-              // Fetch enrollments for each contact in parallel
-              const enrollmentLabels = await Promise.all(items.map(async (c) => {
+              const headers = ['Name','Email','Company','Mobile','Office','Primary','Primary phone','Enrollments (active)','Enrollments (history)']
+              // Fetch enrollments (includeCompleted) for each contact in parallel
+              const enrollmentData = await Promise.all(items.map(async (c) => {
                 try {
-                  const res = await http.get('/api/crm/outreach/enroll', { params: { contactId: c._id } })
-                  const ens = (res.data?.data?.items ?? []) as Array<{ sequenceId: string }>
-                  const labels = ens.map((en) => seqNameById.get(en.sequenceId) ?? en.sequenceId)
-                  return labels.join('|')
+                  const res = await http.get('/api/crm/outreach/enroll', { params: { contactId: c._id, includeCompleted: true } })
+                  const ens = (res.data?.data?.items ?? []) as Array<{ sequenceId: string; completedAt?: string|null }>
+                  const actives = ens.filter((e) => !e.completedAt).map((en) => seqNameById.get(en.sequenceId) ?? en.sequenceId).join('|')
+                  const history = ens.filter((e) => !!e.completedAt).map((en) => seqNameById.get(en.sequenceId) ?? en.sequenceId).join('|')
+                  return { actives, history }
                 } catch {
-                  return ''
+                  return { actives: '', history: '' }
                 }
               }))
               const rows = items.map((c, i) => [
@@ -189,7 +190,8 @@ export default function CRMContacts() {
                 c.officePhone ?? '',
                 c.isPrimary ? 'Yes' : 'No',
                 c.primaryPhone ?? '',
-                enrollmentLabels[i] ?? '',
+                enrollmentData[i]?.actives ?? '',
+                enrollmentData[i]?.history ?? '',
               ])
               const csv = [
                 headers.join(','),
