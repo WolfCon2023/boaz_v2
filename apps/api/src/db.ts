@@ -33,9 +33,16 @@ export async function getNextSequence(key: string): Promise<number> {
   const database = await getDb()
   if (!database) throw new Error('DB unavailable')
   const counters = database.collection<{ _id: string; seq: number }>('counters')
+  // Use aggregation pipeline update to avoid modifier conflicts on the same path
   const result = await counters.findOneAndUpdate(
     { _id: key },
-    { $setOnInsert: { seq: 998800 }, $inc: { seq: 1 } },
+    [
+      {
+        $set: {
+          seq: { $add: [ { $ifNull: ['$seq', 998800] }, 1 ] }
+        }
+      }
+    ] as any,
     { upsert: true, returnDocument: 'after' } as FindOneAndUpdateOptions
   )
   const seq = (result as any)?.value?.seq
