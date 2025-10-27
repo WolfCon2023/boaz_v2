@@ -169,14 +169,29 @@ export default function CRMContacts() {
           <button
             className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-sm hover:bg-[color:var(--color-muted)]"
             onClick={async () => {
-              const headers = ['Name','Email','Company','Mobile','Office','Primary','Primary phone','Enrollments (active)','Enrollments (history)']
+              const headers = ['Name','Email','Company','Mobile','Office','Primary','Primary phone','Enrollments (active)','Enrollments (history with timestamps)']
               // Fetch enrollments (includeCompleted) for each contact in parallel
               const enrollmentData = await Promise.all(items.map(async (c) => {
                 try {
                   const res = await http.get('/api/crm/outreach/enroll', { params: { contactId: c._id, includeCompleted: true } })
-                  const ens = (res.data?.data?.items ?? []) as Array<{ sequenceId: string; completedAt?: string|null }>
-                  const actives = ens.filter((e) => !e.completedAt).map((en) => seqNameById.get(en.sequenceId) ?? en.sequenceId).join('|')
-                  const history = ens.filter((e) => !!e.completedAt).map((en) => seqNameById.get(en.sequenceId) ?? en.sequenceId).join('|')
+                  const ens = (res.data?.data?.items ?? []) as Array<{ sequenceId: string; startedAt?: string; completedAt?: string|null }>
+                  const actives = ens
+                    .filter((e) => !e.completedAt)
+                    .map((en) => {
+                      const name = seqNameById.get(en.sequenceId) ?? en.sequenceId
+                      const started = en.startedAt ? new Date(en.startedAt).toISOString() : ''
+                      return `${name} (enrolled: ${started})`
+                    })
+                    .join('|')
+                  const history = ens
+                    .filter((e) => !!e.completedAt)
+                    .map((en) => {
+                      const name = seqNameById.get(en.sequenceId) ?? en.sequenceId
+                      const started = en.startedAt ? new Date(en.startedAt).toISOString() : ''
+                      const completed = en.completedAt ? new Date(en.completedAt).toISOString() : ''
+                      return `${name} (enrolled: ${started}; completed: ${completed})`
+                    })
+                    .join('|')
                   return { actives, history }
                 } catch {
                   return { actives: '', history: '' }
