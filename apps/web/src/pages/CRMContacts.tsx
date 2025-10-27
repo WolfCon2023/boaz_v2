@@ -117,6 +117,15 @@ export default function CRMContacts() {
     const list = seqs.data?.data.items ?? []
     return new Map(list.map((s) => [s._id, s.name ?? 'Sequence']))
   }, [seqs.data])
+  const [showHistory, setShowHistory] = React.useState(false)
+  const historyQ = useQuery({
+    queryKey: ['contact-history', editing?._id, showHistory],
+    enabled: Boolean(editing?._id && showHistory),
+    queryFn: async () => {
+      const res = await http.get(`/api/crm/contacts/${editing?._id}/history`)
+      return res.data as { data: { createdAt: string; enrollments: Array<{ sequenceName: string; startedAt: string; completedAt?: string|null }>; events: Array<{ channel: string; event: string; at: string; recipient?: string|null }> } }
+    },
+  })
 
   return (
     <div className="space-y-4">
@@ -351,9 +360,39 @@ export default function CRMContacts() {
 
               <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                 <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) remove.mutate(editing._id); setEditing(null) }}>Delete</button>
+                <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
                 <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                 <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
               </div>
+              {showHistory && (
+                <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs">
+                  <div className="mb-1 font-semibold">History</div>
+                  {historyQ.isLoading && <div>Loading…</div>}
+                  {historyQ.data && (
+                    <div className="space-y-2">
+                      <div>Created: {new Date(historyQ.data.data.createdAt).toLocaleString()}</div>
+                      <div>
+                        <div className="font-semibold">Enrollments</div>
+                        <ul className="list-disc pl-5">
+                          {historyQ.data.data.enrollments.map((e, idx) => (
+                            <li key={idx}>{e.sequenceName} (enrolled: {new Date(e.startedAt).toLocaleString()}{e.completedAt ? `; completed: ${new Date(e.completedAt).toLocaleString()}` : ''})</li>
+                          ))}
+                          {historyQ.data.data.enrollments.length === 0 && <li>None</li>}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="font-semibold">Outreach events</div>
+                        <ul className="list-disc pl-5">
+                          {historyQ.data.data.events.map((ev, idx) => (
+                            <li key={idx}>{new Date(ev.at).toLocaleString()} — {ev.channel} {ev.event}{ev.recipient ? ` (${ev.recipient})` : ''}</li>
+                          ))}
+                          {historyQ.data.data.events.length === 0 && <li>None</li>}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </form>
             </div>
           </div>

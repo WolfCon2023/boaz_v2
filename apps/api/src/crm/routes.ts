@@ -120,4 +120,62 @@ crmRouter.delete('/contacts/:id', async (req, res) => {
   }
 })
 
+// GET /api/crm/contacts/:id/history
+crmRouter.get('/contacts/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const contact = await db.collection('contacts').findOne({ _id })
+    if (!contact) return res.status(404).json({ data: null, error: 'not_found' })
+    const createdAt = _id.getTimestamp()
+
+    // Enrollments
+    const enrollments = await db
+      .collection('outreach_enrollments')
+      .find({ contactId: _id })
+      .sort({ startedAt: -1 })
+      .limit(200)
+      .toArray()
+    // Map sequence names
+    const sequenceIds = Array.from(new Set(enrollments.map((e: any) => String(e.sequenceId))))
+    const sequences = sequenceIds.length
+      ? await db
+          .collection('outreach_sequences')
+          .find({ _id: { $in: sequenceIds.map((s) => new ObjectId(s)) } })
+          .project({ name: 1 })
+          .toArray()
+      : []
+    const seqMap = new Map(sequences.map((s: any) => [String(s._id), s.name]))
+    const enrollmentsOut = enrollments.map((e: any) => ({
+      _id: e._id,
+      sequenceId: e.sequenceId,
+      sequenceName: seqMap.get(String(e.sequenceId)) ?? String(e.sequenceId),
+      startedAt: e.startedAt,
+      completedAt: e.completedAt ?? null,
+      lastStepIndex: e.lastStepIndex ?? -1,
+    }))
+
+    // Outreach events for this contact by recipient (email or phone)
+    const recipients: string[] = []
+    if (typeof (contact as any).email === 'string' && (contact as any).email) recipients.push((contact as any).email)
+    for (const k of ['mobilePhone', 'officePhone']) {
+      const v = (contact as any)[k]
+      if (typeof v === 'string' && v) recipients.push(v)
+    }
+    const events = recipients.length
+      ? await db
+          .collection('outreach_events')
+          .find({ recipient: { $in: recipients } })
+          .sort({ at: -1 })
+          .limit(200)
+          .toArray()
+      : []
+
+    res.json({ data: { createdAt, enrollments: enrollmentsOut, events }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 
