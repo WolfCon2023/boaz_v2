@@ -110,6 +110,14 @@ export default function CRMContacts() {
     },
   })
 
+  // Refs for outreach action inputs to avoid nested forms
+  const seqSelectRef = React.useRef<HTMLSelectElement | null>(null)
+  const oneOffTextRef = React.useRef<HTMLInputElement | null>(null)
+  const seqNameById = React.useMemo(() => {
+    const list = seqs.data?.data.items ?? []
+    return new Map(list.map((s) => [s._id, s.name ?? 'Sequence']))
+  }, [seqs.data])
+
   return (
     <div className="space-y-4">
       <CRMNav />
@@ -160,9 +168,20 @@ export default function CRMContacts() {
           </div>
           <button
             className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-sm hover:bg-[color:var(--color-muted)]"
-            onClick={() => {
-              const headers = ['Name','Email','Company','Mobile','Office','Primary','Primary phone']
-              const rows = items.map((c) => [
+            onClick={async () => {
+              const headers = ['Name','Email','Company','Mobile','Office','Primary','Primary phone','Enrollments']
+              // Fetch enrollments for each contact in parallel
+              const enrollmentLabels = await Promise.all(items.map(async (c) => {
+                try {
+                  const res = await http.get('/api/crm/outreach/enroll', { params: { contactId: c._id } })
+                  const ens = (res.data?.data?.items ?? []) as Array<{ sequenceId: string }>
+                  const labels = ens.map((en) => seqNameById.get(en.sequenceId) ?? en.sequenceId)
+                  return labels.join('|')
+                } catch {
+                  return ''
+                }
+              }))
+              const rows = items.map((c, i) => [
                 c.name ?? '',
                 c.email ?? '',
                 c.company ?? '',
@@ -170,6 +189,7 @@ export default function CRMContacts() {
                 c.officePhone ?? '',
                 c.isPrimary ? 'Yes' : 'No',
                 c.primaryPhone ?? '',
+                enrollmentLabels[i] ?? '',
               ])
               const csv = [
                 headers.join(','),
@@ -274,27 +294,41 @@ export default function CRMContacts() {
               <div className="col-span-full mt-4 rounded-xl border border-[color:var(--color-border)] p-3">
                 <div className="mb-2 text-sm font-semibold">Outreach actions</div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); http.post('/api/crm/outreach/enroll', { contactId: editing._id, sequenceId: String(fd.get('sequenceId')||'') }).then(() => alert('Enrolled')); }}>
+                  <div>
                     <label className="text-xs">Enroll in sequence</label>
-                    <select name="sequenceId" className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+                    <select ref={seqSelectRef} className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                       {(seqs.data?.data.items ?? []).map((s) => (<option key={s._id} value={s._id}>{s.name ?? 'Sequence'}</option>))}
                     </select>
-                    <button className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]">Enroll</button>
-                  </form>
-                  <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); const to = editing.email || ''; const text = String(fd.get('text')||''); if (text) http.post('/api/crm/outreach/send/email', { to, subject: 'Message', text }).then(() => alert('Sent')); }}>
+                    <button type="button" className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => { const sequenceId = seqSelectRef.current?.value || ''; if (sequenceId) { http.post('/api/crm/outreach/enroll', { contactId: editing._id, sequenceId }).then(() => alert('Enrolled')) } }}>
+                      Enroll
+                    </button>
+                  </div>
+                  <div>
                     <label className="text-xs">Send one‑off email</label>
-                    <input name="text" placeholder="Body" className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
-                    <button className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]">Send</button>
-                  </form>
+                    <input ref={oneOffTextRef} placeholder="Body" className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
+                    <button type="button" className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => { const to = editing.email || ''; const text = oneOffTextRef.current?.value || ''; if (to && text) { http.post('/api/crm/outreach/send/email', { to, subject: 'Message', text }).then(() => alert('Sent')) } }}>
+                      Send
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-3 text-xs">
                   <div className="mb-1 font-semibold">Current enrollments</div>
                   <ul className="list-disc pl-5">
-                    {(enrollmentsQ.data?.data.items ?? []).map((en) => (
-                      <li key={en._id}>Seq: {en.sequenceId} • Started: {new Date(en.startedAt).toLocaleDateString()} • Step: {(en.lastStepIndex ?? -1) + 1} {en.completedAt ? '• Completed' : ''}</li>
-                    ))}
+                    {(enrollmentsQ.data?.data.items ?? []).map((en) => {
+                      const label = seqNameById.get(en.sequenceId) ?? en.sequenceId
+                      return (
+                        <li key={en._id} className="flex items-center gap-2">Seq: {label} • Started: {new Date(en.startedAt).toLocaleDateString()} • Step: {(en.lastStepIndex ?? -1) + 1} {en.completedAt ? '• Completed' : ''}
+                          {!en.completedAt && (
+                            <button type="button" className="ml-2 rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] hover:bg-[color:var(--color-muted)]" onClick={() => { http.post(`/api/crm/outreach/enroll/${en._id}/unenroll`).then(() => enrollmentsQ.refetch()) }}>Unenroll</button>
+                          )}
+                        </li>
+                      )
+                    })}
                     {((enrollmentsQ.data?.data.items ?? []).length === 0) && <li>None</li>}
                   </ul>
+                  {(enrollmentsQ.data?.data.items ?? []).some((en) => !en.completedAt) && (
+                    <button type="button" className="mt-2 rounded border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]" onClick={() => { http.post('/api/crm/outreach/enroll/bulk/unenroll', { contactId: editing._id }).then(() => enrollmentsQ.refetch()) }}>Unenroll all</button>
+                  )}
                 </div>
               </div>
 
