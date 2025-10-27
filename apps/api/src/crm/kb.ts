@@ -156,9 +156,20 @@ kbRouter.get('/kb/:id/attachments/:attId', async (req, res) => {
     if (!att) return res.status(404).json({ data: null, error: 'not_found' })
     const filePath = att.path || path.join(uploadDir, att.filename)
     if (!fs.existsSync(filePath)) return res.status(404).json({ data: null, error: 'file_missing' })
+    const stat = fs.statSync(filePath)
     res.setHeader('Content-Type', att.contentType || 'application/octet-stream')
-    res.setHeader('Content-Disposition', `inline; filename="${att.filename}"`)
-    fs.createReadStream(filePath).pipe(res)
+    res.setHeader('Content-Length', String(stat.size))
+    // Prefer inline for PDFs/images; fall back to attachment otherwise
+    const disp = (att.contentType && /pdf|image\//i.test(att.contentType)) ? 'inline' : 'attachment'
+    const safeName = encodeURIComponent(att.filename)
+    res.setHeader('Content-Disposition', `${disp}; filename*=UTF-8''${safeName}`)
+    const stream = fs.createReadStream(filePath)
+    stream.on('error', (err) => {
+      // eslint-disable-next-line no-console
+      console.error('kb_attachment_stream_error', err)
+      if (!res.headersSent) res.status(500).json({ data: null, error: 'read_failed' })
+    })
+    stream.pipe(res)
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }
