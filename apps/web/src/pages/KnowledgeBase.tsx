@@ -3,7 +3,7 @@ import * as React from 'react'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 
-type Article = { _id: string; title?: string; body?: string; tags?: string[]; updatedAt?: string }
+type Article = { _id: string; title?: string; body?: string; tags?: string[]; updatedAt?: string; attachments?: { _id: string; filename: string; contentType?: string; size?: number }[] }
 
 export default function KnowledgeBase() {
   const qc = useQueryClient()
@@ -26,6 +26,24 @@ export default function KnowledgeBase() {
   })
   const remove = useMutation({
     mutationFn: async (_id: string) => { const res = await http.delete(`/api/crm/support/kb/${_id}`); return res.data },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb'] }),
+  })
+
+  // Attachment mutations
+  const uploadAttachment = useMutation({
+    mutationFn: async (vars: { articleId: string; file: File }) => {
+      const fd = new FormData()
+      fd.append('file', vars.file)
+      const res = await http.post(`/api/crm/support/kb/${vars.articleId}/attachments`, fd)
+      return res.data as { data: { attachment: { _id: string; filename: string; contentType?: string; size?: number } } }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb'] }),
+  })
+  const removeAttachment = useMutation({
+    mutationFn: async (vars: { articleId: string; attId: string }) => {
+      const res = await http.delete(`/api/crm/support/kb/${vars.articleId}/attachments/${vars.attId}`)
+      return res.data
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kb'] }),
   })
 
@@ -115,6 +133,31 @@ export default function KnowledgeBase() {
                 <input name="title" defaultValue={editing.title ?? ''} placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="tags" defaultValue={(editing.tags ?? []).join(', ')} placeholder="Tags" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <textarea name="body" defaultValue={editing.body ?? ''} placeholder="Body" className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+
+                <div className="sm:col-span-2 mt-1">
+                  <div className="mb-1 text-sm font-semibold">Attachments</div>
+                  <div className="space-y-2 rounded-lg border border-[color:var(--color-border)] p-2">
+                    {(editing.attachments ?? []).length === 0 && (
+                      <div className="text-xs text-[color:var(--color-text-muted)]">No attachments.</div>
+                    )}
+                    {(editing.attachments ?? []).map((att) => (
+                      <div key={att._id} className="flex items-center justify-between gap-2">
+                        <a href={`/api/crm/support/kb/${editing._id}/attachments/${att._id}`} target="_blank" rel="noopener noreferrer" className="truncate text-[color:var(--color-primary-600)] hover:underline">
+                          {att.filename}
+                        </a>
+                        <div className="flex items-center gap-2">
+                          {typeof att.size === 'number' && <span className="text-xs text-[color:var(--color-text-muted)]">{Math.ceil(att.size / 1024)} KB</span>}
+                          <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={async () => {
+                            if (!confirm('Delete attachment?')) return
+                            await removeAttachment.mutateAsync({ articleId: editing._id, attId: att._id })
+                            setEditing((prev) => prev ? { ...prev, attachments: (prev.attachments ?? []).filter((a) => a._id !== att._id) } : prev)
+                          }}>Delete</button>
+                        </div>
+                      </div>
+                    ))}
+                    <UploadAttachmentRow articleId={editing._id} onUploaded={(a) => setEditing((prev) => prev ? { ...prev, attachments: [...(prev.attachments ?? []), a] } : prev)} uploadAttachment={uploadAttachment} />
+                  </div>
+                </div>
                 <div className="col-span-full mt-2 flex items-center justify-between gap-2">
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-danger-600)] hover:bg-[color:var(--color-muted)]" onClick={async () => { if (!editing?._id) return; if (!confirm('Delete this article?')) return; await remove.mutateAsync(editing._id); setEditing(null) }}>Delete</button>
                   <div className="flex items-center gap-2">
@@ -131,4 +174,18 @@ export default function KnowledgeBase() {
   )
 }
 
+function UploadAttachmentRow({ articleId, onUploaded, uploadAttachment }: { articleId: string, onUploaded: (a: { _id: string; filename: string; contentType?: string; size?: number }) => void, uploadAttachment: { mutateAsync: (vars: { articleId: string; file: File }) => Promise<{ data: { attachment: { _id: string; filename: string; contentType?: string; size?: number } } }> } }) {
+  const [file, setFile] = React.useState<File | null>(null)
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <input type="file" onChange={(e) => setFile(e.currentTarget.files?.[0] ?? null)} className="text-sm" />
+      <button type="button" disabled={!file} className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50" onClick={async () => {
+        if (!file) return
+        const res = await uploadAttachment.mutateAsync({ articleId, file })
+        onUploaded(res.data.attachment)
+        setFile(null)
+      }}>Upload</button>
+    </div>
+  )
+}
 

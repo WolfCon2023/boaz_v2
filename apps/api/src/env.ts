@@ -31,6 +31,7 @@ const EnvSchema = z.object({
     )
     .default('http://localhost:5173'),
   MONGO_URL: z.string().url().optional(),
+  UPLOAD_DIR: z.string().optional(),
   SENDGRID_API_KEY: z.string().optional(),
   MAILGUN_API_KEY: z.string().optional(),
   MAILGUN_DOMAIN: z.string().optional(),

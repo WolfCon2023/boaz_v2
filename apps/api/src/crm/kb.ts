@@ -1,8 +1,42 @@
 import { Router } from 'express'
+import multer from 'multer'
+import fs from 'fs'
+import path from 'path'
 import { getDb } from '../db.js'
 import { ObjectId, Sort } from 'mongodb'
+import { env } from '../env.js'
 
 export const kbRouter = Router()
+const uploadDir = env.UPLOAD_DIR || path.join(process.cwd(), 'uploads')
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+
+// Multer storage to Railway volume
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (_req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_')
+    const ts = Date.now()
+    cb(null, `${ts}-${safe}`)
+  },
+})
+const upload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/plain',
+      'image/png',
+      'image/jpeg',
+    ]
+    if (allowed.includes(file.mimetype)) return cb(null, true)
+    return cb(new Error('unsupported_file_type'))
+  },
+})
 
 // GET /api/crm/support/kb?q=&tag=&sort=&dir=
 kbRouter.get('/kb', async (req, res) => {
@@ -58,6 +92,67 @@ kbRouter.delete('/kb/:id', async (req, res) => {
   try {
     const _id = new ObjectId(req.params.id)
     await db.collection('kb_articles').deleteOne({ _id })
+    res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// POST /api/crm/support/kb/:id/attachments
+kbRouter.post('/kb/:id/attachments', upload.single('file'), async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    if (!req.file) return res.status(400).json({ data: null, error: 'no_file' })
+    const att = {
+      _id: new ObjectId(),
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+      size: req.file.size,
+      path: req.file.path,
+      storage: 'volume' as const,
+    }
+    await db.collection('kb_articles').updateOne({ _id }, { $push: { attachments: att }, $set: { updatedAt: new Date() } })
+    res.status(201).json({ data: { attachment: att }, error: null })
+  } catch (e: any) {
+    res.status(400).json({ data: null, error: 'upload_failed' })
+  }
+})
+
+// GET /api/crm/support/kb/:id/attachments/:attId
+kbRouter.get('/kb/:id/attachments/:attId', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const attId = req.params.attId
+    const art = await db.collection('kb_articles').findOne({ _id }, { projection: { attachments: 1 } }) as any
+    const att = (art?.attachments || []).find((a: any) => String(a._id) === attId)
+    if (!att) return res.status(404).json({ data: null, error: 'not_found' })
+    const filePath = att.path || path.join(uploadDir, att.filename)
+    if (!fs.existsSync(filePath)) return res.status(404).json({ data: null, error: 'file_missing' })
+    res.setHeader('Content-Type', att.contentType || 'application/octet-stream')
+    res.setHeader('Content-Disposition', `inline; filename="${att.filename}"`)
+    fs.createReadStream(filePath).pipe(res)
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// DELETE /api/crm/support/kb/:id/attachments/:attId
+kbRouter.delete('/kb/:id/attachments/:attId', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const attId = req.params.attId
+    const art = await db.collection('kb_articles').findOne({ _id }, { projection: { attachments: 1 } }) as any
+    const att = (art?.attachments || []).find((a: any) => String(a._id) === attId)
+    if (att?.path && fs.existsSync(att.path)) {
+      try { fs.unlinkSync(att.path) } catch {}
+    }
+    await db.collection('kb_articles').updateOne({ _id }, { $pull: { attachments: { _id: new ObjectId(attId).toString() } }, $set: { updatedAt: new Date() } } as any)
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
