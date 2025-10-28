@@ -54,7 +54,6 @@ export const router = createBrowserRouter([
     path: '/portal',
     element: <PublicShell><SupportPortal /></PublicShell>,
   },
-  // Keep /apps/helpdesk working even if accessed directly
-  { path: '/apps/helpdesk', element: <App />, children: [{ index: true, element: <Helpdesk /> }] },
+  // Direct access fallback removed to avoid conflicting route matching
   { path: '*', element: <NotFound /> },
 ])
