@@ -37,6 +37,11 @@ export default function SupportTickets() {
     },
   })
   const items = data?.data.items ?? []
+  const metrics = useQuery({
+    queryKey: ['support-tickets-metrics'],
+    queryFn: async () => { const r = await http.get('/api/crm/support/tickets/metrics'); return r.data as { data: { open: number; breached: number; dueNext60: number } } },
+    refetchInterval: 60000,
+  })
 
   const create = useMutation({
     mutationFn: async (payload: any) => { const res = await http.post('/api/crm/support/tickets', payload); return res.data },
@@ -126,6 +131,13 @@ export default function SupportTickets() {
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
         </div>
+        {metrics.data && (
+          <div className="grid grid-cols-1 gap-2 px-4 pb-4 sm:grid-cols-3">
+            <div className="rounded-lg border border-[color:var(--color-border)] p-3"><div className="text-xs text-[color:var(--color-text-muted)]">Open</div><div className="text-xl font-semibold">{metrics.data.data.open}</div></div>
+            <div className="rounded-lg border border-[color:var(--color-border)] p-3"><div className="text-xs text-[color:var(--color-text-muted)]">Breached SLA</div><div className="text-xl font-semibold text-red-400">{metrics.data.data.breached}</div></div>
+            <div className="rounded-lg border border-[color:var(--color-border)] p-3"><div className="text-xs text-[color:var(--color-text-muted)]">Due next 60m</div><div className="text-xl font-semibold text-yellow-300">{metrics.data.data.dueNext60}</div></div>
+          </div>
+        )}
         <form ref={createFormRef} className="grid items-start gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = String(fd.get('assignee')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const slaDueAt = createSlaValue || String(fd.get('slaDueAt')||'') || undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue('') }}>
           <input name="shortDescription" required placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="status" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option><option>canceled</option></select>
@@ -155,8 +167,10 @@ export default function SupportTickets() {
             <th className="px-4 py-2">Updated</th>
           </tr></thead>
           <tbody>
-            {pageItems.map((t) => (
-              <tr key={t._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(t)}>
+            {pageItems.map((t) => {
+              const isBreached = !!t.slaDueAt && new Date(t.slaDueAt).getTime() < Date.now() && (t.status === 'open' || t.status === 'pending')
+              return (
+              <tr key={t._id} className={`border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer ${isBreached ? 'bg-red-500/10' : ''}`} onClick={() => setEditing(t)}>
                 <td className="px-4 py-2">{t.ticketNumber ?? '-'}</td>
                 <td className="px-4 py-2">{t.shortDescription ?? t.title ?? '-'}</td>
                 <td className="px-4 py-2">{t.status ?? '-'}</td>
@@ -167,7 +181,7 @@ export default function SupportTickets() {
                 </td>
                 <td className="px-4 py-2">{t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '-'}</td>
               </tr>
-            ))}
+              )})}
           </tbody>
         </table>
         <div className="flex items-center justify-between p-4 text-sm">

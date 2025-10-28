@@ -21,7 +21,7 @@ type TicketDoc = {
   updatedAt: Date
 }
 
-// GET /api/crm/support/tickets?q=&status=&priority=&accountId=&contactId=&sort=&dir=
+// GET /api/crm/support/tickets?q=&status=&priority=&accountId=&contactId=&sort=&dir=&breached=&dueWithin=
 supportTicketsRouter.get('/tickets', async (req, res) => {
   const db = await getDb()
   if (!db) return res.json({ data: { items: [] }, error: null })
@@ -39,8 +39,33 @@ supportTicketsRouter.get('/tickets', async (req, res) => {
   if (priority) filter.priority = priority
   if (ObjectId.isValid(accountId)) filter.accountId = new ObjectId(accountId)
   if (ObjectId.isValid(contactId)) filter.contactId = new ObjectId(contactId)
+  const now = new Date()
+  const breached = String((req.query.breached as string) ?? '')
+  if (breached === '1') filter.slaDueAt = { $ne: null, $lt: now }
+  const dueWithin = Number((req.query.dueWithin as string) ?? '')
+  if (!isNaN(dueWithin) && dueWithin > 0) {
+    const until = new Date(now.getTime() + dueWithin * 60 * 1000)
+    filter.slaDueAt = filter.slaDueAt || {}
+    filter.slaDueAt.$gte = now
+    filter.slaDueAt.$lte = until
+  }
   const items = await db.collection<TicketDoc>('support_tickets').find(filter).sort(sort).limit(200).toArray()
   res.json({ data: { items }, error: null })
+})
+
+// GET /api/crm/support/tickets/metrics
+supportTicketsRouter.get('/tickets/metrics', async (_req, res) => {
+  const db = await getDb()
+  if (!db) return res.json({ data: { open: 0, breached: 0, dueNext60: 0 }, error: null })
+  const now = new Date()
+  const next60 = new Date(now.getTime() + 60 * 60 * 1000)
+  const coll = db.collection<TicketDoc>('support_tickets')
+  const [open, breached, dueNext60] = await Promise.all([
+    coll.countDocuments({ status: { $in: ['open','pending'] } }),
+    coll.countDocuments({ status: { $in: ['open','pending'] }, slaDueAt: { $ne: null, $lt: now } }),
+    coll.countDocuments({ status: { $in: ['open','pending'] }, slaDueAt: { $gte: now, $lte: next60 } }),
+  ])
+  res.json({ data: { open, breached, dueNext60 }, error: null })
 })
 
 // POST /api/crm/support/tickets
