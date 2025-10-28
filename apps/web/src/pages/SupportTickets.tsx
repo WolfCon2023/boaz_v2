@@ -37,11 +37,18 @@ export default function SupportTickets() {
     },
   })
   const items = data?.data.items ?? []
-  const metrics = useQuery({
-    queryKey: ['support-tickets-metrics'],
-    queryFn: async () => { const r = await http.get('/api/crm/support/tickets/metrics'); return r.data as { data: { open: number; breached: number; dueNext60: number } } },
-    refetchInterval: 60000,
-  })
+  // Fallback client-side metrics so the UI works even if the API route isn't deployed yet
+  const computedMetrics = React.useMemo(() => {
+    const now = Date.now()
+    const next60 = now + 60 * 60 * 1000
+    const isOpen = (s?: string) => s === 'open' || s === 'pending'
+    const open = items.filter((t) => isOpen(t.status)).length
+    const breached = items.filter((t) => isOpen(t.status) && t.slaDueAt && new Date(t.slaDueAt).getTime() < now).length
+    const dueNext60 = items.filter((t) => isOpen(t.status) && t.slaDueAt) 
+      .filter((t) => { const d = new Date(t.slaDueAt as string).getTime(); return d >= now && d <= next60 })
+      .length
+    return { open, breached, dueNext60 }
+  }, [items])
 
   const create = useMutation({
     mutationFn: async (payload: any) => { const res = await http.post('/api/crm/support/tickets', payload); return res.data },
@@ -131,11 +138,11 @@ export default function SupportTickets() {
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
         </div>
-        {metrics.data && (
+        {(
           <div className="grid grid-cols-1 gap-2 px-4 pb-4 sm:grid-cols-3">
-            <div className="rounded-lg border border-[color:var(--color-border)] p-3"><div className="text-xs text-[color:var(--color-text-muted)]">Open</div><div className="text-xl font-semibold">{metrics.data.data.open}</div></div>
-            <div className="rounded-lg border border-[color:var(--color-border)] p-3"><div className="text-xs text-[color:var(--color-text-muted)]">Breached SLA</div><div className="text-xl font-semibold text-red-400">{metrics.data.data.breached}</div></div>
-            <div className="rounded-lg border border-[color:var(--color-border)] p-3"><div className="text-xs text-[color:var(--color-text-muted)]">Due next 60m</div><div className="text-xl font-semibold text-yellow-300">{metrics.data.data.dueNext60}</div></div>
+            <div className="rounded-lg border border-[color:var(--color-border)] p-3"><div className="text-xs text-[color:var(--color-text-muted)]">Open</div><div className="text-xl font-semibold">{computedMetrics.open}</div></div>
+            <div className="rounded-lg border border-[color:var(--color-border)] p-3"><div className="text-xs text-[color:var(--color-text-muted)]">Breached SLA</div><div className="text-xl font-semibold text-red-400">{computedMetrics.breached}</div></div>
+            <div className="rounded-lg border border-[color:var(--color-border)] p-3"><div className="text-xs text-[color:var(--color-text-muted)]">Due next 60m</div><div className="text-xl font-semibold text-yellow-300">{computedMetrics.dueNext60}</div></div>
           </div>
         )}
         <form ref={createFormRef} className="grid items-start gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = String(fd.get('assignee')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const slaDueAt = createSlaValue || String(fd.get('slaDueAt')||'') || undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue('') }}>

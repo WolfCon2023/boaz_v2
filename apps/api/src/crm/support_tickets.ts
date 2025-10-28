@@ -68,6 +68,21 @@ supportTicketsRouter.get('/tickets/metrics', async (_req, res) => {
   res.json({ data: { open, breached, dueNext60 }, error: null })
 })
 
+// Alias: GET /api/crm/support/metrics (same payload)
+supportTicketsRouter.get('/metrics', async (_req, res) => {
+  const db = await getDb()
+  if (!db) return res.json({ data: { open: 0, breached: 0, dueNext60: 0 }, error: null })
+  const now = new Date()
+  const next60 = new Date(now.getTime() + 60 * 60 * 1000)
+  const coll = db.collection<TicketDoc>('support_tickets')
+  const [open, breached, dueNext60] = await Promise.all([
+    coll.countDocuments({ status: { $in: ['open','pending'] } }),
+    coll.countDocuments({ status: { $in: ['open','pending'] }, slaDueAt: { $ne: null, $lt: now } }),
+    coll.countDocuments({ status: { $in: ['open','pending'] }, slaDueAt: { $gte: now, $lte: next60 } }),
+  ])
+  res.json({ data: { open, breached, dueNext60 }, error: null })
+})
+
 // POST /api/crm/support/tickets
 supportTicketsRouter.post('/tickets', async (req, res) => {
   const db = await getDb()
