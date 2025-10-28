@@ -55,16 +55,6 @@ export default function Helpdesk() {
   )
 }
 
-function MetricCard({ title, value, accent }: { title: string; value: number; accent?: 'red' | 'yellow' }) {
-  const accentClass = accent === 'red' ? 'text-red-400' : accent === 'yellow' ? 'text-yellow-300' : ''
-  return (
-    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-      <div className="text-xs text-[color:var(--color-text-muted)]">{title}</div>
-      <div className={`text-2xl font-semibold ${accentClass}`}>{value}</div>
-    </div>
-  )
-}
-
 function QuickLinkCard({ title, value, to, accent }: { title: string; value: number; to: string; accent?: 'red' | 'yellow' }) {
   const accentClass = accent === 'red' ? 'text-red-400' : accent === 'yellow' ? 'text-yellow-300' : ''
   return (
