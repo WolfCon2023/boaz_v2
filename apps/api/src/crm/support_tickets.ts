@@ -29,6 +29,7 @@ supportTicketsRouter.get('/tickets', async (req, res) => {
   if (!db) return res.json({ data: { items: [] }, error: null })
   const q = String((req.query.q as string) ?? '').trim()
   const status = String((req.query.status as string) ?? '')
+  const statusesRaw = String((req.query.statuses as string) ?? '')
   const priority = String((req.query.priority as string) ?? '')
   const accountId = String((req.query.accountId as string) ?? '')
   const contactId = String((req.query.contactId as string) ?? '')
@@ -37,7 +38,10 @@ supportTicketsRouter.get('/tickets', async (req, res) => {
   const sort: Sort = { [sortKey]: dir as 1 | -1 }
   const filter: any = {}
   if (q) filter.$or = [{ title: { $regex: q, $options: 'i' } }, { description: { $regex: q, $options: 'i' } }]
-  if (status) filter.status = status
+  if (statusesRaw) {
+    const list = statusesRaw.split(',').map((s) => s.trim()).filter(Boolean)
+    if (list.length > 0) filter.status = { $in: list }
+  } else if (status) filter.status = status
   if (priority) filter.priority = priority
   if (ObjectId.isValid(accountId)) filter.accountId = new ObjectId(accountId)
   if (ObjectId.isValid(contactId)) filter.contactId = new ObjectId(contactId)
