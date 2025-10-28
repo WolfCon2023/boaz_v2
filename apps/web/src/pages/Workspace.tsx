@@ -67,7 +67,7 @@ export default function Workspace() {
             <button onClick={(e) => { e.stopPropagation(); remove.mutate(appKey) }} className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]">Remove</button>
           </div>
           <div className="mt-4 text-sm text-[color:var(--color-primary)] underline">
-            <a href={`/apps/${appKey}`}>Open</a>
+            <a href={appKey === 'support' ? '/apps/helpdesk' : `/apps/${appKey}`}>Open</a>
           </div>
         </div>
       </li>

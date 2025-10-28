@@ -22,7 +22,7 @@ export default function Marketplace() {
       <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {catalog.map((app) => (
           <li key={app.key}>
-            <a href={`/apps/${app.key}`} className="block h-full rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-primary)] focus:ring-offset-2 focus:ring-offset-[color:var(--color-bg)]">
+            <a href={app.key === 'support' ? '/apps/helpdesk' : `/apps/${app.key}`} className="block h-full rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-primary)] focus:ring-offset-2 focus:ring-offset-[color:var(--color-bg)]">
               <div className="text-base font-semibold">{app.name}</div>
               <div className="text-xs text-[color:var(--color-text-muted)] mt-1">{app.description}</div>
               <div className="mt-4 text-sm">
