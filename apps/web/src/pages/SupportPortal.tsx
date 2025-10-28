@@ -14,8 +14,18 @@ export default function SupportPortal() {
     const description = String(fd.get('description') || '')
     const requesterName = String(fd.get('requesterName') || '')
     const requesterEmail = String(fd.get('requesterEmail') || '')
-    const res = await http.post('/api/crm/support/portal/tickets', { shortDescription, description, requesterName, requesterEmail })
-    setSubmitResult({ ticketNumber: (res.data?.data?.ticketNumber as number) || 0 })
+    try {
+      const res = await http.post('/api/crm/support/portal/tickets', { shortDescription, description, requesterName, requesterEmail })
+      setSubmitResult({ ticketNumber: (res.data?.data?.ticketNumber as number) || 0 })
+    } catch (err: any) {
+      // Fallback to internal route if portal routes aren't deployed yet
+      if (err?.response?.status === 404) {
+        const res2 = await http.post('/api/crm/support/tickets', { shortDescription, description })
+        setSubmitResult({ ticketNumber: (res2.data?.data?.ticketNumber as number) || 0 })
+      } else {
+        throw err
+      }
+    }
     ;(e.currentTarget as HTMLFormElement).reset()
   }
 
@@ -36,8 +46,23 @@ export default function SupportPortal() {
     const fd = new FormData(e.currentTarget)
     const body = String(fd.get('body') || '')
     if (!body.trim()) return
-    await http.post(`/api/crm/support/portal/tickets/${found.ticketNumber}/comments`, { body, author: 'customer' })
-    setFound((prev: any) => prev ? { ...prev, comments: [ ...(prev.comments || []), { author: 'you', body, at: new Date().toISOString() } ] } : prev)
+    try {
+      await http.post(`/api/crm/support/portal/tickets/${found.ticketNumber}/comments`, { body, author: 'customer' })
+      setFound((prev: any) => prev ? { ...prev, comments: [ ...(prev.comments || []), { author: 'you', body, at: new Date().toISOString() } ] } : prev)
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        // Fallback: find by ticketNumber via internal list, then post to internal comments route
+        const list = await http.get('/api/crm/support/tickets')
+        const items = (list.data?.data?.items as any[]) || []
+        const match = items.find((t) => t.ticketNumber === found.ticketNumber)
+        if (match?._id) {
+          await http.post(`/api/crm/support/tickets/${match._id}/comments`, { body })
+          setFound((prev: any) => prev ? { ...prev, comments: [ ...(prev.comments || []), { author: 'you', body, at: new Date().toISOString() } ] } : prev)
+        }
+      } else {
+        throw err
+      }
+    }
     ;(e.currentTarget as HTMLFormElement).reset()
   }
 
