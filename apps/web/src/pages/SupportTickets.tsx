@@ -27,7 +27,7 @@ export default function SupportTickets() {
   const [q, setQ] = React.useState('')
   const [status, setStatus] = React.useState('')
   const [priority, setPriority] = React.useState('')
-  const [sort, setSort] = React.useState<'createdAt'|'updatedAt'|'ticketNumber'|'priority'|'status'>('createdAt')
+  const [sort, setSort] = React.useState<'createdAt'|'updatedAt'|'ticketNumber'|'priority'|'status'|'slaDueAt'>('createdAt')
   const [dir, setDir] = React.useState<'asc'|'desc'>('desc')
   const [statusMulti, setStatusMulti] = React.useState<string[]>([])
   const [breachedOnly, setBreachedOnly] = React.useState(false)
@@ -144,6 +144,7 @@ export default function SupportTickets() {
             <option value="ticketNumber">Ticket #</option>
             <option value="priority">Priority</option>
             <option value="status">Status</option>
+            <option value="slaDueAt">SLA Due</option>
           </select>
           <select value={dir} onChange={(e) => setDir(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="desc">Desc</option>
@@ -158,8 +159,8 @@ export default function SupportTickets() {
         {(
           <div className="grid grid-cols-1 gap-2 px-4 pb-4 sm:grid-cols-3">
             <button type="button" onClick={() => { setStatus(''); setStatusMulti(['open','pending']); setBreachedOnly(false); setDueNext60(false); setSort('createdAt'); setDir('desc') }} className="text-left rounded-lg border border-[color:var(--color-border)] p-3 hover:bg-[color:var(--color-muted)]"><div className="text-xs text-[color:var(--color-text-muted)]">Open</div><div className="text-xl font-semibold">{computedMetrics.open}</div></button>
-            <button type="button" onClick={() => { setStatus(''); setStatusMulti(['open','pending']); setBreachedOnly(true); setDueNext60(false); setSort('createdAt'); setDir('desc') }} className="text-left rounded-lg border border-[color:var(--color-border)] p-3 hover:bg-[color:var(--color-muted)]"><div className="text-xs text-[color:var(--color-text-muted)]">Breached SLA</div><div className="text-xl font-semibold text-red-400">{computedMetrics.breached}</div></button>
-            <button type="button" onClick={() => { setStatus(''); setStatusMulti(['open','pending']); setBreachedOnly(false); setDueNext60(true); setSort('createdAt'); setDir('desc') }} className="text-left rounded-lg border border-[color:var(--color-border)] p-3 hover:bg-[color:var(--color-muted)]"><div className="text-xs text-[color:var(--color-text-muted)]">Due next 60m</div><div className="text-xl font-semibold text-yellow-300">{computedMetrics.dueNext60}</div></button>
+            <button type="button" onClick={() => { setStatus(''); setStatusMulti(['open','pending']); setBreachedOnly(true); setDueNext60(false); setSort('slaDueAt'); setDir('asc') }} className="text-left rounded-lg border border-[color:var(--color-border)] p-3 hover:bg-[color:var(--color-muted)]"><div className="text-xs text-[color:var(--color-text-muted)]">Breached SLA</div><div className="text-xl font-semibold text-red-400">{computedMetrics.breached}</div></button>
+            <button type="button" onClick={() => { setStatus(''); setStatusMulti(['open','pending']); setBreachedOnly(false); setDueNext60(true); setSort('slaDueAt'); setDir('asc') }} className="text-left rounded-lg border border-[color:var(--color-border)] p-3 hover:bg-[color:var(--color-muted)]"><div className="text-xs text-[color:var(--color-text-muted)]">Due next 60m</div><div className="text-xl font-semibold text-yellow-300">{computedMetrics.dueNext60}</div></button>
           </div>
         )}
         <form ref={createFormRef} className="grid items-start gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = String(fd.get('assignee')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const rawSla = createSlaValue || String(fd.get('slaDueAt')||''); const slaDueAt = rawSla ? new Date(rawSla).toISOString() : undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue('') }}>
