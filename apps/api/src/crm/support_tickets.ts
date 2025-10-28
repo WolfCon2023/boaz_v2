@@ -47,13 +47,13 @@ supportTicketsRouter.get('/tickets', async (req, res) => {
   if (ObjectId.isValid(contactId)) filter.contactId = new ObjectId(contactId)
   const now = new Date()
   const breached = String((req.query.breached as string) ?? '')
-  if (breached === '1') filter.slaDueAt = { $ne: null, $lt: now }
   const dueWithin = Number((req.query.dueWithin as string) ?? '')
-  if (!isNaN(dueWithin) && dueWithin > 0) {
+  if (breached === '1') {
+    // Explicitly prefer breached filter when both are present
+    filter.slaDueAt = { $ne: null, $lt: now }
+  } else if (!isNaN(dueWithin) && dueWithin > 0) {
     const until = new Date(now.getTime() + dueWithin * 60 * 1000)
-    filter.slaDueAt = filter.slaDueAt || {}
-    filter.slaDueAt.$gte = now
-    filter.slaDueAt.$lte = until
+    filter.slaDueAt = { $ne: null, $gte: now, $lte: until }
   }
   const items = await db.collection<TicketDoc>('support_tickets').find(filter).sort(sort).limit(200).toArray()
   res.json({ data: { items }, error: null })
