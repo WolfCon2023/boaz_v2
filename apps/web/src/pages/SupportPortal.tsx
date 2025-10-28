@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { http, apiBaseURL } from '@/lib/http'
+import { http } from '@/lib/http'
 
 export default function SupportPortal() {
   const [submitResult, setSubmitResult] = React.useState<{ ticketNumber: number } | null>(null)
@@ -91,7 +91,7 @@ export default function SupportPortal() {
         )}
       </div>
 
-      <div className="text-center text-xs text-[color:var(--color-text-muted)]">API: {apiBaseURL}</div>
+      
     </div>
   )
 }

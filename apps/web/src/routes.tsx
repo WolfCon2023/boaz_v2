@@ -20,6 +20,8 @@ import CRMOutreachEvents from '@/pages/CRMOutreachEvents'
 import SupportTickets from '@/pages/SupportTickets'
 import KnowledgeBase from '@/pages/KnowledgeBase'
 import SupportPortal from '@/pages/SupportPortal'
+import { PublicShell } from '@/components/PublicShell'
+import Helpdesk from '@/pages/Helpdesk'
 
 export const router = createBrowserRouter([
   {
@@ -45,8 +47,12 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/outreach/events', element: <CRMOutreachEvents /> },
       { path: 'apps/crm/support/tickets', element: <SupportTickets /> },
       { path: 'apps/crm/support/kb', element: <KnowledgeBase /> },
-      { path: 'portal/support', element: <SupportPortal /> },
     ],
   },
+  {
+    path: '/portal',
+    element: <PublicShell><SupportPortal /></PublicShell>,
+  },
+  { path: '/apps/helpdesk', element: <Helpdesk /> },
   { path: '*', element: <NotFound /> },
 ])

@@ -1,3 +1,5 @@
+import { getPortalUrl } from '@/lib/urls'
+
 export default function CRMHub() {
   const items: { label: string; desc: string; href: string }[] = [
     { label: 'Contacts', desc: 'People and relationships', href: '/apps/crm/contacts' },
@@ -23,6 +25,11 @@ export default function CRMHub() {
           </li>
         ))}
       </ul>
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="text-base font-semibold">External Customer Portal</div>
+        <div className="text-xs text-[color:var(--color-text-muted)] mt-1">Share this link with customers to submit and view tickets.</div>
+        <a href={getPortalUrl()} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Open Customer Portal</a>
+      </div>
     </div>
   )
 }
