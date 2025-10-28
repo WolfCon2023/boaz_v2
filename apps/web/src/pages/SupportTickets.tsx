@@ -78,7 +78,7 @@ export default function SupportTickets() {
 
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
-  React.useEffect(() => { setPage(0) }, [q, status, priority, sort, dir, pageSize, breachedOnly, dueNext60])
+  React.useEffect(() => { setPage(0) }, [q, status, statusMulti.join(','), priority, sort, dir, pageSize, breachedOnly, dueNext60])
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
   const pageItems = React.useMemo(() => items.slice(page * pageSize, page * pageSize + pageSize), [items, page, pageSize])
 
