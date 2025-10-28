@@ -79,8 +79,30 @@ export default function SupportTickets() {
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
   React.useEffect(() => { setPage(0) }, [q, status, statusMulti.join(','), priority, sort, dir, pageSize, breachedOnly, dueNext60])
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
-  const pageItems = React.useMemo(() => items.slice(page * pageSize, page * pageSize + pageSize), [items, page, pageSize])
+  const filteredItems = React.useMemo(() => {
+    let arr = items.slice()
+    if (statusMulti.length > 0) arr = arr.filter((t) => statusMulti.includes(String(t.status)))
+    if (breachedOnly) {
+      arr = arr.filter((t) => !!t.slaDueAt && new Date(t.slaDueAt).getTime() < nowTs)
+    } else if (dueNext60) {
+      const until = nowTs + 60 * 60 * 1000
+      arr = arr.filter((t) => {
+        if (!t.slaDueAt) return false
+        const ts = new Date(t.slaDueAt).getTime()
+        return ts >= nowTs && ts <= until
+      })
+    }
+    if (sort === 'slaDueAt') {
+      arr.sort((a, b) => {
+        const aTs = a.slaDueAt ? new Date(a.slaDueAt).getTime() : Number.POSITIVE_INFINITY
+        const bTs = b.slaDueAt ? new Date(b.slaDueAt).getTime() : Number.POSITIVE_INFINITY
+        return (dir === 'asc' ? 1 : -1) * (aTs - bTs)
+      })
+    }
+    return arr
+  }, [items, statusMulti, breachedOnly, dueNext60, nowTs, sort, dir])
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize))
+  const pageItems = React.useMemo(() => filteredItems.slice(page * pageSize, page * pageSize + pageSize), [filteredItems, page, pageSize])
 
   const [editing, setEditing] = React.useState<Ticket | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
