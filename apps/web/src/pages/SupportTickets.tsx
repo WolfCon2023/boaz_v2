@@ -104,6 +104,82 @@ export default function SupportTickets() {
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize))
   const pageItems = React.useMemo(() => filteredItems.slice(page * pageSize, page * pageSize + pageSize), [filteredItems, page, pageSize])
 
+  function exportCsv() {
+    const rows = filteredItems.map((t) => ({
+      ticketNumber: t.ticketNumber ?? '',
+      shortDescription: t.shortDescription ?? t.title ?? '',
+      description: t.description ?? '',
+      status: t.status ?? '',
+      priority: t.priority ?? '',
+      assignee: t.assignee ?? '',
+      accountId: t.accountId ?? '',
+      contactId: t.contactId ?? '',
+      commentsCount: Array.isArray(t.comments) ? String(t.comments.length) : '0',
+      slaDueAt: t.slaDueAt ? new Date(t.slaDueAt).toISOString() : '',
+      createdAt: t.createdAt ? new Date(t.createdAt).toISOString() : '',
+      updatedAt: t.updatedAt ? new Date(t.updatedAt).toISOString() : '',
+    }))
+    const headers = [
+      'ticketNumber',
+      'shortDescription',
+      'description',
+      'status',
+      'priority',
+      'assignee',
+      'accountId',
+      'contactId',
+      'commentsCount',
+      'slaDueAt',
+      'createdAt',
+      'updatedAt',
+    ]
+    const escape = (v: any) => {
+      const s = String(v ?? '')
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"'
+      return s
+    }
+    const csv = [headers.join(','), ...rows.map(r => headers.map(h => escape((r as any)[h])).join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tickets_export_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  function exportJson() {
+    const blob = new Blob([JSON.stringify(filteredItems, null, 2)], { type: 'application/json;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tickets_export_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  async function copyToClipboard() {
+    try {
+      const text = JSON.stringify(filteredItems, null, 2)
+      await navigator.clipboard.writeText(text)
+      // Optional: simple visual feedback
+      alert('Copied current filtered tickets to clipboard')
+    } catch {
+      // Fallback
+      const textArea = document.createElement('textarea')
+      textArea.value = JSON.stringify(filteredItems, null, 2)
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      alert('Copied current filtered tickets to clipboard')
+    }
+  }
+
   const [editing, setEditing] = React.useState<Ticket | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   React.useEffect(() => { if (!editing) return; const el = document.createElement('div'); el.setAttribute('data-overlay', 'ticket-editor'); Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' }); document.body.appendChild(el); setPortalEl(el); return () => { try { document.body.removeChild(el) } catch {}; setPortalEl(null) } }, [editing])
@@ -174,6 +250,11 @@ export default function SupportTickets() {
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
           <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={exportCsv} className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Export CSV</button>
+            <button type="button" onClick={exportJson} className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Export JSON</button>
+            <button type="button" onClick={copyToClipboard} className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Copy</button>
+          </div>
+          <div className="ml-2 flex items-center gap-2">
             <button type="button" onClick={() => setBreachedOnly((v) => !v)} className={`rounded-full border px-3 py-1 text-xs ${breachedOnly ? 'bg-red-500/20 border-red-500 text-red-300' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]'}`}>Breached</button>
             <button type="button" onClick={() => setDueNext60((v) => !v)} className={`rounded-full border px-3 py-1 text-xs ${dueNext60 ? 'bg-yellow-500/20 border-yellow-500 text-yellow-300' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]'}`}>Due 60m</button>
           </div>
@@ -210,6 +291,7 @@ export default function SupportTickets() {
             <th className="px-4 py-2">Short description</th>
             <th className="px-4 py-2">Status</th>
             <th className="px-4 py-2">Priority</th>
+            <th className="px-4 py-2">Assignee</th>
             <th className="px-4 py-2">SLA Due</th>
             <th className="px-4 py-2">Updated</th>
           </tr></thead>
@@ -222,6 +304,7 @@ export default function SupportTickets() {
                 <td className="px-4 py-2">{t.shortDescription ?? t.title ?? '-'}</td>
                 <td className="px-4 py-2">{t.status ?? '-'}</td>
                 <td className="px-4 py-2">{t.priority ?? '-'}</td>
+                <td className="px-4 py-2">{t.assignee ?? '-'}</td>
                 <td className="px-4 py-2 flex items-center gap-2">
                   <span>{t.slaDueAt ? new Date(t.slaDueAt).toLocaleString() : '-'}</span>
                   <button type="button" className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-xs hover:bg-[color:var(--color-muted)]" onClick={(e) => { e.stopPropagation(); setSlaEditing(t) }}>Set</button>
@@ -257,14 +340,20 @@ export default function SupportTickets() {
             <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
               <div className="mb-3 text-base font-semibold">Edit ticket</div>
               <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, shortDescription: String(fd.get('shortDescription')||'')||undefined, status: String(fd.get('status')||'')||undefined, priority: String(fd.get('priority')||'')||undefined, assignee: String(fd.get('assignee')||'')||undefined, description: String(fd.get('description')||'')||undefined }; const sla = String(fd.get('slaDueAt')||''); if (sla) payload.slaDueAt = new Date(sla).toISOString(); update.mutate(payload); setEditing(null) }}>
+                <label className="text-xs text-[color:var(--color-text-muted)]">Short description</label>
                 <input name="shortDescription" defaultValue={editing.shortDescription ?? editing.title ?? ''} placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <label className="text-xs text-[color:var(--color-text-muted)]">Status</label>
                 <select name="status" defaultValue={editing.status ?? 'open'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option><option>canceled</option></select>
+                <label className="text-xs text-[color:var(--color-text-muted)]">Priority</label>
                 <select name="priority" defaultValue={editing.priority ?? 'normal'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>low</option><option>normal</option><option>high</option><option>urgent</option></select>
+                <label className="text-xs text-[color:var(--color-text-muted)]">Assignee</label>
                 <input name="assignee" defaultValue={editing.assignee ?? ''} placeholder="Assignee" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] px-3 py-2 text-sm" />
+                <label className="text-xs text-[color:var(--color-text-muted)]">SLA Due</label>
                 <div className="flex items-center gap-2">
                   <input name="slaDueAt" type="datetime-local" defaultValue={editing.slaDueAt ? editing.slaDueAt.slice(0,16) : ''} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">OK</button>
                 </div>
+                <label className="text-xs text-[color:var(--color-text-muted)] sm:col-span-2">Description</label>
                 <textarea name="description" defaultValue={editing.description ?? ''} placeholder="Description" maxLength={2500} className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <div className="sm:col-span-2 mt-2">
                   <div className="mb-2 text-sm font-semibold">History</div>

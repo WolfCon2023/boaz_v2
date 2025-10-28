@@ -47,12 +47,14 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/outreach/events', element: <CRMOutreachEvents /> },
       { path: 'apps/crm/support/tickets', element: <SupportTickets /> },
       { path: 'apps/crm/support/kb', element: <KnowledgeBase /> },
+      { path: 'apps/helpdesk', element: <Helpdesk /> },
     ],
   },
   {
     path: '/portal',
     element: <PublicShell><SupportPortal /></PublicShell>,
   },
-  { path: '/apps/helpdesk', element: <Helpdesk /> },
+  // Keep /apps/helpdesk working even if accessed directly
+  { path: '/apps/helpdesk', element: <App />, children: [{ index: true, element: <Helpdesk /> }] },
   { path: '*', element: <NotFound /> },
 ])
