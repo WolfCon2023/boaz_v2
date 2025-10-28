@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
@@ -23,6 +24,7 @@ type Ticket = {
 
 export default function SupportTickets() {
   const qc = useQueryClient()
+  const location = useLocation()
   const createFormRef = React.useRef<HTMLFormElement | null>(null)
   const [q, setQ] = React.useState('')
   const [status, setStatus] = React.useState('')
@@ -44,6 +46,27 @@ export default function SupportTickets() {
     },
   })
   const items = data?.data.items ?? []
+  // Sync filters from URL query params
+  React.useEffect(() => {
+    const sp = new URLSearchParams(location.search)
+    const qParam = sp.get('q') ?? ''
+    const statuses = sp.get('statuses') ?? ''
+    const breached = sp.get('breached') === '1'
+    const dueWithin = sp.get('dueWithin')
+    const sortParam = (sp.get('sort') as any) || ''
+    const dirParam = (sp.get('dir') as any) || ''
+    setQ(qParam)
+    if (statuses) {
+      setStatus('')
+      setStatusMulti(statuses.split(',').map((s) => s.trim()).filter(Boolean))
+    } else {
+      setStatusMulti([])
+    }
+    setBreachedOnly(breached)
+    setDueNext60(!!dueWithin)
+    if (sortParam) setSort(sortParam)
+    if (dirParam) setDir(dirParam)
+  }, [location.search])
   // Heartbeat to keep SLA view in sync with system time
   const [nowTs, setNowTs] = React.useState(() => Date.now())
   React.useEffect(() => {

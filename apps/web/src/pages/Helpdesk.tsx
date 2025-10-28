@@ -24,9 +24,9 @@ export default function Helpdesk() {
 
       {/* At-a-glance metrics */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <MetricCard title="Open" value={metrics.data?.data.open ?? 0} />
-        <MetricCard title="Breached SLA" value={metrics.data?.data.breached ?? 0} accent="red" />
-        <MetricCard title="Due next 60m" value={metrics.data?.data.dueNext60 ?? 0} accent="yellow" />
+        <QuickLinkCard title="Open" value={metrics.data?.data.open ?? 0} to="/apps/crm/support/tickets?statuses=open,pending&sort=createdAt&dir=desc" />
+        <QuickLinkCard title="Breached SLA" value={metrics.data?.data.breached ?? 0} to="/apps/crm/support/tickets?statuses=open,pending&breached=1&sort=slaDueAt&dir=asc" accent="red" />
+        <QuickLinkCard title="Due next 60m" value={metrics.data?.data.dueNext60 ?? 0} to="/apps/crm/support/tickets?statuses=open,pending&dueWithin=60&sort=slaDueAt&dir=asc" accent="yellow" />
       </div>
 
       {/* Quick actions */}
@@ -62,6 +62,16 @@ function MetricCard({ title, value, accent }: { title: string; value: number; ac
       <div className="text-xs text-[color:var(--color-text-muted)]">{title}</div>
       <div className={`text-2xl font-semibold ${accentClass}`}>{value}</div>
     </div>
+  )
+}
+
+function QuickLinkCard({ title, value, to, accent }: { title: string; value: number; to: string; accent?: 'red' | 'yellow' }) {
+  const accentClass = accent === 'red' ? 'text-red-400' : accent === 'yellow' ? 'text-yellow-300' : ''
+  return (
+    <Link to={to} className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 hover:bg-[color:var(--color-muted)]">
+      <div className="text-xs text-[color:var(--color-text-muted)]">{title}</div>
+      <div className={`text-2xl font-semibold ${accentClass}`}>{value}</div>
+    </Link>
   )
 }
 
