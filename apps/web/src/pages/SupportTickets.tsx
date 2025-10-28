@@ -42,9 +42,15 @@ export default function SupportTickets() {
     },
   })
   const items = data?.data.items ?? []
+  // Heartbeat to keep SLA view in sync with system time
+  const [nowTs, setNowTs] = React.useState(() => Date.now())
+  React.useEffect(() => {
+    const id = setInterval(() => setNowTs(Date.now()), 60_000) // update every minute
+    return () => clearInterval(id)
+  }, [])
   // Fallback client-side metrics so the UI works even if the API route isn't deployed yet
   const computedMetrics = React.useMemo(() => {
-    const now = Date.now()
+    const now = nowTs
     const next60 = now + 60 * 60 * 1000
     const isOpen = (s?: string) => s === 'open' || s === 'pending'
     const open = items.filter((t) => isOpen(t.status)).length
@@ -53,7 +59,7 @@ export default function SupportTickets() {
       .filter((t) => { const d = new Date(t.slaDueAt as string).getTime(); return d >= now && d <= next60 })
       .length
     return { open, breached, dueNext60 }
-  }, [items])
+  }, [items, nowTs])
 
   const create = useMutation({
     mutationFn: async (payload: any) => { const res = await http.post('/api/crm/support/tickets', payload); return res.data },
@@ -184,7 +190,7 @@ export default function SupportTickets() {
           </tr></thead>
           <tbody>
             {pageItems.map((t) => {
-              const isBreached = !!t.slaDueAt && new Date(t.slaDueAt).getTime() < Date.now() && (t.status === 'open' || t.status === 'pending')
+              const isBreached = !!t.slaDueAt && new Date(t.slaDueAt).getTime() < nowTs && (t.status === 'open' || t.status === 'pending')
               return (
               <tr key={t._id} className={`border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer ${isBreached ? 'bg-red-500/10' : ''}`} onClick={() => setEditing(t)}>
                 <td className="px-4 py-2">{t.ticketNumber ?? '-'}</td>
