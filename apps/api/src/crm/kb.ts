@@ -159,8 +159,11 @@ kbRouter.get('/kb/:id/attachments/:attId', async (req, res) => {
     const stat = fs.statSync(filePath)
     res.setHeader('Content-Type', att.contentType || 'application/octet-stream')
     res.setHeader('Content-Length', String(stat.size))
-    // Prefer inline for PDFs/images; fall back to attachment otherwise
-    const disp = (att.contentType && /pdf|image\//i.test(att.contentType)) ? 'inline' : 'attachment'
+    // Prefer inline for PDFs/images; allow override with ?download=1
+    const forceDownload = String((req.query as any)?.download ?? '').toLowerCase() === '1'
+    const disp = forceDownload
+      ? 'attachment'
+      : (att.contentType && /pdf|image\//i.test(att.contentType)) ? 'inline' : 'attachment'
     const safeName = encodeURIComponent(att.filename)
     res.setHeader('Content-Disposition', `${disp}; filename*=UTF-8''${safeName}`)
     const stream = fs.createReadStream(filePath)

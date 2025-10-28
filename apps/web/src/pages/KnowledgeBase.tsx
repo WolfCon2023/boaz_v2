@@ -165,21 +165,37 @@ export default function KnowledgeBase() {
                     {(editing.attachments ?? []).length === 0 && (
                       <div className="text-xs text-[color:var(--color-text-muted)]">No attachments.</div>
                     )}
-                    {(editing.attachments ?? []).map((att) => (
-                      <div key={att._id} className="flex items-center justify-between gap-2">
-                        <a href={`${apiBaseURL}/api/crm/support/kb/${editing._id}/attachments/${att._id}`} target="_blank" rel="noopener noreferrer" className="truncate text-[color:var(--color-primary-600)] hover:underline">
-                          {att.filename}
-                        </a>
-                        <div className="flex items-center gap-2">
-                          {typeof att.size === 'number' && <span className="text-xs text-[color:var(--color-text-muted)]">{Math.ceil(att.size / 1024)} KB</span>}
-                          <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={async () => {
-                            if (!confirm('Delete attachment?')) return
-                            await removeAttachment.mutateAsync({ articleId: editing._id, attId: att._id })
-                            setEditing((prev) => prev ? { ...prev, attachments: (prev.attachments ?? []).filter((a) => a._id !== att._id) } : prev)
-                          }}>Delete</button>
+                    {(editing.attachments ?? []).map((att) => {
+                      const name = att.filename || 'file'
+                      const lower = name.toLowerCase()
+                      const ext = lower.split('.').pop() || ''
+                      const isPdf = ext === 'pdf'
+                      const isImage = ['png','jpg','jpeg','gif','webp'].includes(ext)
+                      const isDoc = ['doc','docx'].includes(ext)
+                      const isXls = ['xls','xlsx','csv'].includes(ext)
+                      const icon = isPdf ? '📄' : isImage ? '🖼️' : isDoc ? '📝' : isXls ? '📊' : '📎'
+                      const viewHref = `${apiBaseURL}/api/crm/support/kb/${editing._id}/attachments/${att._id}`
+                      const downloadHref = `${viewHref}?download=1`
+                      return (
+                        <div key={att._id} className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="select-none">{icon}</span>
+                            <a href={viewHref} target="_blank" rel="noopener noreferrer" className="truncate text-[color:var(--color-primary-600)] hover:underline">
+                              {name}
+                            </a>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {typeof att.size === 'number' && <span className="text-xs text-[color:var(--color-text-muted)]">{Math.ceil(att.size / 1024)} KB</span>}
+                            <a href={downloadHref} className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" target="_blank" rel="noopener noreferrer">Download</a>
+                            <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={async () => {
+                              if (!confirm('Delete attachment?')) return
+                              await removeAttachment.mutateAsync({ articleId: editing._id, attId: att._id })
+                              setEditing((prev) => prev ? { ...prev, attachments: (prev.attachments ?? []).filter((a) => a._id !== att._id) } : prev)
+                            }}>Delete</button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                     <UploadAttachmentRow articleId={editing._id} onUploaded={(a) => setEditing((prev) => prev ? { ...prev, attachments: [...(prev.attachments ?? []), a] } : prev)} uploadAttachment={uploadAttachment} />
                   </div>
                 </div>
