@@ -19,6 +19,7 @@ import CRMOutreachSequences from '@/pages/CRMOutreachSequences'
 import CRMOutreachEvents from '@/pages/CRMOutreachEvents'
 import SupportTickets from '@/pages/SupportTickets'
 import KnowledgeBase from '@/pages/KnowledgeBase'
+import SupportPortal from '@/pages/SupportPortal'
 
 export const router = createBrowserRouter([
   {
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/outreach/events', element: <CRMOutreachEvents /> },
       { path: 'apps/crm/support/tickets', element: <SupportTickets /> },
       { path: 'apps/crm/support/kb', element: <KnowledgeBase /> },
+      { path: 'portal/support', element: <SupportPortal /> },
     ],
   },
   { path: '*', element: <NotFound /> },

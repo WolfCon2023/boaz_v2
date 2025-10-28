@@ -19,6 +19,8 @@ type TicketDoc = {
   comments: TicketComment[]
   createdAt: Date
   updatedAt: Date
+  requesterName?: string | null
+  requesterEmail?: string | null
 }
 
 // GET /api/crm/support/tickets?q=&status=&priority=&accountId=&contactId=&sort=&dir=&breached=&dueWithin=
@@ -107,6 +109,8 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
       comments: [],
       createdAt: new Date(),
       updatedAt: new Date(),
+      requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
+      requesterEmail: typeof raw.requesterEmail === 'string' ? raw.requesterEmail : null,
     }
     try {
       doc.ticketNumber = await getNextSequence('ticketNumber')
@@ -155,6 +159,61 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
     }
     return res.status(500).json({ data: null, error: 'insert_failed', details })
   }
+})
+
+// PUBLIC PORTAL
+// POST /api/crm/support/portal/tickets { shortDescription, description, requesterName, requesterEmail }
+supportTicketsRouter.post('/portal/tickets', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const raw = req.body ?? {}
+  const shortDescription = typeof raw.shortDescription === 'string' ? raw.shortDescription.trim() : ''
+  const requesterEmail = typeof raw.requesterEmail === 'string' ? raw.requesterEmail.trim() : ''
+  if (!shortDescription || !requesterEmail) return res.status(400).json({ data: null, error: 'invalid_payload' })
+  const description = typeof raw.description === 'string' ? raw.description.slice(0, 2500) : ''
+  const doc: TicketDoc = {
+    shortDescription,
+    description,
+    status: 'open',
+    priority: 'normal',
+    accountId: null,
+    contactId: null,
+    assignee: null,
+    slaDueAt: null,
+    comments: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
+    requesterEmail,
+  }
+  try {
+    doc.ticketNumber = await getNextSequence('ticketNumber')
+  } catch {}
+  if (doc.ticketNumber == null) doc.ticketNumber = 200001
+  const result = await db.collection<TicketDoc>('support_tickets').insertOne(doc)
+  res.status(201).json({ data: { _id: result.insertedId, ticketNumber: doc.ticketNumber }, error: null })
+})
+
+// GET /api/crm/support/portal/tickets/:ticketNumber
+supportTicketsRouter.get('/portal/tickets/:ticketNumber', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const num = Number(req.params.ticketNumber)
+  if (!num) return res.status(400).json({ data: null, error: 'invalid_ticketNumber' })
+  const item = await db.collection<TicketDoc>('support_tickets').findOne({ ticketNumber: num })
+  if (!item) return res.status(404).json({ data: null, error: 'not_found' })
+  res.json({ data: { item }, error: null })
+})
+
+// POST /api/crm/support/portal/tickets/:ticketNumber/comments { body, author }
+supportTicketsRouter.post('/portal/tickets/:ticketNumber/comments', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const num = Number(req.params.ticketNumber)
+  if (!num) return res.status(400).json({ data: null, error: 'invalid_ticketNumber' })
+  const comment: TicketComment = { author: req.body?.author || 'customer', body: String(req.body?.body || ''), at: new Date() }
+  await db.collection<TicketDoc>('support_tickets').updateOne({ ticketNumber: num }, { $push: { comments: comment }, $set: { updatedAt: new Date() } })
+  res.json({ data: { ok: true }, error: null })
 })
 
 // PUT /api/crm/support/tickets/:id

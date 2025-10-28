@@ -29,10 +29,15 @@ export default function SupportTickets() {
   const [priority, setPriority] = React.useState('')
   const [sort, setSort] = React.useState<'createdAt'|'updatedAt'|'ticketNumber'|'priority'|'status'>('createdAt')
   const [dir, setDir] = React.useState<'asc'|'desc'>('desc')
+  const [breachedOnly, setBreachedOnly] = React.useState(false)
+  const [dueNext60, setDueNext60] = React.useState(false)
   const { data, isFetching } = useQuery({
-    queryKey: ['support-tickets', q, status, priority, sort, dir],
+    queryKey: ['support-tickets', q, status, priority, sort, dir, breachedOnly, dueNext60],
     queryFn: async () => {
-      const res = await http.get('/api/crm/support/tickets', { params: { q, status, priority, sort, dir } })
+      const params: any = { q, status, priority, sort, dir }
+      if (breachedOnly) params.breached = 1
+      if (dueNext60) params.dueWithin = 60
+      const res = await http.get('/api/crm/support/tickets', { params })
       return res.data as { data: { items: Ticket[] } }
     },
   })
@@ -65,7 +70,7 @@ export default function SupportTickets() {
 
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
-  React.useEffect(() => { setPage(0) }, [q, status, priority, sort, dir, pageSize])
+  React.useEffect(() => { setPage(0) }, [q, status, priority, sort, dir, pageSize, breachedOnly, dueNext60])
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
   const pageItems = React.useMemo(() => items.slice(page * pageSize, page * pageSize + pageSize), [items, page, pageSize])
 
@@ -137,6 +142,10 @@ export default function SupportTickets() {
             <option value="asc">Asc</option>
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={() => setBreachedOnly((v) => !v)} className={`rounded-full border px-3 py-1 text-xs ${breachedOnly ? 'bg-red-500/20 border-red-500 text-red-300' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]'}`}>Breached</button>
+            <button type="button" onClick={() => setDueNext60((v) => !v)} className={`rounded-full border px-3 py-1 text-xs ${dueNext60 ? 'bg-yellow-500/20 border-yellow-500 text-yellow-300' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]'}`}>Due 60m</button>
+          </div>
         </div>
         {(
           <div className="grid grid-cols-1 gap-2 px-4 pb-4 sm:grid-cols-3">
