@@ -29,6 +29,30 @@ const EnvSchema = z.object({
         .default('http://localhost:5173'),
     MONGO_URL: z.string().url().optional(),
     UPLOAD_DIR: z.string().optional(),
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z
+        .string()
+        .regex(/^\d+$/)
+        .transform((v) => Number(v))
+        .optional(),
+    SMTP_SECURE: z
+        .string()
+        .transform((v) => v === 'true')
+        .optional(),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASS: z.string().optional(),
+    ALERT_FROM: z.string().optional(),
+    ALERT_TO: z.string().optional(),
+    SLA_ALERT_WITHIN_MIN: z
+        .string()
+        .regex(/^\d+$/)
+        .transform((v) => Number(v))
+        .optional(),
+    SLA_ALERT_COOLDOWN_MIN: z
+        .string()
+        .regex(/^\d+$/)
+        .transform((v) => Number(v))
+        .optional(),
     SENDGRID_API_KEY: z.string().optional(),
     MAILGUN_API_KEY: z.string().optional(),
     MAILGUN_DOMAIN: z.string().optional(),

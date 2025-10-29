@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { http } from '@/lib/http'
 
 type Segment = { _id: string; name: string; description?: string }

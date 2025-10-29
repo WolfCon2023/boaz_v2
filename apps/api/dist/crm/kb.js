@@ -58,6 +58,22 @@ kbRouter.get('/kb', async (req, res) => {
     const items = await db.collection('kb_articles').find(filter).sort(sort).limit(200).toArray();
     res.json({ data: { items }, error: null });
 });
+// GET /api/crm/support/kb/:id
+kbRouter.get('/kb/:id', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const _id = new ObjectId(req.params.id);
+        const item = await db.collection('kb_articles').findOne({ _id });
+        if (!item)
+            return res.status(404).json({ data: null, error: 'not_found' });
+        res.json({ data: { item }, error: null });
+    }
+    catch {
+        res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+});
 // POST /api/crm/support/kb
 kbRouter.post('/kb', async (req, res) => {
     const db = await getDb();
@@ -152,9 +168,24 @@ kbRouter.get('/kb/:id/attachments/:attId', async (req, res) => {
         const filePath = att.path || path.join(uploadDir, att.filename);
         if (!fs.existsSync(filePath))
             return res.status(404).json({ data: null, error: 'file_missing' });
+        const stat = fs.statSync(filePath);
         res.setHeader('Content-Type', att.contentType || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `inline; filename="${att.filename}"`);
-        fs.createReadStream(filePath).pipe(res);
+        res.setHeader('Content-Length', String(stat.size));
+        // Prefer inline for PDFs/images; allow override with ?download=1
+        const forceDownload = String(req.query?.download ?? '').toLowerCase() === '1';
+        const disp = forceDownload
+            ? 'attachment'
+            : (att.contentType && /pdf|image\//i.test(att.contentType)) ? 'inline' : 'attachment';
+        const safeName = encodeURIComponent(att.filename);
+        res.setHeader('Content-Disposition', `${disp}; filename*=UTF-8''${safeName}`);
+        const stream = fs.createReadStream(filePath);
+        stream.on('error', (err) => {
+            // eslint-disable-next-line no-console
+            console.error('kb_attachment_stream_error', err);
+            if (!res.headersSent)
+                res.status(500).json({ data: null, error: 'read_failed' });
+        });
+        stream.pipe(res);
     }
     catch {
         res.status(400).json({ data: null, error: 'invalid_id' });

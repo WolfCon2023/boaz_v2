@@ -2,13 +2,14 @@ import { Router } from 'express';
 import { getDb, getNextSequence } from '../db.js';
 import { ObjectId } from 'mongodb';
 export const supportTicketsRouter = Router();
-// GET /api/crm/support/tickets?q=&status=&priority=&accountId=&contactId=&sort=&dir=
+// GET /api/crm/support/tickets?q=&status=&priority=&accountId=&contactId=&sort=&dir=&breached=&dueWithin=
 supportTicketsRouter.get('/tickets', async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.json({ data: { items: [] }, error: null });
     const q = String(req.query.q ?? '').trim();
     const status = String(req.query.status ?? '');
+    const statusesRaw = String(req.query.statuses ?? '');
     const priority = String(req.query.priority ?? '');
     const accountId = String(req.query.accountId ?? '');
     const contactId = String(req.query.contactId ?? '');
@@ -18,7 +19,12 @@ supportTicketsRouter.get('/tickets', async (req, res) => {
     const filter = {};
     if (q)
         filter.$or = [{ title: { $regex: q, $options: 'i' } }, { description: { $regex: q, $options: 'i' } }];
-    if (status)
+    if (statusesRaw) {
+        const list = statusesRaw.split(',').map((s) => s.trim()).filter(Boolean);
+        if (list.length > 0)
+            filter.status = { $in: list };
+    }
+    else if (status)
         filter.status = status;
     if (priority)
         filter.priority = priority;
@@ -26,8 +32,49 @@ supportTicketsRouter.get('/tickets', async (req, res) => {
         filter.accountId = new ObjectId(accountId);
     if (ObjectId.isValid(contactId))
         filter.contactId = new ObjectId(contactId);
+    const now = new Date();
+    const breached = String(req.query.breached ?? '');
+    const dueWithin = Number(req.query.dueWithin ?? '');
+    if (breached === '1') {
+        // Explicitly prefer breached filter when both are present
+        filter.slaDueAt = { $ne: null, $lt: now };
+    }
+    else if (!isNaN(dueWithin) && dueWithin > 0) {
+        const until = new Date(now.getTime() + dueWithin * 60 * 1000);
+        filter.slaDueAt = { $ne: null, $gte: now, $lte: until };
+    }
     const items = await db.collection('support_tickets').find(filter).sort(sort).limit(200).toArray();
     res.json({ data: { items }, error: null });
+});
+// GET /api/crm/support/tickets/metrics
+supportTicketsRouter.get('/tickets/metrics', async (_req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.json({ data: { open: 0, breached: 0, dueNext60: 0 }, error: null });
+    const now = new Date();
+    const next60 = new Date(now.getTime() + 60 * 60 * 1000);
+    const coll = db.collection('support_tickets');
+    const [open, breached, dueNext60] = await Promise.all([
+        coll.countDocuments({ status: { $in: ['open', 'pending'] } }),
+        coll.countDocuments({ status: { $in: ['open', 'pending'] }, slaDueAt: { $ne: null, $lt: now } }),
+        coll.countDocuments({ status: { $in: ['open', 'pending'] }, slaDueAt: { $gte: now, $lte: next60 } }),
+    ]);
+    res.json({ data: { open, breached, dueNext60 }, error: null });
+});
+// Alias: GET /api/crm/support/metrics (same payload)
+supportTicketsRouter.get('/metrics', async (_req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.json({ data: { open: 0, breached: 0, dueNext60: 0 }, error: null });
+    const now = new Date();
+    const next60 = new Date(now.getTime() + 60 * 60 * 1000);
+    const coll = db.collection('support_tickets');
+    const [open, breached, dueNext60] = await Promise.all([
+        coll.countDocuments({ status: { $in: ['open', 'pending'] } }),
+        coll.countDocuments({ status: { $in: ['open', 'pending'] }, slaDueAt: { $ne: null, $lt: now } }),
+        coll.countDocuments({ status: { $in: ['open', 'pending'] }, slaDueAt: { $gte: now, $lte: next60 } }),
+    ]);
+    res.json({ data: { open, breached, dueNext60 }, error: null });
 });
 // POST /api/crm/support/tickets
 supportTicketsRouter.post('/tickets', async (req, res) => {
@@ -55,6 +102,8 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
             comments: [],
             createdAt: new Date(),
             updatedAt: new Date(),
+            requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
+            requesterEmail: typeof raw.requesterEmail === 'string' ? raw.requesterEmail : null,
         };
         try {
             doc.ticketNumber = await getNextSequence('ticketNumber');
@@ -112,6 +161,67 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
         }
         return res.status(500).json({ data: null, error: 'insert_failed', details });
     }
+});
+// PUBLIC PORTAL
+// POST /api/crm/support/portal/tickets { shortDescription, description, requesterName, requesterEmail }
+supportTicketsRouter.post('/portal/tickets', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const raw = req.body ?? {};
+    const shortDescription = typeof raw.shortDescription === 'string' ? raw.shortDescription.trim() : '';
+    const requesterEmail = typeof raw.requesterEmail === 'string' ? raw.requesterEmail.trim() : '';
+    if (!shortDescription || !requesterEmail)
+        return res.status(400).json({ data: null, error: 'invalid_payload' });
+    const description = typeof raw.description === 'string' ? raw.description.slice(0, 2500) : '';
+    const doc = {
+        shortDescription,
+        description,
+        status: 'open',
+        priority: 'normal',
+        accountId: null,
+        contactId: null,
+        assignee: null,
+        slaDueAt: null,
+        comments: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
+        requesterEmail,
+    };
+    try {
+        doc.ticketNumber = await getNextSequence('ticketNumber');
+    }
+    catch { }
+    if (doc.ticketNumber == null)
+        doc.ticketNumber = 200001;
+    const result = await db.collection('support_tickets').insertOne(doc);
+    res.status(201).json({ data: { _id: result.insertedId, ticketNumber: doc.ticketNumber }, error: null });
+});
+// GET /api/crm/support/portal/tickets/:ticketNumber
+supportTicketsRouter.get('/portal/tickets/:ticketNumber', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const num = Number(req.params.ticketNumber);
+    if (!num)
+        return res.status(400).json({ data: null, error: 'invalid_ticketNumber' });
+    const item = await db.collection('support_tickets').findOne({ ticketNumber: num });
+    if (!item)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    res.json({ data: { item }, error: null });
+});
+// POST /api/crm/support/portal/tickets/:ticketNumber/comments { body, author }
+supportTicketsRouter.post('/portal/tickets/:ticketNumber/comments', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const num = Number(req.params.ticketNumber);
+    if (!num)
+        return res.status(400).json({ data: null, error: 'invalid_ticketNumber' });
+    const comment = { author: req.body?.author || 'customer', body: String(req.body?.body || ''), at: new Date() };
+    await db.collection('support_tickets').updateOne({ ticketNumber: num }, { $push: { comments: comment }, $set: { updatedAt: new Date() } });
+    res.json({ data: { ok: true }, error: null });
 });
 // PUT /api/crm/support/tickets/:id
 supportTicketsRouter.put('/tickets/:id', async (req, res) => {
