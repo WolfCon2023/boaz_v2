@@ -94,18 +94,19 @@ function SegmentsTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-segments'] }),
   })
   const save = useMutation({
-    mutationFn: async (payload: { id: string; rules: any[] }) => http.put(`/api/marketing/segments/${payload.id}`, { rules: payload.rules }),
+    mutationFn: async (payload: { id: string; rules: any[]; emails?: string[] }) => http.put(`/api/marketing/segments/${payload.id}`, { rules: payload.rules, emails: payload.emails || [] }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-segments'] }),
   })
   const [editing, setEditing] = React.useState<any | null>(null)
   const [rules, setRules] = React.useState<Array<{ field: string; operator: string; value: string }>>([])
-  const [preview, setPreview] = React.useState<{ total: number; contacts: any[] } | null>(null)
+  const [preview, setPreview] = React.useState<{ total: number; contacts: any[]; directEmails?: string[] } | null>(null)
+  const [emailsText, setEmailsText] = React.useState<string>('')
   function addRule() { setRules((r) => [...r, { field: 'email', operator: 'contains', value: '' }]) }
   function removeRule(idx: number) { setRules((r) => r.filter((_, i) => i !== idx)) }
   async function previewSegment() {
     if (!editing) return
     const res = await http.get(`/api/marketing/segments/${editing._id}/preview`)
-    setPreview(res.data?.data ?? { total: 0, contacts: [] })
+    setPreview(res.data?.data ?? { total: 0, contacts: [], directEmails: [] })
   }
   return (
     <div className="space-y-4">
@@ -161,9 +162,13 @@ function SegmentsTab() {
             ))}
             <div className="flex items-center gap-2">
               <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={addRule}>Add rule</button>
-              <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={async () => { if (!editing) return; await save.mutateAsync({ id: editing._id, rules }); alert('Saved rules') }}>Save rules</button>
+              <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={async () => { if (!editing) return; const emails = emailsText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean); await save.mutateAsync({ id: editing._id, rules, emails }); alert('Saved segment') }}>Save segment</button>
               <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={previewSegment}>Preview matches</button>
               {preview && <span className="text-xs text-[color:var(--color-text-muted)]">Matches: {preview.total}</span>}
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs text-[color:var(--color-text-muted)]">Additional recipients (one email per line)</div>
+              <textarea value={emailsText} onChange={(e) => setEmailsText(e.target.value)} className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent h-28" placeholder="user1@example.com\nuser2@example.com" />
             </div>
             {preview && (
               <div className="rounded-lg border">
@@ -171,6 +176,7 @@ function SegmentsTab() {
                   <thead><tr className="border-b"><th className="p-2 text-left">Name</th><th className="p-2 text-left">Email</th></tr></thead>
                   <tbody>
                     {preview.contacts.map((c: any) => (<tr key={String(c._id)} className="border-b"><td className="p-2">{c.name}</td><td className="p-2">{c.email}</td></tr>))}
+                    {(preview.directEmails || []).map((em: string, i: number) => (<tr key={`direct-${i}`} className="border-b"><td className="p-2 text-[color:var(--color-text-muted)]">(direct)</td><td className="p-2">{em}</td></tr>))}
                   </tbody>
                 </table>
               </div>

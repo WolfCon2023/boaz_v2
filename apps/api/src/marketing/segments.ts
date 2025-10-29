@@ -26,7 +26,8 @@ marketingSegmentsRouter.post('/segments', async (req, res) => {
   const name = typeof raw.name === 'string' ? raw.name.trim() : ''
   const rules = Array.isArray(raw.rules) ? raw.rules : []
   if (!name) return res.status(400).json({ data: null, error: 'invalid_payload' })
-  const doc = { name, description: String(raw.description || ''), rules, createdAt: new Date(), updatedAt: new Date() }
+  const emails = Array.isArray(raw.emails) ? raw.emails.filter((e: any) => typeof e === 'string' && e.includes('@')) : []
+  const doc = { name, description: String(raw.description || ''), rules, emails, createdAt: new Date(), updatedAt: new Date() }
   const r = await db.collection('marketing_segments').insertOne(doc)
   res.status(201).json({ data: { _id: r.insertedId, ...doc }, error: null })
 })
@@ -41,6 +42,7 @@ marketingSegmentsRouter.put('/segments/:id', async (req, res) => {
     if (typeof req.body?.name === 'string') update.name = req.body.name
     if (typeof req.body?.description === 'string') update.description = req.body.description
     if (Array.isArray(req.body?.rules)) update.rules = req.body.rules
+    if (Array.isArray(req.body?.emails)) update.emails = req.body.emails.filter((e: any) => typeof e === 'string' && e.includes('@'))
     await db.collection('marketing_segments').updateOne({ _id }, { $set: update })
     res.json({ data: { ok: true }, error: null })
   } catch {
@@ -69,6 +71,7 @@ marketingSegmentsRouter.get('/segments/:id/preview', async (req, res) => {
     const _id = new ObjectId(req.params.id)
     const seg = await db.collection('marketing_segments').findOne({ _id }) as any
     const rules: any[] = Array.isArray(seg?.rules) ? seg.rules : []
+    const directEmails: string[] = Array.isArray(seg?.emails) ? seg.emails : []
     const ands: any[] = []
     for (const r of rules) {
       const field = typeof r?.field === 'string' ? r.field : ''
@@ -81,9 +84,9 @@ marketingSegmentsRouter.get('/segments/:id/preview', async (req, res) => {
     }
     const filter = ands.length ? { $and: ands } : {}
     const coll = db.collection('contacts')
-    const total = await coll.countDocuments(filter)
+    const totalContacts = await coll.countDocuments(filter)
     const contacts = await coll.find(filter, { projection: { name: 1, email: 1 } as any }).limit(50).toArray()
-    res.json({ data: { total, contacts }, error: null })
+    res.json({ data: { total: totalContacts + directEmails.length, contacts, directEmails: directEmails.slice(0, 50) }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }

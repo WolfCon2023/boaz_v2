@@ -57,6 +57,21 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
       .find(filter, { projection: { email: 1, name: 1 } as any })
       .limit(5000)
       .toArray()
+    const directEmails: string[] = Array.isArray(segment?.emails) ? segment.emails : []
+    const emailSet = new Set<string>()
+    const finalList: { email: string; name?: string }[] = []
+    for (const r of recipients) {
+      const email = String(r.email || '').trim().toLowerCase()
+      if (!email || emailSet.has(email)) continue
+      emailSet.add(email)
+      finalList.push({ email, name: r.name })
+    }
+    for (const e of directEmails) {
+      const email = String(e || '').trim().toLowerCase()
+      if (!email || emailSet.has(email)) continue
+      emailSet.add(email)
+      finalList.push({ email })
+    }
     const unsubbed = await db.collection('marketing_unsubscribes').find({}).toArray()
     const unsubSet = new Set(unsubbed.map((u: any) => String(u.email).toLowerCase()))
     const dryRun = !!req.body?.dryRun
@@ -65,7 +80,7 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
     let skipped = 0
     let sent = 0
     let errors = 0
-    for (const r of recipients) {
+    for (const r of finalList) {
       const email = String(r.email || '').trim()
       if (!email) continue
       total++
