@@ -126,7 +126,7 @@ function SegmentsTab() {
           </thead>
           <tbody>
             {(data?.data?.items ?? []).map((s: any) => (
-              <tr key={s._id} className="border-b hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => { setEditing(s); setRules(Array.isArray(s.rules) ? s.rules : []) }}>
+              <tr key={s._id} className="border-b hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => { setEditing(s); setRules(Array.isArray(s.rules) ? s.rules : []); setEmailsText(Array.isArray(s.emails) ? s.emails.join('\n') : ''); setPreview(null) }}>
                 <td className="p-2">{s.name}</td><td className="p-2">{s.description}</td>
               </tr>
             ))}
@@ -138,7 +138,7 @@ function SegmentsTab() {
         <div className="rounded-2xl border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-base font-semibold">Segment — {editing.name}</div>
-            <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setRules([]); setPreview(null) }}>Close</button>
+            <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setRules([]); setPreview(null); setEmailsText('') }}>Close</button>
           </div>
           <div className="space-y-2">
             <div className="text-xs text-[color:var(--color-text-muted)]">Rules (AND)</div>
