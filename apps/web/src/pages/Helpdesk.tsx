@@ -4,11 +4,24 @@ import { http } from '@/lib/http'
 import { getPortalUrl } from '@/lib/urls'
 
 export default function Helpdesk() {
-  const metrics = useQuery({
-    queryKey: ['helpdesk-metrics'],
-    queryFn: async () => { const r = await http.get('/api/crm/support/tickets/metrics'); return r.data as { data: { open: number; breached: number; dueNext60: number } } },
+  // Fetch tickets and compute metrics in the same way as the Tickets page for parity
+  const { data: ticketsData, isFetching } = useQuery({
+    queryKey: ['helpdesk-tickets'],
+    queryFn: async () => { const r = await http.get('/api/crm/support/tickets'); return r.data as { data: { items: any[] } } },
     refetchInterval: 60000,
   })
+  const items = ticketsData?.data.items ?? []
+  const [nowTs, setNowTs] = React.useState(() => Date.now())
+  React.useEffect(() => { const id = setInterval(() => setNowTs(Date.now()), 60_000); return () => clearInterval(id) }, [])
+  const computed = React.useMemo(() => {
+    const isOpen = (s?: string) => s === 'open' || s === 'pending'
+    const open = items.filter((t) => isOpen(t.status)).length
+    const breached = items.filter((t) => isOpen(t.status) && t.slaDueAt && new Date(t.slaDueAt).getTime() < nowTs).length
+    const until = nowTs + 60 * 60 * 1000
+    const dueNext60 = items.filter((t) => isOpen(t.status) && t.slaDueAt)
+      .filter((t) => { const d = new Date(t.slaDueAt as string).getTime(); return d >= nowTs && d <= until }).length
+    return { open, breached, dueNext60 }
+  }, [items, nowTs])
 
   return (
     <div className="space-y-6">
@@ -24,9 +37,9 @@ export default function Helpdesk() {
 
       {/* At-a-glance metrics */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <QuickLinkCard title="Open" value={metrics.data?.data.open ?? 0} to="/apps/crm/support/tickets?statuses=open,pending&sort=createdAt&dir=desc" />
-        <QuickLinkCard title="Breached SLA" value={metrics.data?.data.breached ?? 0} to="/apps/crm/support/tickets?statuses=open,pending&breached=1&sort=slaDueAt&dir=asc" accent="red" />
-        <QuickLinkCard title="Due next 60m" value={metrics.data?.data.dueNext60 ?? 0} to="/apps/crm/support/tickets?statuses=open,pending&dueWithin=60&sort=slaDueAt&dir=asc" accent="yellow" />
+        <QuickLinkCard title="Open" value={computed.open} to="/apps/crm/support/tickets?statuses=open,pending&sort=createdAt&dir=desc" />
+        <QuickLinkCard title="Breached SLA" value={computed.breached} to="/apps/crm/support/tickets?statuses=open,pending&breached=1&sort=slaDueAt&dir=asc" accent="red" />
+        <QuickLinkCard title="Due next 60m" value={computed.dueNext60} to="/apps/crm/support/tickets?statuses=open,pending&dueWithin=60&sort=slaDueAt&dir=asc" accent="yellow" />
       </div>
 
       {/* Quick actions */}
