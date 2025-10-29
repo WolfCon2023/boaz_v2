@@ -38,4 +38,55 @@ marketingTrackingRouter.post('/track', async (req, res) => {
   res.status(201).json({ data: { ok: true }, error: null })
 })
 
+// POST /api/marketing/links { campaignId, url, utmSource, utmMedium }
+marketingTrackingRouter.post('/links', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const raw = req.body ?? {}
+  const url = String(raw.url || '')
+  if (!/^https?:\/\//i.test(url)) return res.status(400).json({ data: null, error: 'invalid_url' })
+  const campaignId = ObjectId.isValid(raw.campaignId) ? new ObjectId(raw.campaignId) : null
+  const utmSource = String(raw.utmSource || 'email')
+  const utmMedium = String(raw.utmMedium || 'email')
+  const utmCampaign = String(raw.utmCampaign || '')
+  const token = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10)
+  const doc = { token, campaignId, url, utmSource, utmMedium, utmCampaign, createdAt: new Date() }
+  await db.collection('marketing_links').insertOne(doc)
+  res.status(201).json({ data: { token }, error: null })
+})
+
+// GET /api/marketing/r/:token — record click and redirect
+marketingTrackingRouter.get('/r/:token', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).send('db_unavailable')
+  const token = String(req.params.token || '')
+  const link = await db.collection('marketing_links').findOne({ token }) as any
+  if (!link) return res.status(404).send('not_found')
+  const target = new URL(link.url)
+  if (link.utmSource) target.searchParams.set('utm_source', link.utmSource)
+  if (link.utmMedium) target.searchParams.set('utm_medium', link.utmMedium)
+  if (link.utmCampaign) target.searchParams.set('utm_campaign', link.utmCampaign)
+  await db.collection('marketing_events').insertOne({ event: 'click', campaignId: link.campaignId || null, url: target.toString(), at: new Date() })
+  res.redirect(302, target.toString())
+})
+
+// GET /api/marketing/pixel.gif?c=&e=
+marketingTrackingRouter.get('/pixel.gif', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).end()
+  const c = String(req.query.c || '')
+  const e = String(req.query.e || '')
+  try {
+    const campaignId = ObjectId.isValid(c) ? new ObjectId(c) : null
+    await db.collection('marketing_events').insertOne({ event: 'open', campaignId, recipient: e || null, at: new Date() })
+  } catch {
+    // ignore
+  }
+  // 1x1 transparent GIF
+  const gif = Buffer.from('R0lGODlhAQABAPAAAAAAAAAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==', 'base64')
+  res.setHeader('Content-Type', 'image/gif')
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  res.send(gif)
+})
+
 

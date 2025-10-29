@@ -61,4 +61,32 @@ marketingSegmentsRouter.delete('/segments/:id', async (req, res) => {
   }
 })
 
+// GET /api/marketing/segments/:id/preview — returns first 50 matching contacts and count
+marketingSegmentsRouter.get('/segments/:id/preview', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.json({ data: { total: 0, contacts: [] }, error: null })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const seg = await db.collection('marketing_segments').findOne({ _id }) as any
+    const rules: any[] = Array.isArray(seg?.rules) ? seg.rules : []
+    const ands: any[] = []
+    for (const r of rules) {
+      const field = typeof r?.field === 'string' ? r.field : ''
+      const operator = typeof r?.operator === 'string' ? r.operator : 'contains'
+      const value = typeof r?.value === 'string' ? r.value : ''
+      if (!field || !value) continue
+      if (operator === 'equals') ands.push({ [field]: value })
+      else if (operator === 'startsWith') ands.push({ [field]: { $regex: `^${value}`, $options: 'i' } })
+      else ands.push({ [field]: { $regex: value, $options: 'i' } })
+    }
+    const filter = ands.length ? { $and: ands } : {}
+    const coll = db.collection('contacts')
+    const total = await coll.countDocuments(filter)
+    const contacts = await coll.find(filter, { projection: { name: 1, email: 1 } as any }).limit(50).toArray()
+    res.json({ data: { total, contacts }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 

@@ -25,6 +25,39 @@ export default function Marketing() {
   )
 }
 
+function LinkBuilder({ campaignId, campaignName }: { campaignId: string; campaignName: string }) {
+  const [url, setUrl] = React.useState('')
+  const [utmSource, setUtmSource] = React.useState('email')
+  const [utmMedium, setUtmMedium] = React.useState('email')
+  const [result, setResult] = React.useState<string>('')
+  async function build() {
+    if (!/^https?:\/\//i.test(url)) { alert('Enter a valid http(s) URL'); return }
+    const utmCampaign = campaignName?.toLowerCase().replace(/\s+/g, '-') || ''
+    const res = await http.post('/api/marketing/links', { campaignId, url, utmSource, utmMedium, utmCampaign })
+    const token = res.data?.data?.token
+    const apiBase = (import.meta as any)?.env?.VITE_API_URL || window.location.origin
+    setResult(String(apiBase).replace(/\/$/,'') + `/api/marketing/r/${token}`)
+  }
+  return (
+    <div className="rounded-lg border p-3 space-y-2">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Target URL (https://...)" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+        <input value={utmSource} onChange={(e) => setUtmSource(e.target.value)} placeholder="utm_source" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+        <input value={utmMedium} onChange={(e) => setUtmMedium(e.target.value)} placeholder="utm_medium" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+      </div>
+      <div className="flex items-center gap-2">
+        <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={build}>Generate link</button>
+        {result && (
+          <>
+            <input readOnly value={result} className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent" />
+            <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => { navigator.clipboard.writeText(result) }}>Copy</button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function SegmentsTab() {
   const qc = useQueryClient()
   const { data } = useQuery({ queryKey: ['mkt-segments'], queryFn: async () => (await http.get('/api/marketing/segments')).data })
@@ -32,6 +65,20 @@ function SegmentsTab() {
     mutationFn: async (payload: { name: string; description?: string }) => http.post('/api/marketing/segments', payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-segments'] }),
   })
+  const save = useMutation({
+    mutationFn: async (payload: { id: string; rules: any[] }) => http.put(`/api/marketing/segments/${payload.id}`, { rules: payload.rules }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-segments'] }),
+  })
+  const [editing, setEditing] = React.useState<any | null>(null)
+  const [rules, setRules] = React.useState<Array<{ field: string; operator: string; value: string }>>([])
+  const [preview, setPreview] = React.useState<{ total: number; contacts: any[] } | null>(null)
+  function addRule() { setRules((r) => [...r, { field: 'email', operator: 'contains', value: '' }]) }
+  function removeRule(idx: number) { setRules((r) => r.filter((_, i) => i !== idx)) }
+  async function previewSegment() {
+    if (!editing) return
+    const res = await http.get(`/api/marketing/segments/${editing._id}/preview`)
+    setPreview(res.data?.data ?? { total: 0, contacts: [] })
+  }
   return (
     <div className="space-y-4">
       <form className="rounded-2xl border p-4 grid gap-2 sm:grid-cols-3" onSubmit={async (e) => {
@@ -49,12 +96,60 @@ function SegmentsTab() {
             <tr className="border-b"><th className="p-2 text-left">Name</th><th className="p-2 text-left">Description</th></tr>
           </thead>
           <tbody>
-            {(data?.data?.items ?? []).map((s: Segment) => (
-              <tr key={s._id} className="border-b"><td className="p-2">{s.name}</td><td className="p-2">{s.description}</td></tr>
+            {(data?.data?.items ?? []).map((s: any) => (
+              <tr key={s._id} className="border-b hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => { setEditing(s); setRules(Array.isArray(s.rules) ? s.rules : []) }}>
+                <td className="p-2">{s.name}</td><td className="p-2">{s.description}</td>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {editing && (
+        <div className="rounded-2xl border p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-base font-semibold">Segment — {editing.name}</div>
+            <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setRules([]); setPreview(null) }}>Close</button>
+          </div>
+          <div className="space-y-2">
+            <div className="text-xs text-[color:var(--color-text-muted)]">Rules (AND)</div>
+            {rules.map((r, idx) => (
+              <div key={idx} className="grid gap-2 sm:grid-cols-4">
+                <select value={r.field} onChange={(e) => setRules((cur) => cur.map((x, i) => i===idx?{...x, field:e.target.value}:x))} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
+                  <option value="email">Contact email</option>
+                  <option value="name">Contact name</option>
+                  <option value="company">Contact company</option>
+                </select>
+                <select value={r.operator} onChange={(e) => setRules((cur) => cur.map((x, i) => i===idx?{...x, operator:e.target.value}:x))} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
+                  <option value="contains">contains</option>
+                  <option value="equals">equals</option>
+                  <option value="startsWith">starts with</option>
+                </select>
+                <input value={r.value} onChange={(e) => setRules((cur) => cur.map((x, i) => i===idx?{...x, value:e.target.value}:x))} placeholder="Value" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+                <div>
+                  <button type="button" className="rounded-lg border px-2 py-2 text-sm" onClick={() => removeRule(idx)}>Remove</button>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={addRule}>Add rule</button>
+              <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={async () => { if (!editing) return; await save.mutateAsync({ id: editing._id, rules }); alert('Saved rules') }}>Save rules</button>
+              <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={previewSegment}>Preview matches</button>
+              {preview && <span className="text-xs text-[color:var(--color-text-muted)]">Matches: {preview.total}</span>}
+            </div>
+            {preview && (
+              <div className="rounded-lg border">
+                <table className="min-w-full text-sm">
+                  <thead><tr className="border-b"><th className="p-2 text-left">Name</th><th className="p-2 text-left">Email</th></tr></thead>
+                  <tbody>
+                    {preview.contacts.map((c: any) => (<tr key={String(c._id)} className="border-b"><td className="p-2">{c.name}</td><td className="p-2">{c.email}</td></tr>))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -74,6 +169,13 @@ function CampaignsTab() {
       await qc.invalidateQueries({ queryKey: ['mkt-campaigns'] })
     },
   })
+  const remove = useMutation({
+    mutationFn: async (id: string) => http.delete(`/api/marketing/campaigns/${id}`),
+    onSuccess: async (_d, _v, _c) => {
+      setEditing(null)
+      await qc.invalidateQueries({ queryKey: ['mkt-campaigns'] })
+    },
+  })
   const [editing, setEditing] = React.useState<Campaign | null>(null)
   const [mjml, setMjml] = React.useState<string>('')
   const [previewHtml, setPreviewHtml] = React.useState<string>('')
@@ -87,6 +189,8 @@ function CampaignsTab() {
     }
   }, [editing])
   const [testTo, setTestTo] = React.useState<string>('')
+  const [sending, setSending] = React.useState<boolean>(false)
+  const [sendResult, setSendResult] = React.useState<{ total: number; skipped: number; sent: number; errors: number } | null>(null)
   async function renderPreview() {
     if (!mjml.trim()) {
       alert('Please paste or insert an MJML template first.')
@@ -112,6 +216,19 @@ function CampaignsTab() {
     }
     await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html })
     alert('Saved')
+  }
+  async function sendCampaign(dryRun: boolean) {
+    if (!editing) return
+    if (!dryRun && !confirm('Send this campaign to the segment now?')) return
+    setSending(true); setSendResult(null)
+    try {
+      const res = await http.post(`/api/marketing/campaigns/${editing._id}/send`, { dryRun })
+      setSendResult(res.data?.data || null)
+    } catch (e) {
+      alert('Send failed. Check SMTP env and try again.')
+    } finally {
+      setSending(false)
+    }
   }
 
   function ensureSkeleton(content: string, block: string) {
@@ -142,7 +259,7 @@ function CampaignsTab() {
       }}>
         <input name="name" placeholder="Campaign name" required className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
         <input name="subject" placeholder="Subject" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
-        <select name="segmentId" className="rounded-lg border px-3 py-2 text-sm bg-transparent">
+        <select name="segmentId" className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
           <option value="">No segment</option>
           {(segments?.data?.items ?? []).map((s: Segment) => (<option key={s._id} value={s._id}>{s.name}</option>))}
         </select>
@@ -168,7 +285,14 @@ function CampaignsTab() {
         <div className="rounded-2xl border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-base font-semibold">Builder — {editing.name}</div>
-            <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setPreviewHtml(''); setMjml('') }}>Close</button>
+            <div className="flex items-center gap-2">
+              <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setPreviewHtml(''); setMjml('') }}>Close</button>
+              <button className="rounded-lg border border-red-400 text-red-400 px-2 py-1 text-sm" onClick={async () => {
+                if (!editing) return
+                if (!confirm('Delete this campaign? This cannot be undone.')) return
+                await remove.mutateAsync(editing._id)
+              }}>Delete</button>
+            </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
@@ -181,11 +305,11 @@ function CampaignsTab() {
                   const key = e.target.value
                   const t = (tplData?.data?.items as Template[] | undefined)?.find((x) => x.key === key)
                   if (t) setMjml(t.mjml)
-                }} className="rounded-lg border px-3 py-2 text-sm bg-transparent">
+                }} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
                   <option value="">Insert template…</option>
                   {(tplData?.data?.items ?? []).map((t: Template) => (<option key={t.key} value={t.key}>{t.name}</option>))}
                 </select>
-                <select onChange={(e) => { insertSnippet(e.target.value); e.currentTarget.selectedIndex = 0 }} className="rounded-lg border px-3 py-2 text-sm bg-transparent">
+                <select onChange={(e) => { insertSnippet(e.target.value); e.currentTarget.selectedIndex = 0 }} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
                   <option value="">Insert block…</option>
                   <option value="hero">Hero</option>
                   <option value="text">Text</option>
@@ -202,6 +326,7 @@ function CampaignsTab() {
               </div>
               <div className="flex items-center gap-2">
                 <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={renderPreview}>Render preview</button>
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => { setMjml(''); setPreviewHtml('') }}>Clear</button>
                 <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Test email to" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
                 <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={sendTest} disabled={!testTo}>Send test</button>
               </div>
@@ -215,6 +340,20 @@ function CampaignsTab() {
                   <div className="p-4 text-xs text-[color:var(--color-text-muted)]">No preview yet. Click "Render preview".</div>
                 )}
               </div>
+              <div className="flex items-center gap-2">
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => sendCampaign(true)} disabled={sending}>Dry run</button>
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => sendCampaign(false)} disabled={sending}>Send</button>
+                {sending && <span className="text-xs text-[color:var(--color-text-muted)]">Sending…</span>}
+                {sendResult && (
+                  <span className="text-xs text-[color:var(--color-text-muted)]">Total {sendResult.total}, skipped {sendResult.skipped}, sent {sendResult.sent}, errors {sendResult.errors}</span>
+                )}
+              </div>
+              {editing && (
+                <div className="space-y-2">
+                  <div className="text-xs text-[color:var(--color-text-muted)]">UTM Link Builder</div>
+                  <LinkBuilder campaignId={editing._id} campaignName={editing.name} />
+                </div>
+              )}
             </div>
           </div>
         </div>

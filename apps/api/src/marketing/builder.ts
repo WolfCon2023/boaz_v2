@@ -9,11 +9,15 @@ export const marketingBuilderRouter = Router()
 // POST /api/marketing/mjml/preview { mjml }
 marketingBuilderRouter.post('/mjml/preview', async (req, res) => {
   const source = String((req.body?.mjml as string) || '')
+  if (!source.trim()) {
+    return res.json({ data: { html: '', errors: ['missing_mjml'] }, error: null })
+  }
   try {
     const { html, errors } = mjml2html(source, { keepComments: false, validationLevel: 'soft' })
     return res.json({ data: { html, errors: errors || [] }, error: null })
-  } catch (e) {
-    return res.status(400).json({ data: null, error: 'mjml_render_failed' })
+  } catch (e: any) {
+    const msg = typeof e?.message === 'string' ? e.message : 'mjml_render_failed'
+    return res.json({ data: { html: '', errors: [msg] }, error: null })
   }
 })
 

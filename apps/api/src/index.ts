@@ -23,6 +23,8 @@ import { marketingCampaignsRouter } from './marketing/campaigns.js'
 import { marketingTrackingRouter } from './marketing/tracking.js'
 import { marketingBuilderRouter } from './marketing/builder.js'
 import { marketingTemplatesRouter } from './marketing/templates.js'
+import { marketingSendRouter } from './marketing/send.js'
+import { marketingUnsubscribeRouter } from './marketing/unsubscribe.js'
 import { getDb } from './db.js'
 
 const app = express()
@@ -54,7 +56,7 @@ const corsMiddleware = cors({
 
 app.use(corsMiddleware)
 app.options('*', corsMiddleware)
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use('/auth', authRouter)
 app.use('/api/crm', crmRouter)
@@ -76,6 +78,8 @@ app.use('/api/marketing', marketingCampaignsRouter)
 app.use('/api/marketing', marketingTrackingRouter)
 app.use('/api/marketing', marketingBuilderRouter)
 app.use('/api/marketing', marketingTemplatesRouter)
+app.use('/api/marketing', marketingSendRouter)
+app.use('/api/marketing', marketingUnsubscribeRouter)
 
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))
