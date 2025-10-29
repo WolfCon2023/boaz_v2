@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 
 type Segment = { _id: string; name: string; description?: string }
-type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null }
+type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null; mjml?: string; previewText?: string }
 type Template = { key: string; name: string; mjml: string }
 
 export default function Marketing() {
@@ -82,12 +82,22 @@ function CampaignsTab() {
   React.useEffect(() => {
     if (editing) {
       setSubject(editing.subject || '')
+      setPreviewText(editing.previewText || '')
+      setMjml(editing.mjml || '')
     }
   }, [editing])
   const [testTo, setTestTo] = React.useState<string>('')
   async function renderPreview() {
-    const res = await http.post('/api/marketing/mjml/preview', { mjml })
-    setPreviewHtml(String(res.data?.data?.html || ''))
+    if (!mjml.trim()) {
+      alert('Please paste or insert an MJML template first.')
+      return
+    }
+    try {
+      const res = await http.post('/api/marketing/mjml/preview', { mjml })
+      setPreviewHtml(String(res.data?.data?.html || ''))
+    } catch (e) {
+      alert('Failed to render MJML. Please check your template syntax.')
+    }
   }
   async function sendTest() {
     if (!editing) return
@@ -102,6 +112,26 @@ function CampaignsTab() {
     }
     await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html })
     alert('Saved')
+  }
+
+  function ensureSkeleton(content: string, block: string) {
+    const hasRoot = /<mjml[\s>]/i.test(content)
+    const hasBody = /<mj-body[\s>]/i.test(content)
+    if (hasRoot && hasBody) return content + "\n" + block
+    const skeleton = `\n<mjml>\n  <mj-body>\n${block.split('\n').map((l) => '    ' + l).join('\n')}\n  </mj-body>\n</mjml>`
+    return (content || '').trim() ? content + skeleton : skeleton.trim()
+  }
+  function insertSnippet(kind: string) {
+    const snippets: Record<string, string> = {
+      hero: `<mj-section background-color="#111827">\n  <mj-column>\n    <mj-text align="center" color="#e5e7eb" font-size="24px" font-weight="700">Your headline</mj-text>\n    <mj-text align="center" color="#cbd5e1" font-size="14px">Your subhead goes here</mj-text>\n    <mj-button href="https://example.com" background-color="#22c55e">Call to action</mj-button>\n  </mj-column>\n</mj-section>`,
+      text: `<mj-section background-color="#ffffff">\n  <mj-column>\n    <mj-text font-size="16px">Hello, this is a text block. Add your content here.</mj-text>\n  </mj-column>\n</mj-section>`,
+      button: `<mj-section background-color="#ffffff">\n  <mj-column>\n    <mj-button href="https://example.com" background-color="#2563eb">Click me</mj-button>\n  </mj-column>\n</mj-section>`,
+      twoCols: `<mj-section background-color="#ffffff">\n  <mj-column>\n    <mj-text>Left column</mj-text>\n  </mj-column>\n  <mj-column>\n    <mj-text>Right column</mj-text>\n  </mj-column>\n</mj-section>`,
+      footer: `<mj-section>\n  <mj-column>\n    <mj-text font-size="12px" color="#64748b">You received this email because you subscribed. <a href="#">Unsubscribe</a></mj-text>\n  </mj-column>\n</mj-section>`,
+    }
+    const block = snippets[kind]
+    if (!block) return
+    setMjml((prev) => ensureSkeleton(prev || '', block))
   }
   return (
     <div className="space-y-4">
@@ -146,7 +176,7 @@ function CampaignsTab() {
                 <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
                 <input value={previewText} onChange={(e) => setPreviewText(e.target.value)} placeholder="Preview text (inbox snippet)" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <select onChange={(e) => {
                   const key = e.target.value
                   const t = (tplData?.data?.items as Template[] | undefined)?.find((x) => x.key === key)
@@ -155,10 +185,21 @@ function CampaignsTab() {
                   <option value="">Insert template…</option>
                   {(tplData?.data?.items ?? []).map((t: Template) => (<option key={t.key} value={t.key}>{t.name}</option>))}
                 </select>
+                <select onChange={(e) => { insertSnippet(e.target.value); e.currentTarget.selectedIndex = 0 }} className="rounded-lg border px-3 py-2 text-sm bg-transparent">
+                  <option value="">Insert block…</option>
+                  <option value="hero">Hero</option>
+                  <option value="text">Text</option>
+                  <option value="button">Button</option>
+                  <option value="twoCols">Two columns</option>
+                  <option value="footer">Footer</option>
+                </select>
                 <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={saveCampaign}>Save</button>
               </div>
               <div className="text-xs text-[color:var(--color-text-muted)]">MJML</div>
               <textarea value={mjml} onChange={(e) => setMjml(e.target.value)} className="h-72 w-full rounded-lg border px-3 py-2 text-sm bg-transparent" placeholder="<mjml>...</mjml>" />
+              <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                Tip: MJML uses tags like {`<mj-section>`}, {`<mj-column>`}, {`<mj-text>`}, {`<mj-image>`}, {`<mj-button>`}. Use “Insert block…” to add common pieces.
+              </div>
               <div className="flex items-center gap-2">
                 <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={renderPreview}>Render preview</button>
                 <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Test email to" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
