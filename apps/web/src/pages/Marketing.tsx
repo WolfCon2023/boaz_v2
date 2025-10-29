@@ -66,6 +66,19 @@ function CampaignsTab() {
     mutationFn: async (payload: { name: string; subject?: string; html?: string; segmentId?: string }) => http.post('/api/marketing/campaigns', payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-campaigns'] }),
   })
+  const [editing, setEditing] = React.useState<Campaign | null>(null)
+  const [mjml, setMjml] = React.useState<string>('')
+  const [previewHtml, setPreviewHtml] = React.useState<string>('')
+  const [testTo, setTestTo] = React.useState<string>('')
+  async function renderPreview() {
+    const res = await http.post('/api/marketing/mjml/preview', { mjml })
+    setPreviewHtml(String(res.data?.data?.html || ''))
+  }
+  async function sendTest() {
+    if (!editing) return
+    await http.post(`/api/marketing/campaigns/${editing._id}/test-send`, { to: testTo, mjml, subject: editing.subject || editing.name })
+    alert('Test email sent (if SMTP is configured).')
+  }
   return (
     <div className="space-y-4">
       <form className="rounded-2xl border p-4 grid gap-2 sm:grid-cols-4" onSubmit={async (e) => {
@@ -89,11 +102,43 @@ function CampaignsTab() {
           </thead>
           <tbody>
             {(data?.data?.items ?? []).map((c: Campaign) => (
-              <tr key={c._id} className="border-b"><td className="p-2">{c.name}</td><td className="p-2">{c.subject}</td><td className="p-2">{c.status}</td></tr>
+              <tr key={c._id} className="border-b hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => { setEditing(c) }}>
+                <td className="p-2">{c.name}</td><td className="p-2">{c.subject}</td><td className="p-2">{c.status}</td>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {editing && (
+        <div className="rounded-2xl border p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-base font-semibold">Builder — {editing.name}</div>
+            <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setPreviewHtml(''); setMjml('') }}>Close</button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <div className="text-xs text-[color:var(--color-text-muted)]">MJML</div>
+              <textarea value={mjml} onChange={(e) => setMjml(e.target.value)} className="h-72 w-full rounded-lg border px-3 py-2 text-sm bg-transparent" placeholder="<mjml>...</mjml>" />
+              <div className="flex items-center gap-2">
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={renderPreview}>Render preview</button>
+                <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Test email to" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={sendTest} disabled={!testTo}>Send test</button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs text-[color:var(--color-text-muted)]">Preview</div>
+              <div className="rounded-lg border overflow-hidden min-h-72 bg-white">
+                {previewHtml ? (
+                  <iframe title="preview" className="w-full h-72" srcDoc={previewHtml} />
+                ) : (
+                  <div className="p-4 text-xs text-[color:var(--color-text-muted)]">No preview yet. Click "Render preview".</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
