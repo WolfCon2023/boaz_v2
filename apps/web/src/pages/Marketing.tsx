@@ -4,6 +4,7 @@ import { http } from '@/lib/http'
 
 type Segment = { _id: string; name: string; description?: string }
 type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null }
+type Template = { key: string; name: string; mjml: string }
 
 export default function Marketing() {
   const [tab, setTab] = React.useState<'campaigns'|'segments'|'analytics'>('campaigns')
@@ -62,13 +63,27 @@ function CampaignsTab() {
   const qc = useQueryClient()
   const { data: segments } = useQuery({ queryKey: ['mkt-segments'], queryFn: async () => (await http.get('/api/marketing/segments')).data })
   const { data } = useQuery({ queryKey: ['mkt-campaigns'], queryFn: async () => (await http.get('/api/marketing/campaigns')).data })
+  const { data: tplData } = useQuery({ queryKey: ['mkt-templates'], queryFn: async () => (await http.get('/api/marketing/templates')).data })
   const create = useMutation({
-    mutationFn: async (payload: { name: string; subject?: string; html?: string; segmentId?: string }) => http.post('/api/marketing/campaigns', payload),
+    mutationFn: async (payload: { name: string; subject?: string; html?: string; mjml?: string; previewText?: string; segmentId?: string }) => http.post('/api/marketing/campaigns', payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-campaigns'] }),
+  })
+  const save = useMutation({
+    mutationFn: async (payload: { id: string; subject?: string; previewText?: string; mjml?: string; html?: string }) => http.put(`/api/marketing/campaigns/${payload.id}`, payload),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['mkt-campaigns'] })
+    },
   })
   const [editing, setEditing] = React.useState<Campaign | null>(null)
   const [mjml, setMjml] = React.useState<string>('')
   const [previewHtml, setPreviewHtml] = React.useState<string>('')
+  const [subject, setSubject] = React.useState<string>('')
+  const [previewText, setPreviewText] = React.useState<string>('')
+  React.useEffect(() => {
+    if (editing) {
+      setSubject(editing.subject || '')
+    }
+  }, [editing])
   const [testTo, setTestTo] = React.useState<string>('')
   async function renderPreview() {
     const res = await http.post('/api/marketing/mjml/preview', { mjml })
@@ -78,6 +93,15 @@ function CampaignsTab() {
     if (!editing) return
     await http.post(`/api/marketing/campaigns/${editing._id}/test-send`, { to: testTo, mjml, subject: editing.subject || editing.name })
     alert('Test email sent (if SMTP is configured).')
+  }
+  async function saveCampaign() {
+    if (!editing) return
+    let html: string | undefined = undefined
+    if (mjml) {
+      try { const r = await http.post('/api/marketing/mjml/preview', { mjml }); html = String(r.data?.data?.html || '') } catch {}
+    }
+    await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html })
+    alert('Saved')
   }
   return (
     <div className="space-y-4">
@@ -118,6 +142,21 @@ function CampaignsTab() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+                <input value={previewText} onChange={(e) => setPreviewText(e.target.value)} placeholder="Preview text (inbox snippet)" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+              </div>
+              <div className="flex items-center gap-2">
+                <select onChange={(e) => {
+                  const key = e.target.value
+                  const t = (tplData?.data?.items as Template[] | undefined)?.find((x) => x.key === key)
+                  if (t) setMjml(t.mjml)
+                }} className="rounded-lg border px-3 py-2 text-sm bg-transparent">
+                  <option value="">Insert template…</option>
+                  {(tplData?.data?.items ?? []).map((t: Template) => (<option key={t.key} value={t.key}>{t.name}</option>))}
+                </select>
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={saveCampaign}>Save</button>
+              </div>
               <div className="text-xs text-[color:var(--color-text-muted)]">MJML</div>
               <textarea value={mjml} onChange={(e) => setMjml(e.target.value)} className="h-72 w-full rounded-lg border px-3 py-2 text-sm bg-transparent" placeholder="<mjml>...</mjml>" />
               <div className="flex items-center gap-2">

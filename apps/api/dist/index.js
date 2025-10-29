@@ -21,6 +21,7 @@ import { supportAlertsRouter } from './crm/support_alerts.js';
 import { marketingSegmentsRouter } from './marketing/segments.js';
 import { marketingCampaignsRouter } from './marketing/campaigns.js';
 import { marketingTrackingRouter } from './marketing/tracking.js';
+import { marketingBuilderRouter } from './marketing/builder.js';
 import { getDb } from './db.js';
 const app = express();
 const normalize = (s) => s.trim().replace(/\/$/, '').toLowerCase();
@@ -74,6 +75,7 @@ app.use('/api/crm/support', supportAlertsRouter);
 app.use('/api/marketing', marketingSegmentsRouter);
 app.use('/api/marketing', marketingCampaignsRouter);
 app.use('/api/marketing', marketingTrackingRouter);
+app.use('/api/marketing', marketingBuilderRouter);
 app.get('/health', (_req, res) => {
     res.json(createHealthResponse('api'));
 });

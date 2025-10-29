@@ -33,6 +33,11 @@ marketingBuilderRouter.post('/campaigns/:id/test-send', async (req, res) => {
     if (!html && mjml) {
       try { html = mjml2html(mjml, { validationLevel: 'soft' }).html } catch {}
     }
+    if (!html) {
+      if (campaign?.mjml) {
+        try { html = mjml2html(String(campaign.mjml), { validationLevel: 'soft' }).html } catch {}
+      }
+    }
     if (!html) html = String(campaign.html || '')
     if (!html) return res.status(400).json({ data: null, error: 'no_html' })
     await sendEmail({ to, subject, html })
