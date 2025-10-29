@@ -330,7 +330,7 @@ function CampaignsTab() {
     if (!testTo || !/.+@.+\..+/.test(testTo)) { alert('Enter a valid test email'); return }
     setTesting(true)
     try {
-      await http.post(`/api/marketing/campaigns/${editing._id}/test-send`, { to: testTo, mjml, subject: editing.subject || editing.name })
+      await http.post(`/api/marketing/campaigns/${editing._id}/test-send`, { to: testTo, mjml, subject: subject || editing.subject || editing.name })
       alert('Test email sent (if SMTP is configured).')
     } catch (e: any) {
       const msg = e?.response?.data?.error || 'Failed to send test email.'

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
@@ -9,15 +10,119 @@ type AccountPick = { _id: string; accountNumber?: number; name?: string }
 
 export default function CRMDeals() {
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = React.useState('')
-  const [sort, setSort] = React.useState<'title'|'stage'|'amount'|'closeDate'>('closeDate')
+  const [sort, setSort] = React.useState<'dealNumber'|'title'|'stage'|'amount'|'closeDate'>('closeDate')
   const [dir, setDir] = React.useState<'asc'|'desc'>('desc')
+  const [stage, setStage] = React.useState<string>('')
+  const [minAmount, setMinAmount] = React.useState<string>('')
+  const [maxAmount, setMaxAmount] = React.useState<string>('')
+  const [startDate, setStartDate] = React.useState<string>('')
+  const [endDate, setEndDate] = React.useState<string>('')
+  const [page, setPage] = React.useState(0)
+  const [pageSize, setPageSize] = React.useState(10)
+  const [showColsMenu, setShowColsMenu] = React.useState(false)
+  const [cols, setCols] = React.useState<{ dealNumber: boolean; account: boolean; title: boolean; amount: boolean; stage: boolean; closeDate: boolean }>({
+    dealNumber: true,
+    account: true,
+    title: true,
+    amount: true,
+    stage: true,
+    closeDate: true,
+  })
+  const initializedFromUrl = React.useRef(false)
+
+  // Initialize from URL and localStorage once
+  React.useEffect(() => {
+    if (initializedFromUrl.current) return
+    initializedFromUrl.current = true
+    const get = (key: string) => searchParams.get(key) || ''
+    const getNum = (key: string, fallback: number) => {
+      const v = searchParams.get(key)
+      const n = v != null ? Number(v) : NaN
+      return Number.isFinite(n) && n >= 0 ? n : fallback
+    }
+    const q0 = get('q')
+    const sort0 = (get('sort') as any) || 'closeDate'
+    const dir0 = (get('dir') as any) || 'desc'
+    const stage0 = get('stage')
+    const min0 = get('minAmount')
+    const max0 = get('maxAmount')
+    const start0 = get('startDate')
+    const end0 = get('endDate')
+    const page0 = getNum('page', 0)
+    const limit0 = getNum('limit', 10)
+    if (q0) setQ(q0)
+    setSort(sort0)
+    setDir(dir0)
+    if (stage0) setStage(stage0)
+    if (min0) setMinAmount(min0)
+    if (max0) setMaxAmount(max0)
+    if (start0) setStartDate(start0)
+    if (end0) setEndDate(end0)
+    setPage(page0)
+    setPageSize(limit0)
+
+    // Columns from localStorage or URL (comma-separated keys)
+    try {
+      const stored = localStorage.getItem('DEALS_COLS')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed && typeof parsed === 'object') setCols((prev) => ({ ...prev, ...parsed }))
+      }
+    } catch {}
+    const colsParam = get('cols')
+    if (colsParam) {
+      const keys = new Set(colsParam.split(',').map((s) => s.trim()).filter(Boolean))
+      setCols({
+        dealNumber: keys.has('dealNumber'),
+        account: keys.has('account'),
+        title: keys.has('title'),
+        amount: keys.has('amount'),
+        stage: keys.has('stage'),
+        closeDate: keys.has('closeDate'),
+      })
+    }
+  }, [searchParams])
+
+  // Persist filters and columns to URL/localStorage
+  React.useEffect(() => {
+    const params: Record<string, string> = {}
+    if (q) params.q = q
+    if (sort) params.sort = sort
+    if (dir) params.dir = dir
+    if (stage) params.stage = stage
+    if (minAmount) params.minAmount = minAmount
+    if (maxAmount) params.maxAmount = maxAmount
+    if (startDate) params.startDate = startDate
+    if (endDate) params.endDate = endDate
+    if (page) params.page = String(page)
+    if (pageSize !== 10) params.limit = String(pageSize)
+    const colKeys = Object.entries(cols).filter(([, v]) => v).map(([k]) => k).join(',')
+    if (colKeys) params.cols = colKeys
+    setSearchParams(params, { replace: true })
+    try { localStorage.setItem('DEALS_COLS', JSON.stringify(cols)) } catch {}
+  }, [q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize, cols, setSearchParams])
   const { data, isFetching } = useQuery({
-    queryKey: ['deals', q, sort, dir],
+    queryKey: ['deals', q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize],
     queryFn: async () => {
-      const res = await http.get('/api/crm/deals', { params: { q, sort, dir } })
-      return res.data as { data: { items: Deal[] } }
+      const res = await http.get('/api/crm/deals', {
+        params: {
+          q,
+          sort,
+          dir,
+          stage: stage || undefined,
+          minAmount: minAmount || undefined,
+          maxAmount: maxAmount || undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          page,
+          limit: pageSize,
+        },
+      })
+      return res.data as { data: { items: Deal[]; total: number; page: number; limit: number } }
     },
+    keepPreviousData: true,
   })
   const accountsQ = useQuery({
     queryKey: ['accounts-pick'],
@@ -49,28 +154,10 @@ export default function CRMDeals() {
   })
 
   const items = data?.data.items ?? []
-  const visibleItems = React.useMemo(() => {
-    const ql = q.trim().toLowerCase()
-    let rows = items
-    if (ql) rows = rows.filter((d) => (d.title ?? '').toLowerCase().includes(ql) || (d.stage ?? '').toLowerCase().includes(ql))
-    const dirMul = dir === 'desc' ? -1 : 1
-    rows = [...rows].sort((a: any, b: any) => {
-      const av = a[sort]
-      const bv = b[sort]
-      if (av == null && bv == null) return 0
-      if (av == null) return 1
-      if (bv == null) return -1
-      if (sort === 'amount') return ((av as number) - (bv as number)) * dirMul
-      if (sort === 'closeDate') return (new Date(av).getTime() - new Date(bv).getTime()) * dirMul
-      return String(av).localeCompare(String(bv)) * dirMul
-    })
-    return rows
-  }, [items, q, sort, dir])
-  const [page, setPage] = React.useState(0)
-  const [pageSize, setPageSize] = React.useState(10)
-  React.useEffect(() => { setPage(0) }, [q, sort, dir, pageSize])
-  const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize))
-  const pageItems = React.useMemo(() => visibleItems.slice(page * pageSize, page * pageSize + pageSize), [visibleItems, page, pageSize])
+  const total = data?.data.total ?? 0
+  React.useEffect(() => { setPage(0) }, [q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, pageSize])
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const pageItems = items
 
   const [editing, setEditing] = React.useState<Deal | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
@@ -94,6 +181,7 @@ export default function CRMDeals() {
           <button type="button" onClick={() => setQ('')} disabled={!q}
             className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">Clear</button>
           <select value={sort} onChange={(e) => setSort(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold [&>option]:text-[color:var(--color-text)] [&>option]:bg-[color:var(--color-panel)]">
+            <option value="dealNumber">Deal #</option>
             <option value="closeDate">Close date</option>
             <option value="title">Title</option>
             <option value="stage">Stage</option>
@@ -104,17 +192,64 @@ export default function CRMDeals() {
             <option value="asc">Asc</option>
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
+          <select value={stage} onChange={(e) => setStage(e.target.value)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+            <option value="">All stages</option>
+            <option>Draft / Deal Created</option>
+            <option>Submitted for Review</option>
+            <option>Initial Validation</option>
+            <option>Manager Approval</option>
+            <option>Finance Approval</option>
+            <option>Legal Review</option>
+            <option>Executive Approval</option>
+            <option>Approved / Ready for Signature</option>
+            <option>Contract Signed / Closed Won</option>
+            <option>Rejected / Returned for Revision</option>
+          </select>
+          <input value={minAmount} onChange={(e) => setMinAmount(e.target.value)} type="number" placeholder="Min $" className="w-28 rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
+          <input value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} type="number" placeholder="Max $" className="w-28 rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
+          <input value={startDate} onChange={(e) => setStartDate(e.target.value)} type="date" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
+          <input value={endDate} onChange={(e) => setEndDate(e.target.value)} type="date" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
+          <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => { setStage(''); setMinAmount(''); setMaxAmount(''); setStartDate(''); setEndDate(''); setQ(''); setSort('closeDate'); setDir('desc'); }}>Reset</button>
+          <div className="relative">
+            <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowColsMenu((v) => !v)}>Columns</button>
+            {showColsMenu && (
+              <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2 shadow">
+                {([
+                  ['dealNumber','Deal #'],
+                  ['account','Account'],
+                  ['title','Title'],
+                  ['amount','Amount'],
+                  ['stage','Stage'],
+                  ['closeDate','Close date'],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 p-1 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={(cols as any)[key]}
+                      onChange={(e) => setCols((prev) => ({ ...prev, [key]: e.target.checked }))}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
             onClick={() => {
-              const headers = ['Deal #','Title','Amount','Stage','Close date']
-              const rows = visibleItems.map((d) => [
-                d.dealNumber ?? '',
-                d.title ?? '',
-                typeof d.amount === 'number' ? d.amount : '',
-                d.stage ?? '',
-                d.closeDate ? new Date(d.closeDate).toISOString().slice(0,10) : '',
-              ])
+              const all = [
+                cols.dealNumber && ['Deal #', (d: any) => d.dealNumber ?? ''],
+                cols.account && ['Account', (d: any) => {
+                  const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
+                  return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
+                }],
+                cols.title && ['Title', (d: any) => d.title ?? ''],
+                cols.amount && ['Amount', (d: any) => (typeof d.amount === 'number' ? d.amount : '')],
+                cols.stage && ['Stage', (d: any) => d.stage ?? ''],
+                cols.closeDate && ['Close date', (d: any) => (d.closeDate ? new Date(d.closeDate).toISOString().slice(0,10) : '')],
+              ].filter(Boolean) as [string, (d: any)=>any][]
+              const headers = all.map(([h]) => h)
+              const rows = pageItems.map((d) => all.map(([, getter]) => getter(d)))
               const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
               const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
               const url = URL.createObjectURL(blob)
@@ -161,35 +296,37 @@ export default function CRMDeals() {
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]">
             <tr>
-              <th className="px-4 py-2">Deal #</th>
-              <th className="px-4 py-2">Account</th>
-              <th className="px-4 py-2">Title</th>
-              <th className="px-4 py-2">Amount</th>
-              <th className="px-4 py-2">Stage</th>
-              <th className="px-4 py-2">Close date</th>
+              {cols.dealNumber && <th className="px-4 py-2">Deal #</th>}
+              {cols.account && <th className="px-4 py-2">Account</th>}
+              {cols.title && <th className="px-4 py-2">Title</th>}
+              {cols.amount && <th className="px-4 py-2">Amount</th>}
+              {cols.stage && <th className="px-4 py-2">Stage</th>}
+              {cols.closeDate && <th className="px-4 py-2">Close date</th>}
             </tr>
           </thead>
           <tbody>
             {pageItems.map((d) => (
               <tr key={d._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(d)}>
-                <td className="px-4 py-2">{d.dealNumber ?? '-'}</td>
-                <td className="px-4 py-2">{
-                  (() => {
-                    const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
-                    return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
-                  })()
-                }</td>
-                <td className="px-4 py-2">{d.title ?? '-'}</td>
-                <td className="px-4 py-2">{typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'}</td>
-                <td className="px-4 py-2">{d.stage ?? '-'}</td>
-                <td className="px-4 py-2">{d.closeDate ? new Date(d.closeDate).toLocaleDateString() : '-'}</td>
+                {cols.dealNumber && (<td className="px-4 py-2">{d.dealNumber ?? '-'}</td>)}
+                {cols.account && (
+                  <td className="px-4 py-2">{
+                    (() => {
+                      const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
+                      return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
+                    })()
+                  }</td>
+                )}
+                {cols.title && (<td className="px-4 py-2">{d.title ?? '-'}</td>)}
+                {cols.amount && (<td className="px-4 py-2">{typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'}</td>)}
+                {cols.stage && (<td className="px-4 py-2">{d.stage ?? '-'}</td>)}
+                {cols.closeDate && (<td className="px-4 py-2">{d.closeDate ? new Date(d.closeDate).toLocaleDateString() : '-'}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
         <div className="flex items-center justify-between p-4 text-sm">
           <div className="flex items-center gap-2">
-            <span>Rows: {visibleItems.length}</span>
+            <span>Rows: {total}</span>
             <label className="ml-4 flex items-center gap-1">Page size
               <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1">
                 <option value={5}>5</option>
