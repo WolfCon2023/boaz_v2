@@ -226,6 +226,12 @@ function CampaignsTab() {
     if (!dryRun && !confirm('Send this campaign to the segment now?')) return
     setSending(true); setSendResult(null)
     try {
+      // Compile and save latest content before sending
+      let html: string | undefined = undefined
+      if (mjml) {
+        try { const r = await http.post('/api/marketing/mjml/preview', { mjml }); html = String(r.data?.data?.html || '') } catch {}
+      }
+      await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html, segmentId: segmentId || undefined })
       const res = await http.post(`/api/marketing/campaigns/${editing._id}/send`, { dryRun })
       setSendResult(res.data?.data || null)
     } catch (e: any) {
