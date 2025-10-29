@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
+import { CRMNav } from '@/components/CRMNav'
 
 type Segment = { _id: string; name: string; description?: string }
 type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null; mjml?: string; previewText?: string }
@@ -10,6 +11,7 @@ export default function Marketing() {
   const [tab, setTab] = React.useState<'campaigns'|'segments'|'analytics'>('campaigns')
   return (
     <div className="space-y-6">
+      <CRMNav />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Marketing</h1>
         <div className="flex items-center gap-2">
