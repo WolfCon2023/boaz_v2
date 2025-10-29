@@ -66,7 +66,7 @@ marketingTrackingRouter.get('/r/:token', async (req, res) => {
   if (link.utmSource) target.searchParams.set('utm_source', link.utmSource)
   if (link.utmMedium) target.searchParams.set('utm_medium', link.utmMedium)
   if (link.utmCampaign) target.searchParams.set('utm_campaign', link.utmCampaign)
-  await db.collection('marketing_events').insertOne({ event: 'click', campaignId: link.campaignId || null, url: target.toString(), at: new Date() })
+  await db.collection('marketing_events').insertOne({ event: 'click', token, campaignId: link.campaignId || null, url: target.toString(), at: new Date() })
   res.redirect(302, target.toString())
 })
 
@@ -87,6 +87,32 @@ marketingTrackingRouter.get('/pixel.gif', async (req, res) => {
   res.setHeader('Content-Type', 'image/gif')
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   res.send(gif)
+})
+
+// GET /api/marketing/metrics/links?campaignId=
+marketingTrackingRouter.get('/metrics/links', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.json({ data: { items: [] }, error: null })
+  const campaignId = String((req.query.campaignId as string) ?? '')
+  const match: any = {}
+  if (ObjectId.isValid(campaignId)) match.campaignId = new ObjectId(campaignId)
+  const items = await db.collection('marketing_links').aggregate([
+    { $match: match },
+    {
+      $lookup: {
+        from: 'marketing_events',
+        let: { t: '$token' },
+        pipeline: [
+          { $match: { $expr: { $and: [ { $eq: ['$event','click'] }, { $eq: ['$token','$$t'] } ] } } },
+          { $count: 'count' },
+        ],
+        as: 'clicksAgg'
+      }
+    },
+    { $addFields: { clicks: { $ifNull: [ { $arrayElemAt: ['$clicksAgg.count', 0] }, 0 ] } } },
+    { $project: { _id: 0, token: 1, url: 1, utmSource: 1, utmMedium: 1, utmCampaign: 1, campaignId: 1, clicks: 1 } },
+  ]).toArray()
+  res.json({ data: { items }, error: null })
 })
 
 

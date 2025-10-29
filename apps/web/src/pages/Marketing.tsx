@@ -426,19 +426,59 @@ function CampaignsTab() {
 
 function AnalyticsTab() {
   const { data } = useQuery({ queryKey: ['mkt-metrics'], queryFn: async () => (await http.get('/api/marketing/metrics')).data, refetchInterval: 60000 })
+  const { data: campaigns } = useQuery({ queryKey: ['mkt-campaigns'], queryFn: async () => (await http.get('/api/marketing/campaigns')).data })
+  const [filterCampaign, setFilterCampaign] = React.useState<string>('')
+  const { data: linkMetrics } = useQuery({
+    queryKey: ['mkt-link-metrics', filterCampaign],
+    queryFn: async () => (await http.get('/api/marketing/metrics/links', { params: { campaignId: filterCampaign || undefined } })).data,
+    refetchInterval: 60000,
+  })
   const rows = (data?.data?.byCampaign ?? []) as { campaignId: string; opens: number; clicks: number; visits: number }[]
+  const linkRows = (linkMetrics?.data?.items ?? []) as { token: string; url: string; utmSource?: string; utmMedium?: string; utmCampaign?: string; clicks: number; campaignId?: string }[]
   return (
-    <div className="rounded-2xl border">
-      <table className="min-w-full text-sm">
-        <thead>
-          <tr className="border-b"><th className="p-2 text-left">Campaign</th><th className="p-2 text-left">Opens</th><th className="p-2 text-left">Clicks</th><th className="p-2 text-left">Visits</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={String(r.campaignId)} className="border-b"><td className="p-2">{String(r.campaignId)}</td><td className="p-2">{r.opens}</td><td className="p-2">{r.clicks}</td><td className="p-2">{r.visits}</td></tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-4">
+      <div className="rounded-2xl border">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b"><th className="p-2 text-left">Campaign</th><th className="p-2 text-left">Opens</th><th className="p-2 text-left">Clicks</th><th className="p-2 text-left">Visits</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={String(r.campaignId)} className="border-b"><td className="p-2">{String(r.campaignId)}</td><td className="p-2">{r.opens}</td><td className="p-2">{r.clicks}</td><td className="p-2">{r.visits}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="text-base font-semibold">Per-link performance</div>
+        <select value={filterCampaign} onChange={(e) => setFilterCampaign(e.target.value)} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)]">
+          <option value="">All campaigns</option>
+          {((campaigns?.data?.items ?? []) as any[]).map((c) => (<option key={c._id} value={c._id}>{c.name}</option>))}
+        </select>
+      </div>
+      <div className="rounded-2xl border">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b"><th className="p-2 text-left">Short</th><th className="p-2 text-left">Target URL</th><th className="p-2 text-left">UTM</th><th className="p-2 text-left">Clicks</th></tr>
+          </thead>
+          <tbody>
+            {linkRows.map((r) => {
+              const apiBase = (import.meta as any)?.env?.VITE_API_URL || window.location.origin
+              const shortUrl = String(apiBase).replace(/\/$/,'') + `/api/marketing/r/${r.token}`
+              const utm = [r.utmSource && `source=${r.utmSource}`, r.utmMedium && `medium=${r.utmMedium}`, r.utmCampaign && `campaign=${r.utmCampaign}`].filter(Boolean).join(' · ')
+              return (
+                <tr key={r.token} className="border-b">
+                  <td className="p-2"><a className="underline" href={shortUrl} target="_blank" rel="noopener noreferrer">{r.token.slice(0,8)}</a></td>
+                  <td className="p-2 truncate max-w-[32rem]"><a className="underline" href={r.url} target="_blank" rel="noopener noreferrer">{r.url}</a></td>
+                  <td className="p-2 text-[color:var(--color-text-muted)]">{utm || '-'}</td>
+                  <td className="p-2">{r.clicks}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
