@@ -287,7 +287,15 @@ function CampaignsTab() {
       await qc.invalidateQueries({ queryKey: ['mkt-campaigns'] })
     },
   })
+  const rename = useMutation({
+    mutationFn: async (payload: { id: string; name: string }) => http.put(`/api/marketing/campaigns/${payload.id}`, { name: payload.name }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['mkt-campaigns'] })
+    },
+  })
   const [editing, setEditing] = React.useState<Campaign | null>(null)
+  const [renamingId, setRenamingId] = React.useState<string | null>(null)
+  const [renamingName, setRenamingName] = React.useState<string>('')
   const [mjml, setMjml] = React.useState<string>('')
   const [previewHtml, setPreviewHtml] = React.useState<string>('')
   const [subject, setSubject] = React.useState<string>('')
@@ -408,8 +416,42 @@ function CampaignsTab() {
           </thead>
           <tbody>
             {(data?.data?.items ?? []).map((c: Campaign) => (
-              <tr key={c._id} className="border-b hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => { setEditing(c) }}>
-                <td className="p-2">{c.name}</td><td className="p-2">{c.subject}</td><td className="p-2">{c.status}</td>
+              <tr key={c._id} className="border-b hover:bg-[color:var(--color-muted)]">
+                <td className="p-2">
+                  {renamingId === String(c._id) ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        autoFocus
+                        value={renamingName}
+                        onChange={(e) => setRenamingName(e.target.value)}
+                        className="rounded-lg border px-2 py-1 text-sm bg-transparent"
+                      />
+                      <button
+                        className="rounded-lg border px-2 py-1 text-xs"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          await rename.mutateAsync({ id: String(c._id), name: renamingName })
+                          setRenamingId(null)
+                          setRenamingName('')
+                        }}
+                      >Save</button>
+                      <button
+                        className="rounded-lg border px-2 py-1 text-xs"
+                        onClick={(e) => { e.stopPropagation(); setRenamingId(null); setRenamingName('') }}
+                      >Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button className="text-left truncate" onClick={() => { setEditing(c) }}>{c.name}</button>
+                      <button
+                        className="rounded-lg border px-2 py-1 text-xs"
+                        onClick={(e) => { e.stopPropagation(); setRenamingId(String(c._id)); setRenamingName(String(c.name || '')) }}
+                      >Rename</button>
+                    </div>
+                  )}
+                </td>
+                <td className="p-2 cursor-pointer" onClick={() => { setEditing(c) }}>{c.subject}</td>
+                <td className="p-2 cursor-pointer" onClick={() => { setEditing(c) }}>{c.status}</td>
               </tr>
             ))}
           </tbody>
