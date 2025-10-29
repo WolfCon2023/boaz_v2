@@ -22,6 +22,7 @@ import KnowledgeBase from '@/pages/KnowledgeBase'
 import SupportPortal from '@/pages/SupportPortal'
 import { PublicShell } from '@/components/PublicShell'
 import Helpdesk from '@/pages/Helpdesk'
+import Marketing from '@/pages/Marketing'
 
 export const router = createBrowserRouter([
   {
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/outreach/templates', element: <CRMOutreachTemplates /> },
       { path: 'apps/crm/outreach/sequences', element: <CRMOutreachSequences /> },
       { path: 'apps/crm/outreach/events', element: <CRMOutreachEvents /> },
+      { path: 'apps/crm/marketing', element: <Marketing /> },
       { path: 'apps/crm/support/tickets', element: <SupportTickets /> },
       { path: 'apps/crm/support/kb', element: <KnowledgeBase /> },
       { path: 'apps/helpdesk', element: <Helpdesk /> },

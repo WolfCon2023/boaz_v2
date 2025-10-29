@@ -17,6 +17,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.1",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.14",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.20.0",
     "zod": "^3.23.8"
@@ -28,7 +30,6 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^1.4.13",
     "@types/node": "^24.9.1",
-    "multer": "^1.4.5-lts.1",
     "tsx": "^4.19.2",
     "typescript": "~5.9.3"
   }
