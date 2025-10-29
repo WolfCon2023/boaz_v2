@@ -30,13 +30,41 @@ function LinkBuilder({ campaignId, campaignName }: { campaignId: string; campaig
   const [utmSource, setUtmSource] = React.useState('email')
   const [utmMedium, setUtmMedium] = React.useState('email')
   const [result, setResult] = React.useState<string>('')
+  const [isBuilding, setIsBuilding] = React.useState(false)
   async function build() {
     if (!/^https?:\/\//i.test(url)) { alert('Enter a valid http(s) URL'); return }
-    const utmCampaign = campaignName?.toLowerCase().replace(/\s+/g, '-') || ''
-    const res = await http.post('/api/marketing/links', { campaignId, url, utmSource, utmMedium, utmCampaign })
-    const token = res.data?.data?.token
-    const apiBase = (import.meta as any)?.env?.VITE_API_URL || window.location.origin
-    setResult(String(apiBase).replace(/\/$/,'') + `/api/marketing/r/${token}`)
+    setIsBuilding(true)
+    try {
+      const utmCampaign = campaignName?.toLowerCase().replace(/\s+/g, '-') || ''
+      const res = await http.post('/api/marketing/links', { campaignId, url, utmSource, utmMedium, utmCampaign })
+      const token = res.data?.data?.token
+      const apiBase = (import.meta as any)?.env?.VITE_API_URL || window.location.origin
+      setResult(String(apiBase).replace(/\/$/,'') + `/api/marketing/r/${token}`)
+    } catch (e) {
+      alert('Failed to generate link')
+    } finally {
+      setIsBuilding(false)
+    }
+  }
+  async function copyToClipboard(text: string) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      alert('Copied')
+    } catch {
+      alert('Copy failed. Select and copy manually.')
+    }
   }
   return (
     <div className="rounded-lg border p-3 space-y-2">
@@ -46,11 +74,11 @@ function LinkBuilder({ campaignId, campaignName }: { campaignId: string; campaig
         <input value={utmMedium} onChange={(e) => setUtmMedium(e.target.value)} placeholder="utm_medium" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
       </div>
       <div className="flex items-center gap-2">
-        <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={build}>Generate link</button>
+        <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={build} disabled={isBuilding}>{isBuilding ? 'Generating…' : 'Generate link'}</button>
         {result && (
           <>
             <input readOnly value={result} className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent" />
-            <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => { navigator.clipboard.writeText(result) }}>Copy</button>
+            <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => { void copyToClipboard(result) }}>Copy</button>
           </>
         )}
       </div>
@@ -191,6 +219,7 @@ function CampaignsTab() {
     }
   }, [editing])
   const [testTo, setTestTo] = React.useState<string>('')
+  const [testing, setTesting] = React.useState<boolean>(false)
   const [sending, setSending] = React.useState<boolean>(false)
   const [sendResult, setSendResult] = React.useState<{ total: number; skipped: number; sent: number; errors: number } | null>(null)
   async function renderPreview() {
@@ -207,8 +236,17 @@ function CampaignsTab() {
   }
   async function sendTest() {
     if (!editing) return
-    await http.post(`/api/marketing/campaigns/${editing._id}/test-send`, { to: testTo, mjml, subject: editing.subject || editing.name })
-    alert('Test email sent (if SMTP is configured).')
+    if (!testTo || !/.+@.+\..+/.test(testTo)) { alert('Enter a valid test email'); return }
+    setTesting(true)
+    try {
+      await http.post(`/api/marketing/campaigns/${editing._id}/test-send`, { to: testTo, mjml, subject: editing.subject || editing.name })
+      alert('Test email sent (if SMTP is configured).')
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || 'Failed to send test email.'
+      alert(msg)
+    } finally {
+      setTesting(false)
+    }
   }
   async function saveCampaign() {
     if (!editing) return
@@ -346,7 +384,7 @@ function CampaignsTab() {
                 <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={renderPreview}>Render preview</button>
                 <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => { setMjml(''); setPreviewHtml('') }}>Clear</button>
                 <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Test email to" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
-                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={sendTest} disabled={!testTo}>Send test</button>
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={sendTest} disabled={!testTo || testing}>{testing ? 'Sending…' : 'Send test'}</button>
               </div>
             </div>
             <div className="space-y-2">
