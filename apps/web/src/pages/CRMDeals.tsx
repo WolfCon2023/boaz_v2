@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
@@ -103,7 +103,7 @@ export default function CRMDeals() {
     setSearchParams(params, { replace: true })
     try { localStorage.setItem('DEALS_COLS', JSON.stringify(cols)) } catch {}
   }, [q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize, cols, setSearchParams])
-  const { data, isFetching } = useQuery({
+  const { data, isFetching } = useQuery<{ data: { items: Deal[]; total: number; page: number; limit: number } }>({
     queryKey: ['deals', q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize],
     queryFn: async () => {
       const res = await http.get('/api/crm/deals', {
@@ -122,7 +122,7 @@ export default function CRMDeals() {
       })
       return res.data as { data: { items: Deal[]; total: number; page: number; limit: number } }
     },
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   })
   const accountsQ = useQuery({
     queryKey: ['accounts-pick'],
@@ -237,19 +237,19 @@ export default function CRMDeals() {
           <button
             className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
             onClick={() => {
-              const all = [
-                cols.dealNumber && ['Deal #', (d: any) => d.dealNumber ?? ''],
-                cols.account && ['Account', (d: any) => {
+              const all: Array<[string, (d: Deal) => any]> = [
+                cols.dealNumber && ['Deal #', (d: Deal) => d.dealNumber ?? ''],
+                cols.account && ['Account', (d: Deal) => {
                   const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
                   return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
                 }],
-                cols.title && ['Title', (d: any) => d.title ?? ''],
-                cols.amount && ['Amount', (d: any) => (typeof d.amount === 'number' ? d.amount : '')],
-                cols.stage && ['Stage', (d: any) => d.stage ?? ''],
-                cols.closeDate && ['Close date', (d: any) => (d.closeDate ? new Date(d.closeDate).toISOString().slice(0,10) : '')],
-              ].filter(Boolean) as [string, (d: any)=>any][]
+                cols.title && ['Title', (d: Deal) => d.title ?? ''],
+                cols.amount && ['Amount', (d: Deal) => (typeof d.amount === 'number' ? d.amount : '')],
+                cols.stage && ['Stage', (d: Deal) => d.stage ?? ''],
+                cols.closeDate && ['Close date', (d: Deal) => (d.closeDate ? new Date(d.closeDate).toISOString().slice(0,10) : '')],
+              ].filter(Boolean) as Array<[string, (d: Deal)=>any]>
               const headers = all.map(([h]) => h)
-              const rows = pageItems.map((d) => all.map(([, getter]) => getter(d)))
+              const rows = pageItems.map((d: Deal) => all.map(([, getter]) => getter(d)))
               const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
               const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
               const url = URL.createObjectURL(blob)
