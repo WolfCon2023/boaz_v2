@@ -96,13 +96,27 @@ function SegmentsTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-segments'] }),
   })
   const save = useMutation({
-    mutationFn: async (payload: { id: string; rules: any[]; emails?: string[] }) => http.put(`/api/marketing/segments/${payload.id}`, { rules: payload.rules, emails: payload.emails || [] }),
+    mutationFn: async (payload: { id: string; name?: string; description?: string; rules?: any[]; emails?: string[] }) =>
+      http.put(`/api/marketing/segments/${payload.id}`, {
+        name: payload.name,
+        description: payload.description,
+        rules: payload.rules,
+        emails: payload.emails || [],
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-segments'] }),
+  })
+  const remove = useMutation({
+    mutationFn: async (id: string) => http.delete(`/api/marketing/segments/${id}`),
+    onSuccess: async () => { setEditing(null); await qc.invalidateQueries({ queryKey: ['mkt-segments'] }) },
   })
   const [editing, setEditing] = React.useState<any | null>(null)
   const [rules, setRules] = React.useState<Array<{ field: string; operator: string; value: string }>>([])
   const [preview, setPreview] = React.useState<{ total: number; contacts: any[]; directEmails?: string[] } | null>(null)
   const [emailsText, setEmailsText] = React.useState<string>('')
+  const [segName, setSegName] = React.useState<string>('')
+  const [segDesc, setSegDesc] = React.useState<string>('')
+  const [renamingId, setRenamingId] = React.useState<string | null>(null)
+  const [renamingName, setRenamingName] = React.useState<string>('')
   function addRule() { setRules((r) => [...r, { field: 'email', operator: 'contains', value: '' }]) }
   function removeRule(idx: number) { setRules((r) => r.filter((_, i) => i !== idx)) }
   async function previewSegment() {
@@ -110,6 +124,15 @@ function SegmentsTab() {
     const res = await http.get(`/api/marketing/segments/${editing._id}/preview`)
     setPreview(res.data?.data ?? { total: 0, contacts: [], directEmails: [] })
   }
+  React.useEffect(() => {
+    if (editing) {
+      setSegName(String(editing.name || ''))
+      setSegDesc(String(editing.description || ''))
+    } else {
+      setSegName('')
+      setSegDesc('')
+    }
+  }, [editing])
   return (
     <div className="space-y-4">
       <form className="rounded-2xl border p-4 grid gap-2 sm:grid-cols-3" onSubmit={async (e) => {
@@ -128,8 +151,52 @@ function SegmentsTab() {
           </thead>
           <tbody>
             {(data?.data?.items ?? []).map((s: any) => (
-              <tr key={s._id} className="border-b hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => { setEditing(s); setRules(Array.isArray(s.rules) ? s.rules : []); setEmailsText(Array.isArray(s.emails) ? s.emails.join('\n') : ''); setPreview(null) }}>
-                <td className="p-2">{s.name}</td><td className="p-2">{s.description}</td>
+              <tr key={s._id} className="border-b hover:bg-[color:var(--color-muted)]">
+                <td className="p-2">
+                  {renamingId === String(s._id) ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        autoFocus
+                        value={renamingName}
+                        onChange={(e) => setRenamingName(e.target.value)}
+                        className="rounded-lg border px-2 py-1 text-sm bg-transparent"
+                      />
+                      <button
+                        className="rounded-lg border px-2 py-1 text-xs"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          await save.mutateAsync({ id: String(s._id), name: renamingName || undefined })
+                          setRenamingId(null)
+                          setRenamingName('')
+                        }}
+                      >Save</button>
+                      <button
+                        className="rounded-lg border px-2 py-1 text-xs"
+                        onClick={(e) => { e.stopPropagation(); setRenamingId(null); setRenamingName('') }}
+                      >Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="text-left truncate"
+                        onClick={() => { setEditing(s); setRules(Array.isArray(s.rules) ? s.rules : []); setEmailsText(Array.isArray(s.emails) ? s.emails.join('\n') : ''); setPreview(null) }}
+                      >{s.name}</button>
+                      <button
+                        className="rounded-lg border px-2 py-1 text-xs"
+                        onClick={(e) => { e.stopPropagation(); setRenamingId(String(s._id)); setRenamingName(String(s.name || '')) }}
+                      >Rename</button>
+                      <button
+                        className="rounded-lg border border-red-400 text-red-400 px-2 py-1 text-xs"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          if (!confirm('Delete this segment? This cannot be undone.')) return
+                          await remove.mutateAsync(String(s._id))
+                        }}
+                      >Delete</button>
+                    </div>
+                  )}
+                </td>
+                <td className="p-2 cursor-pointer" onClick={() => { setEditing(s); setRules(Array.isArray(s.rules) ? s.rules : []); setEmailsText(Array.isArray(s.emails) ? s.emails.join('\n') : ''); setPreview(null) }}>{s.description}</td>
               </tr>
             ))}
           </tbody>
@@ -140,7 +207,15 @@ function SegmentsTab() {
         <div className="rounded-2xl border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-base font-semibold">Segment — {editing.name}</div>
-            <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setRules([]); setPreview(null); setEmailsText('') }}>Close</button>
+            <div className="flex items-center gap-2">
+              <button className="rounded-lg border border-red-400 text-red-400 px-2 py-1 text-sm" onClick={async () => { if (!editing) return; if (!confirm('Delete this segment? This cannot be undone.')) return; await remove.mutateAsync(editing._id) }}>Delete</button>
+              <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setRules([]); setPreview(null); setEmailsText('') }}>Close</button>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <input value={segName} onChange={(e) => setSegName(e.target.value)} placeholder="Segment name" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+            <input value={segDesc} onChange={(e) => setSegDesc(e.target.value)} placeholder="Description (optional)" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+            <button className="rounded-lg border px-3 py-2 text-sm" onClick={async () => { if (!editing) return; await save.mutateAsync({ id: editing._id, name: segName || undefined, description: segDesc || undefined }); alert('Details saved') }}>Save details</button>
           </div>
           <div className="space-y-2">
             <div className="text-xs text-[color:var(--color-text-muted)]">Rules (AND)</div>
