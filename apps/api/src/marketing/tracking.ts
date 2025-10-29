@@ -115,4 +115,20 @@ marketingTrackingRouter.get('/metrics/links', async (req, res) => {
   res.json({ data: { items }, error: null })
 })
 
+// GET /api/marketing/metrics/roi?campaignId=
+marketingTrackingRouter.get('/metrics/roi', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.json({ data: { items: [] }, error: null })
+  const campaignId = String((req.query.campaignId as string) ?? '')
+  const match: any = { marketingCampaignId: { $exists: true, $ne: null } }
+  if (ObjectId.isValid(campaignId)) match.marketingCampaignId = new ObjectId(campaignId)
+  const closedWon = 'Contract Signed / Closed Won'
+  const items = await db.collection('deals').aggregate([
+    { $match: { ...match, stage: closedWon, amount: { $type: 'number', $gt: 0 } } },
+    { $group: { _id: '$marketingCampaignId', revenue: { $sum: '$amount' }, dealsCount: { $sum: 1 } } },
+    { $project: { campaignId: '$_id', revenue: 1, dealsCount: 1, _id: 0 } },
+  ]).toArray()
+  res.json({ data: { items }, error: null })
+})
+
 

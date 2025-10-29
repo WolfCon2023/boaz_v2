@@ -61,6 +61,8 @@ dealsRouter.post('/', async (req, res) => {
       amount: typeof amountParsed === 'number' && Number.isFinite(amountParsed) ? amountParsed : undefined,
       stage: stageRaw || 'new',
     }
+    if (ObjectId.isValid(raw.marketingCampaignId)) doc.marketingCampaignId = new ObjectId(raw.marketingCampaignId)
+    if (typeof raw.attributionToken === 'string') doc.attributionToken = raw.attributionToken.trim()
     if (typeof accountNumberValue === 'number') doc.accountNumber = accountNumberValue
     // Normalize date-only strings to midday UTC to avoid timezone shifting one day back
     if (closeDateRaw) doc.closeDate = new Date(`${closeDateRaw}T12:00:00Z`)
@@ -151,6 +153,8 @@ dealsRouter.put('/:id', async (req, res) => {
     amount: z.number().optional(),
     stage: z.string().optional(),
     closeDate: z.string().optional(),
+    marketingCampaignId: z.string().optional(),
+    attributionToken: z.string().optional(),
   })
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload' })
@@ -160,6 +164,8 @@ dealsRouter.put('/:id', async (req, res) => {
     const _id = new ObjectId(req.params.id)
     const update: any = { ...parsed.data }
     if (update.accountId) update.accountId = new ObjectId(update.accountId)
+    if (update.marketingCampaignId && ObjectId.isValid(update.marketingCampaignId)) update.marketingCampaignId = new ObjectId(update.marketingCampaignId)
+    if (update.attributionToken === '') delete update.attributionToken
     const closedWon = 'Contract Signed / Closed Won'
     if (update.closeDate) update.closeDate = new Date(`${update.closeDate}T12:00:00Z`)
 

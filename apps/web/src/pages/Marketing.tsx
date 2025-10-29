@@ -433,8 +433,14 @@ function AnalyticsTab() {
     queryFn: async () => (await http.get('/api/marketing/metrics/links', { params: { campaignId: filterCampaign || undefined } })).data,
     refetchInterval: 60000,
   })
+  const { data: roiMetrics } = useQuery({
+    queryKey: ['mkt-roi-metrics', filterCampaign],
+    queryFn: async () => (await http.get('/api/marketing/metrics/roi', { params: { campaignId: filterCampaign || undefined } })).data,
+    refetchInterval: 60000,
+  })
   const rows = (data?.data?.byCampaign ?? []) as { campaignId: string; opens: number; clicks: number; visits: number }[]
   const linkRows = (linkMetrics?.data?.items ?? []) as { token: string; url: string; utmSource?: string; utmMedium?: string; utmCampaign?: string; clicks: number; campaignId?: string }[]
+  const roiRows = (roiMetrics?.data?.items ?? []) as { campaignId: string; revenue: number; dealsCount: number }[]
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border">
@@ -443,9 +449,14 @@ function AnalyticsTab() {
             <tr className="border-b"><th className="p-2 text-left">Campaign</th><th className="p-2 text-left">Opens</th><th className="p-2 text-left">Clicks</th><th className="p-2 text-left">Visits</th></tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={String(r.campaignId)} className="border-b"><td className="p-2">{String(r.campaignId)}</td><td className="p-2">{r.opens}</td><td className="p-2">{r.clicks}</td><td className="p-2">{r.visits}</td></tr>
-            ))}
+            {rows.map((r) => {
+              const list = ((campaigns?.data?.items ?? []) as any[])
+              const found = list.find((c) => String(c._id) === String(r.campaignId))
+              const name = found?.name || String(r.campaignId)
+              return (
+                <tr key={String(r.campaignId)} className="border-b"><td className="p-2">{name}</td><td className="p-2">{r.opens}</td><td className="p-2">{r.clicks}</td><td className="p-2">{r.visits}</td></tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -479,6 +490,33 @@ function AnalyticsTab() {
           </tbody>
         </table>
       </div>
+
+      {roiRows.length > 0 && (
+        <>
+          <div className="text-base font-semibold">ROI Attribution</div>
+          <div className="rounded-2xl border">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b"><th className="p-2 text-left">Campaign</th><th className="p-2 text-left">Revenue</th><th className="p-2 text-left">Closed Won Deals</th></tr>
+              </thead>
+              <tbody>
+                {roiRows.map((r) => {
+                  const list = ((campaigns?.data?.items ?? []) as any[])
+                  const found = list.find((c) => String(c._id) === String(r.campaignId))
+                  const name = found?.name || String(r.campaignId)
+                  return (
+                    <tr key={String(r.campaignId)} className="border-b">
+                      <td className="p-2">{name}</td>
+                      <td className="p-2 font-semibold">${r.revenue.toLocaleString()}</td>
+                      <td className="p-2">{r.dealsCount}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   )
 }

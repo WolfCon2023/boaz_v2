@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 
-type Deal = { _id: string; dealNumber?: number; title?: string; amount?: number; stage?: string; closeDate?: string; accountId?: string; accountNumber?: number }
+type Deal = { _id: string; dealNumber?: number; title?: string; amount?: number; stage?: string; closeDate?: string; accountId?: string; accountNumber?: number; marketingCampaignId?: string }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
 
 export default function CRMDeals() {
@@ -25,6 +25,10 @@ export default function CRMDeals() {
       const res = await http.get('/api/crm/accounts', { params: { limit: 1000, sort: 'name', dir: 'asc' } })
       return res.data as { data: { items: AccountPick[] } }
     },
+  })
+  const { data: campaignsQ } = useQuery({
+    queryKey: ['mkt-campaigns'],
+    queryFn: async () => (await http.get('/api/marketing/campaigns')).data as { data: { items: { _id: string; name: string }[] } },
   })
   const accounts = accountsQ.data?.data.items ?? []
   const acctById = React.useMemo(() => new Map(accounts.map((a) => [a._id, a])), [accounts])
@@ -122,7 +126,7 @@ export default function CRMDeals() {
             }}
           >Export CSV</button>
         </div>
-        <form className="flex flex-wrap gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = String(fd.get('title')||''); const accNumStr = String(fd.get('accountNumber')||''); const accNum = accNumStr ? Number(accNumStr) : undefined; const amount = fd.get('amount') ? Number(fd.get('amount')) : undefined; const stage = String(fd.get('stage')||'')|| undefined; const closeDate = String(fd.get('closeDate')||'')|| undefined; const acc = (accountsQ.data?.data.items ?? []).find(a => a.accountNumber === accNum); const payload: any = { title, amount, stage, closeDate }; if (acc?._id) payload.accountId = acc._id; else if (typeof accNum === 'number' && Number.isFinite(accNum)) payload.accountNumber = accNum; create.mutate(payload); (e.currentTarget as HTMLFormElement).reset() }}>
+        <form className="flex flex-wrap gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = String(fd.get('title')||''); const accNumStr = String(fd.get('accountNumber')||''); const accNum = accNumStr ? Number(accNumStr) : undefined; const amount = fd.get('amount') ? Number(fd.get('amount')) : undefined; const stage = String(fd.get('stage')||'')|| undefined; const closeDate = String(fd.get('closeDate')||'')|| undefined; const campaignSel = String(fd.get('marketingCampaignId')||''); const acc = (accountsQ.data?.data.items ?? []).find(a => a.accountNumber === accNum); const payload: any = { title, amount, stage, closeDate }; if (acc?._id) payload.accountId = acc._id; else if (typeof accNum === 'number' && Number.isFinite(accNum)) payload.accountNumber = accNum; if (campaignSel) payload.marketingCampaignId = campaignSel; create.mutate(payload); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="title" required placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="accountNumber" required className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="">Select account</option>
@@ -146,6 +150,12 @@ export default function CRMDeals() {
             <option>Rejected / Returned for Revision</option>
           </select>
           <input name="closeDate" type="date" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <select name="marketingCampaignId" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+            <option value="">Campaign (optional)</option>
+            {((campaignsQ?.data?.items ?? []) as any[]).map((c) => (
+              <option key={c._id} value={c._id}>{c.name}</option>
+            ))}
+          </select>
           <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add deal</button>
         </form>
         <table className="w-full text-sm">
@@ -212,9 +222,12 @@ export default function CRMDeals() {
                   const stage = String(fd.get('stage')||'') || undefined
                   const closeDateRaw = String(fd.get('closeDate')||'') || undefined
                   const accSel = String(fd.get('accountId')||'')
+                  const campaignSel = String(fd.get('marketingCampaignId')||'')
                   const payload: any = { _id: editing._id, title, amount, stage }
                   if (closeDateRaw) payload.closeDate = closeDateRaw
                   if (accSel) payload.accountId = accSel
+                  if (campaignSel) payload.marketingCampaignId = campaignSel
+                  else if (campaignSel === '') payload.marketingCampaignId = ''
                   update.mutate(payload)
                   setEditing(null)
                 }}
@@ -239,6 +252,14 @@ export default function CRMDeals() {
                     <option value="">(no change)</option>
                     {(accountsQ.data?.data.items ?? []).map((a) => (
                       <option key={a._id} value={a._id}>{(a.accountNumber ?? '—')} — {a.name ?? 'Account'}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="col-span-full text-sm">Marketing Campaign (for ROI attribution)
+                  <select name="marketingCampaignId" defaultValue={editing.marketingCampaignId ?? ''} className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+                    <option value="">None</option>
+                    {((campaignsQ?.data?.items ?? []) as any[]).map((c) => (
+                      <option key={c._id} value={c._id}>{c.name}</option>
                     ))}
                   </select>
                 </label>
