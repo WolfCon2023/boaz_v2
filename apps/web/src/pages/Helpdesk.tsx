@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '@/lib/http'
@@ -5,7 +6,7 @@ import { getPortalUrl } from '@/lib/urls'
 
 export default function Helpdesk() {
   // Fetch tickets and compute metrics in the same way as the Tickets page for parity
-  const { data: ticketsData, isFetching } = useQuery({
+  const { data: ticketsData } = useQuery({
     queryKey: ['helpdesk-tickets'],
     queryFn: async () => { const r = await http.get('/api/crm/support/tickets'); return r.data as { data: { items: any[] } } },
     refetchInterval: 60000,

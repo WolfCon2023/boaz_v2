@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import App from '@/App'
 // Home removed from initial routes; Dashboard is the index
 import NotFound from '@/pages/NotFound'
@@ -48,6 +48,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/support/tickets', element: <SupportTickets /> },
       { path: 'apps/crm/support/kb', element: <KnowledgeBase /> },
       { path: 'apps/helpdesk', element: <Helpdesk /> },
+      { path: 'apps/support', element: <Navigate to="/apps/helpdesk" replace /> },
     ],
   },
   {
