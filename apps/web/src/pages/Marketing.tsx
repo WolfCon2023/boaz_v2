@@ -164,7 +164,7 @@ function CampaignsTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-campaigns'] }),
   })
   const save = useMutation({
-    mutationFn: async (payload: { id: string; subject?: string; previewText?: string; mjml?: string; html?: string }) => http.put(`/api/marketing/campaigns/${payload.id}`, payload),
+    mutationFn: async (payload: { id: string; subject?: string; previewText?: string; mjml?: string; html?: string; segmentId?: string }) => http.put(`/api/marketing/campaigns/${payload.id}`, payload),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['mkt-campaigns'] })
     },
@@ -181,11 +181,13 @@ function CampaignsTab() {
   const [previewHtml, setPreviewHtml] = React.useState<string>('')
   const [subject, setSubject] = React.useState<string>('')
   const [previewText, setPreviewText] = React.useState<string>('')
+  const [segmentId, setSegmentId] = React.useState<string>('')
   React.useEffect(() => {
     if (editing) {
       setSubject(editing.subject || '')
       setPreviewText(editing.previewText || '')
       setMjml(editing.mjml || '')
+      setSegmentId(String(editing.segmentId || ''))
     }
   }, [editing])
   const [testTo, setTestTo] = React.useState<string>('')
@@ -214,18 +216,24 @@ function CampaignsTab() {
     if (mjml) {
       try { const r = await http.post('/api/marketing/mjml/preview', { mjml }); html = String(r.data?.data?.html || '') } catch {}
     }
-    await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html })
+    await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html, segmentId: segmentId || undefined })
     alert('Saved')
   }
   async function sendCampaign(dryRun: boolean) {
     if (!editing) return
+    if (!segmentId) { alert('Please select a segment and Save before sending.'); return }
+    if (!mjml && !(editing as any).html) { alert('Please add MJML and Save before sending.'); return }
     if (!dryRun && !confirm('Send this campaign to the segment now?')) return
     setSending(true); setSendResult(null)
     try {
       const res = await http.post(`/api/marketing/campaigns/${editing._id}/send`, { dryRun })
       setSendResult(res.data?.data || null)
-    } catch (e) {
-      alert('Send failed. Check SMTP env and try again.')
+    } catch (e: any) {
+      const err = e?.response?.data?.error
+      const msg = err === 'missing_segment' ? 'This campaign has no segment. Select one and Save.'
+        : err === 'missing_html' ? 'No HTML found. Add MJML and Save first.'
+        : err || 'Send failed. Check SMTP env and try again.'
+      alert(msg)
     } finally {
       setSending(false)
     }
@@ -296,9 +304,13 @@ function CampaignsTab() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
                 <input value={previewText} onChange={(e) => setPreviewText(e.target.value)} placeholder="Preview text (inbox snippet)" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+                <select value={segmentId} onChange={(e) => setSegmentId(e.target.value)} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
+                  <option value="">Select segment…</option>
+                  {((segments?.data?.items ?? []) as any[]).map((s) => (<option key={s._id} value={s._id}>{s.name}</option>))}
+                </select>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select onChange={(e) => {
