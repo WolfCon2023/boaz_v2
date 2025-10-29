@@ -21,15 +21,21 @@ export default function CRMDeals() {
   const [endDate, setEndDate] = React.useState<string>('')
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
+  type ColumnDef = { key: string; visible: boolean; label: string }
+  const defaultCols: ColumnDef[] = [
+    { key: 'dealNumber', visible: true, label: 'Deal #' },
+    { key: 'account', visible: true, label: 'Account' },
+    { key: 'title', visible: true, label: 'Title' },
+    { key: 'amount', visible: true, label: 'Amount' },
+    { key: 'stage', visible: true, label: 'Stage' },
+    { key: 'closeDate', visible: true, label: 'Close date' },
+  ]
   const [showColsMenu, setShowColsMenu] = React.useState(false)
-  const [cols, setCols] = React.useState<{ dealNumber: boolean; account: boolean; title: boolean; amount: boolean; stage: boolean; closeDate: boolean }>({
-    dealNumber: true,
-    account: true,
-    title: true,
-    amount: true,
-    stage: true,
-    closeDate: true,
-  })
+  const [cols, setCols] = React.useState<ColumnDef[]>(defaultCols)
+  const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
+  const [showSaveViewDialog, setShowSaveViewDialog] = React.useState(false)
+  const [savingViewName, setSavingViewName] = React.useState('')
+  const [draggedCol, setDraggedCol] = React.useState<string | null>(null)
   const initializedFromUrl = React.useRef(false)
 
   // Initialize from URL and localStorage once
@@ -63,26 +69,30 @@ export default function CRMDeals() {
     setPage(page0)
     setPageSize(limit0)
 
-    // Columns from localStorage or URL (comma-separated keys)
+    // Columns from localStorage or URL (comma-separated keys or full array)
     try {
       const stored = localStorage.getItem('DEALS_COLS')
       if (stored) {
         const parsed = JSON.parse(stored)
-        if (parsed && typeof parsed === 'object') setCols((prev) => ({ ...prev, ...parsed }))
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCols(parsed)
+        }
       }
     } catch {}
     const colsParam = get('cols')
     if (colsParam) {
       const keys = new Set(colsParam.split(',').map((s) => s.trim()).filter(Boolean))
-      setCols({
-        dealNumber: keys.has('dealNumber'),
-        account: keys.has('account'),
-        title: keys.has('title'),
-        amount: keys.has('amount'),
-        stage: keys.has('stage'),
-        closeDate: keys.has('closeDate'),
-      })
+      setCols(defaultCols.map((c) => ({ ...c, visible: keys.has(c.key) })))
     }
+
+    // Load saved views
+    try {
+      const views = localStorage.getItem('DEALS_SAVED_VIEWS')
+      if (views) {
+        const parsed = JSON.parse(views)
+        if (Array.isArray(parsed)) setSavedViews(parsed)
+      }
+    } catch {}
   }, [searchParams])
 
   // Persist filters and columns to URL/localStorage
@@ -98,11 +108,12 @@ export default function CRMDeals() {
     if (endDate) params.endDate = endDate
     if (page) params.page = String(page)
     if (pageSize !== 10) params.limit = String(pageSize)
-    const colKeys = Object.entries(cols).filter(([, v]) => v).map(([k]) => k).join(',')
+    const colKeys = cols.filter((c) => c.visible).map((c) => c.key).join(',')
     if (colKeys) params.cols = colKeys
     setSearchParams(params, { replace: true })
     try { localStorage.setItem('DEALS_COLS', JSON.stringify(cols)) } catch {}
-  }, [q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize, cols, setSearchParams])
+    try { localStorage.setItem('DEALS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
+  }, [q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize, cols, savedViews, setSearchParams])
   const { data, isFetching } = useQuery<{ data: { items: Deal[]; total: number; page: number; limit: number } }>({
     queryKey: ['deals', q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize],
     queryFn: async () => {
@@ -161,6 +172,73 @@ export default function CRMDeals() {
 
   const [editing, setEditing] = React.useState<Deal | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
+
+  function saveCurrentView() {
+    const viewConfig = { q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, cols, pageSize }
+    const id = Date.now().toString()
+    const newView = { id, name: savingViewName || `View ${savedViews.length + 1}`, config: viewConfig }
+    const updated = [...savedViews, newView]
+    setSavedViews(updated)
+    setShowSaveViewDialog(false)
+    setSavingViewName('')
+  }
+  function loadView(view: { id: string; name: string; config: any }) {
+    const c = view.config
+    if (c.q !== undefined) setQ(c.q)
+    if (c.sort) setSort(c.sort)
+    if (c.dir) setDir(c.dir)
+    if (c.stage !== undefined) setStage(c.stage)
+    if (c.minAmount !== undefined) setMinAmount(c.minAmount)
+    if (c.maxAmount !== undefined) setMaxAmount(c.maxAmount)
+    if (c.startDate !== undefined) setStartDate(c.startDate)
+    if (c.endDate !== undefined) setEndDate(c.endDate)
+    if (c.cols) setCols(c.cols)
+    if (c.pageSize) setPageSize(c.pageSize)
+    setPage(0)
+  }
+  function deleteView(id: string) {
+    setSavedViews(savedViews.filter((v) => v.id !== id))
+  }
+  function copyShareLink() {
+    const url = window.location.origin + window.location.pathname + '?' + searchParams.toString()
+    navigator.clipboard?.writeText(url).then(() => alert('Link copied')).catch(() => alert('Failed to copy'))
+  }
+  function getColValue(d: Deal, key: string) {
+    if (key === 'dealNumber') return d.dealNumber ?? ''
+    if (key === 'account') {
+      const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
+      return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
+    }
+    if (key === 'title') return d.title ?? ''
+    if (key === 'amount') return typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'
+    if (key === 'stage') return d.stage ?? '-'
+    if (key === 'closeDate') return d.closeDate ? new Date(d.closeDate).toLocaleDateString() : '-'
+    return ''
+  }
+  function handleDragStart(key: string) { setDraggedCol(key) }
+  function handleDragOver(e: React.DragEvent) { e.preventDefault() }
+  function handleDrop(targetKey: string) {
+    if (!draggedCol || draggedCol === targetKey) return
+    const draggedIndex = cols.findIndex((c) => c.key === draggedCol)
+    const targetIndex = cols.findIndex((c) => c.key === targetKey)
+    if (draggedIndex === -1 || targetIndex === -1) return
+    const newCols = [...cols]
+    const [removed] = newCols.splice(draggedIndex, 1)
+    newCols.splice(targetIndex, 0, removed)
+    setCols(newCols)
+    setDraggedCol(null)
+  }
+
+  React.useEffect(() => {
+    if (!showColsMenu) return
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-cols-menu]')) setShowColsMenu(false)
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [showColsMenu])
+
   React.useEffect(() => {
     if (!editing) return
     const el = document.createElement('div')
@@ -211,25 +289,44 @@ export default function CRMDeals() {
           <input value={endDate} onChange={(e) => setEndDate(e.target.value)} type="date" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
           <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => { setStage(''); setMinAmount(''); setMaxAmount(''); setStartDate(''); setEndDate(''); setQ(''); setSort('closeDate'); setDir('desc'); }}>Reset</button>
           <div className="relative">
+            <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowSaveViewDialog(true)}>Save view</button>
+          </div>
+          <div className="relative">
+            <select className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)]" onChange={(e) => {
+              const selected = savedViews.find((v) => v.id === e.target.value)
+              if (selected) loadView(selected)
+              e.target.value = ''
+            }}>
+              <option value="">Saved views</option>
+              {savedViews.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+          <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={copyShareLink}>Share link</button>
+          <div className="relative" data-cols-menu>
             <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowColsMenu((v) => !v)}>Columns</button>
             {showColsMenu && (
-              <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2 shadow">
-                {([
-                  ['dealNumber','Deal #'],
-                  ['account','Account'],
-                  ['title','Title'],
-                  ['amount','Amount'],
-                  ['stage','Stage'],
-                  ['closeDate','Close date'],
-                ] as const).map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2 p-1 text-sm">
+              <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2 shadow space-y-1">
+                <div className="text-xs text-[color:var(--color-text-muted)] pb-1 border-b">Drag to reorder</div>
+                {cols.map((col) => (
+                  <div
+                    key={col.key}
+                    draggable
+                    onDragStart={() => handleDragStart(col.key)}
+                    onDragOver={handleDragOver}
+                    onDrop={() => handleDrop(col.key)}
+                    className={`flex items-center gap-2 p-1 text-sm cursor-move rounded ${draggedCol === col.key ? 'opacity-50 bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}
+                  >
+                    <span className="text-xs text-[color:var(--color-text-muted)]">≡</span>
                     <input
                       type="checkbox"
-                      checked={(cols as any)[key]}
-                      onChange={(e) => setCols((prev) => ({ ...prev, [key]: e.target.checked }))}
+                      checked={col.visible}
+                      onChange={(e) => setCols(cols.map((c) => c.key === col.key ? { ...c, visible: e.target.checked } : c))}
+                      onClick={(e) => e.stopPropagation()}
                     />
-                    <span>{label}</span>
-                  </label>
+                    <span>{col.label}</span>
+                  </div>
                 ))}
               </div>
             )}
@@ -237,19 +334,20 @@ export default function CRMDeals() {
           <button
             className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
             onClick={() => {
-              const all: Array<[string, (d: Deal) => any]> = [
-                cols.dealNumber && ['Deal #', (d: Deal) => d.dealNumber ?? ''],
-                cols.account && ['Account', (d: Deal) => {
+              const visibleCols = cols.filter((c) => c.visible)
+              const headers = visibleCols.map((c) => c.label)
+              const rows = pageItems.map((d: Deal) => visibleCols.map((col) => {
+                if (col.key === 'dealNumber') return d.dealNumber ?? ''
+                if (col.key === 'account') {
                   const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
                   return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
-                }],
-                cols.title && ['Title', (d: Deal) => d.title ?? ''],
-                cols.amount && ['Amount', (d: Deal) => (typeof d.amount === 'number' ? d.amount : '')],
-                cols.stage && ['Stage', (d: Deal) => d.stage ?? ''],
-                cols.closeDate && ['Close date', (d: Deal) => (d.closeDate ? new Date(d.closeDate).toISOString().slice(0,10) : '')],
-              ].filter(Boolean) as Array<[string, (d: Deal)=>any]>
-              const headers = all.map(([h]) => h)
-              const rows = pageItems.map((d: Deal) => all.map(([, getter]) => getter(d)))
+                }
+                if (col.key === 'title') return d.title ?? ''
+                if (col.key === 'amount') return typeof d.amount === 'number' ? d.amount : ''
+                if (col.key === 'stage') return d.stage ?? ''
+                if (col.key === 'closeDate') return d.closeDate ? new Date(d.closeDate).toISOString().slice(0,10) : ''
+                return ''
+              }))
               const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
               const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
               const url = URL.createObjectURL(blob)
@@ -296,30 +394,25 @@ export default function CRMDeals() {
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]">
             <tr>
-              {cols.dealNumber && <th className="px-4 py-2">Deal #</th>}
-              {cols.account && <th className="px-4 py-2">Account</th>}
-              {cols.title && <th className="px-4 py-2">Title</th>}
-              {cols.amount && <th className="px-4 py-2">Amount</th>}
-              {cols.stage && <th className="px-4 py-2">Stage</th>}
-              {cols.closeDate && <th className="px-4 py-2">Close date</th>}
+              {cols.filter((c) => c.visible).map((col) => (
+                <th
+                  key={col.key}
+                  draggable
+                  onDragStart={() => handleDragStart(col.key)}
+                  onDragOver={handleDragOver}
+                  onDrop={() => handleDrop(col.key)}
+                  className={`px-4 py-2 cursor-move ${draggedCol === col.key ? 'opacity-50' : ''}`}
+                  title="Drag to reorder"
+                >{col.label}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {pageItems.map((d) => (
               <tr key={d._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(d)}>
-                {cols.dealNumber && (<td className="px-4 py-2">{d.dealNumber ?? '-'}</td>)}
-                {cols.account && (
-                  <td className="px-4 py-2">{
-                    (() => {
-                      const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
-                      return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
-                    })()
-                  }</td>
-                )}
-                {cols.title && (<td className="px-4 py-2">{d.title ?? '-'}</td>)}
-                {cols.amount && (<td className="px-4 py-2">{typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'}</td>)}
-                {cols.stage && (<td className="px-4 py-2">{d.stage ?? '-'}</td>)}
-                {cols.closeDate && (<td className="px-4 py-2">{d.closeDate ? new Date(d.closeDate).toLocaleDateString() : '-'}</td>)}
+                {cols.filter((c) => c.visible).map((col) => (
+                  <td key={col.key} className="px-4 py-2">{getColValue(d, col.key)}</td>
+                ))}
               </tr>
             ))}
           </tbody>
@@ -410,6 +503,39 @@ export default function CRMDeals() {
           </div>
         </div>,
         portalEl
+      )}
+      {showSaveViewDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowSaveViewDialog(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative z-10 w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 text-base font-semibold">Save view</div>
+            <input
+              value={savingViewName}
+              onChange={(e) => setSavingViewName(e.target.value)}
+              placeholder="View name"
+              className="mb-3 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') { saveCurrentView() } else if (e.key === 'Escape') setShowSaveViewDialog(false) }}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => { setShowSaveViewDialog(false); setSavingViewName('') }}>Cancel</button>
+              <button type="button" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={saveCurrentView}>Save</button>
+            </div>
+            {savedViews.length > 0 && (
+              <div className="mt-4 border-t border-[color:var(--color-border)] pt-4">
+                <div className="mb-2 text-xs text-[color:var(--color-text-muted)]">Saved views</div>
+                <div className="space-y-1">
+                  {savedViews.map((v) => (
+                    <div key={v.id} className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] p-2 text-sm">
+                      <button type="button" className="flex-1 text-left hover:underline" onClick={() => { loadView(v); setShowSaveViewDialog(false) }}>{v.name}</button>
+                      <button type="button" className="ml-2 rounded-lg border border-red-400 text-red-400 px-2 py-1 text-xs hover:bg-red-50" onClick={() => { if (confirm(`Delete "${v.name}"?`)) deleteView(v.id) }}>Delete</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
