@@ -443,6 +443,27 @@ function AnalyticsTab() {
   const rows = (data?.data?.byCampaign ?? []) as { campaignId: string; opens: number; clicks: number; visits: number }[]
   const linkRows = (linkMetrics?.data?.items ?? []) as { token: string; url: string; utmSource?: string; utmMedium?: string; utmCampaign?: string; clicks: number; campaignId?: string }[]
   const roiRows = (roiMetrics?.data?.items ?? []) as { campaignId: string; revenue: number; dealsCount: number }[]
+
+  // Build a combined ROI view so the table always shows campaigns with 0s
+  const roiByCampaignId = React.useMemo(() => {
+    const map = new Map<string, { revenue: number; dealsCount: number }>()
+    for (const r of roiRows) {
+      map.set(String(r.campaignId), { revenue: r.revenue, dealsCount: r.dealsCount })
+    }
+    return map
+  }, [roiRows])
+  const allCampaignItems = ((campaigns?.data?.items ?? []) as any[])
+  const roiDisplayRows = React.useMemo(() => {
+    const base = allCampaignItems.map((c) => ({
+      campaignId: String(c._id),
+      name: c.name as string,
+      revenue: roiByCampaignId.get(String(c._id))?.revenue ?? 0,
+      dealsCount: roiByCampaignId.get(String(c._id))?.dealsCount ?? 0,
+    }))
+    const filtered = filterCampaign ? base.filter((r) => r.campaignId === String(filterCampaign)) : base
+    // Show campaigns with any ROI first
+    return [...filtered].sort((a, b) => (b.revenue - a.revenue) || (b.dealsCount - a.dealsCount) || a.name.localeCompare(b.name))
+  }, [allCampaignItems, roiByCampaignId, filterCampaign])
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border">
@@ -493,32 +514,32 @@ function AnalyticsTab() {
         </table>
       </div>
 
-      {roiRows.length > 0 && (
-        <>
-          <div className="text-base font-semibold">ROI Attribution</div>
-          <div className="rounded-2xl border">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b"><th className="p-2 text-left">Campaign</th><th className="p-2 text-left">Revenue</th><th className="p-2 text-left">Closed Won Deals</th></tr>
-              </thead>
-              <tbody>
-                {roiRows.map((r) => {
-                  const list = ((campaigns?.data?.items ?? []) as any[])
-                  const found = list.find((c) => String(c._id) === String(r.campaignId))
-                  const name = found?.name || String(r.campaignId)
-                  return (
-                    <tr key={String(r.campaignId)} className="border-b">
-                      <td className="p-2">{name}</td>
-                      <td className="p-2 font-semibold">${r.revenue.toLocaleString()}</td>
-                      <td className="p-2">{r.dealsCount}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+      <div className="flex items-center justify-between">
+        <div className="text-base font-semibold">ROI Attribution</div>
+        <select value={filterCampaign} onChange={(e) => setFilterCampaign(e.target.value)} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)]">
+          <option value="">All campaigns</option>
+          {allCampaignItems.map((c) => (<option key={c._id} value={c._id}>{c.name}</option>))}
+        </select>
+      </div>
+      <div className="rounded-2xl border">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b"><th className="p-2 text-left">Campaign</th><th className="p-2 text-left">Revenue</th><th className="p-2 text-left">Closed Won Deals</th></tr>
+          </thead>
+          <tbody>
+            {roiDisplayRows.map((r) => (
+              <tr key={r.campaignId} className="border-b">
+                <td className="p-2">{r.name}</td>
+                <td className="p-2 font-semibold">${r.revenue.toLocaleString()}</td>
+                <td className="p-2">{r.dealsCount}</td>
+              </tr>
+            ))}
+            {roiDisplayRows.length === 0 && (
+              <tr><td className="p-2 text-[color:var(--color-text-muted)]" colSpan={3}>No campaigns found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
