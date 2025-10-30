@@ -118,6 +118,21 @@ export default function CRMAccounts() {
         if (Array.isArray(parsed)) setSavedViews(parsed)
       }
     } catch {}
+    ;(async () => {
+      try {
+        const res = await http.get('/api/views', { params: { viewKey: 'accounts' } })
+        const items = (res.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
+        if (Array.isArray(items)) setSavedViews(items)
+        if (items.length === 0) {
+          const seeds = [
+            { name: 'Key accounts', config: { query: '', sort: 'name', dir: 'asc' } },
+            { name: 'New this month', config: { query: '', sort: 'accountNumber', dir: 'desc' } },
+          ]
+          for (const s of seeds) { try { await http.post('/api/views', { viewKey: 'accounts', name: s.name, config: s.config }) } catch {} }
+          try { const res2 = await http.get('/api/views', { params: { viewKey: 'accounts' } }); const items2 = (res2.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config })); if (Array.isArray(items2)) setSavedViews(items2) } catch {}
+        }
+      } catch {}
+    })()
   }, [searchParams])
 
   // Persist to URL/localStorage
@@ -133,11 +148,17 @@ export default function CRMAccounts() {
     try { localStorage.setItem('ACCOUNTS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
   }, [query, sort, dir, cols, savedViews, setSearchParams])
 
-  function saveCurrentView() {
+  async function saveCurrentView() {
     const viewConfig = { query, sort, dir, cols, pageSize }
-    const id = Date.now().toString()
-    const newView = { id, name: savingViewName || `View ${savedViews.length + 1}`, config: viewConfig }
-    setSavedViews([...savedViews, newView])
+    const name = savingViewName || `View ${savedViews.length + 1}`
+    try {
+      const res = await http.post('/api/views', { viewKey: 'accounts', name, config: viewConfig })
+      const doc = res.data?.data
+      const newItem = doc && doc._id ? { id: String(doc._id), name: doc.name, config: doc.config } : { id: Date.now().toString(), name, config: viewConfig }
+      setSavedViews((prev) => [...prev, newItem])
+    } catch {
+      setSavedViews((prev) => [...prev, { id: Date.now().toString(), name, config: viewConfig }])
+    }
     setShowSaveViewDialog(false)
     setSavingViewName('')
   }
@@ -150,9 +171,7 @@ export default function CRMAccounts() {
     if (c.pageSize) setPageSize(c.pageSize)
     setPage(0)
   }
-  function deleteView(id: string) {
-    setSavedViews(savedViews.filter((v) => v.id !== id))
-  }
+  async function deleteView(id: string) { try { await http.delete(`/api/views/${id}`) } catch {}; setSavedViews((prev) => prev.filter((v) => v.id !== id)) }
   function copyShareLink() {
     const url = window.location.origin + window.location.pathname + '?' + searchParams.toString()
     navigator.clipboard?.writeText(url).then(() => alert('Link copied')).catch(() => alert('Failed to copy'))
