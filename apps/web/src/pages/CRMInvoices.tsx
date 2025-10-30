@@ -174,7 +174,6 @@ export default function CRMInvoices() {
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
-  function handleDragOver(e: React.DragEvent) { e.preventDefault() }
   function handleDrop(targetKey: string) {
     if (!draggedCol || draggedCol === targetKey) return
     const draggedIndex = cols.findIndex((c) => c.key === draggedCol)

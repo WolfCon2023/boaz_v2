@@ -187,7 +187,7 @@ export default function CRMContacts() {
   }, [q, sort, dir, cols, savedViews, setSearchParams])
 
   function saveCurrentView() {
-    const viewConfig = { q, sort, dir, cols, pageSize }
+    const viewConfig = { q, sort, dir, cols }
     const id = Date.now().toString()
     const newView = { id, name: savingViewName || `View ${savedViews.length + 1}`, config: viewConfig }
     setSavedViews([...savedViews, newView])
@@ -200,7 +200,6 @@ export default function CRMContacts() {
     if (c.sort) setSort(c.sort)
     if (c.dir) setDir(c.dir)
     if (c.cols) setCols(c.cols)
-    if (c.pageSize) setPageSize(c.pageSize)
     setPage(0)
   }
   function deleteView(id: string) {
