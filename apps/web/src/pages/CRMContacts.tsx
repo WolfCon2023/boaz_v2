@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 
@@ -17,10 +18,28 @@ async function fetchContacts({ pageParam, queryKey }: { pageParam?: string; quer
 
 export default function CRMContacts() {
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'name'|'email'|'company'>('name')
   const [dir, setDir] = React.useState<'asc'|'desc'>('asc')
   const [page, setPage] = React.useState(0)
+  type ColumnDef = { key: string; visible: boolean; label: string }
+  const defaultCols: ColumnDef[] = [
+    { key: 'name', visible: true, label: 'Name' },
+    { key: 'email', visible: true, label: 'Email' },
+    { key: 'company', visible: true, label: 'Company' },
+    { key: 'mobilePhone', visible: true, label: 'Mobile' },
+    { key: 'officePhone', visible: true, label: 'Office' },
+    { key: 'isPrimary', visible: true, label: 'Primary' },
+    { key: 'primaryPhone', visible: true, label: 'Primary phone' },
+  ]
+  const [cols, setCols] = React.useState<ColumnDef[]>(defaultCols)
+  const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
+  const [showSaveViewDialog, setShowSaveViewDialog] = React.useState(false)
+  const [savingViewName, setSavingViewName] = React.useState('')
+  const [showColsMenu, setShowColsMenu] = React.useState(false)
+  const [draggedCol, setDraggedCol] = React.useState<string | null>(null)
+  const initializedFromUrl = React.useRef(false)
   const create = useMutation({
     mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }) => {
       const res = await http.post('/api/crm/contacts', payload)
@@ -127,6 +146,104 @@ export default function CRMContacts() {
     },
   })
 
+  // Initialize from URL and localStorage once
+  React.useEffect(() => {
+    if (initializedFromUrl.current) return
+    initializedFromUrl.current = true
+    const get = (key: string) => searchParams.get(key) || ''
+    const q0 = get('q')
+    const sort0 = (get('sort') as any) || 'name'
+    const dir0 = (get('dir') as any) || 'asc'
+    if (q0) setQ(q0)
+    setSort(sort0)
+    setDir(dir0)
+    try {
+      const stored = localStorage.getItem('CONTACTS_COLS')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) setCols(parsed)
+      }
+    } catch {}
+    try {
+      const views = localStorage.getItem('CONTACTS_SAVED_VIEWS')
+      if (views) {
+        const parsed = JSON.parse(views)
+        if (Array.isArray(parsed)) setSavedViews(parsed)
+      }
+    } catch {}
+  }, [searchParams])
+
+  // Persist to URL/localStorage
+  React.useEffect(() => {
+    const params: Record<string, string> = {}
+    if (q) params.q = q
+    if (sort !== 'name') params.sort = sort
+    if (dir !== 'asc') params.dir = dir
+    const colKeys = cols.filter((c) => c.visible).map((c) => c.key).join(',')
+    if (colKeys) params.cols = colKeys
+    setSearchParams(params, { replace: true })
+    try { localStorage.setItem('CONTACTS_COLS', JSON.stringify(cols)) } catch {}
+    try { localStorage.setItem('CONTACTS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
+  }, [q, sort, dir, cols, savedViews, setSearchParams])
+
+  function saveCurrentView() {
+    const viewConfig = { q, sort, dir, cols, pageSize }
+    const id = Date.now().toString()
+    const newView = { id, name: savingViewName || `View ${savedViews.length + 1}`, config: viewConfig }
+    setSavedViews([...savedViews, newView])
+    setShowSaveViewDialog(false)
+    setSavingViewName('')
+  }
+  function loadView(view: { id: string; name: string; config: any }) {
+    const c = view.config
+    if (c.q !== undefined) setQ(c.q)
+    if (c.sort) setSort(c.sort)
+    if (c.dir) setDir(c.dir)
+    if (c.cols) setCols(c.cols)
+    if (c.pageSize) setPageSize(c.pageSize)
+    setPage(0)
+  }
+  function deleteView(id: string) {
+    setSavedViews(savedViews.filter((v) => v.id !== id))
+  }
+  function copyShareLink() {
+    const url = window.location.origin + window.location.pathname + '?' + searchParams.toString()
+    navigator.clipboard?.writeText(url).then(() => alert('Link copied')).catch(() => alert('Failed to copy'))
+  }
+  function getColValue(c: Contact, key: string) {
+    if (key === 'name') return c.name ?? '-'
+    if (key === 'email') return c.email ?? '-'
+    if (key === 'company') return c.company ?? '-'
+    if (key === 'mobilePhone') return c.mobilePhone ?? '-'
+    if (key === 'officePhone') return c.officePhone ?? '-'
+    if (key === 'isPrimary') return c.isPrimary ? 'Yes' : 'No'
+    if (key === 'primaryPhone') return c.primaryPhone ?? '-'
+    return ''
+  }
+  function handleDragStart(key: string) { setDraggedCol(key) }
+  function handleDragOver(e: React.DragEvent) { e.preventDefault() }
+  function handleDrop(targetKey: string) {
+    if (!draggedCol || draggedCol === targetKey) return
+    const draggedIndex = cols.findIndex((c) => c.key === draggedCol)
+    const targetIndex = cols.findIndex((c) => c.key === targetKey)
+    if (draggedIndex === -1 || targetIndex === -1) return
+    const newCols = [...cols]
+    const [removed] = newCols.splice(draggedIndex, 1)
+    newCols.splice(targetIndex, 0, removed)
+    setCols(newCols)
+    setDraggedCol(null)
+  }
+
+  React.useEffect(() => {
+    if (!showColsMenu) return
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-cols-menu]')) setShowColsMenu(false)
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [showColsMenu])
+
   return (
     <div className="space-y-4">
       <CRMNav />
@@ -157,6 +274,51 @@ export default function CRMContacts() {
         <div className="flex items-center justify-between px-4 gap-2">
           <div className="flex items-center gap-2">
             <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); refetch() }} placeholder="Search contacts..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            <button type="button" onClick={() => { setQ(''); setSort('name'); setDir('asc'); setPage(0) }} disabled={!q && sort === 'name' && dir === 'asc'}
+              className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">Reset</button>
+            <div className="relative">
+              <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowSaveViewDialog(true)}>Save view</button>
+            </div>
+            <div className="relative">
+              <select className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)]" onChange={(e) => {
+                const selected = savedViews.find((v) => v.id === e.target.value)
+                if (selected) loadView(selected)
+                e.target.value = ''
+              }}>
+                <option value="">Saved views</option>
+                {savedViews.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </div>
+            <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={copyShareLink}>Share link</button>
+            <div className="relative" data-cols-menu>
+              <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowColsMenu((v) => !v)}>Columns</button>
+              {showColsMenu && (
+                <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2 shadow space-y-1">
+                  <div className="text-xs text-[color:var(--color-text-muted)] pb-1 border-b">Drag to reorder</div>
+                  {cols.map((col) => (
+                    <div
+                      key={col.key}
+                      draggable
+                      onDragStart={() => handleDragStart(col.key)}
+                      onDragOver={handleDragOver}
+                      onDrop={() => handleDrop(col.key)}
+                      className={`flex items-center gap-2 p-1 text-sm cursor-move rounded ${draggedCol === col.key ? 'opacity-50 bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}
+                    >
+                      <span className="text-xs text-[color:var(--color-text-muted)]">≡</span>
+                      <input
+                        type="checkbox"
+                        checked={col.visible}
+                        onChange={(e) => setCols(cols.map((c) => c.key === col.key ? { ...c, visible: e.target.checked } : c))}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span>{col.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as any)}
@@ -234,25 +396,25 @@ export default function CRMContacts() {
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]">
             <tr>
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Email</th>
-              <th className="px-4 py-2">Company</th>
-              <th className="px-4 py-2">Mobile</th>
-              <th className="px-4 py-2">Office</th>
-              <th className="px-4 py-2">Primary</th>
-              <th className="px-4 py-2">Primary phone</th>
+              {cols.filter((c) => c.visible).map((col) => (
+                <th
+                  key={col.key}
+                  draggable
+                  onDragStart={() => handleDragStart(col.key)}
+                  onDragOver={handleDragOver}
+                  onDrop={() => handleDrop(col.key)}
+                  className={`px-4 py-2 cursor-move ${draggedCol === col.key ? 'opacity-50' : ''}`}
+                  title="Drag to reorder"
+                >{col.label}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {visibleItems.map((c) => (
               <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(c)}>
-                <td className="px-4 py-2">{c.name ?? '-'}</td>
-                <td className="px-4 py-2">{c.email ?? '-'}</td>
-                <td className="px-4 py-2">{c.company ?? '-'}</td>
-                <td className="px-4 py-2">{c.mobilePhone ?? '-'}</td>
-                <td className="px-4 py-2">{c.officePhone ?? '-'}</td>
-                <td className="px-4 py-2">{c.isPrimary ? 'Yes' : 'No'}</td>
-                <td className="px-4 py-2">{c.primaryPhone ?? '-'}</td>
+                {cols.filter((c) => c.visible).map((col) => (
+                  <td key={col.key} className="px-4 py-2">{getColValue(c, col.key)}</td>
+                ))}
               </tr>
             ))}
           </tbody>
@@ -398,6 +560,39 @@ export default function CRMContacts() {
           </div>
         </div>,
         portalEl
+      )}
+      {showSaveViewDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowSaveViewDialog(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative z-10 w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 text-base font-semibold">Save view</div>
+            <input
+              value={savingViewName}
+              onChange={(e) => setSavingViewName(e.target.value)}
+              placeholder="View name"
+              className="mb-3 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') { saveCurrentView() } else if (e.key === 'Escape') setShowSaveViewDialog(false) }}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => { setShowSaveViewDialog(false); setSavingViewName('') }}>Cancel</button>
+              <button type="button" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={saveCurrentView}>Save</button>
+            </div>
+            {savedViews.length > 0 && (
+              <div className="mt-4 border-t border-[color:var(--color-border)] pt-4">
+                <div className="mb-2 text-xs text-[color:var(--color-text-muted)]">Saved views</div>
+                <div className="space-y-1">
+                  {savedViews.map((v) => (
+                    <div key={v.id} className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] p-2 text-sm">
+                      <button type="button" className="flex-1 text-left hover:underline" onClick={() => { loadView(v); setShowSaveViewDialog(false) }}>{v.name}</button>
+                      <button type="button" className="ml-2 rounded-lg border border-red-400 text-red-400 px-2 py-1 text-xs hover:bg-red-50" onClick={() => { if (confirm(`Delete "${v.name}"?`)) deleteView(v.id) }}>Delete</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
