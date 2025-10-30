@@ -122,6 +122,21 @@ export default function CRMQuotes() {
     setDir(dir0)
     try { const stored = localStorage.getItem('QUOTES_COLS'); if (stored) { const parsed = JSON.parse(stored); if (Array.isArray(parsed) && parsed.length>0) setCols(parsed) } } catch {}
     try { const views = localStorage.getItem('QUOTES_SAVED_VIEWS'); if (views) { const parsed = JSON.parse(views); if (Array.isArray(parsed)) setSavedViews(parsed) } } catch {}
+    ;(async () => {
+      try {
+        const res = await http.get('/api/views', { params: { viewKey: 'quotes' } })
+        const items = (res.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
+        if (Array.isArray(items)) setSavedViews(items)
+        if (items.length === 0) {
+          const seeds = [
+            { name: 'Awaiting approval', config: { q: '', sort: 'updatedAt', dir: 'desc' } },
+            { name: 'Sent for signature', config: { q: 'signature', sort: 'updatedAt', dir: 'desc' } },
+          ]
+          for (const s of seeds) { try { await http.post('/api/views', { viewKey: 'quotes', name: s.name, config: s.config }) } catch {} }
+          try { const res2 = await http.get('/api/views', { params: { viewKey: 'quotes' } }); const items2 = (res2.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config })); if (Array.isArray(items2)) setSavedViews(items2) } catch {}
+        }
+      } catch {}
+    })()
   }, [searchParams])
 
   // Persist
@@ -137,11 +152,17 @@ export default function CRMQuotes() {
     try { localStorage.setItem('QUOTES_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
   }, [q, sort, dir, cols, savedViews, setSearchParams])
 
-  function saveCurrentView() {
+  async function saveCurrentView() {
     const viewConfig = { q, sort, dir, cols }
-    const id = Date.now().toString()
-    const newView = { id, name: savingViewName || `View ${savedViews.length + 1}`, config: viewConfig }
-    setSavedViews([...savedViews, newView])
+    const name = savingViewName || `View ${savedViews.length + 1}`
+    try {
+      const res = await http.post('/api/views', { viewKey: 'quotes', name, config: viewConfig })
+      const doc = res.data?.data
+      const newItem = doc && doc._id ? { id: String(doc._id), name: doc.name, config: doc.config } : { id: Date.now().toString(), name, config: viewConfig }
+      setSavedViews((prev) => [...prev, newItem])
+    } catch {
+      setSavedViews((prev) => [...prev, { id: Date.now().toString(), name, config: viewConfig }])
+    }
     setShowSaveViewDialog(false)
     setSavingViewName('')
   }
@@ -153,7 +174,7 @@ export default function CRMQuotes() {
     if (c.cols) setCols(c.cols)
     setPage(0)
   }
-  function deleteView(id: string) { setSavedViews(savedViews.filter((v)=> v.id !== id)) }
+  async function deleteView(id: string) { try { await http.delete(`/api/views/${id}`) } catch {}; setSavedViews((prev) => prev.filter((v) => v.id !== id)) }
   function copyShareLink() { const url = window.location.origin + window.location.pathname + '?' + searchParams.toString(); navigator.clipboard?.writeText(url) }
   function getColValue(qt: Quote, key: string) {
     if (key==='quoteNumber') return qt.quoteNumber ?? '-'

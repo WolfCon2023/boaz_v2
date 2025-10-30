@@ -25,6 +25,7 @@ import { marketingBuilderRouter } from './marketing/builder.js'
 import { marketingTemplatesRouter } from './marketing/templates.js'
 import { marketingSendRouter } from './marketing/send.js'
 import { marketingUnsubscribeRouter } from './marketing/unsubscribe.js'
+import { viewsRouter } from './views.js'
 import { getDb } from './db.js'
 
 const app = express()
@@ -80,6 +81,7 @@ app.use('/api/marketing', marketingBuilderRouter)
 app.use('/api/marketing', marketingTemplatesRouter)
 app.use('/api/marketing', marketingSendRouter)
 app.use('/api/marketing', marketingUnsubscribeRouter)
+app.use('/api', viewsRouter)
 
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))

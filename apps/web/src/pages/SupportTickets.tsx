@@ -88,6 +88,30 @@ export default function SupportTickets() {
     setDueNext60(!!dueWithin)
     if (sortParam) setSort(sortParam)
     if (dirParam) setDir(dirParam)
+    // Load server views (global)
+    ;(async () => {
+      try {
+        const res = await http.get('/api/views', { params: { viewKey: 'tickets' } })
+        const items = (res.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
+        if (Array.isArray(items)) setSavedViews(items)
+        if (items.length === 0) {
+          // Seed sensible defaults
+          const seeds = [
+            { name: 'Open', config: { status: '', statusMulti: ['open','pending'], breachedOnly: false, dueNext60: false, sort: 'createdAt', dir: 'desc' } },
+            { name: 'Breached SLA', config: { status: '', statusMulti: ['open','pending'], breachedOnly: true, dueNext60: false, sort: 'slaDueAt', dir: 'asc' } },
+            { name: 'Due next 60m', config: { status: '', statusMulti: ['open','pending'], breachedOnly: false, dueNext60: true, sort: 'slaDueAt', dir: 'asc' } },
+          ]
+          for (const s of seeds) {
+            try { await http.post('/api/views', { viewKey: 'tickets', name: s.name, config: s.config }) } catch {}
+          }
+          try {
+            const res2 = await http.get('/api/views', { params: { viewKey: 'tickets' } })
+            const items2 = (res2.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
+            if (Array.isArray(items2)) setSavedViews(items2)
+          } catch {}
+        }
+      } catch {}
+    })()
   }, [location.search])
   React.useEffect(() => { try { localStorage.setItem('TICKETS_COLS', JSON.stringify(cols)) } catch {}; try { localStorage.setItem('TICKETS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {} }, [cols, savedViews])
   // Heartbeat to keep SLA view in sync with system time
@@ -149,11 +173,17 @@ export default function SupportTickets() {
   }, [items, statusMulti, breachedOnly, dueNext60, nowTs, sort, dir])
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize))
   const pageItems = React.useMemo(() => filteredItems.slice(page * pageSize, page * pageSize + pageSize), [filteredItems, page, pageSize])
-  function saveCurrentView() {
+  async function saveCurrentView() {
     const viewConfig = { q, status, statusMulti, priority, sort, dir, breachedOnly, dueNext60, cols }
-    const id = Date.now().toString()
-    const newView = { id, name: savingViewName || `View ${savedViews.length + 1}`, config: viewConfig }
-    setSavedViews([...savedViews, newView])
+    const name = savingViewName || `View ${savedViews.length + 1}`
+    try {
+      const res = await http.post('/api/views', { viewKey: 'tickets', name, config: viewConfig })
+      const doc = res.data?.data
+      const newItem = doc && doc._id ? { id: String(doc._id), name: doc.name, config: doc.config } : { id: Date.now().toString(), name, config: viewConfig }
+      setSavedViews((prev) => [...prev, newItem])
+    } catch {
+      setSavedViews((prev) => [...prev, { id: Date.now().toString(), name, config: viewConfig }])
+    }
     setShowSaveViewDialog(false)
     setSavingViewName('')
   }
@@ -169,7 +199,10 @@ export default function SupportTickets() {
     if (c.cols) setCols(c.cols)
     setPage(0)
   }
-  function deleteView(id: string) { setSavedViews(savedViews.filter((v) => v.id !== id)) }
+  async function deleteView(id: string) {
+    try { await http.delete(`/api/views/${id}`) } catch {}
+    setSavedViews((prev) => prev.filter((v) => v.id !== id))
+  }
   function copyShareLink() { const url = window.location.origin + window.location.pathname + window.location.search; navigator.clipboard?.writeText(url) }
   function getColValue(t: Ticket, key: string) {
     if (key==='ticketNumber') return t.ticketNumber ?? '-'
