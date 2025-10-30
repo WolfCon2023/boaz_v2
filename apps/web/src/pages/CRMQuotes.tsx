@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 
@@ -24,9 +25,30 @@ type AccountPick = { _id: string; accountNumber?: number; name?: string }
 
 export default function CRMQuotes() {
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'quoteNumber'|'title'|'total'|'status'|'updatedAt'>('updatedAt')
   const [dir, setDir] = React.useState<'asc'|'desc'>('desc')
+  type ColumnDef = { key: string; visible: boolean; label: string }
+  const defaultCols: ColumnDef[] = [
+    { key: 'quoteNumber', visible: true, label: 'Quote #' },
+    { key: 'title', visible: true, label: 'Title' },
+    { key: 'account', visible: true, label: 'Account' },
+    { key: 'total', visible: true, label: 'Total' },
+    { key: 'status', visible: true, label: 'Status' },
+    { key: 'approver', visible: true, label: 'Approver' },
+    { key: 'signerName', visible: true, label: 'Signer' },
+    { key: 'signerEmail', visible: true, label: 'Signer Email' },
+    { key: 'version', visible: true, label: 'Version' },
+    { key: 'updatedAt', visible: true, label: 'Updated' },
+  ]
+  const [cols, setCols] = React.useState<ColumnDef[]>(defaultCols)
+  const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
+  const [showSaveViewDialog, setShowSaveViewDialog] = React.useState(false)
+  const [savingViewName, setSavingViewName] = React.useState('')
+  const [showColsMenu, setShowColsMenu] = React.useState(false)
+  const [draggedCol, setDraggedCol] = React.useState<string | null>(null)
+  const initializedFromUrl = React.useRef(false)
 
   const { data, isFetching } = useQuery({
     queryKey: ['quotes', q, sort, dir],
@@ -87,6 +109,84 @@ export default function CRMQuotes() {
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize))
   const pageItems = React.useMemo(() => visible.slice(page * pageSize, page * pageSize + pageSize), [visible, page, pageSize])
 
+  // Initialize from URL/localStorage
+  React.useEffect(() => {
+    if (initializedFromUrl.current) return
+    initializedFromUrl.current = true
+    const get = (key: string) => searchParams.get(key) || ''
+    const q0 = get('q')
+    const sort0 = (get('sort') as any) || 'updatedAt'
+    const dir0 = (get('dir') as any) || 'desc'
+    if (q0) setQ(q0)
+    setSort(sort0)
+    setDir(dir0)
+    try { const stored = localStorage.getItem('QUOTES_COLS'); if (stored) { const parsed = JSON.parse(stored); if (Array.isArray(parsed) && parsed.length>0) setCols(parsed) } } catch {}
+    try { const views = localStorage.getItem('QUOTES_SAVED_VIEWS'); if (views) { const parsed = JSON.parse(views); if (Array.isArray(parsed)) setSavedViews(parsed) } } catch {}
+  }, [searchParams])
+
+  // Persist
+  React.useEffect(() => {
+    const params: Record<string, string> = {}
+    if (q) params.q = q
+    if (sort !== 'updatedAt') params.sort = sort
+    if (dir !== 'desc') params.dir = dir
+    const colKeys = cols.filter((c)=> c.visible).map((c)=> c.key).join(',')
+    if (colKeys) params.cols = colKeys
+    setSearchParams(params, { replace: true })
+    try { localStorage.setItem('QUOTES_COLS', JSON.stringify(cols)) } catch {}
+    try { localStorage.setItem('QUOTES_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
+  }, [q, sort, dir, cols, savedViews, setSearchParams])
+
+  function saveCurrentView() {
+    const viewConfig = { q, sort, dir, cols }
+    const id = Date.now().toString()
+    const newView = { id, name: savingViewName || `View ${savedViews.length + 1}`, config: viewConfig }
+    setSavedViews([...savedViews, newView])
+    setShowSaveViewDialog(false)
+    setSavingViewName('')
+  }
+  function loadView(view: { id: string; name: string; config: any }) {
+    const c = view.config
+    if (c.q !== undefined) setQ(c.q)
+    if (c.sort) setSort(c.sort)
+    if (c.dir) setDir(c.dir)
+    if (c.cols) setCols(c.cols)
+    setPage(0)
+  }
+  function deleteView(id: string) { setSavedViews(savedViews.filter((v)=> v.id !== id)) }
+  function copyShareLink() { const url = window.location.origin + window.location.pathname + '?' + searchParams.toString(); navigator.clipboard?.writeText(url) }
+  function getColValue(qt: Quote, key: string) {
+    if (key==='quoteNumber') return qt.quoteNumber ?? '-'
+    if (key==='title') return qt.title ?? '-'
+    if (key==='account') { const a = qt.accountId && acctById.get(qt.accountId!); return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (qt.accountNumber ?? '—') }
+    if (key==='total') return typeof qt.total==='number' ? `$${qt.total.toLocaleString()}` : '-'
+    if (key==='status') return qt.status ?? '-'
+    if (key==='approver') return qt.approver ?? '-'
+    if (key==='signerName') return qt.signerName ?? '-'
+    if (key==='signerEmail') return qt.signerEmail ?? '-'
+    if (key==='version') return qt.version ?? '-'
+    if (key==='updatedAt') return qt.updatedAt ? new Date(qt.updatedAt).toLocaleString() : '-'
+    return ''
+  }
+  function handleDragStart(key: string) { setDraggedCol(key) }
+  function handleDrop(targetKey: string) {
+    if (!draggedCol || draggedCol===targetKey) return
+    const from = cols.findIndex((c)=> c.key===draggedCol)
+    const to = cols.findIndex((c)=> c.key===targetKey)
+    if (from<0 || to<0) return
+    const next = [...cols]
+    const [m] = next.splice(from,1)
+    next.splice(to,0,m)
+    setCols(next)
+    setDraggedCol(null)
+  }
+  React.useEffect(() => {
+    if (!showColsMenu) return
+    function onDoc(e: MouseEvent) { const t = e.target as HTMLElement; if (!t.closest('[data-cols-menu]')) setShowColsMenu(false) }
+    document.addEventListener('click', onDoc)
+    return () => document.removeEventListener('click', onDoc)
+  }, [showColsMenu])
+
   const [editing, setEditing] = React.useState<Quote | null>(null)
   const [showHistory, setShowHistory] = React.useState(false)
   const historyQ = useQuery({
@@ -113,8 +213,33 @@ export default function CRMQuotes() {
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search quotes..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <button type="button" onClick={() => setQ('')} disabled={!q}
-            className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">Clear</button>
+          <button type="button" onClick={() => { setQ(''); setSort('updatedAt'); setDir('desc'); setPage(0) }} disabled={!q && sort==='updatedAt' && dir==='desc'}
+            className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">Reset</button>
+          <div className="relative">
+            <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowSaveViewDialog(true)}>Save view</button>
+          </div>
+          <div className="relative">
+            <select className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)]" onChange={(e)=>{ const v = savedViews.find((x)=> x.id===e.target.value); if (v) loadView(v); e.currentTarget.value='' }}>
+              <option value="">Saved views</option>
+              {savedViews.map((v)=> (<option key={v.id} value={v.id}>{v.name}</option>))}
+            </select>
+          </div>
+          <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={copyShareLink}>Share link</button>
+          <div className="relative" data-cols-menu>
+            <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowColsMenu((v)=> !v)}>Columns</button>
+            {showColsMenu && (
+              <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2 shadow space-y-1">
+                <div className="text-xs text-[color:var(--color-text-muted)] pb-1 border-b">Drag to reorder</div>
+                {cols.map((col)=> (
+                  <div key={col.key} draggable onDragStart={()=>handleDragStart(col.key)} onDragOver={(e)=>{e.preventDefault()}} onDrop={()=>handleDrop(col.key)} className={`flex items-center gap-2 p-1 text-sm cursor-move rounded ${draggedCol===col.key ? 'opacity-50 bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}>
+                    <span className="text-xs text-[color:var(--color-text-muted)]">≡</span>
+                    <input type="checkbox" checked={col.visible} onChange={(e)=> setCols(cols.map((c)=> c.key===col.key ? { ...c, visible: e.target.checked } : c))} onClick={(e)=> e.stopPropagation()} />
+                    <span>{col.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <select value={sort} onChange={(e) => setSort(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="updatedAt">Updated</option>
             <option value="quoteNumber">Quote #</option>
@@ -177,31 +302,17 @@ export default function CRMQuotes() {
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]">
             <tr>
-              <th className="px-4 py-2">Quote #</th>
-              <th className="px-4 py-2">Title</th>
-              <th className="px-4 py-2">Account</th>
-              <th className="px-4 py-2">Total</th>
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Approver</th>
-              <th className="px-4 py-2">Signer</th>
-              <th className="px-4 py-2">Signer Email</th>
-              <th className="px-4 py-2">Version</th>
-              <th className="px-4 py-2">Updated</th>
+              {cols.filter((c)=> c.visible).map((col)=> (
+                <th key={col.key} draggable onDragStart={()=>handleDragStart(col.key)} onDragOver={(e)=>{e.preventDefault()}} onDrop={()=>handleDrop(col.key)} className={`px-4 py-2 cursor-move ${draggedCol===col.key ? 'opacity-50' : ''}`} title="Drag to reorder">{col.label}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {pageItems.map((q) => (
-              <tr key={q._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(q)}>
-                <td className="px-4 py-2">{q.quoteNumber ?? '-'}</td>
-                <td className="px-4 py-2">{q.title ?? '-'}</td>
-                <td className="px-4 py-2">{(() => { const a = q.accountId && acctById.get(q.accountId!); return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (q.accountNumber ?? '—') })()}</td>
-                <td className="px-4 py-2">{typeof q.total === 'number' ? `$${q.total.toLocaleString()}` : '-'}</td>
-                <td className="px-4 py-2">{q.status ?? '-'}</td>
-                <td className="px-4 py-2">{q.approver ?? '-'}</td>
-                <td className="px-4 py-2">{q.signerName ?? '-'}</td>
-                <td className="px-4 py-2">{q.signerEmail ?? '-'}</td>
-                <td className="px-4 py-2">{q.version ?? '-'}</td>
-                <td className="px-4 py-2">{q.updatedAt ? new Date(q.updatedAt).toLocaleString() : '-'}</td>
+            {pageItems.map((row) => (
+              <tr key={row._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(row)}>
+                {cols.filter((c)=> c.visible).map((col)=> (
+                  <td key={col.key} className="px-4 py-2">{getColValue(row, col.key)}</td>
+                ))}
               </tr>
             ))}
           </tbody>
@@ -297,6 +408,39 @@ export default function CRMQuotes() {
             </div>
           </div>
         </div>, portalEl)}
+      {showSaveViewDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowSaveViewDialog(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative z-10 w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 text-base font-semibold">Save view</div>
+            <input
+              value={savingViewName}
+              onChange={(e) => setSavingViewName(e.target.value)}
+              placeholder="View name"
+              className="mb-3 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') { saveCurrentView() } else if (e.key === 'Escape') setShowSaveViewDialog(false) }}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => { setShowSaveViewDialog(false); setSavingViewName('') }}>Cancel</button>
+              <button type="button" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={saveCurrentView}>Save</button>
+            </div>
+            {savedViews.length > 0 && (
+              <div className="mt-4 border-t border-[color:var(--color-border)] pt-4">
+                <div className="mb-2 text-xs text-[color:var(--color-text-muted)]">Saved views</div>
+                <div className="space-y-1">
+                  {savedViews.map((v) => (
+                    <div key={v.id} className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] p-2 text-sm">
+                      <button type="button" className="flex-1 text-left hover:underline" onClick={() => { loadView(v); setShowSaveViewDialog(false) }}>{v.name}</button>
+                      <button type="button" className="ml-2 rounded-lg border border-red-400 text-red-400 px-2 py-1 text-xs hover:bg-red-50" onClick={() => { if (confirm(`Delete \"${v.name}\"?`)) deleteView(v.id) }}>Delete</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

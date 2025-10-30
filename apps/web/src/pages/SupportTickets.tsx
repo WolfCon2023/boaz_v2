@@ -26,6 +26,23 @@ export default function SupportTickets() {
   const qc = useQueryClient()
   const location = useLocation()
   const createFormRef = React.useRef<HTMLFormElement | null>(null)
+  type ColumnDef = { key: string; visible: boolean; label: string }
+  const defaultCols: ColumnDef[] = [
+    { key: 'ticketNumber', visible: true, label: 'Ticket #' },
+    { key: 'shortDescription', visible: true, label: 'Short description' },
+    { key: 'status', visible: true, label: 'Status' },
+    { key: 'priority', visible: true, label: 'Priority' },
+    { key: 'assignee', visible: true, label: 'Assignee' },
+    { key: 'slaDueAt', visible: true, label: 'SLA Due' },
+    { key: 'updatedAt', visible: true, label: 'Updated' },
+  ]
+  const [cols, setCols] = React.useState<ColumnDef[]>(defaultCols)
+  const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
+  const [showSaveViewDialog, setShowSaveViewDialog] = React.useState(false)
+  const [savingViewName, setSavingViewName] = React.useState('')
+  const [showColsMenu, setShowColsMenu] = React.useState(false)
+  const [draggedCol, setDraggedCol] = React.useState<string | null>(null)
+  const initializedFromUrl = React.useRef(false)
   const [q, setQ] = React.useState('')
   const [status, setStatus] = React.useState('')
   const [priority, setPriority] = React.useState('')
@@ -48,6 +65,11 @@ export default function SupportTickets() {
   const items = data?.data.items ?? []
   // Sync filters from URL query params
   React.useEffect(() => {
+    if (!initializedFromUrl.current) {
+      try { const stored = localStorage.getItem('TICKETS_COLS'); if (stored) { const parsed = JSON.parse(stored); if (Array.isArray(parsed) && parsed.length>0) setCols(parsed) } } catch {}
+      try { const views = localStorage.getItem('TICKETS_SAVED_VIEWS'); if (views) { const parsed = JSON.parse(views); if (Array.isArray(parsed)) setSavedViews(parsed) } } catch {}
+      initializedFromUrl.current = true
+    }
     const sp = new URLSearchParams(location.search)
     const qParam = sp.get('q') ?? ''
     const statuses = sp.get('statuses') ?? ''
@@ -67,6 +89,7 @@ export default function SupportTickets() {
     if (sortParam) setSort(sortParam)
     if (dirParam) setDir(dirParam)
   }, [location.search])
+  React.useEffect(() => { try { localStorage.setItem('TICKETS_COLS', JSON.stringify(cols)) } catch {}; try { localStorage.setItem('TICKETS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {} }, [cols, savedViews])
   // Heartbeat to keep SLA view in sync with system time
   const [nowTs, setNowTs] = React.useState(() => Date.now())
   React.useEffect(() => {
@@ -126,6 +149,56 @@ export default function SupportTickets() {
   }, [items, statusMulti, breachedOnly, dueNext60, nowTs, sort, dir])
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize))
   const pageItems = React.useMemo(() => filteredItems.slice(page * pageSize, page * pageSize + pageSize), [filteredItems, page, pageSize])
+  function saveCurrentView() {
+    const viewConfig = { q, status, statusMulti, priority, sort, dir, breachedOnly, dueNext60, cols }
+    const id = Date.now().toString()
+    const newView = { id, name: savingViewName || `View ${savedViews.length + 1}`, config: viewConfig }
+    setSavedViews([...savedViews, newView])
+    setShowSaveViewDialog(false)
+    setSavingViewName('')
+  }
+  function loadView(view: { id: string; name: string; config: any }) {
+    const c = view.config
+    if (c.q !== undefined) setQ(c.q)
+    if (Array.isArray(c.statusMulti)) { setStatus(''); setStatusMulti(c.statusMulti) } else if (c.status !== undefined) setStatus(c.status)
+    if (c.priority !== undefined) setPriority(c.priority)
+    if (c.sort) setSort(c.sort)
+    if (c.dir) setDir(c.dir)
+    setBreachedOnly(!!c.breachedOnly)
+    setDueNext60(!!c.dueNext60)
+    if (c.cols) setCols(c.cols)
+    setPage(0)
+  }
+  function deleteView(id: string) { setSavedViews(savedViews.filter((v) => v.id !== id)) }
+  function copyShareLink() { const url = window.location.origin + window.location.pathname + window.location.search; navigator.clipboard?.writeText(url) }
+  function getColValue(t: Ticket, key: string) {
+    if (key==='ticketNumber') return t.ticketNumber ?? '-'
+    if (key==='shortDescription') return t.shortDescription ?? t.title ?? '-'
+    if (key==='status') return t.status ?? '-'
+    if (key==='priority') return t.priority ?? '-'
+    if (key==='assignee') return t.assignee ?? '-'
+    if (key==='slaDueAt') return t.slaDueAt ? new Date(t.slaDueAt).toLocaleString() : '-'
+    if (key==='updatedAt') return t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '-'
+    return ''
+  }
+  function handleDragStart(key: string) { setDraggedCol(key) }
+  function handleDrop(targetKey: string) {
+    if (!draggedCol || draggedCol===targetKey) return
+    const from = cols.findIndex((c)=> c.key===draggedCol)
+    const to = cols.findIndex((c)=> c.key===targetKey)
+    if (from<0 || to<0) return
+    const next = [...cols]
+    const [m] = next.splice(from,1)
+    next.splice(to,0,m)
+    setCols(next)
+    setDraggedCol(null)
+  }
+  React.useEffect(() => {
+    if (!showColsMenu) return
+    function onDoc(e: MouseEvent) { const t = e.target as HTMLElement; if (!t.closest('[data-cols-menu]')) setShowColsMenu(false) }
+    document.addEventListener('click', onDoc)
+    return () => document.removeEventListener('click', onDoc)
+  }, [showColsMenu])
 
   function exportCsv() {
     const rows = filteredItems.map((t) => ({
@@ -243,7 +316,7 @@ export default function SupportTickets() {
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tickets..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <button type="button" onClick={() => setQ('')} disabled={!q} className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">Clear</button>
+          <button type="button" onClick={() => { setQ(''); setStatus(''); setStatusMulti([]); setPriority(''); setBreachedOnly(false); setDueNext60(false); setSort('createdAt'); setDir('desc'); setPage(0) }} disabled={!q && !status && statusMulti.length===0 && !priority && !breachedOnly && !dueNext60 && sort==='createdAt' && dir==='desc'} className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">Reset</button>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="">All status</option>
             <option value="open">open</option>
@@ -272,7 +345,30 @@ export default function SupportTickets() {
             <option value="asc">Asc</option>
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="relative ml-auto" data-cols-menu>
+            <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowColsMenu((v)=> !v)}>Columns</button>
+            {showColsMenu && (
+              <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2 shadow space-y-1">
+                <div className="text-xs text-[color:var(--color-text-muted)] pb-1 border-b">Drag to reorder</div>
+                {cols.map((col)=> (
+                  <div key={col.key} draggable onDragStart={()=>handleDragStart(col.key)} onDragOver={(e)=>{e.preventDefault()}} onDrop={()=>handleDrop(col.key)} className={`flex items-center gap-2 p-1 text-sm cursor-move rounded ${draggedCol===col.key ? 'opacity-50 bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}>
+                    <span className="text-xs text-[color:var(--color-text-muted)]">≡</span>
+                    <input type="checkbox" checked={col.visible} onChange={(e)=> setCols(cols.map((c)=> c.key===col.key ? { ...c, visible: e.target.checked } : c))} onClick={(e)=> e.stopPropagation()} />
+                    <span>{col.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setShowSaveViewDialog(true)} className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Save view</button>
+            <select className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)]" onChange={(e)=> { const v = savedViews.find((x)=> x.id===e.target.value); if (v) loadView(v); e.currentTarget.value='' }}>
+              <option value="">Saved views</option>
+              {savedViews.map((v)=> (<option key={v.id} value={v.id}>{v.name}</option>))}
+            </select>
+            <button type="button" onClick={copyShareLink} className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Share link</button>
+          </div>
+          <div className="ml-2 flex items-center gap-2">
             <button type="button" onClick={exportCsv} className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Export CSV</button>
             <button type="button" onClick={exportJson} className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Export JSON</button>
             <button type="button" onClick={copyToClipboard} className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Copy</button>
@@ -310,29 +406,22 @@ export default function SupportTickets() {
         </form>
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]"><tr>
-            <th className="px-4 py-2">Ticket #</th>
-            <th className="px-4 py-2">Short description</th>
-            <th className="px-4 py-2">Status</th>
-            <th className="px-4 py-2">Priority</th>
-            <th className="px-4 py-2">Assignee</th>
-            <th className="px-4 py-2">SLA Due</th>
-            <th className="px-4 py-2">Updated</th>
+            {cols.filter((c)=> c.visible).map((col)=> (
+              <th key={col.key} draggable onDragStart={()=>handleDragStart(col.key)} onDragOver={(e)=>{e.preventDefault()}} onDrop={()=>handleDrop(col.key)} className={`px-4 py-2 cursor-move ${draggedCol===col.key ? 'opacity-50' : ''}`} title="Drag to reorder">{col.label}</th>
+            ))}
           </tr></thead>
           <tbody>
             {pageItems.map((t) => {
               const isBreached = !!t.slaDueAt && new Date(t.slaDueAt).getTime() < nowTs && (t.status === 'open' || t.status === 'pending')
               return (
               <tr key={t._id} className={`border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer ${isBreached ? 'bg-red-500/10' : ''}`} onClick={() => setEditing(t)}>
-                <td className="px-4 py-2">{t.ticketNumber ?? '-'}</td>
-                <td className="px-4 py-2">{t.shortDescription ?? t.title ?? '-'}</td>
-                <td className="px-4 py-2">{t.status ?? '-'}</td>
-                <td className="px-4 py-2">{t.priority ?? '-'}</td>
-                <td className="px-4 py-2">{t.assignee ?? '-'}</td>
-                <td className="px-4 py-2 flex items-center gap-2">
-                  <span>{t.slaDueAt ? new Date(t.slaDueAt).toLocaleString() : '-'}</span>
-                  <button type="button" className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-xs hover:bg-[color:var(--color-muted)]" onClick={(e) => { e.stopPropagation(); setSlaEditing(t) }}>Set</button>
-                </td>
-                <td className="px-4 py-2">{t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '-'}</td>
+                {cols.filter((c)=> c.visible).map((col)=> (
+                  <td key={col.key} className={`px-4 py-2 ${col.key==='slaDueAt' ? 'flex items-center gap-2' : ''}`}>{
+                    col.key==='slaDueAt'
+                      ? (<><span>{getColValue(t, col.key)}</span><button type="button" className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-xs hover:bg-[color:var(--color-muted)]" onClick={(e)=>{ e.stopPropagation(); setSlaEditing(t) }}>Set</button></>)
+                      : getColValue(t, col.key)
+                  }</td>
+                ))}
               </tr>
               )})}
           </tbody>
@@ -461,7 +550,33 @@ function AddComment({ editing, onAdded, addComment }: { editing: Ticket, onAdded
           setValue('')
         }}>Add</button>
         <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setValue('')}>Clear</button>
-      </div>
+    </div>
+      {showSaveViewDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowSaveViewDialog(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative z-10 w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 text-base font-semibold">Save view</div>
+            <input value={savingViewName} onChange={(e)=> setSavingViewName(e.target.value)} placeholder="View name" className="mb-3 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" autoFocus onKeyDown={(e)=> { if (e.key==='Enter') saveCurrentView(); else if (e.key==='Escape') setShowSaveViewDialog(false) }} />
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => { setShowSaveViewDialog(false); setSavingViewName('') }}>Cancel</button>
+              <button type="button" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={saveCurrentView}>Save</button>
+            </div>
+            {savedViews.length > 0 && (
+              <div className="mt-4 border-t border-[color:var(--color-border)] pt-4">
+                <div className="mb-2 text-xs text-[color:var(--color-text-muted)]">Saved views</div>
+                <div className="space-y-1">
+                  {savedViews.map((v) => (
+                    <div key={v.id} className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] p-2 text-sm">
+                      <button type="button" className="flex-1 text-left hover:underline" onClick={() => { loadView(v); setShowSaveViewDialog(false) }}>{v.name}</button>
+                      <button type="button" className="ml-2 rounded-lg border border-red-400 text-red-400 px-2 py-1 text-xs hover:bg-red-50" onClick={() => { if (confirm(`Delete \"${v.name}\"?`)) deleteView(v.id) }}>Delete</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
