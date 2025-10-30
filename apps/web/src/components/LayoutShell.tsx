@@ -21,7 +21,7 @@ export function LayoutShell({ children }: { children?: ReactNode }) {
       </main>
       {/* Footer pinned to bottom across pages */}
       <footer className="row-start-3 lg:col-start-2 border-t border-[color:var(--color-border)] py-6 text-center text-sm text-[color:var(--color-text-muted)] print:hidden">
-        Built and maintained by <span className="font-semibold text-[color:var(--color-primary)]">Wolf Consulting Group, LLC</span> — Agile. Strategic. Powerful.
+        Built by <span className="font-semibold text-[color:var(--color-primary)]">Wolf Consulting Group, LLC</span> — Agile. Strategic. Powerful.
       </footer>
     </div>
   )

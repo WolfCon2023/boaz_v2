@@ -14,7 +14,7 @@ export function PublicShell({ children }: { children?: ReactNode }) {
         {children}
       </main>
       <footer className="border-t border-[color:var(--color-border)] py-6 text-center text-sm text-[color:var(--color-text-muted)]">
-        Built and maintained by <span className="font-semibold text-[color:var(--color-primary)]">Wolf Consulting Group, LLC</span> — Agile. Strategic. Powerful.
+        Built by <span className="font-semibold text-[color:var(--color-primary)]">Wolf Consulting Group, LLC</span> — Agile. Strategic. Powerful.
       </footer>
     </div>
   )
