@@ -544,17 +544,20 @@ function CampaignsTab() {
 }
 
 function AnalyticsTab() {
-  const { data } = useQuery({ queryKey: ['mkt-metrics'], queryFn: async () => (await http.get('/api/marketing/metrics')).data, refetchInterval: 60000 })
+  const [startDate, setStartDate] = React.useState<string>('')
+  const [endDate, setEndDate] = React.useState<string>('')
+  const [selected, setSelected] = React.useState<string>('')
+  const { data } = useQuery({ queryKey: ['mkt-metrics', startDate, endDate], queryFn: async () => (await http.get('/api/marketing/metrics', { params: { startDate: startDate || undefined, endDate: endDate || undefined } })).data, refetchInterval: 60000 })
   const { data: campaigns } = useQuery({ queryKey: ['mkt-campaigns'], queryFn: async () => (await http.get('/api/marketing/campaigns')).data })
   const [filterCampaign, setFilterCampaign] = React.useState<string>('')
   const { data: linkMetrics } = useQuery({
-    queryKey: ['mkt-link-metrics', filterCampaign],
-    queryFn: async () => (await http.get('/api/marketing/metrics/links', { params: { campaignId: filterCampaign || undefined } })).data,
+    queryKey: ['mkt-link-metrics', filterCampaign, startDate, endDate],
+    queryFn: async () => (await http.get('/api/marketing/metrics/links', { params: { campaignId: filterCampaign || undefined, startDate: startDate || undefined, endDate: endDate || undefined } })).data,
     refetchInterval: 60000,
   })
   const { data: roiMetrics } = useQuery({
-    queryKey: ['mkt-roi-metrics', filterCampaign],
-    queryFn: async () => (await http.get('/api/marketing/metrics/roi', { params: { campaignId: filterCampaign || undefined } })).data,
+    queryKey: ['mkt-roi-metrics', filterCampaign, startDate, endDate],
+    queryFn: async () => (await http.get('/api/marketing/metrics/roi', { params: { campaignId: filterCampaign || undefined, startDate: startDate || undefined, endDate: endDate || undefined } })).data,
     refetchInterval: 60000,
   })
   const rows = (data?.data?.byCampaign ?? []) as { campaignId: string; opens: number; clicks: number; visits: number }[]
@@ -583,6 +586,11 @@ function AnalyticsTab() {
   }, [allCampaignItems, roiByCampaignId, filterCampaign])
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded-lg border px-2 py-2 text-sm bg-transparent" />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-lg border px-2 py-2 text-sm bg-transparent" />
+        <button type="button" className="rounded-lg border px-2 py-2 text-sm" onClick={() => { setStartDate(''); setEndDate('') }} disabled={!startDate && !endDate}>Clear dates</button>
+      </div>
       <div className="rounded-2xl border">
         <table className="min-w-full text-sm">
           <thead>
@@ -645,7 +653,7 @@ function AnalyticsTab() {
           </thead>
           <tbody>
             {roiDisplayRows.map((r) => (
-              <tr key={r.campaignId} className="border-b">
+              <tr key={r.campaignId} className="border-b hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setSelected(r.campaignId)}>
                 <td className="p-2">{r.name}</td>
                 <td className="p-2 font-semibold">${r.revenue.toLocaleString()}</td>
                 <td className="p-2">{r.dealsCount}</td>
@@ -657,6 +665,51 @@ function AnalyticsTab() {
           </tbody>
         </table>
       </div>
+      <RoiDrilldown selectedCampaignId={(selected || filterCampaign) || undefined} startDate={startDate || undefined} endDate={endDate || undefined} campaigns={allCampaignItems} onClear={() => setSelected('')} />
+    </div>
+  )
+}
+
+function RoiDrilldown({ selectedCampaignId, startDate, endDate, campaigns, onClear }: { selectedCampaignId?: string; startDate?: string; endDate?: string; campaigns: any[]; onClear?: () => void }) {
+  const { data } = useQuery({
+    queryKey: ['roi-deals', selectedCampaignId, startDate, endDate],
+    enabled: Boolean(selectedCampaignId),
+    queryFn: async () => {
+      const res = await http.get('/api/crm/deals', { params: {
+        stage: 'Contract Signed / Closed Won',
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        page: 0,
+        limit: 1000,
+        marketingCampaignId: selectedCampaignId, // if ignored by API, filter client-side
+      } })
+      return res.data as { data: { items: Array<{ _id: string; title?: string; amount?: number; closeDate?: string; marketingCampaignId?: string }> } }
+    },
+  })
+  const items = (data?.data.items ?? []).filter((d) => !selectedCampaignId || String(d.marketingCampaignId) === String(selectedCampaignId))
+  if (!selectedCampaignId) return null
+  const name = campaigns.find((c) => String(c._id) === String(selectedCampaignId))?.name || 'Campaign'
+  return (
+    <div className="rounded-2xl border p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-base font-semibold">Closed Won deals for: {name}</div>
+        <button type="button" className="rounded-lg border px-2 py-1 text-sm" onClick={onClear}>Close</button>
+      </div>
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b"><th className="p-2 text-left">Title</th><th className="p-2 text-left">Amount</th><th className="p-2 text-left">Close date</th></tr>
+        </thead>
+        <tbody>
+          {items.map((d) => (
+            <tr key={d._id} className="border-b">
+              <td className="p-2">{d.title ?? '-'}</td>
+              <td className="p-2">{typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'}</td>
+              <td className="p-2">{d.closeDate ? new Date(d.closeDate).toLocaleDateString() : '-'}</td>
+            </tr>
+          ))}
+          {items.length === 0 && (<tr><td className="p-2 text-[color:var(--color-text-muted)]" colSpan={3}>No deals in range.</td></tr>)}
+        </tbody>
+      </table>
     </div>
   )
 }
