@@ -532,25 +532,6 @@ export default function SupportTickets() {
             </div>
           </div>
         </div>, createSlaPortal)}
-    </div>
-  )
-}
-
-function AddComment({ editing, onAdded, addComment }: { editing: Ticket, onAdded: (c: { author?: string; body?: string; at?: string }) => void, addComment: { mutateAsync: (vars: { _id: string; body: string }) => Promise<any> } }) {
-  const [value, setValue] = React.useState('')
-  return (
-    <div className="flex items-start gap-2">
-      <textarea value={value} onChange={(e) => setValue(e.target.value)} placeholder="Write a comment..." className="min-h-[72px] flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-      <div className="flex flex-col gap-2">
-        <button type="button" disabled={!value.trim()} className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50" onClick={async () => {
-          if (!value.trim()) return
-          await addComment.mutateAsync({ _id: editing._id, body: value.trim() })
-          const newComment = { author: 'you', body: value.trim(), at: new Date().toISOString() }
-          onAdded(newComment)
-          setValue('')
-        }}>Add</button>
-        <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setValue('')}>Clear</button>
-    </div>
       {showSaveViewDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowSaveViewDialog(false)}>
           <div className="absolute inset-0 bg-black/60" />
@@ -577,6 +558,24 @@ function AddComment({ editing, onAdded, addComment }: { editing: Ticket, onAdded
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function AddComment({ editing, onAdded, addComment }: { editing: Ticket, onAdded: (c: { author?: string; body?: string; at?: string }) => void, addComment: { mutateAsync: (vars: { _id: string; body: string }) => Promise<any> } }) {
+  const [value, setValue] = React.useState('')
+  return (
+    <div className="flex items-start gap-2">
+      <textarea value={value} onChange={(e) => setValue(e.target.value)} placeholder="Write a comment..." className="min-h-[72px] flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+      <div className="flex flex-col gap-2">
+        <button type="button" disabled={!value.trim()} className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50" onClick={async () => {
+          if (!value.trim()) return
+          await addComment.mutateAsync({ _id: editing._id, body: value.trim() })
+          const newComment = { author: 'you', body: value.trim(), at: new Date().toISOString() }
+          onAdded(newComment)
+          setValue('')
+        }}>Add</button>
+        <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setValue('')}>Clear</button>
     </div>
   )
 }
