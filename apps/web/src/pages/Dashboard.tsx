@@ -1,11 +1,28 @@
-import { CalendarDays, CheckCircle2, ListTodo, BarChart3 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { CalendarDays, CheckCircle2, ListTodo, BarChart3, Sun, Moon } from 'lucide-react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { getInstalledApps } from '../lib/apps'
 import { getMetricsSummary } from '../lib/api'
+import { http } from '@/lib/http'
 
 export default function Dashboard() {
   const { data: installed = [] } = useQuery({ queryKey: ['installedApps'], queryFn: async () => getInstalledApps() })
   const { data: metrics } = useQuery<{ data: { appointmentsToday: number; tasksDueToday: number; tasksCompletedToday: number } }>({ queryKey: ['metricsSummary'], queryFn: getMetricsSummary })
+  const prefsQ = useQuery<{ data: { preferences: { theme?: 'light'|'dark'; layout?: 'default'|'compact' } } }>({
+    queryKey: ['preferences','me'],
+    queryFn: async () => (await http.get('/api/preferences/me')).data,
+  })
+  const savePrefs = useMutation({
+    mutationFn: async (payload: { theme?: 'light'|'dark'; layout?: 'default'|'compact' }) => (await http.put('/api/preferences/me', payload)).data,
+    onSuccess: () => { void prefsQ.refetch() },
+  })
+
+  const theme = (prefsQ.data?.data.preferences.theme ?? 'light') as 'light'|'dark'
+  const layout = (prefsQ.data?.data.preferences.layout ?? 'default') as 'default'|'compact'
+  React.useEffect(() => {
+    const el = document.documentElement
+    el.setAttribute('data-theme', theme)
+    el.style.setProperty('--dashboard-gap', layout === 'compact' ? '0.75rem' : '1.5rem')
+  }, [theme, layout])
 
   return (
     <div className="space-y-10">
@@ -15,10 +32,21 @@ export default function Dashboard() {
         <p className="mt-3 text-sm text-[color:var(--color-text-muted)]">Access your business applications and tools</p>
       </div>
 
-      {/* Overview KPIs (placeholder metrics until API wiring) */}
+      {/* Preferences quick toggles */}
+      <div className="flex items-center justify-end gap-2">
+        <button aria-label="Toggle theme" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] inline-flex items-center gap-2" onClick={() => savePrefs.mutate({ theme: theme === 'dark' ? 'light' : 'dark', layout })}>
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />} {theme === 'dark' ? 'Light' : 'Dark'} mode
+        </button>
+        <select aria-label="Layout" value={layout} onChange={(e) => savePrefs.mutate({ layout: e.target.value as any, theme })} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)]">
+          <option value="default">Default layout</option>
+          <option value="compact">Compact layout</option>
+        </select>
+      </div>
+
+      {/* Overview KPIs */}
       <section aria-label="Overview metrics" className="space-y-6">
         <h2 className="text-xl font-semibold text-center">Today</h2>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4" style={{ gap: 'var(--dashboard-gap, 1.5rem)' }}>
           <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5">
             <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]"><BarChart3 className="h-5 w-5" /> Installed apps</div>
             <div className="mt-2 text-3xl font-semibold">{installed.length}</div>
