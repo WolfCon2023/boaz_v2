@@ -1,0 +1,53 @@
+import type { Request, Response, NextFunction } from 'express'
+import { getDb } from '../db.js'
+import { ObjectId } from 'mongodb'
+import { verifyAny } from './jwt.js'
+
+export type RoleDoc = { _id: ObjectId; name: string; permissions: string[] }
+export type UserRoleDoc = { _id: ObjectId; userId: string; roleId: ObjectId }
+
+// Initial matrix used if roles collection is empty
+export const DEFAULT_ROLES: Array<{ name: string; permissions: string[] }> = [
+  { name: 'admin', permissions: ['*'] },
+  { name: 'manager', permissions: ['users.read', 'users.write', 'roles.read'] },
+  { name: 'staff', permissions: ['users.read'] },
+  { name: 'customer', permissions: [] },
+]
+
+export async function ensureDefaultRoles() {
+  const db = await getDb()
+  if (!db) return
+  const count = await db.collection<RoleDoc>('roles').countDocuments()
+  if (count === 0) {
+    await db.collection<RoleDoc>('roles').insertMany(DEFAULT_ROLES.map((r) => ({ _id: new ObjectId(), name: r.name, permissions: r.permissions } as any)))
+  }
+}
+
+export function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const auth = req.headers.authorization
+  if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' })
+  const token = auth.slice(7)
+  const payload = verifyAny<{ sub: string; email: string }>(token)
+  if (!payload) return res.status(401).json({ error: 'Unauthorized' })
+  ;(req as any).auth = { userId: payload.sub, email: payload.email }
+  next()
+}
+
+export function requirePermission(permission: string) {
+  return async function (req: Request, res: Response, next: NextFunction) {
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    if (!auth) return res.status(401).json({ error: 'Unauthorized' })
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'db_unavailable' })
+    // load user's roles
+    const joins = await db.collection<UserRoleDoc>('user_roles').find({ userId: auth.userId } as any).toArray()
+    const roleIds = joins.map((j) => j.roleId)
+    if (roleIds.length === 0) return res.status(403).json({ error: 'forbidden' })
+    const roles = await db.collection<RoleDoc>('roles').find({ _id: { $in: roleIds } } as any).toArray()
+    const allPerms = new Set<string>(roles.flatMap((r) => r.permissions || []))
+    if (allPerms.has('*') || allPerms.has(permission)) return next()
+    return res.status(403).json({ error: 'forbidden' })
+  }
+}
+
+

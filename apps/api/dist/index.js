@@ -27,6 +27,7 @@ import { marketingSendRouter } from './marketing/send.js';
 import { marketingUnsubscribeRouter } from './marketing/unsubscribe.js';
 import { viewsRouter } from './views.js';
 import { getDb } from './db.js';
+import { rolesRouter } from './auth/roles_routes.js';
 const app = express();
 const normalize = (s) => s.trim().replace(/\/$/, '').toLowerCase();
 const allowedOriginsRaw = env.ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
@@ -85,6 +86,7 @@ app.use('/api/marketing', marketingBuilderRouter);
 app.use('/api/marketing', marketingTemplatesRouter);
 app.use('/api/marketing', marketingSendRouter);
 app.use('/api/marketing', marketingUnsubscribeRouter);
+app.use('/api', rolesRouter);
 app.use('/api', viewsRouter);
 app.get('/health', (_req, res) => {
     res.json(createHealthResponse('api'));
