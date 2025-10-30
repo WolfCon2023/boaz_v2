@@ -6,16 +6,44 @@ export const dealsRouter = Router();
 dealsRouter.get('/', async (req, res) => {
     const db = await getDb();
     if (!db)
-        return res.json({ data: { items: [] }, error: null });
-    const limit = Math.max(1, Math.min(200, Number(req.query.limit ?? 50)));
+        return res.json({ data: { items: [], total: 0 }, error: null });
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit ?? 25)));
+    const page = Math.max(0, Number(req.query.page ?? 0));
+    const skip = page * limit;
     const q = String(req.query.q ?? '').trim();
-    const filter = q ? { title: { $regex: q, $options: 'i' } } : {};
+    const filter = {};
+    if (q)
+        filter.title = { $regex: q, $options: 'i' };
+    if (typeof req.query.stage === 'string' && req.query.stage.trim() !== '')
+        filter.stage = req.query.stage;
+    const minAmount = req.query.minAmount != null ? Number(req.query.minAmount) : undefined;
+    const maxAmount = req.query.maxAmount != null ? Number(req.query.maxAmount) : undefined;
+    if (Number.isFinite(minAmount) || Number.isFinite(maxAmount)) {
+        filter.amount = {};
+        if (Number.isFinite(minAmount))
+            filter.amount.$gte = Number(minAmount);
+        if (Number.isFinite(maxAmount))
+            filter.amount.$lte = Number(maxAmount);
+    }
+    const startDate = typeof req.query.startDate === 'string' && req.query.startDate ? new Date(`${req.query.startDate}T00:00:00Z`) : null;
+    const endDate = typeof req.query.endDate === 'string' && req.query.endDate ? new Date(`${req.query.endDate}T23:59:59Z`) : null;
+    if (startDate || endDate) {
+        filter.closeDate = {};
+        if (startDate)
+            filter.closeDate.$gte = startDate;
+        if (endDate)
+            filter.closeDate.$lte = endDate;
+    }
     const sortKey = req.query.sort ?? 'closeDate';
     const dir = (req.query.dir ?? 'desc').toLowerCase() === 'asc' ? 1 : -1;
-    const allowed = { title: dir, stage: dir, amount: dir, closeDate: dir };
+    const allowed = { dealNumber: dir, title: dir, stage: dir, amount: dir, closeDate: dir, createdAt: dir };
     const sort = allowed[sortKey] ? { [sortKey]: allowed[sortKey] } : { closeDate: -1 };
-    const items = await db.collection('deals').find(filter).sort(sort).limit(limit).toArray();
-    res.json({ data: { items }, error: null });
+    const coll = db.collection('deals');
+    const [items, total] = await Promise.all([
+        coll.find(filter).sort(sort).skip(skip).limit(limit).toArray(),
+        coll.countDocuments(filter),
+    ]);
+    res.json({ data: { items, total, page, limit }, error: null });
 });
 dealsRouter.post('/', async (req, res) => {
     const db = await getDb();
@@ -63,6 +91,10 @@ dealsRouter.post('/', async (req, res) => {
             amount: typeof amountParsed === 'number' && Number.isFinite(amountParsed) ? amountParsed : undefined,
             stage: stageRaw || 'new',
         };
+        if (ObjectId.isValid(raw.marketingCampaignId))
+            doc.marketingCampaignId = new ObjectId(raw.marketingCampaignId);
+        if (typeof raw.attributionToken === 'string')
+            doc.attributionToken = raw.attributionToken.trim();
         if (typeof accountNumberValue === 'number')
             doc.accountNumber = accountNumberValue;
         // Normalize date-only strings to midday UTC to avoid timezone shifting one day back
@@ -163,6 +195,8 @@ dealsRouter.put('/:id', async (req, res) => {
         amount: z.number().optional(),
         stage: z.string().optional(),
         closeDate: z.string().optional(),
+        marketingCampaignId: z.string().optional(),
+        attributionToken: z.string().optional(),
     });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success)
@@ -175,6 +209,10 @@ dealsRouter.put('/:id', async (req, res) => {
         const update = { ...parsed.data };
         if (update.accountId)
             update.accountId = new ObjectId(update.accountId);
+        if (update.marketingCampaignId && ObjectId.isValid(update.marketingCampaignId))
+            update.marketingCampaignId = new ObjectId(update.marketingCampaignId);
+        if (update.attributionToken === '')
+            delete update.attributionToken;
         const closedWon = 'Contract Signed / Closed Won';
         if (update.closeDate)
             update.closeDate = new Date(`${update.closeDate}T12:00:00Z`);

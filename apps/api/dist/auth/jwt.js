@@ -11,3 +11,18 @@ export function verifyToken(token) {
         return null;
     }
 }
+// Access/Refresh helpers (non-breaking additions)
+export function signAccessToken(payload) {
+    return jwt.sign(payload, env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '15m' });
+}
+export function signRefreshToken(payload) {
+    return jwt.sign(payload, env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '7d' });
+}
+export function verifyAny(token) {
+    try {
+        return jwt.verify(token, env.JWT_SECRET);
+    }
+    catch {
+        return null;
+    }
+}

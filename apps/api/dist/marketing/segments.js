@@ -27,7 +27,8 @@ marketingSegmentsRouter.post('/segments', async (req, res) => {
     const rules = Array.isArray(raw.rules) ? raw.rules : [];
     if (!name)
         return res.status(400).json({ data: null, error: 'invalid_payload' });
-    const doc = { name, description: String(raw.description || ''), rules, createdAt: new Date(), updatedAt: new Date() };
+    const emails = Array.isArray(raw.emails) ? raw.emails.filter((e) => typeof e === 'string' && e.includes('@')) : [];
+    const doc = { name, description: String(raw.description || ''), rules, emails, createdAt: new Date(), updatedAt: new Date() };
     const r = await db.collection('marketing_segments').insertOne(doc);
     res.status(201).json({ data: { _id: r.insertedId, ...doc }, error: null });
 });
@@ -45,6 +46,8 @@ marketingSegmentsRouter.put('/segments/:id', async (req, res) => {
             update.description = req.body.description;
         if (Array.isArray(req.body?.rules))
             update.rules = req.body.rules;
+        if (Array.isArray(req.body?.emails))
+            update.emails = req.body.emails.filter((e) => typeof e === 'string' && e.includes('@'));
         await db.collection('marketing_segments').updateOne({ _id }, { $set: update });
         res.json({ data: { ok: true }, error: null });
     }
@@ -61,6 +64,40 @@ marketingSegmentsRouter.delete('/segments/:id', async (req, res) => {
         const _id = new ObjectId(req.params.id);
         await db.collection('marketing_segments').deleteOne({ _id });
         res.json({ data: { ok: true }, error: null });
+    }
+    catch {
+        res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+});
+// GET /api/marketing/segments/:id/preview — returns first 50 matching contacts and count
+marketingSegmentsRouter.get('/segments/:id/preview', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.json({ data: { total: 0, contacts: [] }, error: null });
+    try {
+        const _id = new ObjectId(req.params.id);
+        const seg = await db.collection('marketing_segments').findOne({ _id });
+        const rules = Array.isArray(seg?.rules) ? seg.rules : [];
+        const directEmails = Array.isArray(seg?.emails) ? seg.emails : [];
+        const ands = [];
+        for (const r of rules) {
+            const field = typeof r?.field === 'string' ? r.field : '';
+            const operator = typeof r?.operator === 'string' ? r.operator : 'contains';
+            const value = typeof r?.value === 'string' ? r.value : '';
+            if (!field || !value)
+                continue;
+            if (operator === 'equals')
+                ands.push({ [field]: value });
+            else if (operator === 'startsWith')
+                ands.push({ [field]: { $regex: `^${value}`, $options: 'i' } });
+            else
+                ands.push({ [field]: { $regex: value, $options: 'i' } });
+        }
+        const filter = ands.length ? { $and: ands } : {};
+        const coll = db.collection('contacts');
+        const totalContacts = await coll.countDocuments(filter);
+        const contacts = await coll.find(filter, { projection: { name: 1, email: 1 } }).limit(50).toArray();
+        res.json({ data: { total: totalContacts + directEmails.length, contacts, directEmails: directEmails.slice(0, 50) }, error: null });
     }
     catch {
         res.status(400).json({ data: null, error: 'invalid_id' });

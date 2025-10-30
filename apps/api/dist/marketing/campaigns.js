@@ -26,10 +26,12 @@ marketingCampaignsRouter.post('/campaigns', async (req, res) => {
     const name = typeof raw.name === 'string' ? raw.name.trim() : '';
     const subject = typeof raw.subject === 'string' ? raw.subject : '';
     const html = typeof raw.html === 'string' ? raw.html : '';
+    const mjml = typeof raw.mjml === 'string' ? raw.mjml : '';
+    const previewText = typeof raw.previewText === 'string' ? raw.previewText : '';
     const segmentId = ObjectId.isValid(raw.segmentId) ? new ObjectId(raw.segmentId) : null;
     if (!name)
         return res.status(400).json({ data: null, error: 'invalid_payload' });
-    const doc = { name, subject, html, segmentId, status: String(raw.status || 'draft'), createdAt: new Date(), updatedAt: new Date() };
+    const doc = { name, subject, html, mjml, previewText, segmentId, status: String(raw.status || 'draft'), createdAt: new Date(), updatedAt: new Date() };
     const r = await db.collection('marketing_campaigns').insertOne(doc);
     res.status(201).json({ data: { _id: r.insertedId, ...doc }, error: null });
 });
@@ -41,7 +43,7 @@ marketingCampaignsRouter.put('/campaigns/:id', async (req, res) => {
     try {
         const _id = new ObjectId(req.params.id);
         const update = { updatedAt: new Date() };
-        for (const k of ['name', 'subject', 'html', 'status'])
+        for (const k of ['name', 'subject', 'html', 'status', 'mjml', 'previewText'])
             if (typeof (req.body ?? {})[k] === 'string')
                 update[k] = req.body[k];
         if (req.body?.segmentId && ObjectId.isValid(req.body.segmentId))
