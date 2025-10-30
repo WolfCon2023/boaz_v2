@@ -16,7 +16,7 @@ export async function getDb(): Promise<Db | null> {
     db = client.db()
     return db
   } catch (_e) {
-    // Fail fast if Mongo is unreachable so routes can respond with 500 instead of hanging
+    // Fail fast if Mongo is unreachable so routes can respond with 500 instead of hanging 1
     client = null
     db = null
     return null
