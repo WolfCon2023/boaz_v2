@@ -577,6 +577,7 @@ function AddComment({ editing, onAdded, addComment }: { editing: Ticket, onAdded
         }}>Add</button>
         <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setValue('')}>Clear</button>
     </div>
+    </div>
   )
 }
 
