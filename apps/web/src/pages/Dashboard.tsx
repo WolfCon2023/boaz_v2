@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { CalendarDays, CheckCircle2, ListTodo, BarChart3, Sun, Moon } from 'lucide-react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { getInstalledApps } from '../lib/apps'
@@ -11,18 +12,29 @@ export default function Dashboard() {
     queryKey: ['preferences','me'],
     queryFn: async () => (await http.get('/api/preferences/me')).data,
   })
+  const [themeState, setThemeState] = React.useState<'light'|'dark'>('dark')
+  const [layoutState, setLayoutState] = React.useState<'default'|'compact'>('default')
+  React.useEffect(() => {
+    const t = (prefsQ.data?.data.preferences.theme ?? 'dark') as 'light'|'dark'
+    const l = (prefsQ.data?.data.preferences.layout ?? 'default') as 'default'|'compact'
+    setThemeState(t)
+    setLayoutState(l)
+  }, [prefsQ.data])
+
   const savePrefs = useMutation({
     mutationFn: async (payload: { theme?: 'light'|'dark'; layout?: 'default'|'compact' }) => (await http.put('/api/preferences/me', payload)).data,
-    onSuccess: () => { void prefsQ.refetch() },
+    onMutate: (payload) => {
+      // Optimistic update
+      if (payload.theme) setThemeState(payload.theme)
+      if (payload.layout) setLayoutState(payload.layout)
+    },
   })
 
-  const theme = (prefsQ.data?.data.preferences.theme ?? 'light') as 'light'|'dark'
-  const layout = (prefsQ.data?.data.preferences.layout ?? 'default') as 'default'|'compact'
   React.useEffect(() => {
     const el = document.documentElement
-    el.setAttribute('data-theme', theme)
-    el.style.setProperty('--dashboard-gap', layout === 'compact' ? '0.75rem' : '1.5rem')
-  }, [theme, layout])
+    el.setAttribute('data-theme', themeState)
+    el.style.setProperty('--dashboard-gap', layoutState === 'compact' ? '0.75rem' : '1.5rem')
+  }, [themeState, layoutState])
 
   return (
     <div className="space-y-10">
@@ -34,10 +46,10 @@ export default function Dashboard() {
 
       {/* Preferences quick toggles */}
       <div className="flex items-center justify-end gap-2">
-        <button aria-label="Toggle theme" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] inline-flex items-center gap-2" onClick={() => savePrefs.mutate({ theme: theme === 'dark' ? 'light' : 'dark', layout })}>
-          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />} {theme === 'dark' ? 'Light' : 'Dark'} mode
+        <button aria-label="Toggle theme" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] inline-flex items-center gap-2" onClick={() => savePrefs.mutate({ theme: themeState === 'dark' ? 'light' : 'dark', layout: layoutState })}>
+          {themeState === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />} {themeState === 'dark' ? 'Light' : 'Dark'} mode
         </button>
-        <select aria-label="Layout" value={layout} onChange={(e) => savePrefs.mutate({ layout: e.target.value as any, theme })} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)]">
+        <select aria-label="Layout" value={layoutState} onChange={(e) => savePrefs.mutate({ layout: e.target.value as any, theme: themeState })} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)]">
           <option value="default">Default layout</option>
           <option value="compact">Compact layout</option>
         </select>
