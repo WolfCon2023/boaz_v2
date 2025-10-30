@@ -37,6 +37,13 @@ export default function CRMDeals() {
   const [savingViewName, setSavingViewName] = React.useState('')
   const [draggedCol, setDraggedCol] = React.useState<string | null>(null)
   const initializedFromUrl = React.useRef(false)
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [bulkStage, setBulkStage] = React.useState<string>('')
+  const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)
+  const [inlineTitle, setInlineTitle] = React.useState<string>('')
+  const [inlineAmount, setInlineAmount] = React.useState<string>('')
+  const [inlineStage, setInlineStage] = React.useState<string>('')
+  const [inlineCloseDate, setInlineCloseDate] = React.useState<string>('')
 
   // Initialize from URL and localStorage once
   React.useEffect(() => {
@@ -178,9 +185,53 @@ export default function CRMDeals() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['deals'] }),
   })
+  async function applyBulkStage() {
+    if (!bulkStage || selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+    await Promise.allSettled(ids.map((id) => update.mutateAsync({ _id: id, stage: bulkStage } as any)))
+    setSelectedIds(new Set())
+    setBulkStage('')
+  }
+  async function applyBulkDelete() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Delete ${selectedIds.size} deal(s)? This cannot be undone.`)) return
+    const ids = Array.from(selectedIds)
+    await Promise.allSettled(ids.map((id) => http.delete(`/api/crm/deals/${id}`)))
+    qc.invalidateQueries({ queryKey: ['deals'] })
+    setSelectedIds(new Set())
+  }
+  function startInlineEdit(d: Deal) {
+    setInlineEditId(d._id)
+    setInlineTitle(d.title ?? '')
+    setInlineAmount(typeof d.amount === 'number' ? String(d.amount) : '')
+    setInlineStage(d.stage ?? '')
+    setInlineCloseDate(d.closeDate ? d.closeDate.slice(0,10) : '')
+  }
+  async function saveInlineEdit() {
+    if (!inlineEditId) return
+    const payload: any = { _id: inlineEditId }
+    payload.title = inlineTitle || undefined
+    payload.stage = inlineStage || undefined
+    payload.closeDate = inlineCloseDate || undefined
+    if (inlineAmount.trim() !== '') {
+      const n = Number(inlineAmount)
+      if (Number.isFinite(n)) payload.amount = n
+    }
+    await update.mutateAsync(payload)
+    cancelInlineEdit()
+  }
+  function cancelInlineEdit() {
+    setInlineEditId(null)
+    setInlineTitle('')
+    setInlineAmount('')
+    setInlineStage('')
+    setInlineCloseDate('')
+  }
 
   const items = data?.data.items ?? []
   const total = data?.data.total ?? 0
+  const anySelected = selectedIds.size > 0
+  const allPageSelected = items.length > 0 && items.every((d) => selectedIds.has(d._id))
   React.useEffect(() => { setPage(0) }, [q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, pageSize])
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const pageItems = items
@@ -349,6 +400,26 @@ export default function CRMDeals() {
               </div>
             )}
           </div>
+          {anySelected && (
+            <div className="ml-auto flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm">
+              <span className="text-[color:var(--color-text-muted)]">{selectedIds.size} selected</span>
+              <select value={bulkStage} onChange={(e) => setBulkStage(e.target.value)} className="rounded border bg-[color:var(--color-panel)] px-2 py-1">
+                <option value="">Change stage…</option>
+                <option>Draft / Deal Created</option>
+                <option>Submitted for Review</option>
+                <option>Initial Validation</option>
+                <option>Manager Approval</option>
+                <option>Finance Approval</option>
+                <option>Legal Review</option>
+                <option>Executive Approval</option>
+                <option>Approved / Ready for Signature</option>
+                <option>Contract Signed / Closed Won</option>
+                <option>Rejected / Returned for Revision</option>
+              </select>
+              <button type="button" className="rounded-lg border px-2 py-1" onClick={applyBulkStage} disabled={!bulkStage}>Apply</button>
+              <button type="button" className="rounded-lg border border-red-400 text-red-600 px-2 py-1" onClick={applyBulkDelete}>Delete</button>
+            </div>
+          )}
           <button
             className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
             onClick={() => {
@@ -412,6 +483,14 @@ export default function CRMDeals() {
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]">
             <tr>
+              <th className="px-4 py-2">
+                <input type="checkbox" checked={allPageSelected} onChange={(e) => {
+                  const next = new Set(selectedIds)
+                  if (e.target.checked) items.forEach((d) => next.add(d._id))
+                  else items.forEach((d) => next.delete(d._id))
+                  setSelectedIds(next)
+                }} />
+              </th>
               {cols.filter((c) => c.visible).map((col) => (
                 <th
                   key={col.key}
@@ -423,14 +502,62 @@ export default function CRMDeals() {
                   title="Drag to reorder"
                 >{col.label}</th>
               ))}
+              <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.map((d) => (
-              <tr key={d._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(d)}>
+              <tr key={d._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+                <td className="px-4 py-2">
+                  <input type="checkbox" checked={selectedIds.has(d._id)} onChange={(e) => {
+                    const next = new Set(selectedIds)
+                    if (e.target.checked) next.add(d._id); else next.delete(d._id)
+                    setSelectedIds(next)
+                  }} />
+                </td>
                 {cols.filter((c) => c.visible).map((col) => (
-                  <td key={col.key} className="px-4 py-2">{getColValue(d, col.key)}</td>
+                  <td key={col.key} className="px-4 py-2">
+                    {inlineEditId === d._id ? (
+                      col.key === 'title' ? (
+                        <input value={inlineTitle} onChange={(e) => setInlineTitle(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'amount' ? (
+                        <input type="number" value={inlineAmount} onChange={(e) => setInlineAmount(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'stage' ? (
+                        <select value={inlineStage} onChange={(e) => setInlineStage(e.target.value)} className="w-full rounded border bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)]">
+                          <option>Draft / Deal Created</option>
+                          <option>Submitted for Review</option>
+                          <option>Initial Validation</option>
+                          <option>Manager Approval</option>
+                          <option>Finance Approval</option>
+                          <option>Legal Review</option>
+                          <option>Executive Approval</option>
+                          <option>Approved / Ready for Signature</option>
+                          <option>Contract Signed / Closed Won</option>
+                          <option>Rejected / Returned for Revision</option>
+                        </select>
+                      ) : col.key === 'closeDate' ? (
+                        <input type="date" value={inlineCloseDate} onChange={(e) => setInlineCloseDate(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : (
+                        getColValue(d, col.key)
+                      )
+                    ) : (
+                      getColValue(d, col.key)
+                    )}
+                  </td>
                 ))}
+                <td className="px-4 py-2 whitespace-nowrap">
+                  {inlineEditId === d._id ? (
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(d)}>Edit</button>
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(d)}>Open</button>
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

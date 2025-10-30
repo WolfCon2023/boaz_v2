@@ -10,6 +10,7 @@ export default function CRMOutreachSequences() {
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'updatedAt'|'name'>('updatedAt')
   const [dir, setDir] = React.useState<'asc'|'desc'>('desc')
+  const [showAnalytics, setShowAnalytics] = React.useState(false)
   const { data, isFetching } = useQuery({
     queryKey: ['outreach-sequences', q, sort, dir],
     queryFn: async () => {
@@ -18,6 +19,30 @@ export default function CRMOutreachSequences() {
     },
   })
   const items = data?.data.items ?? []
+
+  const eventsQ = useQuery({
+    queryKey: ['outreach-events', 'analytics'],
+    enabled: showAnalytics,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/outreach/events', { params: { sort: 'at', dir: 'desc' } })
+      return res.data as { data: { items: Array<{ sequenceId?: string|null; event: string }> } }
+    },
+    refetchInterval: showAnalytics ? 60000 : false,
+  })
+  const analyticsBySeq = React.useMemo(() => {
+    const map = new Map<string, { sent: number; opened: number; clicked: number }>()
+    const evts = eventsQ.data?.data.items ?? []
+    for (const e of evts) {
+      const key = String(e.sequenceId ?? '')
+      if (!key) continue
+      const cur = map.get(key) || { sent: 0, opened: 0, clicked: 0 }
+      if (e.event === 'sent' || e.event === 'delivered') cur.sent += 1
+      if (e.event === 'opened') cur.opened += 1
+      if (e.event === 'clicked') cur.clicked += 1
+      map.set(key, cur)
+    }
+    return map
+  }, [eventsQ.data])
 
   const create = useMutation({
     mutationFn: async (payload: any) => { const res = await http.post('/api/crm/outreach/sequences', payload); return res.data },
@@ -99,6 +124,9 @@ export default function CRMOutreachSequences() {
             <option value="asc">Asc</option>
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
+          <div className="ml-auto flex items-center gap-2">
+            <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={showAnalytics} onChange={(e) => setShowAnalytics(e.target.checked)} /> Show analytics</label>
+          </div>
         </div>
         <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); setCreateError(null); const fd = new FormData(e.currentTarget); const name = String(fd.get('name')||''); const abGroup = String(fd.get('abGroup')||'') || undefined; const stepsRaw = String(fd.get('steps')||'').trim(); let steps: any[] = []; if (stepsRaw) { try { steps = JSON.parse(stepsRaw) } catch { setCreateError('Invalid JSON for Steps. Please ensure it is a valid JSON array.'); return } } create.mutate({ name, abGroup, steps }); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="name" required placeholder="Sequence name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
@@ -116,6 +144,13 @@ export default function CRMOutreachSequences() {
             <th className="px-4 py-2">Name</th>
             <th className="px-4 py-2">Steps</th>
             <th className="px-4 py-2">A/B</th>
+            {showAnalytics && (<>
+              <th className="px-4 py-2">Sent</th>
+              <th className="px-4 py-2">Opened</th>
+              <th className="px-4 py-2">Clicked</th>
+              <th className="px-4 py-2">Open rate</th>
+              <th className="px-4 py-2">Click rate</th>
+            </>)}
             <th className="px-4 py-2">Actions</th>
           </tr></thead>
           <tbody>
@@ -124,6 +159,15 @@ export default function CRMOutreachSequences() {
                 <td className="px-4 py-2">{s.name ?? '-'}</td>
                 <td className="px-4 py-2">{Array.isArray(s.steps) ? `${s.steps.length} step(s)` : '-'}</td>
                 <td className="px-4 py-2">{s.abGroup ?? '-'}</td>
+                {showAnalytics && (() => { const a = analyticsBySeq.get(String(s._id)) || { sent: 0, opened: 0, clicked: 0 }; const openRate = a.sent ? Math.round((a.opened / a.sent) * 100) : 0; const clickRate = a.sent ? Math.round((a.clicked / a.sent) * 100) : 0; return (
+                  <>
+                    <td className="px-4 py-2">{a.sent}</td>
+                    <td className="px-4 py-2">{a.opened}</td>
+                    <td className="px-4 py-2">{a.clicked}</td>
+                    <td className="px-4 py-2">{openRate}%</td>
+                    <td className="px-4 py-2">{clickRate}%</td>
+                  </>
+                ) })()}
                 <td className="px-4 py-2 flex gap-2">
                   <button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(s)}>Edit</button>
                   <button className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => remove.mutate(s._id)}>Delete</button>

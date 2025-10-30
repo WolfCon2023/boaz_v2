@@ -40,6 +40,7 @@ export default function CRMContacts() {
   const [showColsMenu, setShowColsMenu] = React.useState(false)
   const [draggedCol, setDraggedCol] = React.useState<string | null>(null)
   const initializedFromUrl = React.useRef(false)
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
   const create = useMutation({
     mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }) => {
       const res = await http.post('/api/crm/contacts', payload)
@@ -111,6 +112,8 @@ export default function CRMContacts() {
     })
     return rows
   }, [items, q, sort, dir])
+  const anySelected = selectedIds.size > 0
+  const allSelected = (visibleItems.length > 0) && visibleItems.every((c) => selectedIds.has(c._id))
 
   // Outreach: sequences list for enroll action
   const seqs = useQuery({
@@ -355,65 +358,37 @@ export default function CRMContacts() {
               <option value="desc">Desc</option>
             </select>
           </div>
-          <button
-            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-sm hover:bg-[color:var(--color-muted)]"
-            onClick={async () => {
-              const headers = ['Name','Email','Company','Mobile','Office','Primary','Primary phone','Enrollments (active)','Enrollments (history with timestamps)']
-              // Fetch enrollments (includeCompleted) for each contact in parallel
-              const enrollmentData = await Promise.all(items.map(async (c) => {
-                try {
-                  const res = await http.get('/api/crm/outreach/enroll', { params: { contactId: c._id, includeCompleted: true } })
-                  const ens = (res.data?.data?.items ?? []) as Array<{ sequenceId: string; startedAt?: string; completedAt?: string|null }>
-                  const actives = ens
-                    .filter((e) => !e.completedAt)
-                    .map((en) => {
-                      const name = seqNameById.get(en.sequenceId) ?? en.sequenceId
-                      const started = en.startedAt ? new Date(en.startedAt).toISOString() : ''
-                      return `${name} (enrolled: ${started})`
-                    })
-                    .join('|')
-                  const history = ens
-                    .filter((e) => !!e.completedAt)
-                    .map((en) => {
-                      const name = seqNameById.get(en.sequenceId) ?? en.sequenceId
-                      const started = en.startedAt ? new Date(en.startedAt).toISOString() : ''
-                      const completed = en.completedAt ? new Date(en.completedAt).toISOString() : ''
-                      return `${name} (enrolled: ${started}; completed: ${completed})`
-                    })
-                    .join('|')
-                  return { actives, history }
-                } catch {
-                  return { actives: '', history: '' }
-                }
-              }))
-              const rows = items.map((c, i) => [
-                c.name ?? '',
-                c.email ?? '',
-                c.company ?? '',
-                c.mobilePhone ?? '',
-                c.officePhone ?? '',
-                c.isPrimary ? 'Yes' : 'No',
-                c.primaryPhone ?? '',
-                enrollmentData[i]?.actives ?? '',
-                enrollmentData[i]?.history ?? '',
-              ])
-              const csv = [
-                headers.join(','),
-                ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(',')),
-              ].join('\n')
-              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = 'contacts.csv'
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-          >Export CSV</button>
+          {!anySelected && (
+            <span className="ml-auto text-[11px] text-[color:var(--color-text-muted)]">Tip: select rows to bulk enroll in a sequence</span>
+          )}
+          {anySelected && (
+            <div className="ml-auto flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm">
+              <span className="text-[color:var(--color-text-muted)]">{selectedIds.size} selected</span>
+              <label className="flex items-center gap-1">Enroll in
+                <select ref={seqSelectRef} className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)] font-semibold">
+                  {(seqs.data?.data.items ?? []).map((s) => (<option key={s._id} value={s._id}>{s.name ?? 'Sequence'}</option>))}
+                </select>
+              </label>
+              <button type="button" className="rounded-lg border px-2 py-1" onClick={async () => {
+                const sequenceId = seqSelectRef.current?.value || ''
+                if (!sequenceId) return
+                const ids = Array.from(selectedIds)
+                await Promise.allSettled(ids.map((id) => http.post('/api/crm/outreach/enroll', { contactId: id, sequenceId })))
+                alert('Enrollments queued')
+                setSelectedIds(new Set())
+              }}>Apply</button>
+            </div>
+          )}
         </div>
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]">
             <tr>
+              <th className="px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" checked={allSelected} onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) visibleItems.forEach((c)=> next.add(c._id)); else visibleItems.forEach((c)=> next.delete(c._id)); setSelectedIds(next) }} />
+                  <span>Select</span>
+                </div>
+              </th>
               {cols.filter((c) => c.visible).map((col) => (
                 <th
                   key={col.key}
@@ -430,6 +405,9 @@ export default function CRMContacts() {
           <tbody>
             {visibleItems.map((c) => (
               <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(c)}>
+                <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={selectedIds.has(c._id)} onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) next.add(c._id); else next.delete(c._id); setSelectedIds(next) }} />
+                </td>
                 {cols.filter((c) => c.visible).map((col) => (
                   <td key={col.key} className="px-4 py-2">{getColValue(c, col.key)}</td>
                 ))}
