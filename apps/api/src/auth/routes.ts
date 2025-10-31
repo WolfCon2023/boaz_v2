@@ -556,11 +556,15 @@ authRouter.delete('/admin/sessions/:jti', requireAuth, requirePermission('*'), a
 // Admin: Create user with temporary password
 authRouter.post('/admin/users', requireAuth, requirePermission('*'), async (req, res) => {
   try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
     const parsed = z.object({
       email: z.string().email(),
       name: z.string().optional(),
       phoneNumber: z.string().optional(),
       workLocation: z.string().optional(),
+      roleId: z.string().optional(), // Optional role ID to assign
     }).safeParse(req.body)
 
     if (!parsed.success) {
@@ -575,32 +579,31 @@ authRouter.post('/admin/users', requireAuth, requirePermission('*'), async (req,
     )
 
     // Send email with credentials
+    // Always send welcome email for admin-created users regardless of preferences
+    // (user hasn't logged in yet, so preferences don't apply)
     const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
     const loginUrl = `${baseUrl}/login`
 
-    // Check if user has email notifications enabled (they're new, so this will likely be null/default to true)
-    const notificationsEnabled = await hasEmailNotificationsEnabled(user.id, user.email)
-
-    if (notificationsEnabled !== false) {
-      try {
-        await sendAuthEmail({
-          to: user.email,
-          subject: 'Welcome to BOAZ-OS - Your Account Credentials',
-          checkPreferences: false, // Already checked above
-          html: `
-            <h2>Welcome to BOAZ-OS!</h2>
-            <p>Your account has been created. Please use the following credentials to log in:</p>
-            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <p><strong>Email:</strong> ${user.email}</p>
-              <p><strong>Temporary Password:</strong> <code style="background-color: #e0e0e0; padding: 2px 6px; border-radius: 3px;">${temporaryPassword}</code></p>
-            </div>
-            <p><strong>Important:</strong> You will be required to change your password on first login.</p>
-            <p><a href="${loginUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Log In Now</a></p>
-            <p>Or copy and paste this URL into your browser:</p>
-            <p><code>${loginUrl}</code></p>
-            <p>Please keep your credentials secure and change your password immediately after logging in.</p>
-          `,
-          text: `
+    let emailSent = false
+    try {
+      await sendAuthEmail({
+        to: user.email,
+        subject: 'Welcome to BOAZ-OS - Your Account Credentials',
+        checkPreferences: false, // Skip preference check - always send for new admin-created users
+        html: `
+          <h2>Welcome to BOAZ-OS!</h2>
+          <p>Your account has been created. Please use the following credentials to log in:</p>
+          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Email:</strong> ${user.email}</p>
+            <p><strong>Temporary Password:</strong> <code style="background-color: #e0e0e0; padding: 2px 6px; border-radius: 3px;">${temporaryPassword}</code></p>
+          </div>
+          <p><strong>Important:</strong> You will be required to change your password on first login.</p>
+          <p><a href="${loginUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Log In Now</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${loginUrl}</code></p>
+          <p>Please keep your credentials secure and change your password immediately after logging in.</p>
+        `,
+        text: `
 Welcome to BOAZ-OS!
 
 Your account has been created. Please use the following credentials to log in:
@@ -613,26 +616,65 @@ Important: You will be required to change your password on first login.
 Log in at: ${loginUrl}
 
 Please keep your credentials secure and change your password immediately after logging in.
-          `,
-        })
-      } catch (emailErr) {
-        console.error('Failed to send welcome email:', emailErr)
-        // Don't fail user creation if email fails - return password in response for admin
-        return res.status(201).json({
-          user,
-          temporaryPassword,
-          message: 'User created successfully, but email could not be sent. Please share credentials manually.',
-          emailSent: false,
-        })
+        `,
+      })
+      emailSent = true
+    } catch (emailErr) {
+      console.error('Failed to send welcome email:', emailErr)
+      // Don't fail user creation if email fails - return password in response for admin
+      emailSent = false
+    }
+
+    // Assign role if provided
+    let assignedRole = null
+    if (parsed.data.roleId) {
+      try {
+        const roleIdObj = new ObjectId(parsed.data.roleId)
+        
+        // Validate that role exists
+        const role = await db.collection('roles').findOne({ _id: roleIdObj })
+        if (!role) {
+          console.warn(`Role ${parsed.data.roleId} not found, skipping role assignment`)
+        } else {
+          // Check if assignment already exists
+          const exists = await db.collection('user_roles').findOne({ 
+            userId: user.id, 
+            roleId: roleIdObj 
+          })
+          
+          if (!exists) {
+            await db.collection('user_roles').insertOne({
+              _id: new ObjectId(),
+              userId: user.id,
+              roleId: roleIdObj,
+              createdAt: new Date(),
+            })
+            assignedRole = { id: role._id.toString(), name: role.name }
+          } else {
+            assignedRole = { id: role._id.toString(), name: role.name }
+          }
+        }
+      } catch (roleErr: any) {
+        console.error('Failed to assign role:', roleErr)
+        // Don't fail user creation if role assignment fails
       }
+    }
+
+    if (!emailSent) {
+      return res.status(201).json({
+        user,
+        temporaryPassword,
+        message: 'User created successfully, but email could not be sent. Please share credentials manually.',
+        emailSent: false,
+        assignedRole,
+      })
     }
 
     res.status(201).json({
       user,
       message: 'User created successfully. Credentials have been sent via email.',
       emailSent: true,
-      // Don't return password in response if email was sent successfully (security)
-      temporaryPassword: notificationsEnabled === false ? temporaryPassword : undefined,
+      assignedRole,
     })
   } catch (err: any) {
     console.error('Admin create user error:', err)
@@ -670,6 +712,20 @@ authRouter.post('/me/change-password', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('Change password error:', err)
     res.status(500).json({ error: err.message || 'Failed to change password' })
+  }
+})
+
+// Admin: Get all roles (for dropdown/selection)
+authRouter.get('/admin/roles', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+    
+    const roles = await db.collection('roles').find({}).sort({ name: 1 }).toArray()
+    res.json({ roles: roles.map(r => ({ id: r._id.toString(), name: r.name, permissions: r.permissions || [] })) })
+  } catch (err: any) {
+    console.error('Get roles error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get roles' })
   }
 })
 

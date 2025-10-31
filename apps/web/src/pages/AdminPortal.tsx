@@ -28,7 +28,19 @@ export default function AdminPortal() {
   const [newUserName, setNewUserName] = useState('')
   const [newUserPhone, setNewUserPhone] = useState('')
   const [newUserLocation, setNewUserLocation] = useState('')
+  const [newUserRoleId, setNewUserRoleId] = useState<string>('')
   const [createdUserPassword, setCreatedUserPassword] = useState<string | null>(null)
+
+  // Fetch available roles for dropdown
+  const { data: rolesData } = useQuery<{ roles: Array<{ id: string; name: string; permissions: string[] }> }>({
+    queryKey: ['admin', 'roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/admin/roles')
+      return res.data
+    },
+    enabled: activeTab === 'users',
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  })
 
   // Fetch all sessions (with optional user filter)
   const { data: sessionsData, isLoading } = useQuery<{ sessions: Session[] }>({
@@ -61,12 +73,16 @@ export default function AdminPortal() {
 
   // Create user mutation
   const createUser = useMutation({
-    mutationFn: async (data: { email: string; name?: string; phoneNumber?: string; workLocation?: string }) => {
+    mutationFn: async (data: { email: string; name?: string; phoneNumber?: string; workLocation?: string; roleId?: string }) => {
       const res = await http.post('/api/auth/admin/users', data)
       return res.data
     },
     onSuccess: (data) => {
-      setMessage(data.message || 'User created successfully')
+      const successMsg = data.assignedRole 
+        ? `${data.message || 'User created successfully'} Role "${data.assignedRole.name}" assigned.`
+        : (data.message || 'User created successfully')
+      
+      setMessage(successMsg)
       setError('')
       
       // If email wasn't sent, show the password
@@ -81,6 +97,7 @@ export default function AdminPortal() {
       setNewUserName('')
       setNewUserPhone('')
       setNewUserLocation('')
+      setNewUserRoleId('')
       
       setTimeout(() => {
         setMessage('')
@@ -106,6 +123,7 @@ export default function AdminPortal() {
       name: newUserName || undefined,
       phoneNumber: newUserPhone || undefined,
       workLocation: newUserLocation || undefined,
+      roleId: newUserRoleId || undefined,
     })
   }
 
@@ -242,18 +260,39 @@ export default function AdminPortal() {
                 </div>
               </div>
               
-              <div>
-                <label htmlFor="user-location" className="mb-1 block text-sm font-medium">
-                  Work Location
-                </label>
-                <input
-                  id="user-location"
-                  type="text"
-                  value={newUserLocation}
-                  onChange={(e) => setNewUserLocation(e.target.value)}
-                  placeholder="Office Location"
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="user-location" className="mb-1 block text-sm font-medium">
+                    Work Location
+                  </label>
+                  <input
+                    id="user-location"
+                    type="text"
+                    value={newUserLocation}
+                    onChange={(e) => setNewUserLocation(e.target.value)}
+                    placeholder="Office Location"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="user-role" className="mb-1 block text-sm font-medium">
+                    Role
+                  </label>
+                  <select
+                    id="user-role"
+                    value={newUserRoleId}
+                    onChange={(e) => setNewUserRoleId(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                  >
+                    <option value="">No Role (Optional)</option>
+                    {rolesData?.roles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name} {role.permissions.includes('*') && '(Admin)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               
               <button
