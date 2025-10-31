@@ -83,7 +83,7 @@ authRouter.post('/register', async (req, res) => {
               to: email,
               subject: 'Welcome to BOAZ-OS - Complete Your Account Setup',
               checkPreferences: false,
-            html: `
+              html: `
               <h2>Welcome to BOAZ-OS!</h2>
               <p>Thank you for creating your account. To complete your account setup and enable account recovery features, please click the link below:</p>
               <p><a href="${enrollmentUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Complete Account Setup</a></p>

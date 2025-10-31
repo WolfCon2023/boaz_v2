@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, useQueryClient } from '@tanstack/react-query'
 
 type Preferences = {
   theme?: 'light' | 'dark'
@@ -139,8 +139,6 @@ function formatDateForInput(date: Date | string | number | null | undefined): st
  * React hook to get formatted date/time functions that react to preference changes
  */
 export function useDateFormat() {
-  // Import here to avoid circular dependency issues
-  const { useQueryClient } = require('@tanstack/react-query')
   const queryClient = useQueryClient()
   
   // Store queryClient reference globally so non-hook functions can access it
