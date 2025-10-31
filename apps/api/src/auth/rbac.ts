@@ -4,7 +4,10 @@ import { ObjectId } from 'mongodb'
 import { verifyAny } from './jwt.js'
 
 export type RoleDoc = { _id: ObjectId; name: string; permissions: string[] }
-export type UserRoleDoc = { _id: ObjectId; userId: string; roleId: ObjectId }
+// Join table: Links users to roles (many-to-many relationship)
+// userId is stored as string to match JWT sub claim (string representation of ObjectId)
+// createdAt tracks when the role was assigned
+export type UserRoleDoc = { _id: ObjectId; userId: string; roleId: ObjectId; createdAt?: Date }
 
 // Initial matrix used if roles collection is empty
 export const DEFAULT_ROLES: Array<{ name: string; permissions: string[] }> = [
@@ -20,6 +23,30 @@ export async function ensureDefaultRoles() {
   const count = await db.collection<RoleDoc>('roles').countDocuments()
   if (count === 0) {
     await db.collection<RoleDoc>('roles').insertMany(DEFAULT_ROLES.map((r) => ({ _id: new ObjectId(), name: r.name, permissions: r.permissions } as any)))
+  }
+  
+  // Ensure indexes for user_roles collection (for performance)
+  try {
+    await db.collection<UserRoleDoc>('user_roles').createIndex({ userId: 1 }).catch(() => {
+      // Index might already exist
+    })
+    await db.collection<UserRoleDoc>('user_roles').createIndex({ roleId: 1 }).catch(() => {
+      // Index might already exist
+    })
+    await db.collection<UserRoleDoc>('user_roles').createIndex({ userId: 1, roleId: 1 }, { unique: true }).catch(() => {
+      // Index might already exist - ensures one role assignment per user
+    })
+  } catch (err) {
+    console.warn('Warning: Could not ensure user_roles indexes:', err)
+  }
+  
+  // Ensure index for roles collection
+  try {
+    await db.collection<RoleDoc>('roles').createIndex({ name: 1 }, { unique: true }).catch(() => {
+      // Index might already exist
+    })
+  } catch (err) {
+    console.warn('Warning: Could not ensure roles index:', err)
   }
 }
 

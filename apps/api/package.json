@@ -10,6 +10,7 @@
     "init:db": "tsx scripts/init-db.ts",
     "backfill:deals": "tsx scripts/backfill-deal-numbers.ts",
     "seed": "tsx scripts/seed.ts",
+    "assign-admin": "tsx src/scripts/assign-admin-role.ts",
     "lint": "eslint ."
   },
   "dependencies": {

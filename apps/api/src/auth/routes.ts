@@ -21,6 +21,7 @@ import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
 import { requireAuth, requirePermission } from './rbac.js'
 import { randomUUID } from 'node:crypto'
+import { ObjectId } from 'mongodb'
 import { sendAuthEmail } from './email.js'
 import { env } from '../env.js'
 import { getDb } from '../db.js'
@@ -558,6 +559,49 @@ authRouter.get('/me/roles', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('Get user roles error:', err)
     res.status(500).json({ error: err.message || 'Failed to get roles' })
+  }
+})
+
+// Self-assign admin role (development/initial setup only - should be restricted in production)
+authRouter.post('/me/self-assign-admin', requireAuth, async (req, res) => {
+  try {
+    // Only allow in development mode for security
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'This endpoint is disabled in production' })
+    }
+
+    const auth = (req as any).auth as { userId: string; email: string }
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    // Find admin role
+    const adminRole = await db.collection('roles').findOne({ name: 'admin' })
+    if (!adminRole) {
+      return res.status(404).json({ error: 'Admin role not found. Run ensureDefaultRoles first.' })
+    }
+
+    // Check if user already has admin role
+    const existing = await db.collection('user_roles').findOne({ 
+      userId: auth.userId, 
+      roleId: adminRole._id 
+    })
+    
+    if (existing) {
+      return res.json({ message: 'You already have admin role', roleId: adminRole._id.toString() })
+    }
+
+    // Assign admin role with timestamp
+    await db.collection('user_roles').insertOne({ 
+      _id: new ObjectId(),
+      userId: auth.userId, 
+      roleId: adminRole._id,
+      createdAt: new Date()
+    })
+
+    res.json({ message: 'Admin role assigned successfully', roleId: adminRole._id.toString() })
+  } catch (err: any) {
+    console.error('Self-assign admin error:', err)
+    res.status(500).json({ error: err.message || 'Failed to assign admin role' })
   }
 })
 

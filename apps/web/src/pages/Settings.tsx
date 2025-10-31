@@ -65,6 +65,38 @@ export default function Settings() {
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes - shares cache with PreferencesProvider
   })
   
+  // Check if user has admin role
+  const { data: rolesData, refetch: refetchRoles } = useQuery<{ roles: Array<{ name: string; permissions: string[] }> }>({
+    queryKey: ['user', 'roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/roles')
+      return res.data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const isAdmin = rolesData?.roles?.some(r => r.permissions.includes('*')) || false
+
+  // Self-assign admin mutation (dev only)
+  const selfAssignAdmin = useMutation({
+    mutationFn: async () => {
+      const res = await http.post('/api/auth/me/self-assign-admin')
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('Admin role assigned successfully! Please refresh the page.')
+      setError('')
+      refetchRoles()
+      setTimeout(() => {
+        window.location.reload()
+      }, 2000)
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to assign admin role')
+      setMessage('')
+    },
+  })
+  
   // Sessions data
   const { data: sessionsData } = useQuery<{ sessions: Session[]; currentJti?: string }>({
     queryKey: ['sessions', 'me'],
@@ -427,6 +459,17 @@ export default function Settings() {
           <Shield className="h-4 w-4" />
           Security
         </button>
+        <button
+          onClick={() => setActiveTab('sessions')}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'sessions'
+              ? 'border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'border-transparent text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <Monitor className="h-4 w-4" />
+          Sessions
+        </button>
       </div>
       
       {/* Profile Tab */}
@@ -505,6 +548,53 @@ export default function Settings() {
                 Your email address cannot be changed.
               </p>
             </div>
+            
+            <div>
+              <label className="mb-1 block text-sm font-medium">User ID</label>
+              <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-3 py-2 text-sm text-[color:var(--color-text-muted)] font-mono">
+                {userData?.id || '—'}
+              </div>
+              <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                Your unique user identifier
+              </p>
+            </div>
+
+            {/* Admin Role Assignment (Dev Only) */}
+            {!isAdmin && import.meta.env.DEV && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-amber-700" />
+                  <h3 className="text-sm font-semibold text-amber-900">Admin Access</h3>
+                </div>
+                <p className="mb-3 text-xs text-amber-800">
+                  You don't have admin access. In development mode, you can self-assign the admin role to access the Admin Portal.
+                </p>
+                <button
+                  onClick={() => {
+                    if (confirm('Assign admin role to your account? (Development only)')) {
+                      selfAssignAdmin.mutate()
+                    }
+                  }}
+                  disabled={selfAssignAdmin.isPending}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {selfAssignAdmin.isPending ? 'Assigning...' : 'Assign Admin Role'}
+                </button>
+              </div>
+            )}
+
+            {/* Admin Status */}
+            {isAdmin && (
+              <div className="rounded-lg border border-green-300 bg-green-50 p-4">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-green-700" />
+                  <span className="text-sm font-semibold text-green-900">Admin Access Active</span>
+                </div>
+                <p className="mt-1 text-xs text-green-800">
+                  You have administrator privileges. Access the Admin Portal from the sidebar.
+                </p>
+              </div>
+            )}
             
             <div>
               <label htmlFor="profile-name" className="mb-1 block text-sm font-medium">
