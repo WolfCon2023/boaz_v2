@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Settings as SettingsIcon, Shield, User, Clock } from 'lucide-react'
+import { Settings as SettingsIcon, Shield, User, Clock, CheckCircle2, Circle } from 'lucide-react'
 import { http } from '@/lib/http'
 
 type UserInfo = {
@@ -189,6 +189,29 @@ export default function Settings() {
     updatePreferences.mutate(preferencesForm)
   }
   
+  // Calculate profile completeness
+  const profileCompleteness = useMemo(() => {
+    if (!userData) return { percentage: 0, filled: 0, total: 0, fields: [] }
+    
+    const fields = [
+      { key: 'email', label: 'Email Address', required: true, filled: !!userData.email },
+      { key: 'name', label: 'Name', required: false, filled: !!(userData.name && userData.name.trim()) },
+      { key: 'phoneNumber', label: 'Phone Number', required: false, filled: !!(userData.phoneNumber && userData.phoneNumber.trim()) },
+      { key: 'workLocation', label: 'Work Location', required: false, filled: !!(userData.workLocation && userData.workLocation.trim()) },
+      { key: 'securityQuestions', label: 'Security Questions', required: false, filled: !!(securityQuestionsData?.questions && securityQuestionsData.questions.length >= 3) },
+    ]
+    
+    const filled = fields.filter(f => f.filled).length
+    const total = fields.length
+    
+    return {
+      percentage: Math.round((filled / total) * 100),
+      filled,
+      total,
+      fields,
+    }
+  }, [userData, securityQuestionsData])
+  
   // Load existing questions when they're available
   useEffect(() => {
     if (securityQuestionsData?.questions && securityQuestionsData.questions.length > 0 && !editMode) {
@@ -329,22 +352,71 @@ export default function Settings() {
       
       {/* Profile Tab */}
       {activeTab === 'profile' && (
-        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
-          <h2 className="mb-4 text-lg font-semibold">Profile Information</h2>
-          
-          {error && (
-            <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-              {error}
+        <div className="space-y-6">
+          {/* Profile Completeness Indicator */}
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Profile Completeness</h2>
+              <div className="text-2xl font-bold text-[color:var(--color-primary-600)]">
+                {profileCompleteness.percentage}%
+              </div>
             </div>
-          )}
-          
-          {message && (
-            <div className="mb-4 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
-              {message}
+            
+            {/* Progress Bar */}
+            <div className="mb-4">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[color:var(--color-muted)]">
+                <div
+                  className="h-full bg-[color:var(--color-primary-600)] transition-all duration-300"
+                  style={{ width: `${profileCompleteness.percentage}%` }}
+                />
+              </div>
             </div>
-          )}
+            
+            {/* Field Checklist */}
+            <div className="space-y-2">
+              <p className="mb-2 text-sm font-medium text-[color:var(--color-text-muted)]">
+                Profile Fields ({profileCompleteness.filled} of {profileCompleteness.total} completed)
+              </p>
+              {profileCompleteness.fields.map((field) => (
+                <div key={field.key} className="flex items-center gap-2 text-sm">
+                  {field.filled ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Circle className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+                  )}
+                  <span className={field.filled ? 'text-[color:var(--color-text)]' : 'text-[color:var(--color-text-muted)]'}>
+                    {field.label}
+                    {field.required && <span className="ml-1 text-red-500">*</span>}
+                  </span>
+                  {!field.filled && field.key === 'securityQuestions' && (
+                    <span className="ml-auto text-xs text-[color:var(--color-text-muted)]">
+                      <a href="#security" onClick={(e) => { e.preventDefault(); setActiveTab('security') }} className="underline hover:text-[color:var(--color-primary-600)]">
+                        Set up
+                      </a>
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
           
-          <form onSubmit={handleProfileSubmit} className="space-y-4">
+          {/* Profile Information Form */}
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+            <h2 className="mb-4 text-lg font-semibold">Profile Information</h2>
+            
+            {error && (
+              <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                {error}
+              </div>
+            )}
+            
+            {message && (
+              <div className="mb-4 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
+                {message}
+              </div>
+            )}
+            
+            <form onSubmit={handleProfileSubmit} className="space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium">Email</label>
               <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-3 py-2 text-sm text-[color:var(--color-text-muted)]">
@@ -408,6 +480,7 @@ export default function Settings() {
               {updateProfile.isPending ? 'Saving...' : 'Save Profile'}
             </button>
           </form>
+          </div>
         </div>
       )}
       
