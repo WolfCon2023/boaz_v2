@@ -105,7 +105,7 @@ export async function createUser(
     email: emailLower,
     passwordHash,
     name: name?.trim() || undefined, // Convert empty string to undefined
-    verified: securityQuestions && securityQuestions.length >= 3, // Verified if all 3 questions provided
+    verified: !!(securityQuestions && securityQuestions.length >= 3), // Verified if all 3 questions provided
     failedAttempts: 0,
     lockoutUntil: null,
     securityQuestions: processedSecurityQuestions,

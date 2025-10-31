@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { Settings as SettingsIcon, Shield, User } from 'lucide-react'
 import { http } from '@/lib/http'
 
@@ -10,7 +10,6 @@ type UserInfo = {
 }
 
 export default function Settings() {
-  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'profile' | 'security'>('profile')
   
   const { data: userData } = useQuery<UserInfo>({
