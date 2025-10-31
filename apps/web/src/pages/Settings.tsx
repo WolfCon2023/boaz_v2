@@ -66,7 +66,7 @@ export default function Settings() {
   })
   
   // Check if user has admin role
-  const { data: rolesData, refetch: refetchRoles } = useQuery<{ roles: Array<{ name: string; permissions: string[] }> }>({
+  const { data: rolesData } = useQuery<{ roles: Array<{ name: string; permissions: string[] }> }>({
     queryKey: ['user', 'roles'],
     queryFn: async () => {
       const res = await http.get('/api/auth/me/roles')
