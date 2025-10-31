@@ -59,7 +59,7 @@ export default function AdminPortal() {
     roles: Array<{ id: string; name: string; permissions: string[] }>
   }
   
-  const { data: usersData, refetch: refetchUsers } = useQuery<{ users: UserWithRoles[]; total: number }>({
+  const { data: usersData } = useQuery<{ users: UserWithRoles[]; total: number }>({
     queryKey: ['admin', 'users', userSearch],
     queryFn: async () => {
       const params = userSearch ? { search: userSearch, limit: '100' } : { limit: '100' }
