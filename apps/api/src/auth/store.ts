@@ -435,6 +435,7 @@ export async function resetPasswordWithToken(token: string, newPassword: string)
         passwordResetExpires: undefined,
         failedAttempts: 0,
         lockoutUntil: null,
+        verified: true, // User has verified email access by using reset token
         updatedAt: Date.now(),
       },
     }
@@ -697,13 +698,15 @@ export async function changePassword(userId: string, currentPassword: string, ne
   // Hash new password
   const newPasswordHash = await bcrypt.hash(newPassword, 10)
 
-  // Update password and clear passwordChangeRequired flag
+  // Update password, clear passwordChangeRequired flag, and verify user
+  // If user can log in and change password, they've verified their email/account
   await db.collection<UserDoc>('users').updateOne(
     { _id: objectId },
     {
       $set: {
         passwordHash: newPasswordHash,
         passwordChangeRequired: false,
+        verified: true,
         updatedAt: Date.now(),
       },
     }
