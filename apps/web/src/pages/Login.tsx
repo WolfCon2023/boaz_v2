@@ -1,6 +1,7 @@
 import * as React from 'react'
 import type { AuthResponse } from '@boaz/shared'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { getApiUrl } from '@/lib/http'
 
 export default function Login() {
   const [email, setEmail] = React.useState('')
@@ -20,7 +21,7 @@ export default function Login() {
     e.preventDefault()
     setMessage(null)
     setLoading(true)
-    const res = await fetch('/api/auth/login', {
+    const res = await fetch(getApiUrl('/api/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),

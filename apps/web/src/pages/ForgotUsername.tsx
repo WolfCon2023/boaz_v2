@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
+import { getApiUrl } from '@/lib/http'
 
 export default function ForgotUsername() {
   const [email, setEmail] = React.useState('')
@@ -23,7 +24,7 @@ export default function ForgotUsername() {
     setUsername(null)
 
     try {
-      const res = await fetch('/api/auth/forgot-username/request', {
+      const res = await fetch(getApiUrl('/api/auth/forgot-username/request'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -55,7 +56,7 @@ export default function ForgotUsername() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/auth/forgot-username/verify', {
+      const res = await fetch(getApiUrl('/api/auth/forgot-username/verify'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, answer }),

@@ -4,7 +4,13 @@ function pickBaseUrl(): string {
   const rawEnv = (import.meta as any)?.env?.VITE_API_URL as string | undefined
   const rawRuntime = typeof window !== 'undefined' ? (window as any).__API_URL as string | undefined : undefined
   const rawStored = typeof window !== 'undefined' ? (localStorage.getItem('API_URL') || undefined) : undefined
-  const candidate = [rawEnv, rawRuntime, rawStored, '/api'].find((v) => typeof v === 'string' && String(v).trim() !== '') as string
+  
+  // In production (Railway), we should always have VITE_API_URL set
+  // In development, default to /api which uses Vite proxy
+  const isProduction = import.meta.env.PROD
+  const defaultUrl = isProduction ? (typeof window !== 'undefined' ? window.location.origin : '') : '/api'
+  
+  const candidate = [rawEnv, rawRuntime, rawStored, defaultUrl].find((v) => typeof v === 'string' && String(v).trim() !== '') as string
   return candidate.replace(/\/$/, '')
 }
 
@@ -22,5 +28,28 @@ http.interceptors.request.use((config) => {
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
+
+// Helper function to get the full API URL for fetch requests
+export function getApiUrl(path: string): string {
+  // Ensure path starts with /
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  
+  // If baseURL is '/api', we're in dev mode and should use the Vite proxy (just return the path)
+  if (baseURL === '/api') {
+    // Dev mode - use Vite proxy, return path as-is
+    return cleanPath
+  }
+  
+  // Production mode or custom API URL - construct full URL
+  // Remove leading /api from path since baseURL is the full API server URL
+  // Example: baseURL = 'https://api.example.com', path = '/api/auth/login' -> 'https://api.example.com/auth/login'
+  const pathWithoutApi = cleanPath.replace(/^\/api/, '')
+  
+  // Ensure baseURL doesn't end with / and path starts with /
+  const cleanBase = baseURL.replace(/\/$/, '')
+  const cleanPath2 = pathWithoutApi.startsWith('/') ? pathWithoutApi : `/${pathWithoutApi}`
+  
+  return `${cleanBase}${cleanPath2}`
+}
 
 

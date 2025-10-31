@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
+import { getApiUrl } from '@/lib/http'
 
 export default function ForgotPassword() {
   const [email, setEmail] = React.useState('')
@@ -19,7 +20,7 @@ export default function ForgotPassword() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/auth/forgot-password/request', {
+      const res = await fetch(getApiUrl('/api/auth/forgot-password/request'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
