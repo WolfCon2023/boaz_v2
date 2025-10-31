@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { ObjectId } from 'mongodb'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomInt } from 'node:crypto'
 import { getDb } from '../db.js'
 
 export type User = {
@@ -30,6 +30,7 @@ type UserDoc = {
   securityQuestions?: SecurityQuestion[] // Array of 3 security questions
   passwordResetToken?: string
   passwordResetExpires?: Date
+  passwordChangeRequired?: boolean // If true, user must change password on next login
   createdAt: number
   updatedAt: number
 }
@@ -148,7 +149,12 @@ export async function createUser(
   }
 }
 
-export async function verifyCredentials(email: string, password: string): Promise<User | null> {
+export type VerifyCredentialsResult = {
+  user: User
+  passwordChangeRequired: boolean
+} | null
+
+export async function verifyCredentials(email: string, password: string): Promise<VerifyCredentialsResult> {
   const db = await getDb()
   if (!db) throw new Error('Database unavailable')
 
@@ -221,12 +227,15 @@ export async function verifyCredentials(email: string, password: string): Promis
   }
 
   return {
-    id: userDoc._id.toString(),
-    email: userDoc.email,
-    name: userDoc.name,
-    phoneNumber: userDoc.phoneNumber,
-    workLocation: userDoc.workLocation,
-    createdAt: userDoc.createdAt,
+    user: {
+      id: userDoc._id.toString(),
+      email: userDoc.email,
+      name: userDoc.name,
+      phoneNumber: userDoc.phoneNumber,
+      workLocation: userDoc.workLocation,
+      createdAt: userDoc.createdAt,
+    },
+    passwordChangeRequired: userDoc.passwordChangeRequired || false,
   }
 }
 
@@ -558,6 +567,143 @@ export async function completeEnrollment(
         verified: true,
         passwordResetToken: undefined,
         passwordResetExpires: undefined,
+        updatedAt: Date.now(),
+      },
+    }
+  )
+
+  return true
+}
+
+/**
+ * Generates a secure random password
+ */
+function generateTemporaryPassword(): string {
+  // Generate a password with: 2 uppercase, 2 lowercase, 2 numbers, 2 special chars
+  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ' // Exclude confusing characters
+  const lowercase = 'abcdefghijkmnpqrstuvwxyz'
+  const numbers = '23456789'
+  const special = '!@#$%&*'
+  
+  let password = ''
+  password += uppercase[randomInt(0, uppercase.length)]
+  password += uppercase[randomInt(0, uppercase.length)]
+  password += lowercase[randomInt(0, lowercase.length)]
+  password += lowercase[randomInt(0, lowercase.length)]
+  password += numbers[randomInt(0, numbers.length)]
+  password += numbers[randomInt(0, numbers.length)]
+  password += special[randomInt(0, special.length)]
+  password += special[randomInt(0, special.length)]
+  
+  // Shuffle the password
+  return password.split('').sort(() => randomInt(0, 2) - 1).join('')
+}
+
+/**
+ * Creates a new user by admin with a temporary password
+ * The user will be required to change their password on first login
+ */
+export async function createUserByAdmin(
+  email: string,
+  name?: string,
+  phoneNumber?: string,
+  workLocation?: string
+): Promise<{ user: User; temporaryPassword: string }> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  await ensureUsersCollection(db)
+
+  const emailLower = email.toLowerCase()
+  
+  // Check if user already exists
+  const existing = await db.collection<UserDoc>('users').findOne({ email: emailLower })
+  if (existing) {
+    throw new Error('Email already registered')
+  }
+
+  // Generate temporary password
+  const temporaryPassword = generateTemporaryPassword()
+  const passwordHash = await bcrypt.hash(temporaryPassword, 10)
+
+  const now = Date.now()
+  const userDoc: UserDoc = {
+    _id: new ObjectId(),
+    email: emailLower,
+    passwordHash,
+    name: name?.trim() || undefined,
+    phoneNumber: phoneNumber?.trim() || undefined,
+    workLocation: workLocation?.trim() || undefined,
+    verified: false,
+    failedAttempts: 0,
+    lockoutUntil: null,
+    passwordChangeRequired: true, // Force password change on first login
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  try {
+    await db.collection<UserDoc>('users').insertOne(userDoc)
+  } catch (insertErr: any) {
+    if (insertErr && typeof insertErr === 'object' && 'code' in insertErr && insertErr.code === 11000) {
+      throw new Error('Email already registered')
+    }
+    throw insertErr
+  }
+
+  return {
+    user: {
+      id: userDoc._id.toString(),
+      email: userDoc.email,
+      name: userDoc.name,
+      phoneNumber: userDoc.phoneNumber,
+      workLocation: userDoc.workLocation,
+      createdAt: userDoc.createdAt,
+    },
+    temporaryPassword,
+  }
+}
+
+/**
+ * Changes the password for an authenticated user
+ * This is different from resetPasswordWithToken which uses a reset token
+ */
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  let objectId: ObjectId
+  try {
+    objectId = new ObjectId(userId)
+  } catch {
+    return false
+  }
+
+  const userDoc = await db.collection<UserDoc>('users').findOne({ _id: objectId })
+  if (!userDoc) {
+    return false
+  }
+
+  // Verify current password
+  const ok = await bcrypt.compare(currentPassword, userDoc.passwordHash)
+  if (!ok) {
+    return false
+  }
+
+  // Hash new password
+  const newPasswordHash = await bcrypt.hash(newPassword, 10)
+
+  // Update password and clear passwordChangeRequired flag
+  await db.collection<UserDoc>('users').updateOne(
+    { _id: objectId },
+    {
+      $set: {
+        passwordHash: newPasswordHash,
+        passwordChangeRequired: false,
         updatedAt: Date.now(),
       },
     }

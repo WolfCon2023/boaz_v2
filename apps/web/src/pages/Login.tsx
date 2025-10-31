@@ -32,9 +32,16 @@ export default function Login() {
       setLoading(false)
       return
     }
-    const data = (await res.json()) as AuthResponse
+    const data = (await res.json()) as AuthResponse & { passwordChangeRequired?: boolean }
     localStorage.setItem('token', data.token)
     setLoading(false)
+    
+    // If password change is required, redirect to password change page
+    if (data.passwordChangeRequired) {
+      navigate('/change-password', { replace: true, state: { requireChange: true } })
+      return
+    }
+    
     navigate(from, { replace: true })
   }
 

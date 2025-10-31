@@ -7,6 +7,7 @@ import Register from '@/pages/Register'
 import ForgotUsername from '@/pages/ForgotUsername'
 import ForgotPassword from '@/pages/ForgotPassword'
 import ResetPassword from '@/pages/ResetPassword'
+import ChangePassword from '@/pages/ChangePassword'
 import Enroll from '@/pages/Enroll'
 import Settings from '@/pages/Settings'
 import AdminPortal from '@/pages/AdminPortal'
@@ -85,6 +86,10 @@ export const router = createBrowserRouter([
   {
     path: '/enroll',
     element: <PublicShell><Enroll /></PublicShell>,
+  },
+  {
+    path: '/change-password',
+    element: <ChangePassword />,
   },
   // Direct access fallback removed to avoid conflicting route matching
   { path: '*', element: <NotFound /> },

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -17,10 +17,18 @@ type Session = {
 
 export default function AdminPortal() {
   const queryClient = useQueryClient()
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users'>('sessions')
   const [userIdFilter, setUserIdFilter] = useState<string>('')
   const [emailFilter, setEmailFilter] = useState<string>('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  
+  // User creation form state
+  const [newUserEmail, setNewUserEmail] = useState('')
+  const [newUserName, setNewUserName] = useState('')
+  const [newUserPhone, setNewUserPhone] = useState('')
+  const [newUserLocation, setNewUserLocation] = useState('')
+  const [createdUserPassword, setCreatedUserPassword] = useState<string | null>(null)
 
   // Fetch all sessions (with optional user filter)
   const { data: sessionsData, isLoading } = useQuery<{ sessions: Session[] }>({
@@ -50,6 +58,56 @@ export default function AdminPortal() {
       setMessage('')
     },
   })
+
+  // Create user mutation
+  const createUser = useMutation({
+    mutationFn: async (data: { email: string; name?: string; phoneNumber?: string; workLocation?: string }) => {
+      const res = await http.post('/api/auth/admin/users', data)
+      return res.data
+    },
+    onSuccess: (data) => {
+      setMessage(data.message || 'User created successfully')
+      setError('')
+      
+      // If email wasn't sent, show the password
+      if (!data.emailSent && data.temporaryPassword) {
+        setCreatedUserPassword(data.temporaryPassword)
+      } else {
+        setCreatedUserPassword(null)
+      }
+      
+      // Reset form
+      setNewUserEmail('')
+      setNewUserName('')
+      setNewUserPhone('')
+      setNewUserLocation('')
+      
+      setTimeout(() => {
+        setMessage('')
+        setCreatedUserPassword(null)
+      }, 10000) // Show message for 10 seconds
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to create user')
+      setMessage('')
+      setCreatedUserPassword(null)
+    },
+  })
+
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newUserEmail) {
+      setError('Email is required')
+      return
+    }
+    
+    createUser.mutate({
+      email: newUserEmail,
+      name: newUserName || undefined,
+      phoneNumber: newUserPhone || undefined,
+      workLocation: newUserLocation || undefined,
+    })
+  }
 
   // Helper to parse user agent
   const parseUserAgent = (ua?: string): { device: string; browser: string } => {
@@ -87,9 +145,35 @@ export default function AdminPortal() {
         <div>
           <h1 className="text-2xl font-semibold">Admin Portal</h1>
           <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
-            Manage user sessions across the platform
+            Manage users and sessions across the platform
           </p>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-[color:var(--color-border)]">
+        <button
+          onClick={() => setActiveTab('sessions')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'sessions'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <Monitor className="mr-2 inline h-4 w-4" />
+          Sessions
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'users'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <Users className="mr-2 inline h-4 w-4" />
+          Users
+        </button>
       </div>
 
       {error && (
@@ -104,8 +188,108 @@ export default function AdminPortal() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+      {/* User Management */}
+      {activeTab === 'users' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+            <div className="mb-4 flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              <h2 className="text-lg font-semibold">Create New User</h2>
+            </div>
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div>
+                <label htmlFor="user-email" className="mb-1 block text-sm font-medium">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="user-email"
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  required
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                />
+              </div>
+              
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="user-name" className="mb-1 block text-sm font-medium">
+                    Name
+                  </label>
+                  <input
+                    id="user-name"
+                    type="text"
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    placeholder="Full Name"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="user-phone" className="mb-1 block text-sm font-medium">
+                    Phone Number
+                  </label>
+                  <input
+                    id="user-phone"
+                    type="tel"
+                    value={newUserPhone}
+                    onChange={(e) => setNewUserPhone(e.target.value)}
+                    placeholder="(555) 123-4567"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label htmlFor="user-location" className="mb-1 block text-sm font-medium">
+                  Work Location
+                </label>
+                <input
+                  id="user-location"
+                  type="text"
+                  value={newUserLocation}
+                  onChange={(e) => setNewUserLocation(e.target.value)}
+                  placeholder="Office Location"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                />
+              </div>
+              
+              <button
+                type="submit"
+                disabled={createUser.isPending || !newUserEmail}
+                className="w-full rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              >
+                {createUser.isPending ? 'Creating...' : 'Create User'}
+              </button>
+            </form>
+            
+            {createdUserPassword && (
+              <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                <p className="mb-2 text-sm font-semibold text-amber-900">
+                  ⚠️ Email could not be sent. Please share these credentials manually:
+                </p>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    <span className="font-medium">Email:</span> {newUserEmail}
+                  </p>
+                  <p>
+                    <span className="font-medium">Temporary Password:</span>{' '}
+                    <code className="rounded bg-amber-100 px-2 py-1 font-mono">{createdUserPassword}</code>
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Sessions Management */}
+      {activeTab === 'sessions' && (
+        <>
+          {/* Filters */}
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
         <div className="mb-3 flex items-center gap-2">
           <Filter className="h-4 w-4 text-[color:var(--color-text-muted)]" />
           <h2 className="text-sm font-semibold">Filters</h2>
@@ -232,7 +416,9 @@ export default function AdminPortal() {
             })}
           </div>
         )}
-      </div>
+        </div>
+        </>
+      )}
     </div>
   )
 }

@@ -16,6 +16,8 @@ import {
   getUserById,
   getUserSecurityQuestions,
   updateUserProfile,
+  createUserByAdmin,
+  changePassword,
 } from './store.js'
 import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
@@ -196,10 +198,24 @@ authRouter.post('/login', async (req, res) => {
     
     console.log('Login attempt for:', parsed.data.email)
     
-    const user = await verifyCredentials(parsed.data.email, parsed.data.password)
-    if (!user) {
+    const result = await verifyCredentials(parsed.data.email, parsed.data.password)
+    if (!result) {
       console.log('Login failed: Invalid credentials for', parsed.data.email)
       return res.status(401).json({ error: 'Invalid credentials' })
+    }
+    
+    const { user, passwordChangeRequired } = result
+    
+    // If password change is required, don't create session yet - force password change first
+    if (passwordChangeRequired) {
+      console.log('Login successful but password change required for:', user.email)
+      // Still issue a token but with a flag indicating password change is required
+      const access = signAccessToken({ sub: user.id, email: user.email })
+      return res.json({ 
+        token: access, 
+        user,
+        passwordChangeRequired: true 
+      })
     }
     
     console.log('Login successful for:', user.email)
@@ -534,6 +550,126 @@ authRouter.delete('/admin/sessions/:jti', requireAuth, requirePermission('*'), a
   } catch (err: any) {
     console.error('Admin revoke session error:', err)
     res.status(500).json({ error: err.message || 'Failed to revoke session' })
+  }
+})
+
+// Admin: Create user with temporary password
+authRouter.post('/admin/users', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const parsed = z.object({
+      email: z.string().email(),
+      name: z.string().optional(),
+      phoneNumber: z.string().optional(),
+      workLocation: z.string().optional(),
+    }).safeParse(req.body)
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
+    }
+
+    const { user, temporaryPassword } = await createUserByAdmin(
+      parsed.data.email,
+      parsed.data.name,
+      parsed.data.phoneNumber,
+      parsed.data.workLocation
+    )
+
+    // Send email with credentials
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+    const loginUrl = `${baseUrl}/login`
+
+    // Check if user has email notifications enabled (they're new, so this will likely be null/default to true)
+    const notificationsEnabled = await hasEmailNotificationsEnabled(user.id, user.email)
+
+    if (notificationsEnabled !== false) {
+      try {
+        await sendAuthEmail({
+          to: user.email,
+          subject: 'Welcome to BOAZ-OS - Your Account Credentials',
+          checkPreferences: false, // Already checked above
+          html: `
+            <h2>Welcome to BOAZ-OS!</h2>
+            <p>Your account has been created. Please use the following credentials to log in:</p>
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p><strong>Email:</strong> ${user.email}</p>
+              <p><strong>Temporary Password:</strong> <code style="background-color: #e0e0e0; padding: 2px 6px; border-radius: 3px;">${temporaryPassword}</code></p>
+            </div>
+            <p><strong>Important:</strong> You will be required to change your password on first login.</p>
+            <p><a href="${loginUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Log In Now</a></p>
+            <p>Or copy and paste this URL into your browser:</p>
+            <p><code>${loginUrl}</code></p>
+            <p>Please keep your credentials secure and change your password immediately after logging in.</p>
+          `,
+          text: `
+Welcome to BOAZ-OS!
+
+Your account has been created. Please use the following credentials to log in:
+
+Email: ${user.email}
+Temporary Password: ${temporaryPassword}
+
+Important: You will be required to change your password on first login.
+
+Log in at: ${loginUrl}
+
+Please keep your credentials secure and change your password immediately after logging in.
+          `,
+        })
+      } catch (emailErr) {
+        console.error('Failed to send welcome email:', emailErr)
+        // Don't fail user creation if email fails - return password in response for admin
+        return res.status(201).json({
+          user,
+          temporaryPassword,
+          message: 'User created successfully, but email could not be sent. Please share credentials manually.',
+          emailSent: false,
+        })
+      }
+    }
+
+    res.status(201).json({
+      user,
+      message: 'User created successfully. Credentials have been sent via email.',
+      emailSent: true,
+      // Don't return password in response if email was sent successfully (security)
+      temporaryPassword: notificationsEnabled === false ? temporaryPassword : undefined,
+    })
+  } catch (err: any) {
+    console.error('Admin create user error:', err)
+    if (err.message === 'Email already registered') {
+      return res.status(409).json({ error: 'Email already registered' })
+    }
+    res.status(500).json({ error: err.message || 'Failed to create user' })
+  }
+})
+
+// Change password for authenticated user
+authRouter.post('/me/change-password', requireAuth, async (req, res) => {
+  try {
+    const parsed = z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(6),
+    }).safeParse(req.body)
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
+    }
+
+    const auth = (req as any).auth as { userId: string; email: string }
+    const success = await changePassword(
+      auth.userId,
+      parsed.data.currentPassword,
+      parsed.data.newPassword
+    )
+
+    if (!success) {
+      return res.status(401).json({ error: 'Current password is incorrect' })
+    }
+
+    res.json({ message: 'Password changed successfully' })
+  } catch (err: any) {
+    console.error('Change password error:', err)
+    res.status(500).json({ error: err.message || 'Failed to change password' })
   }
 })
 
