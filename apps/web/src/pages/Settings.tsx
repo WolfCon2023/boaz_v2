@@ -77,6 +77,23 @@ export default function Settings() {
       setShowTestResults((prev) => ({ ...prev, [payload.index]: res.data.valid }))
       return res.data
     },
+    onSuccess: (data, variables) => {
+      // Clear the answer field immediately after testing for security
+      setTestAnswers((prev) => {
+        const updated = { ...prev }
+        delete updated[variables.index]
+        return updated
+      })
+      
+      // Hide the test result after 3 seconds
+      setTimeout(() => {
+        setShowTestResults((prev) => {
+          const updated = { ...prev }
+          delete updated[variables.index]
+          return updated
+        })
+      }, 3000)
+    },
   })
   
   const handleTestAnswer = (index: number) => {
