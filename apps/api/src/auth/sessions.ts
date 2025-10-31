@@ -144,6 +144,71 @@ export async function isSessionRevoked(jti: string): Promise<boolean> {
   return !!session?.revoked
 }
 
+// Get all active sessions (admin only)
+export async function getAllSessions(limit: number = 100): Promise<SessionInfo[]> {
+  const db = await getDb()
+  if (!db) return []
+
+  const sessions = await db.collection<SessionDoc>('sessions')
+    .find({ revoked: { $ne: true } })
+    .sort({ lastUsedAt: -1 })
+    .limit(limit)
+    .toArray()
+
+  return sessions.map(s => ({
+    jti: s.jti,
+    userId: s.userId.toString(),
+    email: s.email,
+    ipAddress: s.ipAddress,
+    userAgent: s.userAgent,
+    createdAt: s.createdAt,
+    lastUsedAt: s.lastUsedAt,
+    revoked: s.revoked,
+  }))
+}
+
+// Get sessions for a specific user (admin only)
+export async function getSessionsByUserId(userId: string): Promise<SessionInfo[]> {
+  const db = await getDb()
+  if (!db) return []
+
+  let objectId: ObjectId
+  try {
+    objectId = new ObjectId(userId)
+  } catch {
+    return []
+  }
+
+  const sessions = await db.collection<SessionDoc>('sessions')
+    .find({ userId: objectId })
+    .sort({ lastUsedAt: -1 })
+    .toArray()
+
+  return sessions.map(s => ({
+    jti: s.jti,
+    userId: s.userId.toString(),
+    email: s.email,
+    ipAddress: s.ipAddress,
+    userAgent: s.userAgent,
+    createdAt: s.createdAt,
+    lastUsedAt: s.lastUsedAt,
+    revoked: s.revoked,
+  }))
+}
+
+// Revoke session by JTI (admin only - no userId check)
+export async function adminRevokeSession(jti: string): Promise<boolean> {
+  const db = await getDb()
+  if (!db) return false
+
+  const result = await db.collection<SessionDoc>('sessions').updateOne(
+    { jti, revoked: { $ne: true } },
+    { $set: { revoked: true } }
+  )
+
+  return result.modifiedCount > 0
+}
+
 // Clean up old revoked sessions (older than 30 days)
 export async function cleanupOldSessions(): Promise<void> {
   const db = await getDb()

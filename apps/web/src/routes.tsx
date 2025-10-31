@@ -9,6 +9,7 @@ import ForgotPassword from '@/pages/ForgotPassword'
 import ResetPassword from '@/pages/ResetPassword'
 import Enroll from '@/pages/Enroll'
 import Settings from '@/pages/Settings'
+import AdminPortal from '@/pages/AdminPortal'
 import Dashboard from '@/pages/Dashboard'
 import Marketplace from '@/pages/Marketplace'
 import Workspace from '@/pages/Workspace'
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
       { path: 'marketplace', element: <RequireAuth><Marketplace /></RequireAuth> },
       { path: 'workspace/me', element: <RequireAuth><Workspace /></RequireAuth> },
       { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
+      { path: 'admin', element: <RequireAuth><AdminPortal /></RequireAuth> },
       // login is defined as a top-level route wrapped in PublicShell
       { path: 'register', element: <Register /> },
       { path: 'dashboard', element: <RequireAuth><Dashboard /></RequireAuth> },

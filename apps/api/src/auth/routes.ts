@@ -19,7 +19,7 @@ import {
 } from './store.js'
 import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
-import { requireAuth } from './rbac.js'
+import { requireAuth, requirePermission } from './rbac.js'
 import { randomUUID } from 'node:crypto'
 import { sendAuthEmail } from './email.js'
 import { env } from '../env.js'
@@ -30,6 +30,10 @@ import {
   revokeAllUserSessions,
   getUserSessions,
   isSessionRevoked,
+  getAllSessions,
+  getSessionsByUserId,
+  adminRevokeSession,
+  type SessionInfo,
 } from './sessions.js'
 
 const cookieOpts = {
@@ -491,6 +495,68 @@ authRouter.post('/me/sessions/revoke-all', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('Revoke all sessions error:', err)
     res.status(500).json({ error: err.message || 'Failed to revoke sessions' })
+  }
+})
+
+// Admin: Get all active sessions
+authRouter.get('/admin/sessions', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 100
+    const userId = req.query.userId as string | undefined
+    
+    let sessions: SessionInfo[]
+    if (userId) {
+      sessions = await getSessionsByUserId(userId)
+    } else {
+      sessions = await getAllSessions(limit)
+    }
+    
+    res.json({ sessions })
+  } catch (err: any) {
+    console.error('Admin get sessions error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get sessions' })
+  }
+})
+
+// Admin: Revoke any session
+authRouter.delete('/admin/sessions/:jti', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const { jti } = req.params
+    
+    const revoked = await adminRevokeSession(jti)
+    if (!revoked) {
+      return res.status(404).json({ error: 'Session not found or already revoked' })
+    }
+    
+    res.json({ message: 'Session revoked successfully' })
+  } catch (err: any) {
+    console.error('Admin revoke session error:', err)
+    res.status(500).json({ error: err.message || 'Failed to revoke session' })
+  }
+})
+
+// Get current user's roles
+authRouter.get('/me/roles', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    const ObjectId = (await import('mongodb')).ObjectId
+    
+    // Get user's roles
+    const userRoles = await db.collection('user_roles').find({ userId: auth.userId } as any).toArray()
+    const roleIds = userRoles.map((ur: any) => ur.roleId)
+    
+    if (roleIds.length === 0) {
+      return res.json({ roles: [] })
+    }
+
+    const roles = await db.collection('roles').find({ _id: { $in: roleIds } } as any).toArray()
+    res.json({ roles: roles.map((r: any) => ({ name: r.name, permissions: r.permissions || [] })) })
+  } catch (err: any) {
+    console.error('Get user roles error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get roles' })
   }
 })
 
