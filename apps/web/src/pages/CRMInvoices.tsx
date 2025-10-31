@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 
 type Invoice = { _id: string; invoiceNumber?: number; title?: string; total?: number; balance?: number; status?: string; dueDate?: string; issuedAt?: string; accountId?: string; accountNumber?: number }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
@@ -189,7 +190,7 @@ export default function CRMInvoices() {
     if (key === 'total') return typeof inv.total === 'number' ? `$${inv.total.toLocaleString()}` : '-'
     if (key === 'balance') return typeof inv.balance === 'number' ? `$${inv.balance.toLocaleString()}` : '-'
     if (key === 'status') return inv.status ?? '-'
-    if (key === 'dueDate') return inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '-'
+    if (key === 'dueDate') return inv.dueDate ? formatDate(inv.dueDate) : '-'
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
@@ -396,12 +397,12 @@ export default function CRMInvoices() {
                 </div>
                 {showHistory && historyQ.data && (
                   <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs">
-                    <div>Created: {new Date(historyQ.data.data.createdAt).toLocaleString()}</div>
+                    <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
                     <div className="mt-1">Invoice: {historyQ.data.data.invoice?.invoiceNumber ?? ''} {historyQ.data.data.invoice?.title ?? ''} • Status: {historyQ.data.data.invoice?.status ?? ''}</div>
                     <div className="mt-2 font-semibold">Payments</div>
-                    <ul className="list-disc pl-5">{historyQ.data.data.payments.map((p, i) => (<li key={i}>${p.amount ?? ''} • {p.method ?? ''} • {p.paidAt ? new Date(p.paidAt).toLocaleString() : ''}</li>))}{historyQ.data.data.payments.length===0 && <li>None</li>}</ul>
+                    <ul className="list-disc pl-5">{historyQ.data.data.payments.map((p, i) => (<li key={i}>${p.amount ?? ''} • {p.method ?? ''} • {p.paidAt ? formatDateTime(p.paidAt) : ''}</li>))}{historyQ.data.data.payments.length===0 && <li>None</li>}</ul>
                     <div className="mt-2 font-semibold">Refunds</div>
-                    <ul className="list-disc pl-5">{historyQ.data.data.refunds.map((r, i) => (<li key={i}>${r.amount ?? ''} • {r.reason ?? ''} • {r.refundedAt ? new Date(r.refundedAt).toLocaleString() : ''}</li>))}{historyQ.data.data.refunds.length===0 && <li>None</li>}</ul>
+                    <ul className="list-disc pl-5">{historyQ.data.data.refunds.map((r, i) => (<li key={i}>${r.amount ?? ''} • {r.reason ?? ''} • {r.refundedAt ? formatDateTime(r.refundedAt) : ''}</li>))}{historyQ.data.data.refunds.length===0 && <li>None</li>}</ul>
                   </div>
                 )}
               </form>

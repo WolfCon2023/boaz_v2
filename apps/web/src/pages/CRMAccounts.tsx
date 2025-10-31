@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 
 type Account = { _id: string; accountNumber?: number; name?: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }
 
@@ -406,22 +407,22 @@ export default function CRMAccounts() {
                     {historyQ.isLoading && <div>Loading…</div>}
                     {historyQ.data && (
                       <div className="space-y-2">
-                        <div>Created: {new Date(historyQ.data.data.createdAt).toLocaleString()}</div>
+                        <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
                         <div>
                           <div className="font-semibold">Deals</div>
-                          <ul className="list-disc pl-5">{historyQ.data.data.deals.map((d, i) => (<li key={i}>{d.dealNumber ?? ''} {d.title ?? ''} {d.amount ? `$${d.amount}` : ''} {d.stage ?? ''} {d.closeDate ? `• Close: ${new Date(d.closeDate).toLocaleDateString()}` : ''}</li>))}{historyQ.data.data.deals.length===0 && <li>None</li>}</ul>
+                          <ul className="list-disc pl-5">{historyQ.data.data.deals.map((d, i) => (<li key={i}>{d.dealNumber ?? ''} {d.title ?? ''} {d.amount ? `$${d.amount}` : ''} {d.stage ?? ''} {d.closeDate ? `• Close: ${formatDate(d.closeDate)}` : ''}</li>))}{historyQ.data.data.deals.length===0 && <li>None</li>}</ul>
                         </div>
                         <div>
                           <div className="font-semibold">Quotes</div>
-                          <ul className="list-disc pl-5">{historyQ.data.data.quotes.map((q, i) => (<li key={i}>{q.quoteNumber ?? ''} {q.title ?? ''} ${q.total ?? ''} {q.status ?? ''} {q.updatedAt ? `• Updated: ${new Date(q.updatedAt).toLocaleString()}` : ''}</li>))}{historyQ.data.data.quotes.length===0 && <li>None</li>}</ul>
+                          <ul className="list-disc pl-5">{historyQ.data.data.quotes.map((q, i) => (<li key={i}>{q.quoteNumber ?? ''} {q.title ?? ''} ${q.total ?? ''} {q.status ?? ''} {q.updatedAt ? `• Updated: ${formatDateTime(q.updatedAt)}` : ''}</li>))}{historyQ.data.data.quotes.length===0 && <li>None</li>}</ul>
                         </div>
                         <div>
                           <div className="font-semibold">Invoices</div>
-                          <ul className="list-disc pl-5">{historyQ.data.data.invoices.map((inv, i) => (<li key={i}>{inv.invoiceNumber ?? ''} {inv.title ?? ''} ${inv.total ?? ''} {inv.status ?? ''} {inv.issuedAt ? `• Issued: ${new Date(inv.issuedAt).toLocaleDateString()}` : ''} {inv.dueDate ? `• Due: ${new Date(inv.dueDate).toLocaleDateString()}` : ''}</li>))}{historyQ.data.data.invoices.length===0 && <li>None</li>}</ul>
+                          <ul className="list-disc pl-5">{historyQ.data.data.invoices.map((inv, i) => (<li key={i}>{inv.invoiceNumber ?? ''} {inv.title ?? ''} ${inv.total ?? ''} {inv.status ?? ''} {inv.issuedAt ? `• Issued: ${formatDate(inv.issuedAt)}` : ''} {inv.dueDate ? `• Due: ${formatDate(inv.dueDate)}` : ''}</li>))}{historyQ.data.data.invoices.length===0 && <li>None</li>}</ul>
                         </div>
                         <div>
                           <div className="font-semibold">Activities</div>
-                          <ul className="list-disc pl-5">{historyQ.data.data.activities.map((a, i) => (<li key={i}>{new Date(a.at).toLocaleString()} — {a.type ?? ''} {a.subject ?? ''}</li>))}{historyQ.data.data.activities.length===0 && <li>None</li>}</ul>
+                          <ul className="list-disc pl-5">{historyQ.data.data.activities.map((a, i) => (<li key={i}>{formatDateTime(a.at)} — {a.type ?? ''} {a.subject ?? ''}</li>))}{historyQ.data.data.activities.length===0 && <li>None</li>}</ul>
                         </div>
                       </div>
                     )}

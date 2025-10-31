@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
 
@@ -501,7 +502,7 @@ export default function CRMContacts() {
                     {(enrollmentsQ.data?.data.items ?? []).map((en) => {
                       const label = seqNameById.get(en.sequenceId) ?? en.sequenceId
                       return (
-                        <li key={en._id} className="flex items-center gap-2">Seq: {label} • Started: {new Date(en.startedAt).toLocaleDateString()} • Step: {(en.lastStepIndex ?? -1) + 1} {en.completedAt ? '• Completed' : ''}
+                        <li key={en._id} className="flex items-center gap-2">Seq: {label} • Started: {formatDate(en.startedAt)} • Step: {(en.lastStepIndex ?? -1) + 1} {en.completedAt ? '• Completed' : ''}
                           {!en.completedAt && (
                             <button type="button" className="ml-2 rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] hover:bg-[color:var(--color-muted)]" onClick={() => { http.post(`/api/crm/outreach/enroll/${en._id}/unenroll`).then(() => enrollmentsQ.refetch()) }}>Unenroll</button>
                           )}
@@ -528,12 +529,12 @@ export default function CRMContacts() {
                   {historyQ.isLoading && <div>Loading…</div>}
                   {historyQ.data && (
                     <div className="space-y-2">
-                      <div>Created: {new Date(historyQ.data.data.createdAt).toLocaleString()}</div>
+                      <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
                       <div>
                         <div className="font-semibold">Enrollments</div>
                         <ul className="list-disc pl-5">
                           {historyQ.data.data.enrollments.map((e, idx) => (
-                            <li key={idx}>{e.sequenceName} (enrolled: {new Date(e.startedAt).toLocaleString()}{e.completedAt ? `; completed: ${new Date(e.completedAt).toLocaleString()}` : ''})</li>
+                            <li key={idx}>{e.sequenceName} (enrolled: {formatDateTime(e.startedAt)}{e.completedAt ? `; completed: ${formatDateTime(e.completedAt)}` : ''})</li>
                           ))}
                           {historyQ.data.data.enrollments.length === 0 && <li>None</li>}
                         </ul>
@@ -542,7 +543,7 @@ export default function CRMContacts() {
                         <div className="font-semibold">Outreach events</div>
                         <ul className="list-disc pl-5">
                           {historyQ.data.data.events.map((ev, idx) => (
-                            <li key={idx}>{new Date(ev.at).toLocaleString()} — {ev.channel} {ev.event}{ev.recipient ? ` (${ev.recipient})` : ''}</li>
+                            <li key={idx}>{formatDateTime(ev.at)} — {ev.channel} {ev.event}{ev.recipient ? ` (${ev.recipient})` : ''}</li>
                           ))}
                           {historyQ.data.data.events.length === 0 && <li>None</li>}
                         </ul>

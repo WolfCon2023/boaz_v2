@@ -17,6 +17,7 @@ import {
   getUserSecurityQuestions,
   updateUserProfile,
 } from './store.js'
+import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
 import { requireAuth } from './rbac.js'
 import { randomUUID } from 'node:crypto'
@@ -67,14 +68,21 @@ authRouter.post('/register', async (req, res) => {
     // Send enrollment email if security questions weren't provided during registration
     if (!securityQuestions || securityQuestions.length !== 3) {
       try {
-        const enrollmentToken = await createEnrollmentToken(email)
-        if (!enrollmentToken.startsWith('dummy-token-')) {
-          const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
-          const enrollmentUrl = `${baseUrl}/enroll?token=${enrollmentToken}`
-          
-          await sendAuthEmail({
-            to: email,
-            subject: 'Welcome to BOAZ-OS - Complete Your Account Setup',
+        // Check if user wants to receive email notifications
+        // Note: For new registrations, user won't have preferences yet, so this will default to true
+        const notificationsEnabled = await hasEmailNotificationsEnabled(user.id, email)
+        
+        if (notificationsEnabled !== false) {
+          const enrollmentToken = await createEnrollmentToken(email)
+          if (!enrollmentToken.startsWith('dummy-token-')) {
+            const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+            const enrollmentUrl = `${baseUrl}/enroll?token=${enrollmentToken}`
+            
+            // Use checkPreferences: false since we already checked above
+            await sendAuthEmail({
+              to: email,
+              subject: 'Welcome to BOAZ-OS - Complete Your Account Setup',
+              checkPreferences: false,
             html: `
               <h2>Welcome to BOAZ-OS!</h2>
               <p>Thank you for creating your account. To complete your account setup and enable account recovery features, please click the link below:</p>
@@ -282,10 +290,22 @@ authRouter.post('/forgot-password/request', async (req, res) => {
     const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
     const resetUrl = `${baseUrl}/reset-password?token=${token}`
 
+    // Check if user has email notifications enabled
+    // Note: Password resets are security-critical, so we check but still send if preference not set
+    const notificationsEnabled = await hasEmailNotificationsEnabled(undefined, parsed.data.email)
+    
+    if (notificationsEnabled === false) {
+      // User has explicitly disabled notifications - log but don't send
+      console.log(`Password reset email skipped for ${parsed.data.email}: user has disabled email notifications`)
+      // Still return success to maintain security (don't reveal if account exists)
+      return res.json({ message: 'If an account exists, a password reset email has been sent.' })
+    }
+
     try {
       await sendAuthEmail({
         to: parsed.data.email,
         subject: 'Password Reset Request',
+        checkPreferences: false, // Already checked above, and security emails should always send if preference not set
         html: `
           <h2>Password Reset Request</h2>
           <p>You requested to reset your password. Click the link below to reset it:</p>

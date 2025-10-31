@@ -4,6 +4,7 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { formatDate } from '@/lib/dateFormat'
 
 type Deal = { _id: string; dealNumber?: number; title?: string; amount?: number; stage?: string; closeDate?: string; accountId?: string; accountNumber?: number; marketingCampaignId?: string }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
@@ -281,7 +282,7 @@ export default function CRMDeals() {
     if (key === 'title') return d.title ?? ''
     if (key === 'amount') return typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'
     if (key === 'stage') return d.stage ?? '-'
-    if (key === 'closeDate') return d.closeDate ? new Date(d.closeDate).toLocaleDateString() : '-'
+    if (key === 'closeDate') return d.closeDate ? formatDate(d.closeDate) : '-'
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }

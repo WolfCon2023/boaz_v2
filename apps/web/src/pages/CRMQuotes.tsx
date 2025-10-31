@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { formatDateTime } from '@/lib/dateFormat'
 
 type Quote = {
   _id: string
@@ -186,7 +187,7 @@ export default function CRMQuotes() {
     if (key==='signerName') return qt.signerName ?? '-'
     if (key==='signerEmail') return qt.signerEmail ?? '-'
     if (key==='version') return qt.version ?? '-'
-    if (key==='updatedAt') return qt.updatedAt ? new Date(qt.updatedAt).toLocaleString() : '-'
+    if (key==='updatedAt') return qt.updatedAt ? formatDateTime(qt.updatedAt) : '-'
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
@@ -420,9 +421,9 @@ export default function CRMQuotes() {
                 </div>
                 {showHistory && historyQ.data && (
                   <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs">
-                    <div>Created: {new Date(historyQ.data.data.createdAt).toLocaleString()}</div>
+                    <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
                     <div className="mt-1">Title: {historyQ.data.data.quote?.title ?? ''} • Status: {historyQ.data.data.quote?.status ?? ''} • Total: {historyQ.data.data.quote?.total ?? ''}</div>
-                    <div>Updated: {historyQ.data.data.quote?.updatedAt ? new Date(historyQ.data.data.quote.updatedAt).toLocaleString() : ''}</div>
+                    <div>Updated: {historyQ.data.data.quote?.updatedAt ? formatDateTime(historyQ.data.data.quote.updatedAt) : ''}</div>
                   </div>
                 )}
               </form>

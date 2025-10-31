@@ -1,10 +1,38 @@
 import nodemailer from 'nodemailer'
 import { env } from '../env.js'
+import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 
 /**
  * Sends an email using available providers (SendGrid > Mailgun > SMTP)
+ * @param to - Recipient email address
+ * @param subject - Email subject
+ * @param text - Plain text email body
+ * @param html - HTML email body
+ * @param checkPreferences - If true, checks user's email notification preference before sending. Defaults to false for critical emails.
  */
-export async function sendAuthEmail({ to, subject, text, html }: { to: string; subject: string; text?: string; html?: string }) {
+export async function sendAuthEmail({ 
+  to, 
+  subject, 
+  text, 
+  html,
+  checkPreferences = false 
+}: { 
+  to: string
+  subject: string
+  text?: string
+  html?: string
+  checkPreferences?: boolean
+}) {
+  // Check user preferences if requested
+  if (checkPreferences) {
+    const notificationsEnabled = await hasEmailNotificationsEnabled(undefined, to)
+    if (notificationsEnabled === false) {
+      // User has explicitly disabled email notifications
+      console.log(`Email notification skipped for ${to}: user has disabled email notifications`)
+      return { sent: false, reason: 'notifications_disabled', provider: null }
+    }
+    // If null (preference not set), default to sending
+  }
   // Try SendGrid first
   if (env.SENDGRID_API_KEY && env.OUTBOUND_EMAIL_FROM) {
     try {

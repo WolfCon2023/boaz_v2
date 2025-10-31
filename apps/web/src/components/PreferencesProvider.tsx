@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useAccessToken } from './Auth'
 
@@ -14,7 +14,6 @@ type Preferences = {
 
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
   const token = useAccessToken()
-  const queryClient = useQueryClient()
   
   // Only fetch preferences if user is authenticated
   const { data: preferencesData } = useQuery<{ data: { preferences: Preferences } }>({

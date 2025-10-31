@@ -4,6 +4,7 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { formatDateTime } from '@/lib/dateFormat'
 
 type Ticket = {
   _id: string
@@ -210,8 +211,8 @@ export default function SupportTickets() {
     if (key==='status') return t.status ?? '-'
     if (key==='priority') return t.priority ?? '-'
     if (key==='assignee') return t.assignee ?? '-'
-    if (key==='slaDueAt') return t.slaDueAt ? new Date(t.slaDueAt).toLocaleString() : '-'
-    if (key==='updatedAt') return t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '-'
+    if (key==='slaDueAt') return t.slaDueAt ? formatDateTime(t.slaDueAt) : '-'
+    if (key==='updatedAt') return t.updatedAt ? formatDateTime(t.updatedAt) : '-'
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
@@ -427,7 +428,7 @@ export default function SupportTickets() {
           <div className="flex items-center gap-2">
             <input name="slaDueAt" type="hidden" value={createSlaValue} readOnly />
             <div className="text-sm text-[color:var(--color-text-muted)]">
-              {createSlaValue ? new Date(createSlaValue).toLocaleString() : 'SLA due (optional)'}
+              {createSlaValue ? formatDateTime(createSlaValue) : 'SLA due (optional)'}
             </div>
             <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setCreateSlaOpen(true)}>Set</button>
           </div>
@@ -503,10 +504,10 @@ export default function SupportTickets() {
                 <div className="sm:col-span-2 mt-2">
                   <div className="mb-2 text-sm font-semibold">History</div>
                   <div className="space-y-2 max-h-48 overflow-auto rounded-lg border border-[color:var(--color-border)] p-2">
-                    <div className="text-xs text-[color:var(--color-text-muted)]">Created: {editing.createdAt ? new Date(editing.createdAt).toLocaleString() : '-'}</div>
+                    <div className="text-xs text-[color:var(--color-text-muted)]">Created: {editing.createdAt ? formatDateTime(editing.createdAt) : '-'}</div>
                     {(editing.comments ?? []).map((c, idx) => (
                       <div key={idx} className="text-sm">
-                        <div className="text-xs text-[color:var(--color-text-muted)]">{c.at ? new Date(c.at).toLocaleString() : ''} • {c.author || 'system'}</div>
+                        <div className="text-xs text-[color:var(--color-text-muted)]">{c.at ? formatDateTime(c.at) : ''} • {c.author || 'system'}</div>
                         <div>{c.body}</div>
                       </div>
                     ))}

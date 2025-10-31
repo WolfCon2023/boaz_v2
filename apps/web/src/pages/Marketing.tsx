@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { formatDate } from '@/lib/dateFormat'
 
 type Segment = { _id: string; name: string; description?: string }
 type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null; mjml?: string; previewText?: string }
@@ -704,7 +705,7 @@ function RoiDrilldown({ selectedCampaignId, startDate, endDate, campaigns, onCle
             <tr key={d._id} className="border-b">
               <td className="p-2">{d.title ?? '-'}</td>
               <td className="p-2">{typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'}</td>
-              <td className="p-2">{d.closeDate ? new Date(d.closeDate).toLocaleDateString() : '-'}</td>
+              <td className="p-2">{d.closeDate ? formatDate(d.closeDate) : '-'}</td>
             </tr>
           ))}
           {items.length === 0 && (<tr><td className="p-2 text-[color:var(--color-text-muted)]" colSpan={3}>No deals in range.</td></tr>)}
