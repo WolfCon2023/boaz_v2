@@ -24,6 +24,7 @@ import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } 
 import { requireAuth, requirePermission } from './rbac.js'
 import { randomUUID } from 'node:crypto'
 import { ObjectId } from 'mongodb'
+import bcrypt from 'bcryptjs'
 import { sendAuthEmail } from './email.js'
 import { env } from '../env.js'
 import { getDb } from '../db.js'
@@ -899,7 +900,6 @@ authRouter.patch('/admin/users/:id/password', requireAuth, requirePermission('*'
     }
 
     // Hash new password
-    const bcrypt = await import('bcryptjs')
     const newPasswordHash = await bcrypt.hash(parsed.data.newPassword, 10)
 
     // Update password
