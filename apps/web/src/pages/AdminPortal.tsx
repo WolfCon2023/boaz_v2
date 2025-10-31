@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -248,6 +248,47 @@ export default function AdminPortal() {
     },
   })
 
+  // Resend welcome email mutation
+  const resendWelcomeEmail = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await http.post(`/api/auth/admin/users/${userId}/resend-welcome`)
+      return res.data
+    },
+    onSuccess: (data) => {
+      if (data.emailSent) {
+        setMessage('Welcome email sent successfully with new temporary password')
+      } else if (data.temporaryPassword) {
+        // Email failed but password was reset - show the password
+        setMessage(`Email failed to send, but temporary password was reset: ${data.temporaryPassword}`)
+        setError('Email could not be sent. Please share credentials manually.')
+      } else {
+        setMessage('Email failed, but new temporary password generated. Check response for details.')
+      }
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      setTimeout(() => {
+        setMessage('')
+        setError('')
+      }, 10000) // Show for 10 seconds if password is shown
+    },
+    onError: (err: any) => {
+      console.error('Resend welcome email error:', err)
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else if (err.response?.status === 404) {
+        setError('Endpoint not found. Please ensure the API server is running and has the latest code.')
+      } else if (err.response?.data?.error) {
+        setError(err.response.data.error)
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message)
+      } else if (err.message) {
+        setError(err.message)
+      } else {
+        setError('Failed to resend welcome email. Please check the console for details.')
+      }
+      setMessage('')
+    },
+  })
+
   // Helper to parse user agent
   const parseUserAgent = (ua?: string): { device: string; browser: string } => {
     if (!ua) return { device: 'Unknown', browser: 'Unknown' }
@@ -357,7 +398,7 @@ export default function AdminPortal() {
             </div>
           )}
           <p className="text-sm text-amber-800">
-            Please contact your system administrator to assign you the admin role, or use the "Assign Admin Role" button in Settings (development mode only).
+            Please contact your system administrator to assign you the admin role.
           </p>
         </div>
       )}
@@ -712,22 +753,41 @@ export default function AdminPortal() {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Are you sure you want to delete user "${user.email}"? This action cannot be undone.`
-                              )
-                            ) {
-                              deleteUser.mutate(user.id)
-                            }
-                          }}
-                          disabled={deleteUser.isPending}
-                          className="ml-4 rounded-lg border border-red-300 bg-red-50 p-2 text-red-700 hover:bg-red-100 disabled:opacity-50"
-                          title="Delete user"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {/* Action Buttons */}
+                        <div className="ml-4 flex flex-col gap-2">
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `This will reset ${user.email}'s password to a new temporary password and send them a welcome email. Their current sessions will be revoked. Continue?`
+                                )
+                              ) {
+                                resendWelcomeEmail.mutate(user.id)
+                              }
+                            }}
+                            disabled={resendWelcomeEmail.isPending}
+                            className="rounded-lg border border-blue-300 bg-blue-50 p-2 text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                            title="Resend welcome email"
+                          >
+                            <Mail className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Are you sure you want to delete user "${user.email}"? This action cannot be undone.`
+                                )
+                              ) {
+                                deleteUser.mutate(user.id)
+                              }
+                            }}
+                            disabled={deleteUser.isPending}
+                            className="rounded-lg border border-red-300 bg-red-50 p-2 text-red-700 hover:bg-red-100 disabled:opacity-50"
+                            title="Delete user"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )

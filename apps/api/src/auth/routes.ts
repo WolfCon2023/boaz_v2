@@ -18,6 +18,7 @@ import {
   updateUserProfile,
   createUserByAdmin,
   changePassword,
+  resetUserToTemporaryPassword,
 } from './store.js'
 import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
@@ -928,6 +929,94 @@ authRouter.patch('/admin/users/:id/password', requireAuth, requirePermission('*'
   } catch (err: any) {
     console.error('Update user password error:', err)
     res.status(500).json({ error: err.message || 'Failed to update password' })
+  }
+})
+
+// Admin: Resend welcome email
+authRouter.post('/admin/users/:id/resend-welcome', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    let userId: ObjectId
+    try {
+      userId = new ObjectId(req.params.id)
+    } catch {
+      return res.status(400).json({ error: 'Invalid user ID' })
+    }
+
+    // Verify user exists
+    const user = await db.collection('users').findOne({ _id: userId })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    // Reset password to new temporary password
+    const { temporaryPassword, user: userInfo } = await resetUserToTemporaryPassword(userId.toString())
+
+    // Revoke all user sessions to force re-login with new password
+    try {
+      const { revokeAllUserSessions } = await import('./sessions.js')
+      await revokeAllUserSessions(userId.toString())
+    } catch (sessionErr) {
+      console.warn('Failed to revoke user sessions:', sessionErr)
+    }
+
+    // Send welcome email with new credentials
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+    const loginUrl = `${baseUrl}/login`
+
+    try {
+      await sendAuthEmail({
+        to: userInfo.email,
+        subject: 'Welcome to BOAZ-OS - Your Account Credentials',
+        checkPreferences: false, // Skip preference check - always send welcome emails
+        html: `
+          <h2>Welcome to BOAZ-OS!</h2>
+          <p>Your account has been created. Please use the following credentials to log in:</p>
+          <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Email:</strong> ${userInfo.email}</p>
+            <p><strong>Temporary Password:</strong> <code style="background-color: #e0e0e0; padding: 2px 6px; border-radius: 3px;">${temporaryPassword}</code></p>
+          </div>
+          <p><strong>Important:</strong> You will be required to change your password on first login.</p>
+          <p><a href="${loginUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Log In Now</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${loginUrl}</code></p>
+          <p>Please keep your credentials secure and change your password immediately after logging in.</p>
+        `,
+        text: `
+Welcome to BOAZ-OS!
+
+Your account has been created. Please use the following credentials to log in:
+
+Email: ${userInfo.email}
+Temporary Password: ${temporaryPassword}
+
+Important: You will be required to change your password on first login.
+
+Log in at: ${loginUrl}
+
+Please keep your credentials secure and change your password immediately after logging in.
+        `,
+      })
+
+      res.json({
+        message: 'Welcome email sent successfully with new temporary password',
+        emailSent: true,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send welcome email:', emailErr)
+      // Return the temporary password if email fails
+      res.status(500).json({
+        error: 'Failed to send email, but temporary password has been reset',
+        message: 'Email could not be sent. Please share credentials manually.',
+        temporaryPassword,
+        emailSent: false,
+      })
+    }
+  } catch (err: any) {
+    console.error('Resend welcome email error:', err)
+    res.status(500).json({ error: err.message || 'Failed to resend welcome email' })
   }
 })
 

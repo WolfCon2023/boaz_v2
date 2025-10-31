@@ -76,26 +76,6 @@ export default function Settings() {
   })
 
   const isAdmin = rolesData?.roles?.some(r => r.permissions.includes('*')) || false
-
-  // Self-assign admin mutation (dev only)
-  const selfAssignAdmin = useMutation({
-    mutationFn: async () => {
-      const res = await http.post('/api/auth/me/self-assign-admin')
-      return res.data
-    },
-    onSuccess: () => {
-      setMessage('Admin role assigned successfully! Please refresh the page.')
-      setError('')
-      refetchRoles()
-      setTimeout(() => {
-        window.location.reload()
-      }, 2000)
-    },
-    onError: (err: any) => {
-      setError(err.response?.data?.error || 'Failed to assign admin role')
-      setMessage('')
-    },
-  })
   
   // Sessions data
   const { data: sessionsData } = useQuery<{ sessions: Session[]; currentJti?: string }>({
@@ -558,30 +538,6 @@ export default function Settings() {
                 Your unique user identifier
               </p>
             </div>
-
-            {/* Admin Role Assignment (Dev Only) */}
-            {!isAdmin && import.meta.env.DEV && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-                <div className="mb-2 flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-amber-700" />
-                  <h3 className="text-sm font-semibold text-amber-900">Admin Access</h3>
-                </div>
-                <p className="mb-3 text-xs text-amber-800">
-                  You don't have admin access. In development mode, you can self-assign the admin role to access the Admin Portal.
-                </p>
-                <button
-                  onClick={() => {
-                    if (confirm('Assign admin role to your account? (Development only)')) {
-                      selfAssignAdmin.mutate()
-                    }
-                  }}
-                  disabled={selfAssignAdmin.isPending}
-                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {selfAssignAdmin.isPending ? 'Assigning...' : 'Assign Admin Role'}
-                </button>
-              </div>
-            )}
 
             {/* Admin Status */}
             {isAdmin && (

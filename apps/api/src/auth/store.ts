@@ -715,4 +715,55 @@ export async function changePassword(userId: string, currentPassword: string, ne
   return true
 }
 
+/**
+ * Resets a user's password to a new temporary password and returns it
+ * Used for resending welcome emails
+ */
+export async function resetUserToTemporaryPassword(userId: string): Promise<{ temporaryPassword: string; user: User }> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  let objectId: ObjectId
+  try {
+    objectId = new ObjectId(userId)
+  } catch {
+    throw new Error('Invalid user ID')
+  }
+
+  const userDoc = await db.collection<UserDoc>('users').findOne({ _id: objectId })
+  if (!userDoc) {
+    throw new Error('User not found')
+  }
+
+  // Generate new temporary password
+  const temporaryPassword = generateTemporaryPassword()
+  const passwordHash = await bcrypt.hash(temporaryPassword, 10)
+
+  // Update password and set passwordChangeRequired
+  await db.collection<UserDoc>('users').updateOne(
+    { _id: objectId },
+    {
+      $set: {
+        passwordHash,
+        passwordChangeRequired: true,
+        verified: false, // Reset verification status since password changed
+        updatedAt: Date.now(),
+      },
+    }
+  )
+
+  return {
+    temporaryPassword,
+    user: {
+      id: userDoc._id.toString(),
+      email: userDoc.email,
+      name: userDoc.name,
+      phoneNumber: userDoc.phoneNumber,
+      workLocation: userDoc.workLocation,
+      createdAt: userDoc.createdAt,
+    },
+  }
+}
 
