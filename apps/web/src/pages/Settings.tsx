@@ -189,7 +189,7 @@ export default function Settings() {
       setShowTestResults((prev) => ({ ...prev, [payload.index]: res.data.valid }))
       return res.data
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (_data, variables) => {
       // Clear the answer field immediately after testing for security
       setTestAnswers((prev) => {
         const updated = { ...prev }
