@@ -31,6 +31,7 @@ export default function Settings() {
       const res = await http.get('/api/auth/me')
       return res.data
     },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   })
   
   const { data: securityQuestionsData } = useQuery<{ questions: string[] }>({
@@ -39,6 +40,7 @@ export default function Settings() {
       const res = await http.get('/api/auth/me/security-questions')
       return res.data
     },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   })
   
   const { data: preferencesData } = useQuery<{ data: { preferences: Preferences } }>({
@@ -47,6 +49,7 @@ export default function Settings() {
       const res = await http.get('/api/preferences/me')
       return res.data
     },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes - shares cache with PreferencesProvider
   })
   
   // Profile form state
@@ -125,7 +128,22 @@ export default function Settings() {
     onSuccess: () => {
       setMessage('Preferences updated successfully!')
       setError('')
+      // Invalidate to trigger PreferencesProvider to apply changes
       queryClient.invalidateQueries({ queryKey: ['preferences', 'me'] })
+      // Also immediately apply theme/layout changes
+      const el = document.documentElement
+      if (preferencesForm.theme) {
+        el.setAttribute('data-theme', preferencesForm.theme)
+      }
+      if (preferencesForm.layout === 'compact') {
+        el.style.setProperty('--dashboard-gap', '0.75rem')
+        el.style.setProperty('--spacing-md', '8px')
+        el.style.setProperty('--spacing-lg', '12px')
+      } else {
+        el.style.setProperty('--dashboard-gap', '1.5rem')
+        el.style.setProperty('--spacing-md', '12px')
+        el.style.setProperty('--spacing-lg', '16px')
+      }
       setTimeout(() => setMessage(''), 5000)
     },
     onError: (err: any) => {
