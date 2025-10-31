@@ -25,7 +25,7 @@ const cookieOpts = {
   httpOnly: true as const,
   sameSite: 'strict' as const,
   secure: process.env.NODE_ENV === 'production',
-  path: '/auth',
+  path: '/api/auth',
 }
 
 const activeRefresh = new Map<string, { userId: string; email: string; revoked?: boolean }>()

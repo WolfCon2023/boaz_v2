@@ -63,7 +63,7 @@ import cookieParser from 'cookie-parser'
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
-app.use('/auth', authRouter)
+app.use('/api/auth', authRouter)
 app.use('/api/crm', crmRouter)
 app.use('/api/crm/accounts', accountsRouter)
 app.use('/api/crm/deals', dealsRouter)
