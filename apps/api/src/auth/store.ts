@@ -10,6 +10,11 @@ export type User = {
   createdAt: number
 }
 
+type SecurityQuestion = {
+  question: string
+  answerHash: string
+}
+
 type UserDoc = {
   _id: ObjectId
   email: string
@@ -18,8 +23,7 @@ type UserDoc = {
   verified: boolean
   failedAttempts: number
   lockoutUntil: Date | null
-  securityQuestion?: string
-  securityAnswerHash?: string
+  securityQuestions?: SecurityQuestion[] // Array of 3 security questions
   passwordResetToken?: string
   passwordResetExpires?: Date
   createdAt: number
@@ -48,8 +52,7 @@ export async function createUser(
   email: string,
   password: string,
   name?: string,
-  securityQuestion?: string,
-  securityAnswer?: string
+  securityQuestions?: Array<{ question: string; answer: string }>
 ): Promise<User> {
   console.log('createUser called for:', email)
   
@@ -82,7 +85,18 @@ export async function createUser(
 
   console.log('Hashing password...')
   const passwordHash = await bcrypt.hash(password, 10)
-  const securityAnswerHash = securityAnswer ? await bcrypt.hash(securityAnswer.toLowerCase().trim(), 10) : undefined
+  
+  // Process security questions if provided
+  let processedSecurityQuestions: SecurityQuestion[] | undefined
+  if (securityQuestions && securityQuestions.length > 0) {
+    processedSecurityQuestions = await Promise.all(
+      securityQuestions.map(async (sq) => ({
+        question: sq.question.trim(),
+        answerHash: await bcrypt.hash(sq.answer.toLowerCase().trim(), 10),
+      }))
+    )
+  }
+  
   console.log('Password hashed')
   
   const now = Date.now()
@@ -91,11 +105,10 @@ export async function createUser(
     email: emailLower,
     passwordHash,
     name: name?.trim() || undefined, // Convert empty string to undefined
-    verified: false,
+    verified: securityQuestions && securityQuestions.length >= 3, // Verified if all 3 questions provided
     failedAttempts: 0,
     lockoutUntil: null,
-    securityQuestion: securityQuestion?.trim(),
-    securityAnswerHash,
+    securityQuestions: processedSecurityQuestions,
     createdAt: now,
     updatedAt: now,
   }
@@ -247,26 +260,44 @@ export async function getUserById(id: string): Promise<User | null> {
   }
 }
 
-export async function verifySecurityAnswer(email: string, answer: string): Promise<boolean> {
+export async function verifySecurityAnswer(email: string, question: string, answer: string): Promise<boolean> {
   const db = await getDb()
   if (!db) throw new Error('Database unavailable')
 
   const emailLower = email.toLowerCase()
   const userDoc = await db.collection<UserDoc>('users').findOne({ email: emailLower })
   
-  if (!userDoc || !userDoc.securityAnswerHash) return false
+  if (!userDoc || !userDoc.securityQuestions || userDoc.securityQuestions.length === 0) return false
 
-  return await bcrypt.compare(answer.toLowerCase().trim(), userDoc.securityAnswerHash)
+  // Find the matching question and verify the answer
+  const matchingQuestion = userDoc.securityQuestions.find(
+    (sq) => sq.question.toLowerCase().trim() === question.toLowerCase().trim()
+  )
+  
+  if (!matchingQuestion) return false
+
+  return await bcrypt.compare(answer.toLowerCase().trim(), matchingQuestion.answerHash)
 }
 
-export async function getUserSecurityQuestion(email: string): Promise<string | null> {
+export async function getRandomSecurityQuestion(email: string): Promise<{ question: string; index: number } | null> {
   const db = await getDb()
   if (!db) throw new Error('Database unavailable')
 
   const emailLower = email.toLowerCase()
   const userDoc = await db.collection<UserDoc>('users').findOne({ email: emailLower })
   
-  return userDoc?.securityQuestion || null
+  if (!userDoc || !userDoc.securityQuestions || userDoc.securityQuestions.length === 0) {
+    return null
+  }
+
+  // Randomly select one of the security questions
+  const randomIndex = Math.floor(Math.random() * userDoc.securityQuestions.length)
+  const selectedQuestion = userDoc.securityQuestions[randomIndex]
+
+  return {
+    question: selectedQuestion.question,
+    index: randomIndex,
+  }
 }
 
 export async function createPasswordResetToken(email: string): Promise<string> {
@@ -304,12 +335,16 @@ export async function resetPasswordWithToken(token: string, newPassword: string)
   const db = await getDb()
   if (!db) throw new Error('Database unavailable')
 
+  // Only match tokens that don't start with 'enroll_' (enrollment tokens)
   const userDoc = await db.collection<UserDoc>('users').findOne({
     passwordResetToken: token,
     passwordResetExpires: { $gt: new Date() },
   })
 
-  if (!userDoc) return false
+  // Additional check: ensure this is not an enrollment token
+  if (!userDoc || userDoc.passwordResetToken?.startsWith('enroll_')) {
+    return false
+  }
 
   const passwordHash = await bcrypt.hash(newPassword, 10)
 
@@ -322,6 +357,138 @@ export async function resetPasswordWithToken(token: string, newPassword: string)
         passwordResetExpires: undefined,
         failedAttempts: 0,
         lockoutUntil: null,
+        updatedAt: Date.now(),
+      },
+    }
+  )
+
+  return true
+}
+
+export async function createEnrollmentToken(email: string): Promise<string> {
+  const db = await getDb()
+  if (!db) throw new Error('Database unavailable')
+
+  const emailLower = email.toLowerCase()
+  const userDoc = await db.collection<UserDoc>('users').findOne({ email: emailLower })
+  
+  if (!userDoc) {
+    // Don't reveal whether email exists (security best practice)
+    return 'dummy-token-' + Date.now()
+  }
+
+  // Generate secure token
+  const token = randomBytes(32).toString('hex')
+  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+
+  // Store enrollment token (we can reuse passwordResetToken field for enrollment, or create new field)
+  // For simplicity, using a naming convention - enrollment tokens start with 'enroll_'
+  await db.collection<UserDoc>('users').updateOne(
+    { _id: userDoc._id },
+    {
+      $set: {
+        passwordResetToken: `enroll_${token}`,
+        passwordResetExpires: expires,
+        updatedAt: Date.now(),
+      },
+    }
+  )
+
+  return token
+}
+
+export async function verifyEnrollmentToken(token: string): Promise<{ userId: string; email: string } | null> {
+  const db = await getDb()
+  if (!db) throw new Error('Database unavailable')
+
+  const userDoc = await db.collection<UserDoc>('users').findOne({
+    passwordResetToken: `enroll_${token}`,
+    passwordResetExpires: { $gt: new Date() },
+  })
+
+  if (!userDoc) return null
+
+  return {
+    userId: userDoc._id.toString(),
+    email: userDoc.email,
+  }
+}
+
+export async function updateSecurityQuestions(
+  userId: string,
+  securityQuestions: Array<{ question: string; answer: string }>
+): Promise<void> {
+  const db = await getDb()
+  if (!db) throw new Error('Database unavailable')
+
+  if (!securityQuestions || securityQuestions.length !== 3) {
+    throw new Error('Exactly 3 security questions are required')
+  }
+
+  let objectId: ObjectId
+  try {
+    objectId = new ObjectId(userId)
+  } catch {
+    throw new Error('Invalid user ID')
+  }
+
+  // Hash all answers
+  const processedSecurityQuestions: SecurityQuestion[] = await Promise.all(
+    securityQuestions.map(async (sq) => ({
+      question: sq.question.trim(),
+      answerHash: await bcrypt.hash(sq.answer.toLowerCase().trim(), 10),
+    }))
+  )
+
+  await db.collection<UserDoc>('users').updateOne(
+    { _id: objectId },
+    {
+      $set: {
+        securityQuestions: processedSecurityQuestions,
+        verified: true,
+        updatedAt: Date.now(),
+      },
+    }
+  )
+}
+
+export async function completeEnrollment(
+  token: string,
+  securityQuestions: Array<{ question: string; answer: string }>
+): Promise<boolean> {
+  const db = await getDb()
+  if (!db) throw new Error('Database unavailable')
+
+  if (!securityQuestions || securityQuestions.length !== 3) {
+    return false
+  }
+
+  const userInfo = await verifyEnrollmentToken(token)
+  if (!userInfo) return false
+
+  let objectId: ObjectId
+  try {
+    objectId = new ObjectId(userInfo.userId)
+  } catch {
+    return false
+  }
+
+  // Hash all answers
+  const processedSecurityQuestions: SecurityQuestion[] = await Promise.all(
+    securityQuestions.map(async (sq) => ({
+      question: sq.question.trim(),
+      answerHash: await bcrypt.hash(sq.answer.toLowerCase().trim(), 10),
+    }))
+  )
+
+  await db.collection<UserDoc>('users').updateOne(
+    { _id: objectId },
+    {
+      $set: {
+        securityQuestions: processedSecurityQuestions,
+        verified: true,
+        passwordResetToken: undefined,
+        passwordResetExpires: undefined,
         updatedAt: Date.now(),
       },
     }

@@ -7,6 +7,8 @@ import Register from '@/pages/Register'
 import ForgotUsername from '@/pages/ForgotUsername'
 import ForgotPassword from '@/pages/ForgotPassword'
 import ResetPassword from '@/pages/ResetPassword'
+import Enroll from '@/pages/Enroll'
+import Settings from '@/pages/Settings'
 import Dashboard from '@/pages/Dashboard'
 import Marketplace from '@/pages/Marketplace'
 import Workspace from '@/pages/Workspace'
@@ -37,6 +39,7 @@ export const router = createBrowserRouter([
       { index: true, element: <RequireAuth><Dashboard /></RequireAuth> },
       { path: 'marketplace', element: <RequireAuth><Marketplace /></RequireAuth> },
       { path: 'workspace/me', element: <RequireAuth><Workspace /></RequireAuth> },
+      { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
       // login is defined as a top-level route wrapped in PublicShell
       { path: 'register', element: <Register /> },
       { path: 'dashboard', element: <RequireAuth><Dashboard /></RequireAuth> },
@@ -76,6 +79,10 @@ export const router = createBrowserRouter([
   {
     path: '/reset-password',
     element: <PublicShell><ResetPassword /></PublicShell>,
+  },
+  {
+    path: '/enroll',
+    element: <PublicShell><Enroll /></PublicShell>,
   },
   // Direct access fallback removed to avoid conflicting route matching
   { path: '*', element: <NotFound /> },

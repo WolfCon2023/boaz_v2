@@ -6,11 +6,17 @@ import {
   getUserByEmail,
   verifyCredentials,
   verifySecurityAnswer,
-  getUserSecurityQuestion,
+  getRandomSecurityQuestion,
   createPasswordResetToken,
   resetPasswordWithToken,
+  createEnrollmentToken,
+  verifyEnrollmentToken,
+  updateSecurityQuestions,
+  completeEnrollment,
+  getUserById,
 } from './store.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
+import { requireAuth } from './rbac.js'
 import { randomUUID } from 'node:crypto'
 import { sendAuthEmail } from './email.js'
 import { env } from '../env.js'
@@ -29,10 +35,14 @@ const credentialsSchema = z.object({
   password: z.string().min(6),
 })
 
+const securityQuestionSchema = z.object({
+  question: z.string().min(1),
+  answer: z.string().min(1),
+})
+
 const registerSchema = credentialsSchema.extend({
   name: z.string().transform((val) => (val.trim() === '' ? undefined : val.trim())).optional(),
-  securityQuestion: z.string().min(1).optional(),
-  securityAnswer: z.string().min(1).optional(),
+  securityQuestions: z.array(securityQuestionSchema).length(3).optional(),
 })
 
 export const authRouter = Router()
@@ -45,10 +55,50 @@ authRouter.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
     }
     
-    const { email, password, name, securityQuestion, securityAnswer } = parsed.data
+    const { email, password, name, securityQuestions } = parsed.data
     console.log('Registration attempt for:', email)
     
-    const user = await createUser(email, password, name, securityQuestion, securityAnswer)
+    const user = await createUser(email, password, name, securityQuestions)
+    
+    // Send enrollment email if security questions weren't provided during registration
+    if (!securityQuestions || securityQuestions.length !== 3) {
+      try {
+        const enrollmentToken = await createEnrollmentToken(email)
+        if (!enrollmentToken.startsWith('dummy-token-')) {
+          const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+          const enrollmentUrl = `${baseUrl}/enroll?token=${enrollmentToken}`
+          
+          await sendAuthEmail({
+            to: email,
+            subject: 'Welcome to BOAZ-OS - Complete Your Account Setup',
+            html: `
+              <h2>Welcome to BOAZ-OS!</h2>
+              <p>Thank you for creating your account. To complete your account setup and enable account recovery features, please click the link below:</p>
+              <p><a href="${enrollmentUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Complete Account Setup</a></p>
+              <p>Or copy and paste this URL into your browser:</p>
+              <p><code>${enrollmentUrl}</code></p>
+              <p>This link will expire in 7 days.</p>
+              <p>If you didn't create this account, please ignore this email.</p>
+            `,
+            text: `
+Welcome to BOAZ-OS!
+
+Thank you for creating your account. To complete your account setup and enable account recovery features, please click the link below:
+
+${enrollmentUrl}
+
+This link will expire in 7 days.
+
+If you didn't create this account, please ignore this email.
+            `,
+          })
+        }
+      } catch (emailErr) {
+        // Log error but don't fail registration
+        console.error('Failed to send enrollment email:', emailErr)
+      }
+    }
+    
     const access = signAccessToken({ sub: user.id, email: user.email })
     const jti = randomUUID()
     const refresh = signRefreshToken({ sub: user.id, email: user.email, jti })
@@ -126,21 +176,6 @@ authRouter.post('/login', async (req, res) => {
   }
 })
 
-authRouter.get('/me', async (req, res) => {
-  const auth = req.headers.authorization
-  if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' })
-  const token = auth.slice(7)
-  const payload = verifyToken(token)
-  if (!payload) return res.status(401).json({ error: 'Unauthorized' })
-  try {
-    const user = await getUserByEmail(payload.email)
-    if (!user) return res.status(401).json({ error: 'Unauthorized' })
-    res.json({ user })
-  } catch (err) {
-    return res.status(503).json({ error: 'Service unavailable' })
-  }
-})
-
 authRouter.post('/refresh', (req, res) => {
   const rt = req.cookies?.refresh_token || req.body?.refresh_token
   if (!rt) return res.status(401).json({ error: 'Unauthorized' })
@@ -171,7 +206,7 @@ authRouter.post('/logout', (req, res) => {
   res.json({ ok: true })
 })
 
-// Forgot Username: Step 1 - Get security question
+// Forgot Username: Step 1 - Get random security question
 authRouter.post('/forgot-username/request', async (req, res) => {
   const parsed = z.object({ email: z.string().email() }).safeParse(req.body)
   if (!parsed.success) {
@@ -179,10 +214,13 @@ authRouter.post('/forgot-username/request', async (req, res) => {
   }
 
   try {
-    const question = await getUserSecurityQuestion(parsed.data.email)
+    const result = await getRandomSecurityQuestion(parsed.data.email)
     // Always return success to prevent email enumeration
-    // If no question exists, return null (user hasn't set up security question)
-    return res.json({ question })
+    // If no questions exist, return null (user hasn't set up security questions)
+    if (!result) {
+      return res.json({ question: null })
+    }
+    return res.json({ question: result.question, questionIndex: result.index })
   } catch (err: any) {
     return res.status(503).json({ error: 'Service unavailable' })
   }
@@ -193,6 +231,7 @@ authRouter.post('/forgot-username/verify', async (req, res) => {
   const parsed = z
     .object({
       email: z.string().email(),
+      question: z.string().min(1),
       answer: z.string().min(1),
     })
     .safeParse(req.body)
@@ -201,7 +240,7 @@ authRouter.post('/forgot-username/verify', async (req, res) => {
   }
 
   try {
-    const isValid = await verifySecurityAnswer(parsed.data.email, parsed.data.answer)
+    const isValid = await verifySecurityAnswer(parsed.data.email, parsed.data.question, parsed.data.answer)
     if (!isValid) {
       return res.status(401).json({ error: 'Incorrect answer' })
     }
@@ -297,6 +336,84 @@ authRouter.post('/forgot-password/reset', async (req, res) => {
     return res.json({ message: 'Password has been reset successfully' })
   } catch (err: any) {
     return res.status(503).json({ error: 'Service unavailable' })
+  }
+})
+
+// Get current user info
+authRouter.get('/me', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const user = await getUserById(auth.userId)
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    // Return user data directly, not nested
+    res.json(user)
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Update security questions (for logged-in users)
+authRouter.put('/me/security-questions', requireAuth, async (req, res) => {
+  try {
+    const parsed = z.object({
+      securityQuestions: z.array(securityQuestionSchema).length(3),
+    }).safeParse(req.body)
+    
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload. Exactly 3 security questions are required.' })
+    }
+    
+    const auth = (req as any).auth as { userId: string; email: string }
+    await updateSecurityQuestions(auth.userId, parsed.data.securityQuestions)
+    res.json({ message: 'Security questions updated successfully' })
+  } catch (err: any) {
+    console.error('Update security questions error:', err)
+    res.status(500).json({ error: err.message || 'Failed to update security questions' })
+  }
+})
+
+// Enrollment: Verify token and get user info
+authRouter.get('/enroll/verify', async (req, res) => {
+  try {
+    const token = req.query.token as string
+    if (!token) {
+      return res.status(400).json({ error: 'Token required' })
+    }
+    
+    const userInfo = await verifyEnrollmentToken(token)
+    if (!userInfo) {
+      return res.status(400).json({ error: 'Invalid or expired token' })
+    }
+    
+    res.json({ email: userInfo.email })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Enrollment: Complete setup
+authRouter.post('/enroll/complete', async (req, res) => {
+  try {
+    const parsed = z.object({
+      token: z.string().min(1),
+      securityQuestions: z.array(securityQuestionSchema).length(3),
+    }).safeParse(req.body)
+    
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload. Exactly 3 security questions are required.' })
+    }
+    
+    const success = await completeEnrollment(parsed.data.token, parsed.data.securityQuestions)
+    if (!success) {
+      return res.status(400).json({ error: 'Invalid or expired token' })
+    }
+    
+    res.json({ message: 'Account setup completed successfully' })
+  } catch (err: any) {
+    console.error('Complete enrollment error:', err)
+    res.status(500).json({ error: err.message || 'Failed to complete enrollment' })
   }
 })
 
