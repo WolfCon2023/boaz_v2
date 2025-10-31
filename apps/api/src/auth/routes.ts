@@ -729,6 +729,195 @@ authRouter.get('/admin/roles', requireAuth, requirePermission('*'), async (req, 
   }
 })
 
+// Admin: List/Search users
+authRouter.get('/admin/users', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    const search = (req.query.search as string)?.trim() || ''
+    const limit = parseInt(req.query.limit as string) || 50
+
+    // Build search query
+    let query: any = {}
+    if (search) {
+      query.$or = [
+        { email: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
+      ]
+    }
+
+    // Get users
+    const users = await db.collection('users')
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray()
+
+    // Get all role assignments for these users
+    const userIds = users.map((u: any) => u._id.toString())
+    const userRoles = await db.collection('user_roles')
+      .find({ userId: { $in: userIds } } as any)
+      .toArray()
+
+    // Get role details
+    const roleIds = userRoles.map((ur: any) => ur.roleId)
+    const roles = roleIds.length > 0
+      ? await db.collection('roles').find({ _id: { $in: roleIds } } as any).toArray()
+      : []
+
+    // Build role map
+    const roleMap = new Map(roles.map((r: any) => [r._id.toString(), { id: r._id.toString(), name: r.name, permissions: r.permissions || [] }]))
+
+    // Build user -> roles map
+    const userRolesMap = new Map<string, Array<{ id: string; name: string; permissions: string[] }>>()
+    userRoles.forEach((ur: any) => {
+      const role = roleMap.get(ur.roleId.toString())
+      if (role) {
+        if (!userRolesMap.has(ur.userId)) {
+          userRolesMap.set(ur.userId, [])
+        }
+        userRolesMap.get(ur.userId)!.push(role)
+      }
+    })
+
+    // Format response
+    const usersWithRoles = users.map((u: any) => ({
+      id: u._id.toString(),
+      email: u.email,
+      name: u.name || undefined,
+      phoneNumber: u.phoneNumber || undefined,
+      workLocation: u.workLocation || undefined,
+      verified: u.verified || false,
+      passwordChangeRequired: u.passwordChangeRequired || false,
+      createdAt: u.createdAt,
+      roles: userRolesMap.get(u._id.toString()) || [],
+    }))
+
+    res.json({ users: usersWithRoles, total: users.length })
+  } catch (err: any) {
+    console.error('Get users error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get users' })
+  }
+})
+
+// Admin: Update user role
+authRouter.patch('/admin/users/:id/role', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    let userId: ObjectId
+    try {
+      userId = new ObjectId(req.params.id)
+    } catch {
+      return res.status(400).json({ error: 'Invalid user ID' })
+    }
+
+    const parsed = z.object({
+      roleId: z.string().nullable(), // null means remove all roles
+    }).safeParse(req.body)
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
+    }
+
+    // Verify user exists
+    const user = await db.collection('users').findOne({ _id: userId })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const userIdStr = userId.toString()
+
+    // Remove all existing roles for this user
+    await db.collection('user_roles').deleteMany({ userId: userIdStr } as any)
+
+    let assignedRole = null
+    if (parsed.data.roleId) {
+      // Assign new role
+      let roleId: ObjectId
+      try {
+        roleId = new ObjectId(parsed.data.roleId)
+      } catch {
+        return res.status(400).json({ error: 'Invalid role ID' })
+      }
+
+      // Verify role exists
+      const role = await db.collection('roles').findOne({ _id: roleId })
+      if (!role) {
+        return res.status(404).json({ error: 'Role not found' })
+      }
+
+      // Assign role
+      await db.collection('user_roles').insertOne({
+        _id: new ObjectId(),
+        userId: userIdStr,
+        roleId,
+        createdAt: new Date(),
+      })
+
+      assignedRole = { id: role._id.toString(), name: role.name }
+    }
+
+    res.json({
+      message: assignedRole ? `Role "${assignedRole.name}" assigned successfully` : 'All roles removed',
+      role: assignedRole,
+    })
+  } catch (err: any) {
+    console.error('Update user role error:', err)
+    res.status(500).json({ error: err.message || 'Failed to update user role' })
+  }
+})
+
+// Admin: Delete user
+authRouter.delete('/admin/users/:id', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    let userId: ObjectId
+    try {
+      userId = new ObjectId(req.params.id)
+    } catch {
+      return res.status(400).json({ error: 'Invalid user ID' })
+    }
+
+    // Prevent deleting yourself
+    const auth = (req as any).auth as { userId: string; email: string }
+    if (auth.userId === userId.toString()) {
+      return res.status(400).json({ error: 'Cannot delete your own account' })
+    }
+
+    // Verify user exists
+    const user = await db.collection('users').findOne({ _id: userId })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const userIdStr = userId.toString()
+
+    // Delete user roles
+    await db.collection('user_roles').deleteMany({ userId: userIdStr } as any)
+
+    // Revoke all user sessions
+    try {
+      const { revokeAllUserSessions } = await import('./sessions.js')
+      await revokeAllUserSessions(userIdStr)
+    } catch (sessionErr) {
+      console.warn('Failed to revoke user sessions:', sessionErr)
+    }
+
+    // Delete user
+    await db.collection('users').deleteOne({ _id: userId })
+
+    res.json({ message: 'User deleted successfully' })
+  } catch (err: any) {
+    console.error('Delete user error:', err)
+    res.status(500).json({ error: err.message || 'Failed to delete user' })
+  }
+})
+
 // Get current user's roles
 authRouter.get('/me/roles', requireAuth, async (req, res) => {
   try {

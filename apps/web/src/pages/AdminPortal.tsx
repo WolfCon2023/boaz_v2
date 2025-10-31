@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -30,6 +30,10 @@ export default function AdminPortal() {
   const [newUserLocation, setNewUserLocation] = useState('')
   const [newUserRoleId, setNewUserRoleId] = useState<string>('')
   const [createdUserPassword, setCreatedUserPassword] = useState<string | null>(null)
+  
+  // User management state
+  const [userSearch, setUserSearch] = useState<string>('')
+  const [editingUserRole, setEditingUserRole] = useState<{ userId: string; roleId: string } | null>(null)
 
   // Fetch available roles for dropdown
   const { data: rolesData } = useQuery<{ roles: Array<{ id: string; name: string; permissions: string[] }> }>({
@@ -40,6 +44,30 @@ export default function AdminPortal() {
     },
     enabled: activeTab === 'users',
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  })
+
+  // Fetch users list
+  type UserWithRoles = {
+    id: string
+    email: string
+    name?: string
+    phoneNumber?: string
+    workLocation?: string
+    verified: boolean
+    passwordChangeRequired: boolean
+    createdAt: number
+    roles: Array<{ id: string; name: string; permissions: string[] }>
+  }
+  
+  const { data: usersData, refetch: refetchUsers } = useQuery<{ users: UserWithRoles[]; total: number }>({
+    queryKey: ['admin', 'users', userSearch],
+    queryFn: async () => {
+      const params = userSearch ? { search: userSearch, limit: '100' } : { limit: '100' }
+      const res = await http.get('/api/auth/admin/users', { params })
+      return res.data
+    },
+    enabled: activeTab === 'users',
+    staleTime: 30 * 1000, // Cache for 30 seconds
   })
 
   // Fetch all sessions (with optional user filter)
@@ -99,6 +127,9 @@ export default function AdminPortal() {
       setNewUserLocation('')
       setNewUserRoleId('')
       
+      // Refresh user list
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      
       setTimeout(() => {
         setMessage('')
         setCreatedUserPassword(null)
@@ -126,6 +157,44 @@ export default function AdminPortal() {
       roleId: newUserRoleId || undefined,
     })
   }
+
+  // Update user role mutation
+  const updateUserRole = useMutation({
+    mutationFn: async ({ userId, roleId }: { userId: string; roleId: string | null }) => {
+      const res = await http.patch(`/api/auth/admin/users/${userId}/role`, { roleId })
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('User role updated successfully')
+      setError('')
+      setEditingUserRole(null)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to update user role')
+      setMessage('')
+      setEditingUserRole(null)
+    },
+  })
+
+  // Delete user mutation
+  const deleteUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await http.delete(`/api/auth/admin/users/${userId}`)
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('User deleted successfully')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to delete user')
+      setMessage('')
+    },
+  })
 
   // Helper to parse user agent
   const parseUserAgent = (ua?: string): { device: string; browser: string } => {
@@ -318,6 +387,183 @@ export default function AdminPortal() {
                     <code className="rounded bg-amber-100 px-2 py-1 font-mono">{createdUserPassword}</code>
                   </p>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* User List */}
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Manage Users</h2>
+                <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
+                  Search, update roles, or delete users
+                </p>
+              </div>
+              <div className="text-sm text-[color:var(--color-text-muted)]">
+                {usersData?.total || 0} user(s)
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--color-text-muted)]" />
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Search by email or name..."
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] pl-10 pr-10 py-2 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                />
+                {userSearch && (
+                  <button
+                    onClick={() => setUserSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Users List */}
+            {!usersData ? (
+              <div className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+                Loading users...
+              </div>
+            ) : usersData.users.length === 0 ? (
+              <div className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+                {userSearch ? 'No users found matching your search.' : 'No users found.'}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {usersData.users.map((user) => {
+                  const isEditingRole = editingUserRole?.userId === user.id
+                  const currentRoleId = user.roles.length > 0 ? user.roles[0].id : ''
+
+                  return (
+                    <div
+                      key={user.id}
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="mb-2 flex items-center gap-2">
+                            <User className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+                            <span className="font-semibold">{user.email}</span>
+                            {user.passwordChangeRequired && (
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                                Password Change Required
+                              </span>
+                            )}
+                            {!user.verified && (
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-800">
+                                Unverified
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="space-y-1 text-sm text-[color:var(--color-text-muted)]">
+                            {user.name && (
+                              <div>
+                                <span className="font-medium">Name:</span> {user.name}
+                              </div>
+                            )}
+                            {user.phoneNumber && (
+                              <div>
+                                <span className="font-medium">Phone:</span> {user.phoneNumber}
+                              </div>
+                            )}
+                            {user.workLocation && (
+                              <div>
+                                <span className="font-medium">Location:</span> {user.workLocation}
+                              </div>
+                            )}
+                            <div>
+                              <span className="font-medium">Created:</span> {formatDateTime(user.createdAt)}
+                            </div>
+                          </div>
+
+                          {/* Current Role */}
+                          <div className="mt-3">
+                            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                              Role
+                            </label>
+                            {isEditingRole ? (
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={editingUserRole.roleId}
+                                  onChange={(e) =>
+                                    setEditingUserRole({ userId: user.id, roleId: e.target.value })
+                                  }
+                                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                                >
+                                  <option value="">No Role</option>
+                                  {rolesData?.roles.map((role) => (
+                                    <option key={role.id} value={role.id}>
+                                      {role.name} {role.permissions.includes('*') && '(Admin)'}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  onClick={() => {
+                                    updateUserRole.mutate({
+                                      userId: user.id,
+                                      roleId: editingUserRole.roleId || null,
+                                    })
+                                  }}
+                                  disabled={updateUserRole.isPending}
+                                  className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-1.5 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => setEditingUserRole(null)}
+                                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-sm hover:bg-[color:var(--color-muted)]"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-sm">
+                                  {user.roles.length > 0
+                                    ? user.roles.map((r) => r.name).join(', ')
+                                    : 'No role assigned'}
+                                </div>
+                                <button
+                                  onClick={() => setEditingUserRole({ userId: user.id, roleId: currentRoleId })}
+                                  className="rounded-lg border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
+                                  title="Edit role"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Are you sure you want to delete user "${user.email}"? This action cannot be undone.`
+                              )
+                            ) {
+                              deleteUser.mutate(user.id)
+                            }
+                          }}
+                          disabled={deleteUser.isPending}
+                          className="ml-4 rounded-lg border border-red-300 bg-red-50 p-2 text-red-700 hover:bg-red-100 disabled:opacity-50"
+                          title="Delete user"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
