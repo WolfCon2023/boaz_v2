@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Settings as SettingsIcon, Shield, User, Clock, CheckCircle2, Circle } from 'lucide-react'
+import { Settings as SettingsIcon, Shield, User, Clock, CheckCircle2, Circle, Monitor, LogOut, Trash2 } from 'lucide-react'
 import { http } from '@/lib/http'
+import { formatDateTime } from '@/lib/dateFormat'
 
 type UserInfo = {
   id: string
@@ -21,9 +22,21 @@ type Preferences = {
   emailNotifications?: boolean
 }
 
+type Session = {
+  jti: string
+  userId: string
+  email: string
+  ipAddress?: string
+  userAgent?: string
+  createdAt: string
+  lastUsedAt: string
+  revoked?: boolean
+  isCurrent?: boolean
+}
+
 export default function Settings() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'security'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'preferences' | 'security' | 'sessions'>('profile')
   
   const { data: userData } = useQuery<UserInfo>({
     queryKey: ['user', 'me'],
@@ -51,6 +64,72 @@ export default function Settings() {
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes - shares cache with PreferencesProvider
   })
+  
+  // Sessions data
+  const { data: sessionsData, refetch: refetchSessions } = useQuery<{ sessions: Session[]; currentJti?: string }>({
+    queryKey: ['sessions', 'me'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/sessions')
+      return res.data
+    },
+    enabled: activeTab === 'sessions',
+    staleTime: 30 * 1000, // Cache for 30 seconds
+  })
+  
+  // Revoke session mutation
+  const revokeSession = useMutation({
+    mutationFn: async (jti: string) => {
+      const res = await http.delete(`/api/auth/me/sessions/${jti}`)
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('Session revoked successfully')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'me'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to revoke session')
+      setMessage('')
+    },
+  })
+  
+  // Revoke all other sessions mutation
+  const revokeAllSessions = useMutation({
+    mutationFn: async () => {
+      const res = await http.post('/api/auth/me/sessions/revoke-all')
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('All other sessions revoked successfully')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'me'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to revoke sessions')
+      setMessage('')
+    },
+  })
+  
+  // Helper to parse user agent
+  const parseUserAgent = (ua?: string): { device: string; browser: string } => {
+    if (!ua) return { device: 'Unknown', browser: 'Unknown' }
+    
+    let device = 'Desktop'
+    if (ua.match(/Mobile|Android|iPhone|iPad/i)) {
+      device = ua.match(/iPhone/i) ? 'iPhone' : ua.match(/iPad/i) ? 'iPad' : 'Mobile'
+    }
+    
+    let browser = 'Unknown'
+    if (ua.match(/Chrome/i) && !ua.match(/Edg/i)) browser = 'Chrome'
+    else if (ua.match(/Firefox/i)) browser = 'Firefox'
+    else if (ua.match(/Safari/i) && !ua.match(/Chrome/i)) browser = 'Safari'
+    else if (ua.match(/Edg/i)) browser = 'Edge'
+    else if (ua.match(/Opera|OPR/i)) browser = 'Opera'
+    
+    return { device, browser }
+  }
   
   // Profile form state
   const [profileForm, setProfileForm] = useState({
@@ -779,6 +858,119 @@ export default function Settings() {
                 </button>
               </div>
             </form>
+          )}
+        </div>
+      )}
+      
+      {/* Sessions Tab */}
+      {activeTab === 'sessions' && (
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Active Sessions</h2>
+              <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
+                Manage your active sessions across different devices and browsers.
+              </p>
+            </div>
+            {sessionsData && sessionsData.sessions.length > 1 && (
+              <button
+                onClick={() => {
+                  if (confirm('Are you sure you want to revoke all other sessions? You will remain logged in on this device.')) {
+                    revokeAllSessions.mutate()
+                  }
+                }}
+                disabled={revokeAllSessions.isPending}
+                className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700 hover:bg-red-100 disabled:opacity-50"
+              >
+                <LogOut className="mr-2 inline h-4 w-4" />
+                {revokeAllSessions.isPending ? 'Revoking...' : 'Revoke All Others'}
+              </button>
+            )}
+          </div>
+          
+          {error && (
+            <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+          
+          {message && (
+            <div className="mb-4 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
+              {message}
+            </div>
+          )}
+          
+          {!sessionsData ? (
+            <div className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+              Loading sessions...
+            </div>
+          ) : sessionsData.sessions.length === 0 ? (
+            <div className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+              No active sessions found.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sessionsData.sessions.map((session) => {
+                const isCurrent = session.isCurrent || false
+                const { device, browser } = parseUserAgent(session.userAgent)
+                
+                return (
+                  <div
+                    key={session.jti}
+                    className={`rounded-lg border p-4 ${
+                      isCurrent
+                        ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                        : 'border-[color:var(--color-border)] bg-[color:var(--color-panel)]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="mb-2 flex items-center gap-2">
+                          <Monitor className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+                          <span className="font-semibold">
+                            {device} • {browser}
+                          </span>
+                          {isCurrent && (
+                            <span className="rounded-full bg-[color:var(--color-primary-600)] px-2 py-0.5 text-xs text-white">
+                              Current Session
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-1 text-sm text-[color:var(--color-text-muted)]">
+                          {session.ipAddress && (
+                            <div>
+                              <span className="font-medium">IP Address:</span> {session.ipAddress}
+                            </div>
+                          )}
+                          <div>
+                            <span className="font-medium">Created:</span> {formatDateTime(session.createdAt)}
+                          </div>
+                          <div>
+                            <span className="font-medium">Last Used:</span> {formatDateTime(session.lastUsedAt)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {!isCurrent && (
+                        <button
+                          onClick={() => {
+                            if (confirm('Are you sure you want to revoke this session?')) {
+                              revokeSession.mutate(session.jti)
+                            }
+                          }}
+                          disabled={revokeSession.isPending}
+                          className="ml-4 rounded-lg border border-red-300 bg-red-50 p-2 text-red-700 hover:bg-red-100 disabled:opacity-50"
+                          title="Revoke this session"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       )}

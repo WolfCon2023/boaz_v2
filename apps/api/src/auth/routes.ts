@@ -23,6 +23,14 @@ import { requireAuth } from './rbac.js'
 import { randomUUID } from 'node:crypto'
 import { sendAuthEmail } from './email.js'
 import { env } from '../env.js'
+import {
+  createSession,
+  updateSessionLastUsed,
+  revokeSession,
+  revokeAllUserSessions,
+  getUserSessions,
+  isSessionRevoked,
+} from './sessions.js'
 
 const cookieOpts = {
   httpOnly: true as const,
@@ -31,7 +39,20 @@ const cookieOpts = {
   path: '/api/auth',
 }
 
-const activeRefresh = new Map<string, { userId: string; email: string; revoked?: boolean }>()
+// Helper function to get client IP
+function getClientIp(req: any): string | undefined {
+  return (
+    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+    req.headers['x-real-ip'] ||
+    req.socket?.remoteAddress ||
+    undefined
+  )
+}
+
+// Helper function to get user agent
+function getUserAgent(req: any): string | undefined {
+  return req.headers['user-agent'] || undefined
+}
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -115,7 +136,15 @@ If you didn't create this account, please ignore this email.
     const access = signAccessToken({ sub: user.id, email: user.email })
     const jti = randomUUID()
     const refresh = signRefreshToken({ sub: user.id, email: user.email, jti })
-    activeRefresh.set(jti, { userId: user.id, email: user.email })
+    
+    // Store session in database
+    try {
+      await createSession(jti, user.id, email, getClientIp(req), getUserAgent(req))
+    } catch (sessionErr) {
+      console.error('Failed to create session:', sessionErr)
+      // Continue anyway - session might work with in-memory fallback
+    }
+    
     res.cookie('refresh_token', refresh, { ...cookieOpts, maxAge: 7 * 24 * 3600 * 1000 })
     const body: AuthResponse = { token: access, user }
     res.status(201).json(body)
@@ -171,7 +200,15 @@ authRouter.post('/login', async (req, res) => {
     const access = signAccessToken({ sub: user.id, email: user.email })
     const jti = randomUUID()
     const refresh = signRefreshToken({ sub: user.id, email: user.email, jti })
-    activeRefresh.set(jti, { userId: user.id, email: user.email })
+    
+    // Store session in database
+    try {
+      await createSession(jti, user.id, user.email, getClientIp(req), getUserAgent(req))
+    } catch (sessionErr) {
+      console.error('Failed to create session:', sessionErr)
+      // Continue anyway - session might work with in-memory fallback
+    }
+    
     res.cookie('refresh_token', refresh, { ...cookieOpts, maxAge: 7 * 24 * 3600 * 1000 })
     const body: AuthResponse = { token: access, user }
     res.json(body)
@@ -189,30 +226,42 @@ authRouter.post('/login', async (req, res) => {
   }
 })
 
-authRouter.post('/refresh', (req, res) => {
+authRouter.post('/refresh', async (req, res) => {
   const rt = req.cookies?.refresh_token || req.body?.refresh_token
   if (!rt) return res.status(401).json({ error: 'Unauthorized' })
   const payload = verifyAny<{ sub: string; email: string; jti?: string }>(rt)
   if (!payload?.jti) return res.status(401).json({ error: 'Unauthorized' })
-  const meta = activeRefresh.get(payload.jti)
-  if (!meta || meta.revoked) return res.status(401).json({ error: 'Unauthorized' })
-  // rotate
-  meta.revoked = true
+  
+  // Check if session is revoked in database
+  const isRevoked = await isSessionRevoked(payload.jti)
+  if (isRevoked) return res.status(401).json({ error: 'Unauthorized' })
+  
+  // Update last used timestamp
+  await updateSessionLastUsed(payload.jti)
+  
+  // Rotate token
+  const oldJti = payload.jti
   const jti = randomUUID()
-  activeRefresh.set(jti, { userId: payload.sub, email: payload.email })
+  await revokeSession(oldJti, payload.sub)
+  
+  try {
+    await createSession(jti, payload.sub, payload.email, getClientIp(req), getUserAgent(req))
+  } catch (sessionErr) {
+    console.error('Failed to create new session during refresh:', sessionErr)
+  }
+  
   const refresh = signRefreshToken({ sub: payload.sub, email: payload.email, jti })
   const access = signAccessToken({ sub: payload.sub, email: payload.email })
   res.cookie('refresh_token', refresh, { ...cookieOpts, maxAge: 7 * 24 * 3600 * 1000 })
   res.json({ token: access })
 })
 
-authRouter.post('/logout', (req, res) => {
+authRouter.post('/logout', async (req, res) => {
   const rt = req.cookies?.refresh_token || req.body?.refresh_token
   if (rt) {
-    const payload = verifyAny<{ jti?: string }>(rt)
-    if (payload?.jti) {
-      const meta = activeRefresh.get(payload.jti)
-      if (meta) meta.revoked = true
+    const payload = verifyAny<{ sub?: string; jti?: string }>(rt)
+    if (payload?.jti && payload?.sub) {
+      await revokeSession(payload.jti, payload.sub)
     }
   }
   res.clearCookie('refresh_token', { ...cookieOpts, maxAge: 0 })
@@ -376,6 +425,72 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     res.json(user)
   } catch (err: any) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// Get user sessions
+authRouter.get('/me/sessions', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const sessions = await getUserSessions(auth.userId)
+    
+    // Identify current session from refresh token
+    const rt = req.cookies?.refresh_token
+    let currentJti: string | undefined
+    if (rt) {
+      const payload = verifyAny<{ jti?: string }>(rt)
+      currentJti = payload?.jti
+    }
+    
+    // Mark current session in response
+    const sessionsWithCurrent = sessions.map(s => ({
+      ...s,
+      isCurrent: s.jti === currentJti,
+    }))
+    
+    res.json({ sessions: sessionsWithCurrent, currentJti })
+  } catch (err: any) {
+    console.error('Get sessions error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get sessions' })
+  }
+})
+
+// Revoke a specific session
+authRouter.delete('/me/sessions/:jti', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const { jti } = req.params
+    
+    const revoked = await revokeSession(jti, auth.userId)
+    if (!revoked) {
+      return res.status(404).json({ error: 'Session not found or already revoked' })
+    }
+    
+    res.json({ message: 'Session revoked successfully' })
+  } catch (err: any) {
+    console.error('Revoke session error:', err)
+    res.status(500).json({ error: err.message || 'Failed to revoke session' })
+  }
+})
+
+// Revoke all other sessions (keep current one)
+authRouter.post('/me/sessions/revoke-all', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    
+    // Get current session JTI from refresh token
+    const rt = req.cookies?.refresh_token
+    let currentJti: string | undefined
+    if (rt) {
+      const payload = verifyAny<{ jti?: string }>(rt)
+      currentJti = payload?.jti
+    }
+    
+    const revokedCount = await revokeAllUserSessions(auth.userId, currentJti)
+    res.json({ message: `Revoked ${revokedCount} session(s)` })
+  } catch (err: any) {
+    console.error('Revoke all sessions error:', err)
+    res.status(500).json({ error: err.message || 'Failed to revoke sessions' })
   }
 })
 
