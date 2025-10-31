@@ -92,7 +92,7 @@ authRouter.post('/register', async (req, res) => {
               <p>This link will expire in 7 days.</p>
               <p>If you didn't create this account, please ignore this email.</p>
             `,
-            text: `
+              text: `
 Welcome to BOAZ-OS!
 
 Thank you for creating your account. To complete your account setup and enable account recovery features, please click the link below:
@@ -103,7 +103,8 @@ This link will expire in 7 days.
 
 If you didn't create this account, please ignore this email.
             `,
-          })
+            })
+          }
         }
       } catch (emailErr) {
         // Log error but don't fail registration
