@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
+import { getApiUrl } from '@/lib/http'
 
 export function useAccessToken(): string | null {
   try {
@@ -19,7 +20,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 export async function logout() {
   try {
     // Call logout endpoint to revoke refresh token
-    await fetch('/api/auth/logout', {
+    await fetch(getApiUrl('/api/auth/logout'), {
       method: 'POST',
       credentials: 'include', // Include cookies for refresh token
     })

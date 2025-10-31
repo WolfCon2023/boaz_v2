@@ -41,13 +41,12 @@ export function getApiUrl(path: string): string {
   }
   
   // Production mode or custom API URL - construct full URL
-  // Remove leading /api from path since baseURL is the full API server URL
-  // Example: baseURL = 'https://api.example.com', path = '/api/auth/login' -> 'https://api.example.com/auth/login'
-  const pathWithoutApi = cleanPath.replace(/^\/api/, '')
+  // Keep the full path including /api since routes are mounted at /api/auth, /api/crm, etc.
+  // Example: baseURL = 'https://api.example.com', path = '/api/auth/login' -> 'https://api.example.com/api/auth/login'
   
   // Ensure baseURL doesn't end with / and path starts with /
   const cleanBase = baseURL.replace(/\/$/, '')
-  const cleanPath2 = pathWithoutApi.startsWith('/') ? pathWithoutApi : `/${pathWithoutApi}`
+  const cleanPath2 = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`
   
   return `${cleanBase}${cleanPath2}`
 }

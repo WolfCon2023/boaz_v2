@@ -14,6 +14,7 @@ import {
   updateSecurityQuestions,
   completeEnrollment,
   getUserById,
+  getUserSecurityQuestions,
 } from './store.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
 import { requireAuth } from './rbac.js'
@@ -349,6 +350,43 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     }
     // Return user data directly, not nested
     res.json(user)
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get current user's security questions (questions only, not answers)
+authRouter.get('/me/security-questions', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const questions = await getUserSecurityQuestions(auth.userId)
+    // Return null if no questions set, otherwise return array of questions
+    res.json({ questions: questions || [] })
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Test/verify a security answer
+authRouter.post('/me/test-security-answer', requireAuth, async (req, res) => {
+  try {
+    const parsed = z.object({
+      question: z.string().min(1),
+      answer: z.string().min(1),
+    }).safeParse(req.body)
+    
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload' })
+    }
+    
+    const auth = (req as any).auth as { userId: string; email: string }
+    const user = await getUserById(auth.userId)
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+    
+    const isValid = await verifySecurityAnswer(user.email, parsed.data.question, parsed.data.answer)
+    res.json({ valid: isValid })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

@@ -260,6 +260,27 @@ export async function getUserById(id: string): Promise<User | null> {
   }
 }
 
+export async function getUserSecurityQuestions(userId: string): Promise<string[] | null> {
+  const db = await getDb()
+  if (!db) return null
+
+  let objectId: ObjectId
+  try {
+    objectId = new ObjectId(userId)
+  } catch {
+    return null
+  }
+
+  const userDoc = await db.collection<UserDoc>('users').findOne({ _id: objectId })
+  
+  if (!userDoc || !userDoc.securityQuestions || userDoc.securityQuestions.length === 0) {
+    return null
+  }
+
+  // Return only the questions, not the answers
+  return userDoc.securityQuestions.map((sq) => sq.question)
+}
+
 export async function verifySecurityAnswer(email: string, question: string, answer: string): Promise<boolean> {
   const db = await getDb()
   if (!db) throw new Error('Database unavailable')
