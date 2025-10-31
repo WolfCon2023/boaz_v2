@@ -38,11 +38,16 @@ const registerSchema = credentialsSchema.extend({
 export const authRouter = Router()
 
 authRouter.post('/register', async (req, res) => {
-  const parsed = registerSchema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid payload' })
-  const { email, password, name, securityQuestion, securityAnswer } = parsed.data
-  
   try {
+    const parsed = registerSchema.safeParse(req.body)
+    if (!parsed.success) {
+      console.error('Registration validation error:', parsed.error)
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
+    }
+    
+    const { email, password, name, securityQuestion, securityAnswer } = parsed.data
+    console.log('Registration attempt for:', email)
+    
     const user = await createUser(email, password, name, securityQuestion, securityAnswer)
     const access = signAccessToken({ sub: user.id, email: user.email })
     const jti = randomUUID()
@@ -53,25 +58,53 @@ authRouter.post('/register', async (req, res) => {
     res.status(201).json(body)
   } catch (err: any) {
     console.error('Registration error:', err)
+    console.error('Error stack:', err.stack)
+    console.error('Error name:', err.name)
+    console.error('Error code:', err.code)
+    
     if (err.message === 'Email already registered') {
       return res.status(409).json({ error: 'Email already registered' })
     }
     if (err.message === 'Database unavailable') {
       return res.status(503).json({ error: 'Service unavailable' })
     }
-    // Include error details in development
-    const errorMessage = process.env.NODE_ENV === 'development' ? err.message : 'Registration failed'
-    return res.status(500).json({ error: errorMessage, details: process.env.NODE_ENV === 'development' ? String(err) : undefined })
+    
+    // Include error details to help debug
+    const errorResponse: any = { 
+      error: 'Registration failed',
+      message: err.message || 'Unknown error'
+    }
+    
+    // Include more details in non-production
+    if (process.env.NODE_ENV !== 'production') {
+      errorResponse.details = {
+        name: err.name,
+        code: err.code,
+        stack: err.stack
+      }
+    }
+    
+    return res.status(500).json(errorResponse)
   }
 })
 
 authRouter.post('/login', async (req, res) => {
-  const parsed = credentialsSchema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid credentials' })
-  
   try {
+    const parsed = credentialsSchema.safeParse(req.body)
+    if (!parsed.success) {
+      console.error('Login validation error:', parsed.error)
+      return res.status(400).json({ error: 'Invalid credentials' })
+    }
+    
+    console.log('Login attempt for:', parsed.data.email)
+    
     const user = await verifyCredentials(parsed.data.email, parsed.data.password)
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' })
+    if (!user) {
+      console.log('Login failed: Invalid credentials for', parsed.data.email)
+      return res.status(401).json({ error: 'Invalid credentials' })
+    }
+    
+    console.log('Login successful for:', user.email)
     const access = signAccessToken({ sub: user.id, email: user.email })
     const jti = randomUUID()
     const refresh = signRefreshToken({ sub: user.id, email: user.email, jti })
@@ -80,9 +113,15 @@ authRouter.post('/login', async (req, res) => {
     const body: AuthResponse = { token: access, user }
     res.json(body)
   } catch (err: any) {
+    console.error('Login error:', err)
+    console.error('Login error stack:', err.stack)
+    console.error('Login error message:', err.message)
+    
     if (err.message === 'Database unavailable') {
+      console.error('Database unavailable during login')
       return res.status(503).json({ error: 'Service unavailable' })
     }
+    console.error('Login failed with error:', err.message || 'Unknown error')
     return res.status(401).json({ error: 'Invalid credentials' })
   }
 })

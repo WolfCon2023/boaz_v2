@@ -32,20 +32,14 @@ const LOCKOUT_DURATION_MS = 15 * 60 * 1000 // 15 minutes
 // Ensure users collection and indexes exist
 async function ensureUsersCollection(db: any) {
   try {
-    const collections = await db.listCollections({ name: 'users' }).toArray()
-    if (collections.length === 0) {
-      // Collection doesn't exist, create it
-      await db.createCollection('users')
-    }
-    // Ensure unique index on email exists
-    const indexes = await db.collection('users').listIndexes().toArray()
-    const hasEmailIndex = indexes.some((idx: any) => idx.key?.email === 1)
-    if (!hasEmailIndex) {
-      await db.collection('users').createIndex({ email: 1 }, { unique: true })
-    }
+    // Try to create index first (MongoDB will auto-create collection if needed)
+    // This is safer than checking if collection exists
+    await db.collection('users').createIndex({ email: 1 }, { unique: true }).catch(() => {
+      // Index might already exist, that's fine
+    })
   } catch (err) {
-    // If collection/index already exists or creation fails, that's okay
-    // MongoDB will handle it gracefully
+    // If index creation fails completely, log but don't throw
+    // MongoDB will handle duplicate index errors gracefully
     console.warn('Warning: Could not ensure users collection/index:', err)
   }
 }
@@ -57,20 +51,39 @@ export async function createUser(
   securityQuestion?: string,
   securityAnswer?: string
 ): Promise<User> {
+  console.log('createUser called for:', email)
+  
   const db = await getDb()
-  if (!db) throw new Error('Database unavailable')
+  if (!db) {
+    console.error('Database connection failed - getDb returned null')
+    throw new Error('Database unavailable')
+  }
+  
+  console.log('Database connected, database name:', db.databaseName)
 
   // Ensure collection and indexes exist
-  await ensureUsersCollection(db)
+  try {
+    await ensureUsersCollection(db)
+    console.log('Users collection/index ensured')
+  } catch (err) {
+    console.error('Error ensuring users collection:', err)
+    // Continue anyway - MongoDB might handle it
+  }
 
   const emailLower = email.toLowerCase()
   
   // Check if user already exists
+  console.log('Checking for existing user:', emailLower)
   const existing = await db.collection<UserDoc>('users').findOne({ email: emailLower })
-  if (existing) throw new Error('Email already registered')
+  if (existing) {
+    console.log('User already exists')
+    throw new Error('Email already registered')
+  }
 
+  console.log('Hashing password...')
   const passwordHash = await bcrypt.hash(password, 10)
   const securityAnswerHash = securityAnswer ? await bcrypt.hash(securityAnswer.toLowerCase().trim(), 10) : undefined
+  console.log('Password hashed')
   
   const now = Date.now()
   const userDoc: UserDoc = {
@@ -87,14 +100,22 @@ export async function createUser(
     updatedAt: now,
   }
 
+  console.log('Inserting user document...')
   try {
-    await db.collection<UserDoc>('users').insertOne(userDoc)
+    const result = await db.collection<UserDoc>('users').insertOne(userDoc)
+    console.log('User inserted successfully, ID:', result.insertedId)
   } catch (insertErr: any) {
+    console.error('Insert error:', insertErr)
+    console.error('Insert error code:', insertErr?.code)
+    console.error('Insert error message:', insertErr?.message)
+    
     // Handle duplicate key error (unique index on email)
     if (insertErr && typeof insertErr === 'object' && 'code' in insertErr && insertErr.code === 11000) {
+      console.log('Duplicate email detected (11000 error)')
       throw new Error('Email already registered')
     }
     // Re-throw other errors
+    console.error('Re-throwing insert error')
     throw insertErr
   }
 
