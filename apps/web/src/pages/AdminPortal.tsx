@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, Search, User, Filter } from 'lucide-react'
+import { Monitor, Trash2, User, Filter } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 

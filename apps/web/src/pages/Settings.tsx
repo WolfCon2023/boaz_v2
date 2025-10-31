@@ -66,7 +66,7 @@ export default function Settings() {
   })
   
   // Sessions data
-  const { data: sessionsData, refetch: refetchSessions } = useQuery<{ sessions: Session[]; currentJti?: string }>({
+  const { data: sessionsData } = useQuery<{ sessions: Session[]; currentJti?: string }>({
     queryKey: ['sessions', 'me'],
     queryFn: async () => {
       const res = await http.get('/api/auth/me/sessions')

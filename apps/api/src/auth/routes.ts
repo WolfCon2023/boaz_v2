@@ -23,6 +23,7 @@ import { requireAuth, requirePermission } from './rbac.js'
 import { randomUUID } from 'node:crypto'
 import { sendAuthEmail } from './email.js'
 import { env } from '../env.js'
+import { getDb } from '../db.js'
 import {
   createSession,
   updateSessionLastUsed,
