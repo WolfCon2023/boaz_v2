@@ -1,12 +1,29 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
 import { Bell, User2, LogOut, ChevronDown } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { logout, useAccessToken } from './Auth'
+import { http } from '@/lib/http'
+
+type UserInfo = {
+  id: string
+  email: string
+  name?: string
+}
 
 export function Topbar() {
   const [userMenuOpen, setUserMenuOpen] = React.useState(false)
   const token = useAccessToken()
   const userMenuRef = React.useRef<HTMLDivElement>(null)
+  
+  const { data: userData } = useQuery<UserInfo>({
+    queryKey: ['user', 'me'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me')
+      return res.data
+    },
+    enabled: !!token, // Only fetch if authenticated
+  })
 
   // Close menu when clicking outside
   React.useEffect(() => {
@@ -44,15 +61,41 @@ export function Topbar() {
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="inline-flex items-center gap-1 rounded-full p-2 hover:bg-[color:var(--color-muted)]"
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[color:var(--color-muted)] transition-colors"
                 aria-label="User menu"
                 aria-expanded={userMenuOpen}
               >
-                <User2 className="w-5 h-5" />
-                <ChevronDown className={`w-3 h-3 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                <User2 className="w-5 h-5 flex-shrink-0" />
+                <div className="text-left min-w-0">
+                  <div className="text-sm font-medium text-[color:var(--color-text)] truncate">
+                    {userData?.name || userData?.email || 'User'}
+                  </div>
+                  {userData?.name && userData?.email && (
+                    <div className="text-xs text-[color:var(--color-text-muted)] truncate hidden sm:block">
+                      {userData.email}
+                    </div>
+                  )}
+                </div>
+                <ChevronDown className={`w-4 h-4 transition-transform flex-shrink-0 ${userMenuOpen ? 'rotate-180' : ''}`} />
               </button>
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-lg py-1">
+                <div className="absolute right-0 mt-2 w-56 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-lg py-2">
+                  <div className="px-4 py-2 border-b border-[color:var(--color-border)]">
+                    <div className="text-sm font-medium text-[color:var(--color-text)]">
+                      {userData?.name || 'User'}
+                    </div>
+                    <div className="text-xs text-[color:var(--color-text-muted)] truncate">
+                      {userData?.email || ''}
+                    </div>
+                  </div>
+                  <Link
+                    to="/settings"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)] transition-colors"
+                  >
+                    <User2 className="w-4 h-4" />
+                    <span>Settings</span>
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-2 px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)] transition-colors"
