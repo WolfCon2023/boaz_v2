@@ -135,14 +135,33 @@ export default function Settings() {
       if (preferencesForm.theme) {
         el.setAttribute('data-theme', preferencesForm.theme)
       }
+      // Apply layout attribute
       if (preferencesForm.layout === 'compact') {
+        el.setAttribute('data-layout', 'compact')
         el.style.setProperty('--dashboard-gap', '0.75rem')
-        el.style.setProperty('--spacing-md', '8px')
-        el.style.setProperty('--spacing-lg', '12px')
+        el.style.setProperty('--spacing-xs', '2px')
+        el.style.setProperty('--spacing-sm', '4px')
+        el.style.setProperty('--spacing-md', '6px')
+        el.style.setProperty('--spacing-lg', '10px')
+        el.style.setProperty('--spacing-xl', '16px')
+        el.style.setProperty('--spacing-2xl', '24px')
+        el.style.setProperty('--spacing-3xl', '32px')
+        el.style.setProperty('--layout-padding', '0.75rem')
+        el.style.setProperty('--layout-gap', '0.5rem')
+        el.style.setProperty('--section-gap', '1rem')
       } else {
+        el.setAttribute('data-layout', 'default')
         el.style.setProperty('--dashboard-gap', '1.5rem')
+        el.style.setProperty('--spacing-xs', '4px')
+        el.style.setProperty('--spacing-sm', '8px')
         el.style.setProperty('--spacing-md', '12px')
         el.style.setProperty('--spacing-lg', '16px')
+        el.style.setProperty('--spacing-xl', '24px')
+        el.style.setProperty('--spacing-2xl', '32px')
+        el.style.setProperty('--spacing-3xl', '40px')
+        el.style.setProperty('--layout-padding', '1rem')
+        el.style.setProperty('--layout-gap', '1rem')
+        el.style.setProperty('--section-gap', '1.5rem')
       }
       setTimeout(() => setMessage(''), 5000)
     },

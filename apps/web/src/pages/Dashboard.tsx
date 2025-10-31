@@ -33,6 +33,8 @@ export default function Dashboard() {
   React.useEffect(() => {
     const el = document.documentElement
     el.setAttribute('data-theme', themeState)
+    el.setAttribute('data-layout', layoutState)
+    // PreferencesProvider will handle the CSS variable updates
     el.style.setProperty('--dashboard-gap', layoutState === 'compact' ? '0.75rem' : '1.5rem')
   }, [themeState, layoutState])
 

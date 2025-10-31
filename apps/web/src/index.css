@@ -70,7 +70,7 @@ html[data-theme="light"] {
   --shadow-1: var(--shadow-1);
   --shadow-2: var(--shadow-2);
 
-  /* Spacing aliases */
+  /* Spacing aliases - defaults, can be overridden by PreferencesProvider */
   --spacing-xxs: 2px;
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -78,7 +78,60 @@ html[data-theme="light"] {
   --spacing-lg: 16px;
   --spacing-xl: 24px;
   --spacing-2xl: 32px;
+  --spacing-3xl: 40px;
+  --dashboard-gap: 1.5rem;
+  --layout-padding: 1rem;
+  --layout-gap: 1rem;
+  --section-gap: 1.5rem;
 }
+
+/* Compact layout overrides */
+html[data-layout="compact"] {
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 6px;
+  --spacing-lg: 10px;
+  --spacing-xl: 16px;
+  --spacing-2xl: 24px;
+  --spacing-3xl: 32px;
+  --dashboard-gap: 0.75rem;
+  --layout-padding: 0.75rem;
+  --layout-gap: 0.5rem;
+  --section-gap: 1rem;
+}
+
+/* Compact layout spacing utilities */
+html[data-layout="compact"] .space-y-2 > * + * { margin-top: var(--spacing-sm, 4px); }
+html[data-layout="compact"] .space-y-3 > * + * { margin-top: var(--spacing-md, 6px); }
+html[data-layout="compact"] .space-y-4 > * + * { margin-top: var(--spacing-md, 6px); }
+html[data-layout="compact"] .space-y-6 > * + * { margin-top: var(--spacing-lg, 10px); }
+html[data-layout="compact"] .space-y-10 > * + * { margin-top: var(--section-gap, 1rem); }
+
+html[data-layout="compact"] .gap-2 { gap: var(--spacing-sm, 4px); }
+html[data-layout="compact"] .gap-3 { gap: var(--spacing-md, 6px); }
+html[data-layout="compact"] .gap-4 { gap: var(--spacing-md, 6px); }
+html[data-layout="compact"] .gap-6 { gap: var(--spacing-lg, 10px); }
+
+html[data-layout="compact"] .p-2 { padding: var(--spacing-sm, 4px); }
+html[data-layout="compact"] .p-3 { padding: var(--spacing-md, 6px); }
+html[data-layout="compact"] .p-4 { padding: var(--layout-padding, 0.75rem); }
+html[data-layout="compact"] .p-5 { padding: var(--spacing-lg, 10px); }
+html[data-layout="compact"] .p-6 { padding: var(--spacing-lg, 10px); }
+
+html[data-layout="compact"] .px-3 { padding-left: var(--spacing-md, 6px); padding-right: var(--spacing-md, 6px); }
+html[data-layout="compact"] .px-4 { padding-left: var(--layout-padding, 0.75rem); padding-right: var(--layout-padding, 0.75rem); }
+html[data-layout="compact"] .px-8 { padding-left: var(--spacing-xl, 16px); padding-right: var(--spacing-xl, 16px); }
+
+html[data-layout="compact"] .py-2 { padding-top: var(--spacing-sm, 4px); padding-bottom: var(--spacing-sm, 4px); }
+html[data-layout="compact"] .py-3 { padding-top: var(--spacing-md, 6px); padding-bottom: var(--spacing-md, 6px); }
+html[data-layout="compact"] .py-6 { padding-top: var(--spacing-lg, 10px); padding-bottom: var(--spacing-lg, 10px); }
+html[data-layout="compact"] .py-12 { padding-top: var(--spacing-xl, 16px); padding-bottom: var(--spacing-xl, 16px); }
+
+html[data-layout="compact"] .mt-2 { margin-top: var(--spacing-sm, 4px); }
+html[data-layout="compact"] .mt-3 { margin-top: var(--spacing-md, 6px); }
+html[data-layout="compact"] .mb-2 { margin-bottom: var(--spacing-sm, 4px); }
+html[data-layout="compact"] .mb-3 { margin-bottom: var(--spacing-md, 6px); }
+html[data-layout="compact"] .mb-4 { margin-bottom: var(--spacing-md, 6px); }
 
 /* Base app background/text */
 html, body, #root {
