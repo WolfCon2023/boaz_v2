@@ -68,13 +68,8 @@ export function Topbar() {
                 <User2 className="w-5 h-5 flex-shrink-0" />
                 <div className="text-left min-w-0">
                   <div className="text-sm font-medium text-[color:var(--color-text)] truncate">
-                    {userData?.name || userData?.email || 'User'}
+                    {userData?.name || 'User'}
                   </div>
-                  {userData?.name && userData?.email && (
-                    <div className="text-xs text-[color:var(--color-text-muted)] truncate hidden sm:block">
-                      {userData.email}
-                    </div>
-                  )}
                 </div>
                 <ChevronDown className={`w-4 h-4 transition-transform flex-shrink-0 ${userMenuOpen ? 'rotate-180' : ''}`} />
               </button>
