@@ -15,6 +15,7 @@ import {
   completeEnrollment,
   getUserById,
   getUserSecurityQuestions,
+  updateUserProfile,
 } from './store.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
 import { requireAuth } from './rbac.js'
@@ -44,6 +45,8 @@ const securityQuestionSchema = z.object({
 const registerSchema = credentialsSchema.extend({
   name: z.string().transform((val) => (val.trim() === '' ? undefined : val.trim())).optional(),
   securityQuestions: z.array(securityQuestionSchema).length(3).optional(),
+  phoneNumber: z.string().transform((val) => (val.trim() === '' ? undefined : val.trim())).optional(),
+  workLocation: z.string().transform((val) => (val.trim() === '' ? undefined : val.trim())).optional(),
 })
 
 export const authRouter = Router()
@@ -56,10 +59,10 @@ authRouter.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
     }
     
-    const { email, password, name, securityQuestions } = parsed.data
+    const { email, password, name, securityQuestions, phoneNumber, workLocation } = parsed.data
     console.log('Registration attempt for:', email)
     
-    const user = await createUser(email, password, name, securityQuestions)
+    const user = await createUser(email, password, name, securityQuestions, phoneNumber, workLocation)
     
     // Send enrollment email if security questions weren't provided during registration
     if (!securityQuestions || securityQuestions.length !== 3) {
@@ -352,6 +355,28 @@ authRouter.get('/me', requireAuth, async (req, res) => {
     res.json(user)
   } catch (err: any) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// Update user profile (name, phone, work location)
+authRouter.put('/me/profile', requireAuth, async (req, res) => {
+  try {
+    const parsed = z.object({
+      name: z.string().transform((val) => (val.trim() === '' ? undefined : val.trim())).optional(),
+      phoneNumber: z.string().transform((val) => (val.trim() === '' ? undefined : val.trim())).optional(),
+      workLocation: z.string().transform((val) => (val.trim() === '' ? undefined : val.trim())).optional(),
+    }).safeParse(req.body)
+    
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload' })
+    }
+    
+    const auth = (req as any).auth as { userId: string; email: string }
+    await updateUserProfile(auth.userId, parsed.data)
+    res.json({ message: 'Profile updated successfully' })
+  } catch (err: any) {
+    console.error('Update profile error:', err)
+    res.status(500).json({ error: err.message || 'Failed to update profile' })
   }
 })
 

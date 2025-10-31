@@ -7,6 +7,8 @@ export type User = {
   id: string
   email: string
   name?: string
+  phoneNumber?: string
+  workLocation?: string
   createdAt: number
 }
 
@@ -20,6 +22,8 @@ type UserDoc = {
   email: string
   passwordHash: string
   name?: string
+  phoneNumber?: string
+  workLocation?: string
   verified: boolean
   failedAttempts: number
   lockoutUntil: Date | null
@@ -52,7 +56,9 @@ export async function createUser(
   email: string,
   password: string,
   name?: string,
-  securityQuestions?: Array<{ question: string; answer: string }>
+  securityQuestions?: Array<{ question: string; answer: string }>,
+  phoneNumber?: string,
+  workLocation?: string
 ): Promise<User> {
   console.log('createUser called for:', email)
   
@@ -105,6 +111,8 @@ export async function createUser(
     email: emailLower,
     passwordHash,
     name: name?.trim() || undefined, // Convert empty string to undefined
+    phoneNumber: phoneNumber?.trim() || undefined,
+    workLocation: workLocation?.trim() || undefined,
     verified: !!(securityQuestions && securityQuestions.length >= 3), // Verified if all 3 questions provided
     failedAttempts: 0,
     lockoutUntil: null,
@@ -216,6 +224,8 @@ export async function verifyCredentials(email: string, password: string): Promis
     id: userDoc._id.toString(),
     email: userDoc.email,
     name: userDoc.name,
+    phoneNumber: userDoc.phoneNumber,
+    workLocation: userDoc.workLocation,
     createdAt: userDoc.createdAt,
   }
 }
@@ -233,6 +243,8 @@ export async function getUserByEmail(email: string): Promise<User | null> {
     id: userDoc._id.toString(),
     email: userDoc.email,
     name: userDoc.name,
+    phoneNumber: userDoc.phoneNumber,
+    workLocation: userDoc.workLocation,
     createdAt: userDoc.createdAt,
   }
 }
@@ -256,8 +268,44 @@ export async function getUserById(id: string): Promise<User | null> {
     id: userDoc._id.toString(),
     email: userDoc.email,
     name: userDoc.name,
+    phoneNumber: userDoc.phoneNumber,
+    workLocation: userDoc.workLocation,
     createdAt: userDoc.createdAt,
   }
+}
+
+export async function updateUserProfile(
+  userId: string,
+  updates: { name?: string; phoneNumber?: string; workLocation?: string }
+): Promise<void> {
+  const db = await getDb()
+  if (!db) throw new Error('Database unavailable')
+
+  let objectId: ObjectId
+  try {
+    objectId = new ObjectId(userId)
+  } catch {
+    throw new Error('Invalid user ID')
+  }
+
+  const updateFields: any = {
+    updatedAt: Date.now(),
+  }
+
+  if (updates.name !== undefined) {
+    updateFields.name = updates.name.trim() || undefined
+  }
+  if (updates.phoneNumber !== undefined) {
+    updateFields.phoneNumber = updates.phoneNumber.trim() || undefined
+  }
+  if (updates.workLocation !== undefined) {
+    updateFields.workLocation = updates.workLocation.trim() || undefined
+  }
+
+  await db.collection<UserDoc>('users').updateOne(
+    { _id: objectId },
+    { $set: updateFields }
+  )
 }
 
 export async function getUserSecurityQuestions(userId: string): Promise<string[] | null> {
