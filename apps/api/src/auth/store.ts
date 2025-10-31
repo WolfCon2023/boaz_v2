@@ -29,6 +29,27 @@ type UserDoc = {
 const MAX_FAILED_ATTEMPTS = 5
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000 // 15 minutes
 
+// Ensure users collection and indexes exist
+async function ensureUsersCollection(db: any) {
+  try {
+    const collections = await db.listCollections({ name: 'users' }).toArray()
+    if (collections.length === 0) {
+      // Collection doesn't exist, create it
+      await db.createCollection('users')
+    }
+    // Ensure unique index on email exists
+    const indexes = await db.collection('users').listIndexes().toArray()
+    const hasEmailIndex = indexes.some((idx: any) => idx.key?.email === 1)
+    if (!hasEmailIndex) {
+      await db.collection('users').createIndex({ email: 1 }, { unique: true })
+    }
+  } catch (err) {
+    // If collection/index already exists or creation fails, that's okay
+    // MongoDB will handle it gracefully
+    console.warn('Warning: Could not ensure users collection/index:', err)
+  }
+}
+
 export async function createUser(
   email: string,
   password: string,
@@ -38,6 +59,9 @@ export async function createUser(
 ): Promise<User> {
   const db = await getDb()
   if (!db) throw new Error('Database unavailable')
+
+  // Ensure collection and indexes exist
+  await ensureUsersCollection(db)
 
   const emailLower = email.toLowerCase()
   
@@ -53,7 +77,7 @@ export async function createUser(
     _id: new ObjectId(),
     email: emailLower,
     passwordHash,
-    name,
+    name: name?.trim() || undefined, // Convert empty string to undefined
     verified: false,
     failedAttempts: 0,
     lockoutUntil: null,
@@ -63,7 +87,16 @@ export async function createUser(
     updatedAt: now,
   }
 
-  await db.collection<UserDoc>('users').insertOne(userDoc)
+  try {
+    await db.collection<UserDoc>('users').insertOne(userDoc)
+  } catch (insertErr: any) {
+    // Handle duplicate key error (unique index on email)
+    if (insertErr && typeof insertErr === 'object' && 'code' in insertErr && insertErr.code === 11000) {
+      throw new Error('Email already registered')
+    }
+    // Re-throw other errors
+    throw insertErr
+  }
 
   return {
     id: userDoc._id.toString(),

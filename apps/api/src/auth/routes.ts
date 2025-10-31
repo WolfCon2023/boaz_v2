@@ -30,7 +30,7 @@ const credentialsSchema = z.object({
 })
 
 const registerSchema = credentialsSchema.extend({
-  name: z.string().min(1).optional(),
+  name: z.string().transform((val) => (val.trim() === '' ? undefined : val.trim())).optional(),
   securityQuestion: z.string().min(1).optional(),
   securityAnswer: z.string().min(1).optional(),
 })
@@ -52,13 +52,16 @@ authRouter.post('/register', async (req, res) => {
     const body: AuthResponse = { token: access, user }
     res.status(201).json(body)
   } catch (err: any) {
+    console.error('Registration error:', err)
     if (err.message === 'Email already registered') {
       return res.status(409).json({ error: 'Email already registered' })
     }
     if (err.message === 'Database unavailable') {
       return res.status(503).json({ error: 'Service unavailable' })
     }
-    return res.status(500).json({ error: 'Registration failed' })
+    // Include error details in development
+    const errorMessage = process.env.NODE_ENV === 'development' ? err.message : 'Registration failed'
+    return res.status(500).json({ error: errorMessage, details: process.env.NODE_ENV === 'development' ? String(err) : undefined })
   }
 })
 
