@@ -4,6 +4,9 @@ import App from '@/App'
 import NotFound from '@/pages/NotFound'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
+import ForgotUsername from '@/pages/ForgotUsername'
+import ForgotPassword from '@/pages/ForgotPassword'
+import ResetPassword from '@/pages/ResetPassword'
 import Dashboard from '@/pages/Dashboard'
 import Marketplace from '@/pages/Marketplace'
 import Workspace from '@/pages/Workspace'
@@ -23,6 +26,7 @@ import SupportPortal from '@/pages/SupportPortal'
 import { PublicShell } from '@/components/PublicShell'
 import Helpdesk from '@/pages/Helpdesk'
 import Marketing from '@/pages/Marketing'
+import { RequireAuth } from '@/components/Auth'
 
 export const router = createBrowserRouter([
   {
@@ -30,32 +34,48 @@ export const router = createBrowserRouter([
     element: <App />,
     errorElement: <NotFound />,
     children: [
-      { index: true, element: <Dashboard /> },
-      { path: 'marketplace', element: <Marketplace /> },
-      { path: 'workspace/me', element: <Workspace /> },
-      { path: 'login', element: <Login /> },
+      { index: true, element: <RequireAuth><Dashboard /></RequireAuth> },
+      { path: 'marketplace', element: <RequireAuth><Marketplace /></RequireAuth> },
+      { path: 'workspace/me', element: <RequireAuth><Workspace /></RequireAuth> },
+      // login is defined as a top-level route wrapped in PublicShell
       { path: 'register', element: <Register /> },
-      { path: 'dashboard', element: <Dashboard /> },
-      { path: 'apps/crm', element: <CRMHub /> },
-      { path: 'apps/crm/contacts', element: <CRMContacts /> },
-      { path: 'apps/crm/accounts', element: <CRMAccounts /> },
-      { path: 'apps/crm/quotes', element: <CRMQuotes /> },
-      { path: 'apps/crm/invoices', element: <CRMInvoices /> },
-      { path: 'apps/crm/invoices/:id/print', element: <CRMInvoicePrint /> },
-      { path: 'apps/crm/deals', element: <CRMDeals /> },
-      { path: 'apps/crm/outreach/templates', element: <CRMOutreachTemplates /> },
-      { path: 'apps/crm/outreach/sequences', element: <CRMOutreachSequences /> },
-      { path: 'apps/crm/outreach/events', element: <CRMOutreachEvents /> },
-      { path: 'apps/crm/marketing', element: <Marketing /> },
-      { path: 'apps/crm/support/tickets', element: <SupportTickets /> },
-      { path: 'apps/crm/support/kb', element: <KnowledgeBase /> },
-      { path: 'apps/helpdesk', element: <Helpdesk /> },
+      { path: 'dashboard', element: <RequireAuth><Dashboard /></RequireAuth> },
+      { path: 'apps/crm', element: <RequireAuth><CRMHub /></RequireAuth> },
+      { path: 'apps/crm/contacts', element: <RequireAuth><CRMContacts /></RequireAuth> },
+      { path: 'apps/crm/accounts', element: <RequireAuth><CRMAccounts /></RequireAuth> },
+      { path: 'apps/crm/quotes', element: <RequireAuth><CRMQuotes /></RequireAuth> },
+      { path: 'apps/crm/invoices', element: <RequireAuth><CRMInvoices /></RequireAuth> },
+      { path: 'apps/crm/invoices/:id/print', element: <RequireAuth><CRMInvoicePrint /></RequireAuth> },
+      { path: 'apps/crm/deals', element: <RequireAuth><CRMDeals /></RequireAuth> },
+      { path: 'apps/crm/outreach/templates', element: <RequireAuth><CRMOutreachTemplates /></RequireAuth> },
+      { path: 'apps/crm/outreach/sequences', element: <RequireAuth><CRMOutreachSequences /></RequireAuth> },
+      { path: 'apps/crm/outreach/events', element: <RequireAuth><CRMOutreachEvents /></RequireAuth> },
+      { path: 'apps/crm/marketing', element: <RequireAuth><Marketing /></RequireAuth> },
+      { path: 'apps/crm/support/tickets', element: <RequireAuth><SupportTickets /></RequireAuth> },
+      { path: 'apps/crm/support/kb', element: <RequireAuth><KnowledgeBase /></RequireAuth> },
+      { path: 'apps/helpdesk', element: <RequireAuth><Helpdesk /></RequireAuth> },
       { path: 'apps/support', element: <Navigate to="/apps/helpdesk" replace /> },
     ],
   },
   {
     path: '/portal',
     element: <PublicShell><SupportPortal /></PublicShell>,
+  },
+  {
+    path: '/login',
+    element: <PublicShell><Login /></PublicShell>,
+  },
+  {
+    path: '/forgot-username',
+    element: <PublicShell><ForgotUsername /></PublicShell>,
+  },
+  {
+    path: '/forgot-password',
+    element: <PublicShell><ForgotPassword /></PublicShell>,
+  },
+  {
+    path: '/reset-password',
+    element: <PublicShell><ResetPassword /></PublicShell>,
   },
   // Direct access fallback removed to avoid conflicting route matching
   { path: '*', element: <NotFound /> },

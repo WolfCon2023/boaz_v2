@@ -13,7 +13,23 @@ export async function getDb(): Promise<Db | null> {
       connectTimeoutMS: 5000,
     })
     await client.connect()
-    db = client.db()
+    
+    // Extract database name from URL if present, otherwise default to 'boaz_v2_dev'
+    // Format: mongodb://host/dbname or mongodb+srv://host/dbname?options
+    // MongoDB driver automatically uses the database name from the URL when calling db() with no args
+    // But we'll extract it explicitly to ensure we're using the right database
+    try {
+      const urlObj = new URL(env.MONGO_URL)
+      const pathPart = urlObj.pathname.slice(1) // Remove leading slash
+      const dbName = pathPart.split('?')[0].split('/')[0] // Get first path segment, remove query params
+      // Use database name from URL if present, otherwise default to 'boaz_v2_dev'
+      db = client.db(dbName || 'boaz_v2_dev')
+    } catch {
+      // If URL parsing fails, default to 'boaz_v2_dev'
+      // Note: client.db() with no args uses database from connection string, or 'test' if not specified
+      db = client.db('boaz_v2_dev')
+    }
+    
     return db
   } catch (_e) {
     // Fail fast if Mongo is unreachable so routes can respond with 500 instead of hanging 1

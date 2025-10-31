@@ -32,6 +32,9 @@ async function main() {
   await ensure('activities')
   await ensure('appointments')
   await ensure('tasks')
+  await ensure('users')
+  await ensure('roles')
+  await ensure('user_roles')
 
   // Indexes (idempotent)
   await db.collection('contacts').createIndexes([
@@ -102,6 +105,9 @@ async function main() {
     { key: { dueAt: 1 } },
     { key: { completedAt: 1 } },
     { key: { status: 1 } },
+  ])
+  await db.collection('users').createIndexes([
+    { key: { email: 1 }, unique: true },
   ])
 
   // Initialize counters for quote numbers (idempotent)
