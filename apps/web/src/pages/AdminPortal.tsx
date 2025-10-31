@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -22,6 +22,18 @@ export default function AdminPortal() {
   const [emailFilter, setEmailFilter] = useState<string>('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+
+  // Check if user has admin role
+  const { data: currentUserRoles, isLoading: isLoadingRoles } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean; userId?: string }>({
+    queryKey: ['user', 'roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/roles')
+      return res.data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const isAdmin = currentUserRoles?.isAdmin || currentUserRoles?.roles?.some(r => r.permissions.includes('*')) || false
   
   // User creation form state
   const [newUserEmail, setNewUserEmail] = useState('')
@@ -34,6 +46,7 @@ export default function AdminPortal() {
   // User management state
   const [userSearch, setUserSearch] = useState<string>('')
   const [editingUserRole, setEditingUserRole] = useState<{ userId: string; roleId: string } | null>(null)
+  const [editingUserPassword, setEditingUserPassword] = useState<{ userId: string; newPassword: string; forceChangeRequired: boolean } | null>(null)
 
   // Fetch available roles for dropdown
   const { data: rolesData } = useQuery<{ roles: Array<{ id: string; name: string; permissions: string[] }> }>({
@@ -42,8 +55,9 @@ export default function AdminPortal() {
       const res = await http.get('/api/auth/admin/roles')
       return res.data
     },
-    enabled: activeTab === 'users',
+    enabled: activeTab === 'users' && isAdmin && !isLoadingRoles,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: false, // Don't retry on 403
   })
 
   // Fetch users list
@@ -66,8 +80,9 @@ export default function AdminPortal() {
       const res = await http.get('/api/auth/admin/users', { params })
       return res.data
     },
-    enabled: activeTab === 'users',
+    enabled: activeTab === 'users' && isAdmin && !isLoadingRoles,
     staleTime: 30 * 1000, // Cache for 30 seconds
+    retry: false, // Don't retry on 403
   })
 
   // Fetch all sessions (with optional user filter)
@@ -78,7 +93,9 @@ export default function AdminPortal() {
       const res = await http.get('/api/auth/admin/sessions', { params })
       return res.data
     },
+    enabled: activeTab === 'sessions' && isAdmin && !isLoadingRoles,
     staleTime: 30 * 1000, // Cache for 30 seconds
+    retry: false, // Don't retry on 403
   })
 
   // Revoke session mutation
@@ -136,7 +153,11 @@ export default function AdminPortal() {
       }, 10000) // Show message for 10 seconds
     },
     onError: (err: any) => {
-      setError(err.response?.data?.error || 'Failed to create user')
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else {
+        setError(err.response?.data?.error || 'Failed to create user')
+      }
       setMessage('')
       setCreatedUserPassword(null)
     },
@@ -172,9 +193,36 @@ export default function AdminPortal() {
       setTimeout(() => setMessage(''), 5000)
     },
     onError: (err: any) => {
-      setError(err.response?.data?.error || 'Failed to update user role')
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else {
+        setError(err.response?.data?.error || 'Failed to update user role')
+      }
       setMessage('')
       setEditingUserRole(null)
+    },
+  })
+
+  // Update user password mutation
+  const updateUserPassword = useMutation({
+    mutationFn: async ({ userId, newPassword, forceChangeRequired }: { userId: string; newPassword: string; forceChangeRequired: boolean }) => {
+      const res = await http.patch(`/api/auth/admin/users/${userId}/password`, { newPassword, forceChangeRequired })
+      return res.data
+    },
+    onSuccess: (data) => {
+      setMessage(data.message || 'Password updated successfully')
+      setError('')
+      setEditingUserPassword(null)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else {
+        setError(err.response?.data?.error || 'Failed to update password')
+      }
+      setMessage('')
     },
   })
 
@@ -191,7 +239,11 @@ export default function AdminPortal() {
       setTimeout(() => setMessage(''), 5000)
     },
     onError: (err: any) => {
-      setError(err.response?.data?.error || 'Failed to delete user')
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else {
+        setError(err.response?.data?.error || 'Failed to delete user')
+      }
       setMessage('')
     },
   })
@@ -225,6 +277,9 @@ export default function AdminPortal() {
     }
     return !session.revoked
   }) || []
+
+  // Show access denied message if user doesn't have admin permissions (but only after roles have loaded)
+  const showAccessDenied = !isLoadingRoles && !isAdmin
 
   return (
     <div className="space-y-6">
@@ -272,6 +327,38 @@ export default function AdminPortal() {
       {message && (
         <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
           {message}
+        </div>
+      )}
+
+      {/* Access Denied Warning */}
+      {showAccessDenied && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6">
+          <h2 className="mb-2 text-lg font-semibold text-amber-900">Access Denied</h2>
+          <p className="mb-4 text-sm text-amber-800">
+            You don't have administrator permissions to access this portal. Admin access requires a role with the <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">*</code> permission.
+          </p>
+          {currentUserRoles && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-100 p-3 text-sm">
+              <p className="font-medium text-amber-900">Current Roles:</p>
+              {currentUserRoles.roles && currentUserRoles.roles.length > 0 ? (
+                <ul className="mt-1 list-inside list-disc space-y-1 text-amber-800">
+                  {currentUserRoles.roles.map((role, idx) => (
+                    <li key={idx}>
+                      {role.name} - Permissions: {role.permissions.length > 0 ? role.permissions.join(', ') : 'None'}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-amber-800">No roles assigned</p>
+              )}
+              {currentUserRoles.userId && (
+                <p className="mt-2 text-xs text-amber-700">User ID: {currentUserRoles.userId}</p>
+              )}
+            </div>
+          )}
+          <p className="text-sm text-amber-800">
+            Please contact your system administrator to assign you the admin role, or use the "Assign Admin Role" button in Settings (development mode only).
+          </p>
         </div>
       )}
 
@@ -538,6 +625,87 @@ export default function AdminPortal() {
                                   title="Edit role"
                                 >
                                   <Edit2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Password Update */}
+                          <div className="mt-3">
+                            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                              Password
+                            </label>
+                            {editingUserPassword?.userId === user.id ? (
+                              <div className="space-y-2">
+                                <input
+                                  type="password"
+                                  value={editingUserPassword.newPassword}
+                                  onChange={(e) =>
+                                    setEditingUserPassword({
+                                      ...editingUserPassword,
+                                      newPassword: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Enter new password (min 6 characters)"
+                                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                                />
+                                <label className="flex items-center gap-2 text-xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={editingUserPassword.forceChangeRequired}
+                                    onChange={(e) =>
+                                      setEditingUserPassword({
+                                        ...editingUserPassword,
+                                        forceChangeRequired: e.target.checked,
+                                      })
+                                    }
+                                    className="rounded border-[color:var(--color-border)]"
+                                  />
+                                  <span>Require password change on next login</span>
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      if (editingUserPassword.newPassword.length < 6) {
+                                        setError('Password must be at least 6 characters')
+                                        return
+                                      }
+                                      updateUserPassword.mutate({
+                                        userId: user.id,
+                                        newPassword: editingUserPassword.newPassword,
+                                        forceChangeRequired: editingUserPassword.forceChangeRequired,
+                                      })
+                                    }}
+                                    disabled={updateUserPassword.isPending || editingUserPassword.newPassword.length < 6}
+                                    className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-1.5 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingUserPassword(null)}
+                                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-sm hover:bg-[color:var(--color-muted)]"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-sm text-[color:var(--color-text-muted)]">
+                                  ••••••••
+                                </div>
+                                <button
+                                  onClick={() =>
+                                    setEditingUserPassword({
+                                      userId: user.id,
+                                      newPassword: '',
+                                      forceChangeRequired: false,
+                                    })
+                                  }
+                                  className="rounded-lg border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
+                                  title="Reset password"
+                                >
+                                  <Key className="h-4 w-4" />
                                 </button>
                               </div>
                             )}

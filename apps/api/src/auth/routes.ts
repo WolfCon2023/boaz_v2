@@ -870,6 +870,67 @@ authRouter.patch('/admin/users/:id/role', requireAuth, requirePermission('*'), a
   }
 })
 
+// Admin: Update user password
+authRouter.patch('/admin/users/:id/password', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    let userId: ObjectId
+    try {
+      userId = new ObjectId(req.params.id)
+    } catch {
+      return res.status(400).json({ error: 'Invalid user ID' })
+    }
+
+    const parsed = z.object({
+      newPassword: z.string().min(6),
+      forceChangeRequired: z.boolean().optional().default(false),
+    }).safeParse(req.body)
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
+    }
+
+    // Verify user exists
+    const user = await db.collection('users').findOne({ _id: userId })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    // Hash new password
+    const bcrypt = await import('bcryptjs')
+    const newPasswordHash = await bcrypt.hash(parsed.data.newPassword, 10)
+
+    // Update password
+    await db.collection('users').updateOne(
+      { _id: userId },
+      {
+        $set: {
+          passwordHash: newPasswordHash,
+          passwordChangeRequired: parsed.data.forceChangeRequired,
+          updatedAt: Date.now(),
+        },
+      }
+    )
+
+    // Revoke all user sessions to force re-login with new password
+    try {
+      const { revokeAllUserSessions } = await import('./sessions.js')
+      await revokeAllUserSessions(userId.toString())
+    } catch (sessionErr) {
+      console.warn('Failed to revoke user sessions:', sessionErr)
+    }
+
+    res.json({
+      message: `Password updated successfully${parsed.data.forceChangeRequired ? '. User will be required to change password on next login.' : ''}`,
+    })
+  } catch (err: any) {
+    console.error('Update user password error:', err)
+    res.status(500).json({ error: err.message || 'Failed to update password' })
+  }
+})
+
 // Admin: Delete user
 authRouter.delete('/admin/users/:id', requireAuth, requirePermission('*'), async (req, res) => {
   try {
@@ -932,11 +993,19 @@ authRouter.get('/me/roles', requireAuth, async (req, res) => {
     const roleIds = userRoles.map((ur: any) => ur.roleId)
     
     if (roleIds.length === 0) {
-      return res.json({ roles: [] })
+      return res.json({ roles: [], userId: auth.userId, email: auth.email })
     }
 
     const roles = await db.collection('roles').find({ _id: { $in: roleIds } } as any).toArray()
-    res.json({ roles: roles.map((r: any) => ({ name: r.name, permissions: r.permissions || [] })) })
+    const allPerms = new Set<string>(roles.flatMap((r: any) => r.permissions || []))
+    const isAdmin = allPerms.has('*')
+    
+    res.json({ 
+      roles: roles.map((r: any) => ({ name: r.name, permissions: r.permissions || [] })),
+      userId: auth.userId,
+      email: auth.email,
+      isAdmin,
+    })
   } catch (err: any) {
     console.error('Get user roles error:', err)
     res.status(500).json({ error: err.message || 'Failed to get roles' })
