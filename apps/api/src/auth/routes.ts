@@ -34,6 +34,8 @@ import {
   getApplicationAccessRequests,
   approveApplicationAccessRequest,
   rejectApplicationAccessRequest,
+  getUserApplicationAccessRequests,
+  getApplicationAccessRequestById,
 } from './store.js'
 import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
@@ -1231,6 +1233,42 @@ authRouter.post('/me/applications/:appKey/request', requireAuth, async (req, res
       return res.status(400).json({ error: err.message })
     }
     res.status(500).json({ error: err.message || 'Failed to create access request' })
+  }
+})
+
+// User: Get their own application access requests
+authRouter.get('/me/app-access-requests', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const status = req.query.status as 'pending' | 'approved' | 'rejected' | undefined
+    const requests = await getUserApplicationAccessRequests(auth.userId, status)
+    res.json({ requests })
+  } catch (err: any) {
+    console.error('Get user application access requests error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get application access requests' })
+  }
+})
+
+// User: Get a specific access request by ID (if it belongs to them)
+authRouter.get('/me/app-access-requests/:id', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const requestId = req.params.id
+    
+    const request = await getApplicationAccessRequestById(requestId)
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' })
+    }
+    
+    // Ensure the request belongs to the current user
+    if (request.userId !== auth.userId) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+    
+    res.json({ request })
+  } catch (err: any) {
+    console.error('Get application access request error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get application access request' })
   }
 })
 

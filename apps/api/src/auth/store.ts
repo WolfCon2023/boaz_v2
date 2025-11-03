@@ -1360,6 +1360,77 @@ export async function getApplicationAccessRequests(
   }))
 }
 
+export async function getUserApplicationAccessRequests(
+  userId: string,
+  status?: 'pending' | 'approved' | 'rejected'
+): Promise<ApplicationAccessRequest[]> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  await ensureAppAccessRequestsCollection(db)
+
+  const query: any = { userId }
+  if (status) {
+    query.status = status
+  }
+
+  const requests = await db
+    .collection<ApplicationAccessRequestDoc>('app_access_requests')
+    .find(query)
+    .sort({ requestedAt: -1 })
+    .toArray()
+
+  return requests.map((req) => ({
+    id: req._id.toString(),
+    userId: req.userId,
+    userEmail: req.userEmail,
+    userName: req.userName,
+    appKey: req.appKey,
+    status: req.status,
+    requestedAt: req.requestedAt,
+    reviewedAt: req.reviewedAt,
+    reviewedBy: req.reviewedBy,
+  }))
+}
+
+export async function getApplicationAccessRequestById(requestId: string): Promise<ApplicationAccessRequest | null> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  await ensureAppAccessRequestsCollection(db)
+
+  let requestObjectId: ObjectId
+  try {
+    requestObjectId = new ObjectId(requestId)
+  } catch {
+    return null
+  }
+
+  const requestDoc = await db.collection<ApplicationAccessRequestDoc>('app_access_requests').findOne({
+    _id: requestObjectId,
+  })
+
+  if (!requestDoc) {
+    return null
+  }
+
+  return {
+    id: requestDoc._id.toString(),
+    userId: requestDoc.userId,
+    userEmail: requestDoc.userEmail,
+    userName: requestDoc.userName,
+    appKey: requestDoc.appKey,
+    status: requestDoc.status,
+    requestedAt: requestDoc.requestedAt,
+    reviewedAt: requestDoc.reviewedAt,
+    reviewedBy: requestDoc.reviewedBy,
+  }
+}
+
 export async function approveApplicationAccessRequest(
   requestId: string,
   reviewedByUserId: string

@@ -6,6 +6,7 @@ import { SortableContext, arrayMove, useSortable, rectSortingStrategy } from '@d
 import { CSS } from '@dnd-kit/utilities'
 import { useEffect, useMemo, useState } from 'react'
 import { http } from '@/lib/http'
+import { Link } from 'react-router-dom'
 
 export default function Workspace() {
   const queryClient = useQueryClient()
@@ -20,9 +21,25 @@ export default function Workspace() {
     },
     staleTime: 30 * 1000,
   })
+
+  // Get user's access requests
+  const { data: userRequestsData } = useQuery<{ requests: Array<{ id: string; appKey: string; status: string }> }>({
+    queryKey: ['user', 'app-access-requests'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/app-access-requests')
+      return res.data
+    },
+    staleTime: 30 * 1000,
+  })
   
   const userHasAccess = (appKey: string) => {
     return userAccessData?.applications?.includes(appKey) || false
+  }
+
+  const hasPendingRequest = (appKey: string) => {
+    return userRequestsData?.requests?.some(
+      (req) => req.appKey === appKey && req.status === 'pending'
+    ) || false
   }
   
   const remove = useMutation({
@@ -45,6 +62,7 @@ export default function Workspace() {
     onSuccess: (result) => {
       setRequestedApps(prev => new Set(prev).add(result.appKey))
       queryClient.invalidateQueries({ queryKey: ['user', 'applications'] })
+      queryClient.invalidateQueries({ queryKey: ['user', 'app-access-requests'] })
       setTimeout(() => {
         setRequestedApps(prev => {
           const next = new Set(prev)
@@ -108,6 +126,14 @@ export default function Workspace() {
           <div className="mt-4 text-sm">
             {hasAccess ? (
               <a href={`/apps/${appKey}`} className="text-[color:var(--color-primary)] underline">Open</a>
+            ) : hasPendingRequest(appKey) ? (
+              <Link
+                to="/request-status"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-block rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+              >
+                Check Request Status
+              </Link>
             ) : (
               <>
                 <button

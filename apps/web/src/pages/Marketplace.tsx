@@ -2,6 +2,7 @@ import { Store } from 'lucide-react'
 import { catalog, getInstalledApps, installApp, uninstallApp } from '@/lib/apps'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
+import { Link } from 'react-router-dom'
 import * as React from 'react'
 
 export default function Marketplace() {
@@ -17,9 +18,25 @@ export default function Marketplace() {
     },
     staleTime: 30 * 1000,
   })
+
+  // Get user's access requests
+  const { data: userRequestsData } = useQuery<{ requests: Array<{ id: string; appKey: string; status: string }> }>({
+    queryKey: ['user', 'app-access-requests'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/app-access-requests')
+      return res.data
+    },
+    staleTime: 30 * 1000,
+  })
   
   const userHasAccess = (appKey: string) => {
     return userAccessData?.applications?.includes(appKey) || false
+  }
+
+  const hasPendingRequest = (appKey: string) => {
+    return userRequestsData?.requests?.some(
+      (req) => req.appKey === appKey && req.status === 'pending'
+    ) || false
   }
   
   const install = useMutation({
@@ -41,6 +58,7 @@ export default function Marketplace() {
     onSuccess: (result) => {
       setRequestedApps(prev => new Set(prev).add(result.appKey))
       queryClient.invalidateQueries({ queryKey: ['user', 'applications'] })
+      queryClient.invalidateQueries({ queryKey: ['user', 'app-access-requests'] })
       setTimeout(() => {
         setRequestedApps(prev => {
           const next = new Set(prev)
@@ -74,6 +92,13 @@ export default function Marketplace() {
                     ) : (
                       <button onClick={() => install.mutate(app.key)} className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-1 text-white hover:bg-[color:var(--color-primary-700)]">Install</button>
                     )
+                  ) : hasPendingRequest(app.key) ? (
+                    <Link
+                      to="/request-status"
+                      className="inline-block rounded-lg border border-[color:var(--color-border)] px-3 py-1 hover:bg-[color:var(--color-muted)]"
+                    >
+                      Check Request Status
+                    </Link>
                   ) : (
                     <button 
                       onClick={() => requestAccess.mutate(app.key)}
