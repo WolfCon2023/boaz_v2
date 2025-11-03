@@ -1550,18 +1550,19 @@ export async function generateAccessReport(): Promise<UserAccessReport[]> {
 
   // Get all user roles
   const userRoles = await db.collection<UserRoleDoc>('user_roles').find({}).toArray()
-  const roleIds = [...new Set(userRoles.map(ur => ur.roleId.toString()))]
+  const roleIds = [...new Set(userRoles.map(ur => ur.roleId instanceof ObjectId ? ur.roleId : new ObjectId(ur.roleId)))]
   const roles = await db.collection<RoleDoc>('roles').find({
-    _id: { $in: roleIds.map(id => new ObjectId(id)) }
+    _id: { $in: roleIds }
   }).toArray()
   const roleMap = new Map(roles.map(r => [r._id.toString(), r.name]))
 
   // Build user role map
   const userRoleMap = new Map<string, string[]>()
   for (const ur of userRoles) {
-    const userId = typeof ur.userId === 'string' ? ur.userId : ur.userId?.toString() || ''
+    const userId = ur.userId
     if (!userId) continue
-    const roleIdStr = typeof ur.roleId === 'string' ? ur.roleId : ur.roleId?.toString() || ''
+    // roleId is ObjectId, convert to string
+    const roleIdStr = ur.roleId instanceof ObjectId ? ur.roleId.toString() : String(ur.roleId)
     const roleName = roleMap.get(roleIdStr) || 'Unknown'
     if (!userRoleMap.has(userId)) {
       userRoleMap.set(userId, [])
