@@ -40,7 +40,7 @@ export default function Workspace() {
       const res = await http.post(`/api/auth/me/applications/${appKey}/request`)
       return { appKey, data: res.data }
     },
-    onSuccess: (result) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user', 'applications'] })
     },
   })

@@ -667,6 +667,17 @@ export default function AdminPortal() {
           <Shield className="mr-2 inline h-4 w-4" />
           Access Management
         </button>
+        <button
+          onClick={() => setActiveTab('app-access-requests')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'app-access-requests'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <FolderOpen className="mr-2 inline h-4 w-4" />
+          App Access Requests
+        </button>
       </div>
 
       {error && (
