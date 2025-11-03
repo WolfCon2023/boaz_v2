@@ -1259,11 +1259,15 @@ export async function createApplicationAccessRequest(
 
   await ensureAppAccessRequestsCollection(db)
 
-  // Validate app key
-  const validAppKeys = APPLICATION_CATALOG.map((app) => app.key)
-  if (!validAppKeys.includes(appKey as AppKey)) {
+  // Validate app key - accept any non-empty string key
+  // This allows the frontend catalog to be the source of truth
+  // and new apps can be added without backend updates
+  if (!appKey || typeof appKey !== 'string' || appKey.trim().length === 0) {
     throw new Error(`Invalid application key: ${appKey}`)
   }
+  
+  // Normalize the app key
+  const normalizedAppKey = appKey.trim().toLowerCase()
 
   // Get user info
   const user = await db.collection<UserDoc>('users').findOne({ _id: new ObjectId(userId) })
@@ -1271,16 +1275,16 @@ export async function createApplicationAccessRequest(
     throw new Error('User not found')
   }
 
-  // Check if user already has access
-  const hasAccess = await hasApplicationAccess(userId, appKey)
+  // Check if user already has access (use normalized key)
+  const hasAccess = await hasApplicationAccess(userId, normalizedAppKey)
   if (hasAccess) {
     throw new Error('User already has access to this application')
   }
 
-  // Check if there's already a pending request
+  // Check if there's already a pending request (use normalized key)
   const existingRequest = await db.collection<ApplicationAccessRequestDoc>('app_access_requests').findOne({
     userId,
-    appKey,
+    appKey: normalizedAppKey,
     status: 'pending',
   })
 
@@ -1298,13 +1302,13 @@ export async function createApplicationAccessRequest(
     }
   }
 
-  // Create request
+  // Create request (use normalized key)
   const requestDoc: ApplicationAccessRequestDoc = {
     _id: new ObjectId(),
     userId,
     userEmail: user.email,
     userName: user.name,
-    appKey,
+    appKey: normalizedAppKey,
     status: 'pending',
     requestedAt: Date.now(),
   }
