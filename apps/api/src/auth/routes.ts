@@ -30,6 +30,10 @@ import {
   getUserAccessList,
   getAllUsersWithAppAccess,
   APPLICATION_CATALOG,
+  createApplicationAccessRequest,
+  getApplicationAccessRequests,
+  approveApplicationAccessRequest,
+  rejectApplicationAccessRequest,
 } from './store.js'
 import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
@@ -1207,6 +1211,121 @@ authRouter.get('/me/applications/:appKey', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('Check application access error:', err)
     res.status(500).json({ error: err.message || 'Failed to check application access' })
+  }
+})
+
+// User: Request access to an application
+authRouter.post('/me/applications/:appKey/request', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const appKey = req.params.appKey
+    
+    const request = await createApplicationAccessRequest(auth.userId, appKey)
+    res.json({ request, message: 'Access request submitted successfully' })
+  } catch (err: any) {
+    console.error('Create application access request error:', err)
+    if (err.message === 'User already has access to this application') {
+      return res.status(400).json({ error: err.message })
+    }
+    if (err.message === 'Invalid application key') {
+      return res.status(400).json({ error: err.message })
+    }
+    res.status(500).json({ error: err.message || 'Failed to create access request' })
+  }
+})
+
+// Admin: Get application access requests
+authRouter.get('/admin/app-access-requests', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const status = req.query.status as 'pending' | 'approved' | 'rejected' | undefined
+    const requests = await getApplicationAccessRequests(status)
+    res.json({ requests })
+  } catch (err: any) {
+    console.error('Get application access requests error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get application access requests' })
+  }
+})
+
+// Admin: Approve application access request
+authRouter.post('/admin/app-access-requests/:id/approve', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const requestId = req.params.id
+    
+    const access = await approveApplicationAccessRequest(requestId, auth.userId)
+    
+    // Get request details for email
+    const requests = await getApplicationAccessRequests()
+    const request = requests.find(r => r.id === requestId)
+    if (!request) {
+      throw new Error('Request not found')
+    }
+
+    // Get app info
+    const appInfo = APPLICATION_CATALOG.find(app => app.key === request.appKey)
+    const appName = appInfo?.name || request.appKey
+
+    // Send email notification
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+    const marketplaceUrl = `${baseUrl}/marketplace`
+    
+    try {
+      await sendAuthEmail({
+        to: request.userEmail,
+        subject: `Application Access Granted - ${appName}`,
+        checkPreferences: true, // Respect user email preferences
+        html: `
+          <h2>Application Access Granted</h2>
+          <p>Your request for access to <strong>${appName}</strong> has been approved!</p>
+          <p>You can now install and use this application in your workspace.</p>
+          <p><a href="${marketplaceUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Go to Marketplace</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${marketplaceUrl}</code></p>
+        `,
+        text: `
+Application Access Granted
+
+Your request for access to ${appName} has been approved!
+
+You can now install and use this application in your workspace.
+
+Go to Marketplace: ${marketplaceUrl}
+        `,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send access granted email:', emailErr)
+      // Don't fail the approval if email fails
+    }
+    
+    res.json({
+      message: 'Application access request approved and access granted',
+      access,
+      emailSent: true,
+    })
+  } catch (err: any) {
+    console.error('Approve application access request error:', err)
+    if (err.message === 'Application access request not found or already processed') {
+      return res.status(404).json({ error: err.message })
+    }
+    res.status(500).json({ error: err.message || 'Failed to approve application access request' })
+  }
+})
+
+// Admin: Reject application access request
+authRouter.post('/admin/app-access-requests/:id/reject', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const requestId = req.params.id
+    
+    await rejectApplicationAccessRequest(requestId, auth.userId)
+    
+    res.json({ message: 'Application access request rejected' })
+  } catch (err: any) {
+    console.error('Reject application access request error:', err)
+    if (err.message === 'Application access request not found or already processed') {
+      return res.status(404).json({ error: err.message })
+    }
+    res.status(500).json({ error: err.message || 'Failed to reject application access request' })
   }
 })
 

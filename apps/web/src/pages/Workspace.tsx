@@ -5,10 +5,26 @@ import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, KeyboardSensor
 import { SortableContext, arrayMove, useSortable, rectSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useEffect, useMemo, useState } from 'react'
+import { http } from '@/lib/http'
 
 export default function Workspace() {
   const queryClient = useQueryClient()
   const { data: installed = [] } = useQuery({ queryKey: ['installedApps'], queryFn: async () => getInstalledApps() })
+  
+  // Get user's application access
+  const { data: userAccessData } = useQuery<{ applications: string[] }>({
+    queryKey: ['user', 'applications'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/applications')
+      return res.data
+    },
+    staleTime: 30 * 1000,
+  })
+  
+  const userHasAccess = (appKey: string) => {
+    return userAccessData?.applications?.includes(appKey) || false
+  }
+  
   const remove = useMutation({
     mutationFn: async (key: string) => uninstallApp(key),
     onSuccess: (_data, key) => {
@@ -18,6 +34,17 @@ export default function Workspace() {
       queryClient.invalidateQueries({ queryKey: ['installedApps'] })
     },
   })
+  
+  const requestAccess = useMutation({
+    mutationFn: async (appKey: string) => {
+      const res = await http.post(`/api/auth/me/applications/${appKey}/request`)
+      return { appKey, data: res.data }
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['user', 'applications'] })
+    },
+  })
+  
   const apps = useMemo(() => catalog.filter((a) => installed.includes(a.key)), [installed])
   const computeOrderedKeys = (baseApps: typeof apps) => {
     const order = getWorkspaceOrder()
@@ -56,6 +83,8 @@ export default function Workspace() {
   function SortableTile({ appKey, name, description }: { appKey: string; name: string; description: string }) {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: appKey })
     const style = { transform: CSS.Transform.toString(transform), transition }
+    const hasAccess = userHasAccess(appKey)
+    
     return (
       <li ref={setNodeRef} style={style} {...attributes} {...listeners}>
         <div className="h-full rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5">
@@ -66,8 +95,21 @@ export default function Workspace() {
             </div>
             <button onClick={(e) => { e.stopPropagation(); remove.mutate(appKey) }} className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]">Remove</button>
           </div>
-          <div className="mt-4 text-sm text-[color:var(--color-primary)] underline">
-            <a href={`/apps/${appKey}`}>Open</a>
+          <div className="mt-4 text-sm">
+            {hasAccess ? (
+              <a href={`/apps/${appKey}`} className="text-[color:var(--color-primary)] underline">Open</a>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  requestAccess.mutate(appKey)
+                }}
+                disabled={requestAccess.isPending}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              >
+                {requestAccess.isPending ? 'Requesting...' : 'Request Access'}
+              </button>
+            )}
           </div>
         </div>
       </li>

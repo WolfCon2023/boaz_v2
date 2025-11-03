@@ -18,7 +18,7 @@ const faqs: FAQItem[] = [
   {
     category: 'Account & Access',
     question: 'How do I request access to an application?',
-    answer: 'Contact your administrator or use the Admin Portal if you have admin access. Administrators can grant access to specific applications (CRM, Helpdesk, Marketplace, Workspace, Dashboard) based on your role and responsibilities.',
+    answer: 'If you have access to the Marketplace or Workspace, you can request access to applications directly by clicking the "Request Access" button on any application you don\'t have access to. Your request will be sent to administrators for approval. Once approved, you\'ll receive an email notification and can then install the application from the Marketplace.',
   },
   {
     category: 'Account & Access',

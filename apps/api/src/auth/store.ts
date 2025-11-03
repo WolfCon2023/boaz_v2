@@ -1207,3 +1207,223 @@ export async function getAllUsersWithAppAccess(appKey?: string): Promise<Array<{
   }))
 }
 
+// Application Access Request Types
+export type ApplicationAccessRequest = {
+  id: string
+  userId: string
+  userEmail: string
+  userName?: string
+  appKey: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedAt: number
+  reviewedAt?: number
+  reviewedBy?: string
+}
+
+type ApplicationAccessRequestDoc = {
+  _id: ObjectId
+  userId: string
+  userEmail: string
+  userName?: string
+  appKey: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedAt: number
+  reviewedAt?: number
+  reviewedBy?: string
+}
+
+async function ensureAppAccessRequestsCollection(db: any) {
+  try {
+    await db.collection('app_access_requests').createIndex({ userId: 1 }).catch(() => {})
+    await db.collection('app_access_requests').createIndex({ appKey: 1 }).catch(() => {})
+    await db.collection('app_access_requests').createIndex({ status: 1 }).catch(() => {})
+    await db.collection('app_access_requests').createIndex({ requestedAt: -1 }).catch(() => {})
+    await db.collection('app_access_requests').createIndex({ userId: 1, appKey: 1, status: 1 }).catch(() => {})
+  } catch (err) {
+    console.warn('Warning: Could not ensure app_access_requests collection/index:', err)
+  }
+}
+
+export async function createApplicationAccessRequest(
+  userId: string,
+  appKey: string
+): Promise<ApplicationAccessRequest> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  await ensureAppAccessRequestsCollection(db)
+
+  // Validate app key
+  const validAppKeys = APPLICATION_CATALOG.map((app) => app.key)
+  if (!validAppKeys.includes(appKey as AppKey)) {
+    throw new Error(`Invalid application key: ${appKey}`)
+  }
+
+  // Get user info
+  const user = await db.collection<UserDoc>('users').findOne({ _id: new ObjectId(userId) })
+  if (!user) {
+    throw new Error('User not found')
+  }
+
+  // Check if user already has access
+  const hasAccess = await hasApplicationAccess(userId, appKey)
+  if (hasAccess) {
+    throw new Error('User already has access to this application')
+  }
+
+  // Check if there's already a pending request
+  const existingRequest = await db.collection<ApplicationAccessRequestDoc>('app_access_requests').findOne({
+    userId,
+    appKey,
+    status: 'pending',
+  })
+
+  if (existingRequest) {
+    return {
+      id: existingRequest._id.toString(),
+      userId: existingRequest.userId,
+      userEmail: existingRequest.userEmail,
+      userName: existingRequest.userName,
+      appKey: existingRequest.appKey,
+      status: existingRequest.status,
+      requestedAt: existingRequest.requestedAt,
+      reviewedAt: existingRequest.reviewedAt,
+      reviewedBy: existingRequest.reviewedBy,
+    }
+  }
+
+  // Create request
+  const requestDoc: ApplicationAccessRequestDoc = {
+    _id: new ObjectId(),
+    userId,
+    userEmail: user.email,
+    userName: user.name,
+    appKey,
+    status: 'pending',
+    requestedAt: Date.now(),
+  }
+
+  await db.collection<ApplicationAccessRequestDoc>('app_access_requests').insertOne(requestDoc)
+
+  return {
+    id: requestDoc._id.toString(),
+    userId: requestDoc.userId,
+    userEmail: requestDoc.userEmail,
+    userName: requestDoc.userName,
+    appKey: requestDoc.appKey,
+    status: requestDoc.status,
+    requestedAt: requestDoc.requestedAt,
+  }
+}
+
+export async function getApplicationAccessRequests(
+  status?: 'pending' | 'approved' | 'rejected'
+): Promise<ApplicationAccessRequest[]> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  await ensureAppAccessRequestsCollection(db)
+
+  const query: any = {}
+  if (status) {
+    query.status = status
+  }
+
+  const requests = await db
+    .collection<ApplicationAccessRequestDoc>('app_access_requests')
+    .find(query)
+    .sort({ requestedAt: -1 })
+    .toArray()
+
+  return requests.map((req) => ({
+    id: req._id.toString(),
+    userId: req.userId,
+    userEmail: req.userEmail,
+    userName: req.userName,
+    appKey: req.appKey,
+    status: req.status,
+    requestedAt: req.requestedAt,
+    reviewedAt: req.reviewedAt,
+    reviewedBy: req.reviewedBy,
+  }))
+}
+
+export async function approveApplicationAccessRequest(
+  requestId: string,
+  reviewedByUserId: string
+): Promise<ApplicationAccess> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  let requestObjectId: ObjectId
+  try {
+    requestObjectId = new ObjectId(requestId)
+  } catch {
+    throw new Error('Invalid request ID')
+  }
+
+  const requestDoc = await db.collection<ApplicationAccessRequestDoc>('app_access_requests').findOne({
+    _id: requestObjectId,
+    status: 'pending',
+  })
+
+  if (!requestDoc) {
+    throw new Error('Application access request not found or already processed')
+  }
+
+  // Grant access
+  const access = await grantApplicationAccess(requestDoc.userId, requestDoc.appKey, reviewedByUserId)
+
+  // Mark request as approved
+  await db.collection<ApplicationAccessRequestDoc>('app_access_requests').updateOne(
+    { _id: requestObjectId },
+    {
+      $set: {
+        status: 'approved',
+        reviewedAt: Date.now(),
+        reviewedBy: reviewedByUserId,
+      },
+    }
+  )
+
+  return access
+}
+
+export async function rejectApplicationAccessRequest(
+  requestId: string,
+  reviewedByUserId: string
+): Promise<void> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  let requestObjectId: ObjectId
+  try {
+    requestObjectId = new ObjectId(requestId)
+  } catch {
+    throw new Error('Invalid request ID')
+  }
+
+  const result = await db.collection<ApplicationAccessRequestDoc>('app_access_requests').updateOne(
+    { _id: requestObjectId, status: 'pending' },
+    {
+      $set: {
+        status: 'rejected',
+        reviewedAt: Date.now(),
+        reviewedBy: reviewedByUserId,
+      },
+    }
+  )
+
+  if (result.matchedCount === 0) {
+    throw new Error('Application access request not found or already processed')
+  }
+}
+

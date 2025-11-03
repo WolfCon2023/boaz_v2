@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -17,9 +17,10 @@ type Session = {
 
 export default function AdminPortal() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests'>('sessions')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [registrationRequestStatus, setRegistrationRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
+  const [appAccessRequestStatus, setAppAccessRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
   const [userIdFilter, setUserIdFilter] = useState<string>('')
   const [emailFilter, setEmailFilter] = useState<string>('')
   const [error, setError] = useState('')
@@ -305,6 +306,85 @@ export default function AdminPortal() {
     },
   })
 
+  // Fetch application access requests
+  type ApplicationAccessRequest = {
+    id: string
+    userId: string
+    userEmail: string
+    userName?: string
+    appKey: string
+    status: 'pending' | 'approved' | 'rejected'
+    requestedAt: number
+    reviewedAt?: number
+    reviewedBy?: string
+  }
+
+  const { data: appAccessRequestsData } = useQuery<{ requests: ApplicationAccessRequest[] }>({
+    queryKey: ['admin', 'app-access-requests', appAccessRequestStatus],
+    queryFn: async () => {
+      const params = appAccessRequestStatus ? { status: appAccessRequestStatus } : {}
+      const res = await http.get('/api/auth/admin/app-access-requests', { params })
+      return res.data
+    },
+    enabled: activeTab === 'app-access-requests' && isAdmin && !isLoadingRoles,
+    staleTime: 30 * 1000,
+    retry: false,
+  })
+
+  // Approve application access request mutation
+  const approveAppAccessRequest = useMutation({
+    mutationFn: async (requestId: string) => {
+      const res = await http.post(`/api/auth/admin/app-access-requests/${requestId}/approve`)
+      return res.data
+    },
+    onSuccess: (data) => {
+      if (data.emailSent) {
+        setMessage(`Application access request approved. Access granted and email sent.`)
+      } else {
+        setMessage(`Application access request approved, but email failed to send.`)
+      }
+      queryClient.invalidateQueries({ queryKey: ['admin', 'app-access-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['user', 'applications'] })
+      setTimeout(() => {
+        setMessage('')
+        setError('')
+      }, 5000)
+    },
+    onError: (err: any) => {
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else {
+        setError(err.response?.data?.error || 'Failed to approve application access request')
+      }
+      setMessage('')
+    },
+  })
+
+  // Reject application access request mutation
+  const rejectAppAccessRequest = useMutation({
+    mutationFn: async (requestId: string) => {
+      const res = await http.post(`/api/auth/admin/app-access-requests/${requestId}/reject`)
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('Application access request rejected')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['admin', 'app-access-requests'] })
+      setTimeout(() => {
+        setMessage('')
+      }, 5000)
+    },
+    onError: (err: any) => {
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else {
+        setError(err.response?.data?.error || 'Failed to reject application access request')
+      }
+      setMessage('')
+    },
+  })
+
   // Reject registration request mutation
   const rejectRegistrationRequest = useMutation({
     mutationFn: async (requestId: string) => {
@@ -340,7 +420,7 @@ export default function AdminPortal() {
       const res = await http.get('/api/auth/admin/applications')
       return res.data
     },
-    enabled: activeTab === 'access-management' && isAdmin && !isLoadingRoles,
+    enabled: (activeTab === 'access-management' || activeTab === 'app-access-requests') && isAdmin && !isLoadingRoles,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
     retry: false,
   })
@@ -1409,6 +1489,142 @@ export default function AdminPortal() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* App Access Requests */}
+      {activeTab === 'app-access-requests' && (
+        <div className="space-y-6">
+          {/* Status Filter */}
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              <span className="text-sm font-medium">Filter by Status:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setAppAccessRequestStatus(undefined)}
+                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                  appAccessRequestStatus === undefined
+                    ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-primary-600)] text-white'
+                    : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setAppAccessRequestStatus('pending')}
+                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                  appAccessRequestStatus === 'pending'
+                    ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-primary-600)] text-white'
+                    : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]'
+                }`}
+              >
+                Pending
+              </button>
+              <button
+                onClick={() => setAppAccessRequestStatus('approved')}
+                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                  appAccessRequestStatus === 'approved'
+                    ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-primary-600)] text-white'
+                    : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]'
+                }`}
+              >
+                Approved
+              </button>
+              <button
+                onClick={() => setAppAccessRequestStatus('rejected')}
+                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                  appAccessRequestStatus === 'rejected'
+                    ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-primary-600)] text-white'
+                    : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]'
+                }`}
+              >
+                Rejected
+              </button>
+            </div>
+          </div>
+
+          {/* App Access Requests List */}
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Application Access Requests</h2>
+              <div className="text-sm text-[color:var(--color-text-muted)]">
+                {appAccessRequestsData?.requests?.length || 0} request(s)
+              </div>
+            </div>
+
+            {!appAccessRequestsData ? (
+              <div className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">Loading...</div>
+            ) : appAccessRequestsData.requests.length === 0 ? (
+              <div className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+                No application access requests found.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {appAccessRequestsData.requests.map((request) => {
+                  const appInfo = applicationsData?.applications?.find((app) => app.key === request.appKey)
+                  const appName = appInfo?.name || request.appKey
+                  return (
+                    <div
+                      key={request.id}
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="font-medium">{appName}</span>
+                            {request.status === 'pending' && (
+                              <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">Pending</span>
+                            )}
+                            {request.status === 'approved' && (
+                              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">Approved</span>
+                            )}
+                            {request.status === 'rejected' && (
+                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-800">Rejected</span>
+                            )}
+                          </div>
+                          <div className="text-sm text-[color:var(--color-text-muted)]">
+                            <div>
+                              <strong>User:</strong> {request.userName || 'N/A'} ({request.userEmail})
+                            </div>
+                            <div>
+                              <strong>Requested:</strong> {formatDateTime(request.requestedAt)}
+                            </div>
+                            {request.reviewedAt && (
+                              <div>
+                                <strong>Reviewed:</strong> {formatDateTime(request.reviewedAt)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {request.status === 'pending' && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => approveAppAccessRequest.mutate(request.id)}
+                              disabled={approveAppAccessRequest.isPending}
+                              className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+                            >
+                              <CheckCircle className="mr-1 inline h-4 w-4" />
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => rejectAppAccessRequest.mutate(request.id)}
+                              disabled={rejectAppAccessRequest.isPending}
+                              className="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              <XCircle className="mr-1 inline h-4 w-4" />
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
