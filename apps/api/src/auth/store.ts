@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs'
 import { ObjectId } from 'mongodb'
 import { randomBytes, randomInt } from 'node:crypto'
 import { getDb } from '../db.js'
+import type { RoleDoc, UserRoleDoc } from './rbac.js'
 
 export type User = {
   id: string
@@ -1009,5 +1010,200 @@ export async function rejectRegistrationRequest(requestId: string, reviewedByUse
   if (result.matchedCount === 0) {
     throw new Error('Registration request not found or already processed')
   }
+}
+
+// Application Access Management Types
+export type ApplicationAccess = {
+  id: string
+  userId: string
+  appKey: string
+  grantedAt: number
+  grantedBy?: string // userId of admin who granted access
+}
+
+type ApplicationAccessDoc = {
+  _id: ObjectId
+  userId: string
+  appKey: string
+  grantedAt: number
+  grantedBy?: string
+}
+
+// Application catalog (should match frontend)
+export const APPLICATION_CATALOG = [
+  { key: 'crm', name: 'CRM', description: 'Contacts, deals, pipelines, and customer management' },
+  { key: 'helpdesk', name: 'Helpdesk', description: 'Support tickets and customer service' },
+  { key: 'marketplace', name: 'Marketplace', description: 'Product and service marketplace' },
+  { key: 'workspace', name: 'Workspace', description: 'Personal workspace and tools' },
+  { key: 'dashboard', name: 'Dashboard', description: 'Main dashboard and analytics' },
+] as const
+
+export type AppKey = typeof APPLICATION_CATALOG[number]['key']
+
+// Ensure user_apps collection and indexes
+async function ensureUserAppsCollection(db: any) {
+  try {
+    await db.collection('user_apps').createIndex({ userId: 1 }).catch(() => {})
+    await db.collection('user_apps').createIndex({ appKey: 1 }).catch(() => {})
+    await db.collection('user_apps').createIndex({ userId: 1, appKey: 1 }, { unique: true }).catch(() => {})
+  } catch (err) {
+    console.warn('Warning: Could not ensure user_apps collection/index:', err)
+  }
+}
+
+export async function getUserApplicationAccess(userId: string): Promise<string[]> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  await ensureUserAppsCollection(db)
+
+  const accessDocs = await db.collection<ApplicationAccessDoc>('user_apps')
+    .find({ userId })
+    .toArray()
+
+  return accessDocs.map((doc) => doc.appKey)
+}
+
+export async function hasApplicationAccess(userId: string, appKey: string): Promise<boolean> {
+  const db = await getDb()
+  if (!db) {
+    return false
+  }
+
+  // Admins have access to all applications
+  const userRoles = await db.collection<UserRoleDoc>('user_roles').find({ userId } as any).toArray()
+  if (userRoles.length > 0) {
+    const roleIds = userRoles.map((ur) => ur.roleId)
+    const roles = await db.collection<RoleDoc>('roles').find({ _id: { $in: roleIds } } as any).toArray()
+    const allPerms = new Set<string>(roles.flatMap((r) => r.permissions || []))
+    if (allPerms.has('*')) {
+      return true // Admin has access to everything
+    }
+  }
+
+  await ensureUserAppsCollection(db)
+
+  const access = await db.collection<ApplicationAccessDoc>('user_apps').findOne({
+    userId,
+    appKey,
+  })
+
+  return !!access
+}
+
+export async function grantApplicationAccess(
+  userId: string,
+  appKey: string,
+  grantedBy: string
+): Promise<ApplicationAccess> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  await ensureUserAppsCollection(db)
+
+  // Validate app key
+  const validAppKeys = APPLICATION_CATALOG.map((app) => app.key)
+  if (!validAppKeys.includes(appKey as AppKey)) {
+    throw new Error(`Invalid application key: ${appKey}`)
+  }
+
+  // Check if access already exists
+  const existing = await db.collection<ApplicationAccessDoc>('user_apps').findOne({
+    userId,
+    appKey,
+  })
+
+  if (existing) {
+    return {
+      id: existing._id.toString(),
+      userId: existing.userId,
+      appKey: existing.appKey,
+      grantedAt: existing.grantedAt,
+      grantedBy: existing.grantedBy,
+    }
+  }
+
+  const now = Date.now()
+  const accessDoc: ApplicationAccessDoc = {
+    _id: new ObjectId(),
+    userId,
+    appKey,
+    grantedAt: now,
+    grantedBy,
+  }
+
+  await db.collection<ApplicationAccessDoc>('user_apps').insertOne(accessDoc)
+
+  return {
+    id: accessDoc._id.toString(),
+    userId: accessDoc.userId,
+    appKey: accessDoc.appKey,
+    grantedAt: accessDoc.grantedAt,
+    grantedBy: accessDoc.grantedBy,
+  }
+}
+
+export async function revokeApplicationAccess(userId: string, appKey: string): Promise<void> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  const result = await db.collection<ApplicationAccessDoc>('user_apps').deleteOne({
+    userId,
+    appKey,
+  })
+
+  if (result.deletedCount === 0) {
+    throw new Error('Application access not found')
+  }
+}
+
+export async function getUserAccessList(userId: string): Promise<ApplicationAccess[]> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  const accessDocs = await db.collection<ApplicationAccessDoc>('user_apps')
+    .find({ userId })
+    .sort({ grantedAt: -1 })
+    .toArray()
+
+  return accessDocs.map((doc) => ({
+    id: doc._id.toString(),
+    userId: doc.userId,
+    appKey: doc.appKey,
+    grantedAt: doc.grantedAt,
+    grantedBy: doc.grantedBy,
+  }))
+}
+
+export async function getAllUsersWithAppAccess(appKey?: string): Promise<Array<{ userId: string; appKeys: string[] }>> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  const query = appKey ? { appKey } : {}
+  const accessDocs = await db.collection<ApplicationAccessDoc>('user_apps').find(query).toArray()
+
+  // Group by userId
+  const userAccessMap = new Map<string, Set<string>>()
+  for (const doc of accessDocs) {
+    if (!userAccessMap.has(doc.userId)) {
+      userAccessMap.set(doc.userId, new Set())
+    }
+    userAccessMap.get(doc.userId)!.add(doc.appKey)
+  }
+
+  return Array.from(userAccessMap.entries()).map(([userId, appKeys]) => ({
+    userId,
+    appKeys: Array.from(appKeys),
+  }))
 }
 

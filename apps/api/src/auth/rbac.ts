@@ -77,4 +77,21 @@ export function requirePermission(permission: string) {
   }
 }
 
+export function requireApplication(appKey: string) {
+  return async function (req: Request, res: Response, next: NextFunction) {
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    if (!auth) return res.status(401).json({ error: 'Unauthorized' })
+    
+    // Import here to avoid circular dependency
+    const { hasApplicationAccess } = await import('./store.js')
+    const hasAccess = await hasApplicationAccess(auth.userId, appKey)
+    
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied: Application access required' })
+    }
+    
+    next()
+  }
+}
+
 

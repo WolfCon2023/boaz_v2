@@ -30,7 +30,7 @@ import SupportPortal from '@/pages/SupportPortal'
 import { PublicShell } from '@/components/PublicShell'
 import Helpdesk from '@/pages/Helpdesk'
 import Marketing from '@/pages/Marketing'
-import { RequireAuth } from '@/components/Auth'
+import { RequireAuth, RequireApplication } from '@/components/Auth'
 
 export const router = createBrowserRouter([
   {
@@ -38,28 +38,28 @@ export const router = createBrowserRouter([
     element: <App />,
     errorElement: <NotFound />,
     children: [
-      { index: true, element: <RequireAuth><Dashboard /></RequireAuth> },
-      { path: 'marketplace', element: <RequireAuth><Marketplace /></RequireAuth> },
-      { path: 'workspace/me', element: <RequireAuth><Workspace /></RequireAuth> },
+      { index: true, element: <RequireAuth><RequireApplication appKey="dashboard"><Dashboard /></RequireApplication></RequireAuth> },
+      { path: 'marketplace', element: <RequireAuth><RequireApplication appKey="marketplace"><Marketplace /></RequireApplication></RequireAuth> },
+      { path: 'workspace/me', element: <RequireAuth><RequireApplication appKey="workspace"><Workspace /></RequireApplication></RequireAuth> },
       { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
       { path: 'admin', element: <RequireAuth><AdminPortal /></RequireAuth> },
       // login is defined as a top-level route wrapped in PublicShell
       { path: 'register', element: <Register /> },
-      { path: 'dashboard', element: <RequireAuth><Dashboard /></RequireAuth> },
-      { path: 'apps/crm', element: <RequireAuth><CRMHub /></RequireAuth> },
-      { path: 'apps/crm/contacts', element: <RequireAuth><CRMContacts /></RequireAuth> },
-      { path: 'apps/crm/accounts', element: <RequireAuth><CRMAccounts /></RequireAuth> },
-      { path: 'apps/crm/quotes', element: <RequireAuth><CRMQuotes /></RequireAuth> },
-      { path: 'apps/crm/invoices', element: <RequireAuth><CRMInvoices /></RequireAuth> },
-      { path: 'apps/crm/invoices/:id/print', element: <RequireAuth><CRMInvoicePrint /></RequireAuth> },
-      { path: 'apps/crm/deals', element: <RequireAuth><CRMDeals /></RequireAuth> },
-      { path: 'apps/crm/outreach/templates', element: <RequireAuth><CRMOutreachTemplates /></RequireAuth> },
-      { path: 'apps/crm/outreach/sequences', element: <RequireAuth><CRMOutreachSequences /></RequireAuth> },
-      { path: 'apps/crm/outreach/events', element: <RequireAuth><CRMOutreachEvents /></RequireAuth> },
-      { path: 'apps/crm/marketing', element: <RequireAuth><Marketing /></RequireAuth> },
-      { path: 'apps/crm/support/tickets', element: <RequireAuth><SupportTickets /></RequireAuth> },
-      { path: 'apps/crm/support/kb', element: <RequireAuth><KnowledgeBase /></RequireAuth> },
-      { path: 'apps/helpdesk', element: <RequireAuth><Helpdesk /></RequireAuth> },
+      { path: 'dashboard', element: <RequireAuth><RequireApplication appKey="dashboard"><Dashboard /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm', element: <RequireAuth><RequireApplication appKey="crm"><CRMHub /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/contacts', element: <RequireAuth><RequireApplication appKey="crm"><CRMContacts /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/accounts', element: <RequireAuth><RequireApplication appKey="crm"><CRMAccounts /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/quotes', element: <RequireAuth><RequireApplication appKey="crm"><CRMQuotes /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/invoices', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoices /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/invoices/:id/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoicePrint /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/deals', element: <RequireAuth><RequireApplication appKey="crm"><CRMDeals /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/outreach/templates', element: <RequireAuth><RequireApplication appKey="crm"><CRMOutreachTemplates /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/outreach/sequences', element: <RequireAuth><RequireApplication appKey="crm"><CRMOutreachSequences /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/outreach/events', element: <RequireAuth><RequireApplication appKey="crm"><CRMOutreachEvents /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/marketing', element: <RequireAuth><RequireApplication appKey="crm"><Marketing /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/support/tickets', element: <RequireAuth><RequireApplication appKey="crm"><SupportTickets /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/support/kb', element: <RequireAuth><RequireApplication appKey="crm"><KnowledgeBase /></RequireApplication></RequireAuth> },
+      { path: 'apps/helpdesk', element: <RequireAuth><RequireApplication appKey="helpdesk"><Helpdesk /></RequireApplication></RequireAuth> },
       { path: 'apps/support', element: <Navigate to="/apps/helpdesk" replace /> },
     ],
   },

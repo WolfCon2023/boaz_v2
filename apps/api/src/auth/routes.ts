@@ -23,6 +23,13 @@ import {
   getRegistrationRequests,
   approveRegistrationRequest,
   rejectRegistrationRequest,
+  getUserApplicationAccess,
+  hasApplicationAccess,
+  grantApplicationAccess,
+  revokeApplicationAccess,
+  getUserAccessList,
+  getAllUsersWithAppAccess,
+  APPLICATION_CATALOG,
 } from './store.js'
 import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
@@ -1112,6 +1119,94 @@ authRouter.post('/admin/registration-requests/:id/reject', requireAuth, requireP
       return res.status(404).json({ error: err.message })
     }
     res.status(500).json({ error: err.message || 'Failed to reject registration request' })
+  }
+})
+
+// Admin: Get application catalog
+authRouter.get('/admin/applications', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    res.json({ applications: APPLICATION_CATALOG })
+  } catch (err: any) {
+    console.error('Get applications error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get applications' })
+  }
+})
+
+// Admin: Get user's application access
+authRouter.get('/admin/users/:id/applications', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const userId = req.params.id
+    const accessList = await getUserAccessList(userId)
+    res.json({ access: accessList })
+  } catch (err: any) {
+    console.error('Get user application access error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get user application access' })
+  }
+})
+
+// Admin: Grant application access to user
+authRouter.post('/admin/users/:id/applications', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const userId = req.params.id
+    const parsed = z.object({
+      appKey: z.string().min(1),
+    }).safeParse(req.body)
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
+    }
+
+    const access = await grantApplicationAccess(userId, parsed.data.appKey, auth.userId)
+    res.json({ access, message: 'Application access granted successfully' })
+  } catch (err: any) {
+    console.error('Grant application access error:', err)
+    if (err.message.includes('Invalid application key')) {
+      return res.status(400).json({ error: err.message })
+    }
+    res.status(500).json({ error: err.message || 'Failed to grant application access' })
+  }
+})
+
+// Admin: Revoke application access from user
+authRouter.delete('/admin/users/:id/applications/:appKey', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const userId = req.params.id
+    const appKey = req.params.appKey
+    
+    await revokeApplicationAccess(userId, appKey)
+    res.json({ message: 'Application access revoked successfully' })
+  } catch (err: any) {
+    console.error('Revoke application access error:', err)
+    if (err.message === 'Application access not found') {
+      return res.status(404).json({ error: err.message })
+    }
+    res.status(500).json({ error: err.message || 'Failed to revoke application access' })
+  }
+})
+
+// Get current user's application access
+authRouter.get('/me/applications', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const appKeys = await getUserApplicationAccess(auth.userId)
+    res.json({ applications: appKeys })
+  } catch (err: any) {
+    console.error('Get user applications error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get applications' })
+  }
+})
+
+// Check if current user has access to a specific application
+authRouter.get('/me/applications/:appKey', requireAuth, async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const appKey = req.params.appKey
+    const hasAccess = await hasApplicationAccess(auth.userId, appKey)
+    res.json({ hasAccess, appKey })
+  } catch (err: any) {
+    console.error('Check application access error:', err)
+    res.status(500).json({ error: err.message || 'Failed to check application access' })
   }
 })
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -17,7 +17,8 @@ type Session = {
 
 export default function AdminPortal() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management'>('sessions')
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [registrationRequestStatus, setRegistrationRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
   const [userIdFilter, setUserIdFilter] = useState<string>('')
   const [emailFilter, setEmailFilter] = useState<string>('')
@@ -81,7 +82,7 @@ export default function AdminPortal() {
       const res = await http.get('/api/auth/admin/users', { params })
       return res.data
     },
-    enabled: activeTab === 'users' && isAdmin && !isLoadingRoles,
+    enabled: (activeTab === 'users' || activeTab === 'access-management') && isAdmin && !isLoadingRoles,
     staleTime: 30 * 1000, // Cache for 30 seconds
     retry: false, // Don't retry on 403
   })
@@ -326,6 +327,81 @@ export default function AdminPortal() {
     },
   })
 
+  // Fetch applications catalog
+  type Application = {
+    key: string
+    name: string
+    description: string
+  }
+
+  const { data: applicationsData } = useQuery<{ applications: Application[] }>({
+    queryKey: ['admin', 'applications'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/admin/applications')
+      return res.data
+    },
+    enabled: activeTab === 'access-management' && isAdmin && !isLoadingRoles,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: false,
+  })
+
+  // Fetch user's application access
+  type UserApplicationAccess = {
+    id: string
+    userId: string
+    appKey: string
+    grantedAt: number
+    grantedBy?: string
+  }
+
+  const { data: userAccessData } = useQuery<{ access: UserApplicationAccess[] }>({
+    queryKey: ['admin', 'users', selectedUserId, 'applications'],
+    queryFn: async () => {
+      if (!selectedUserId) return { access: [] }
+      const res = await http.get(`/api/auth/admin/users/${selectedUserId}/applications`)
+      return res.data
+    },
+    enabled: activeTab === 'access-management' && !!selectedUserId && isAdmin && !isLoadingRoles,
+    staleTime: 30 * 1000,
+    retry: false,
+  })
+
+  // Grant application access mutation
+  const grantAppAccess = useMutation({
+    mutationFn: async ({ userId, appKey }: { userId: string; appKey: string }) => {
+      const res = await http.post(`/api/auth/admin/users/${userId}/applications`, { appKey })
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('Application access granted successfully')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', selectedUserId, 'applications'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to grant application access')
+      setMessage('')
+    },
+  })
+
+  // Revoke application access mutation
+  const revokeAppAccess = useMutation({
+    mutationFn: async ({ userId, appKey }: { userId: string; appKey: string }) => {
+      const res = await http.delete(`/api/auth/admin/users/${userId}/applications/${appKey}`)
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('Application access revoked successfully')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', selectedUserId, 'applications'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to revoke application access')
+      setMessage('')
+    },
+  })
+
   // Resend welcome email mutation
   const resendWelcomeEmail = useMutation({
     mutationFn: async (userId: string) => {
@@ -445,6 +521,17 @@ export default function AdminPortal() {
         >
           <Clock className="mr-2 inline h-4 w-4" />
           Registration Requests
+        </button>
+        <button
+          onClick={() => setActiveTab('access-management')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'access-management'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <Shield className="mr-2 inline h-4 w-4" />
+          Access Management
         </button>
       </div>
 
@@ -1198,6 +1285,108 @@ export default function AdminPortal() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Access Management */}
+      {activeTab === 'access-management' && (
+        <div className="space-y-6">
+          {!isAdmin ? (
+            <div className="text-center py-8 text-[color:var(--color-text-muted)]">
+              You don't have permission to manage application access.
+            </div>
+          ) : (
+            <>
+              {/* User Selection */}
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                <h2 className="mb-4 text-lg font-semibold">Select User</h2>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search users by email or name..."
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                  />
+                  {usersData?.users && usersData.users.length > 0 && (
+                    <div className="max-h-60 overflow-y-auto space-y-1">
+                      {usersData.users.map((user) => (
+                        <button
+                          key={user.id}
+                          onClick={() => setSelectedUserId(user.id)}
+                          className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                            selectedUserId === user.id
+                              ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-primary-50)]'
+                              : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-panel)]'
+                          }`}
+                        >
+                          <div className="font-medium">{user.email}</div>
+                          {user.name && <div className="text-sm text-[color:var(--color-text-muted)]">{user.name}</div>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Application Access Management */}
+              {selectedUserId && (
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                  <h2 className="mb-4 text-lg font-semibold">Application Access</h2>
+                  {!applicationsData ? (
+                    <div className="text-center py-4 text-[color:var(--color-text-muted)]">Loading applications...</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {applicationsData.applications.map((app) => {
+                        const hasAccess = userAccessData?.access?.some((a) => a.appKey === app.key) || false
+                        return (
+                          <div
+                            key={app.key}
+                            className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] p-4"
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium">{app.name}</div>
+                              <div className="text-sm text-[color:var(--color-text-muted)]">{app.description}</div>
+                              {hasAccess && userAccessData?.access && (
+                                <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                                  Granted: {formatDateTime(userAccessData.access.find((a) => a.appKey === app.key)?.grantedAt || 0)}
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              {hasAccess ? (
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Revoke ${app.name} access for this user?`)) {
+                                      revokeAppAccess.mutate({ userId: selectedUserId, appKey: app.key })
+                                    }
+                                  }}
+                                  disabled={revokeAppAccess.isPending}
+                                  className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                                >
+                                  Revoke Access
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    grantAppAccess.mutate({ userId: selectedUserId, appKey: app.key })
+                                  }}
+                                  disabled={grantAppAccess.isPending}
+                                  className="rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+                                >
+                                  Grant Access
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
