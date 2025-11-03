@@ -1,6 +1,4 @@
 import * as React from 'react'
-import type { AuthResponse } from '@boaz/shared'
-import { useNavigate } from 'react-router-dom'
 import { getApiUrl } from '@/lib/http'
 
 export default function Register() {
@@ -11,7 +9,6 @@ export default function Register() {
   const [error, setError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [requestSubmitted, setRequestSubmitted] = React.useState(false)
-  const navigate = useNavigate()
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
