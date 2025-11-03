@@ -8,12 +8,15 @@ export default function Register() {
   const [password, setPassword] = React.useState('')
   const [name, setName] = React.useState('')
   const [message, setMessage] = React.useState<string | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(false)
+  const [requestSubmitted, setRequestSubmitted] = React.useState(false)
   const navigate = useNavigate()
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setMessage(null)
+    setError(null)
     setLoading(true)
     const res = await fetch(getApiUrl('/api/auth/register'), {
       method: 'POST',
@@ -22,14 +25,18 @@ export default function Register() {
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      setMessage(err.error ?? 'Registration failed')
+      setError(err.error ?? 'Registration request failed')
       setLoading(false)
       return
     }
-    const data = (await res.json()) as AuthResponse
-    localStorage.setItem('token', data.token)
+    const data = await res.json()
     setLoading(false)
-    navigate('/', { replace: true })
+    setRequestSubmitted(true)
+    setMessage(data.message || 'Registration request submitted successfully. You will receive an email once your request has been reviewed.')
+    // Clear form
+    setEmail('')
+    setPassword('')
+    setName('')
   }
 
   return (
@@ -50,8 +57,17 @@ export default function Register() {
             <span className="mb-1 block text-[color:var(--color-text-muted)]">Name</span>
             <input className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
-          {message && <div className="text-sm text-red-400">{message}</div>}
-          <button disabled={loading} className="mt-2 w-full rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50">{loading ? 'Creating…' : 'Create account'}</button>
+          {error && <div className="text-sm text-red-400">{error}</div>}
+          {message && !requestSubmitted && <div className="text-sm text-red-400">{message}</div>}
+          {requestSubmitted && (
+            <div className="rounded-lg border border-green-300 bg-green-50 p-4 text-sm text-green-800">
+              <div className="font-semibold mb-1">Registration Request Submitted</div>
+              <div>{message}</div>
+            </div>
+          )}
+          <button disabled={loading || requestSubmitted} className="mt-2 w-full rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50">
+            {loading ? 'Submitting…' : requestSubmitted ? 'Request Submitted' : 'Submit Registration Request'}
+          </button>
         </form>
         <div className="mt-4 text-center text-xs text-[color:var(--color-text-muted)]">
           Already have an account? <a className="underline" href="/login">Sign in</a>

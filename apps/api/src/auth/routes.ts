@@ -19,6 +19,10 @@ import {
   createUserByAdmin,
   changePassword,
   resetUserToTemporaryPassword,
+  createRegistrationRequest,
+  getRegistrationRequests,
+  approveRegistrationRequest,
+  rejectRegistrationRequest,
 } from './store.js'
 import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
@@ -91,81 +95,26 @@ authRouter.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
     }
     
-    const { email, password, name, securityQuestions, phoneNumber, workLocation } = parsed.data
-    console.log('Registration attempt for:', email)
+    const { email, password, name, phoneNumber, workLocation } = parsed.data
+    console.log('Registration request for:', email)
     
-    const user = await createUser(email, password, name, securityQuestions, phoneNumber, workLocation)
+    // Create registration request instead of immediate user account
+    const request = await createRegistrationRequest(email, password, name, phoneNumber, workLocation)
     
-    // Send enrollment email if security questions weren't provided during registration
-    if (!securityQuestions || securityQuestions.length !== 3) {
-      try {
-        // Check if user wants to receive email notifications
-        // Note: For new registrations, user won't have preferences yet, so this will default to true
-        const notificationsEnabled = await hasEmailNotificationsEnabled(user.id, email)
-        
-        if (notificationsEnabled !== false) {
-          const enrollmentToken = await createEnrollmentToken(email)
-          if (!enrollmentToken.startsWith('dummy-token-')) {
-            const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
-            const enrollmentUrl = `${baseUrl}/enroll?token=${enrollmentToken}`
-            
-            // Use checkPreferences: false since we already checked above
-            await sendAuthEmail({
-              to: email,
-              subject: 'Welcome to BOAZ-OS - Complete Your Account Setup',
-              checkPreferences: false,
-              html: `
-              <h2>Welcome to BOAZ-OS!</h2>
-              <p>Thank you for creating your account. To complete your account setup and enable account recovery features, please click the link below:</p>
-              <p><a href="${enrollmentUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Complete Account Setup</a></p>
-              <p>Or copy and paste this URL into your browser:</p>
-              <p><code>${enrollmentUrl}</code></p>
-              <p>This link will expire in 7 days.</p>
-              <p>If you didn't create this account, please ignore this email.</p>
-            `,
-              text: `
-Welcome to BOAZ-OS!
-
-Thank you for creating your account. To complete your account setup and enable account recovery features, please click the link below:
-
-${enrollmentUrl}
-
-This link will expire in 7 days.
-
-If you didn't create this account, please ignore this email.
-            `,
-            })
-          }
-        }
-      } catch (emailErr) {
-        // Log error but don't fail registration
-        console.error('Failed to send enrollment email:', emailErr)
-      }
-    }
-    
-    const access = signAccessToken({ sub: user.id, email: user.email })
-    const jti = randomUUID()
-    const refresh = signRefreshToken({ sub: user.id, email: user.email, jti })
-    
-    // Store session in database
-    try {
-      await createSession(jti, user.id, email, getClientIp(req), getUserAgent(req))
-    } catch (sessionErr) {
-      console.error('Failed to create session:', sessionErr)
-      // Continue anyway - session might work with in-memory fallback
-    }
-    
-    res.cookie('refresh_token', refresh, { ...cookieOpts, maxAge: 7 * 24 * 3600 * 1000 })
-    const body: AuthResponse = { token: access, user }
-    res.status(201).json(body)
+    // Return success - user will be notified via email after admin approval
+    res.status(201).json({
+      message: 'Registration request submitted successfully. Your request is pending admin approval. You will receive an email once your request has been reviewed.',
+      requestId: request.id,
+      status: 'pending',
+    })
   } catch (err: any) {
-    console.error('Registration error:', err)
-    console.error('Error stack:', err.stack)
-    console.error('Error name:', err.name)
-    console.error('Error code:', err.code)
+    console.error('Registration request error:', err)
     
     if (err.message === 'Email already registered') {
       return res.status(409).json({ error: 'Email already registered' })
+    }
+    if (err.message === 'Registration request already pending for this email') {
+      return res.status(409).json({ error: 'A registration request for this email is already pending approval' })
     }
     if (err.message === 'Database unavailable') {
       return res.status(503).json({ error: 'Service unavailable' })
@@ -173,7 +122,7 @@ If you didn't create this account, please ignore this email.
     
     // Include error details to help debug
     const errorResponse: any = { 
-      error: 'Registration failed',
+      error: 'Registration request failed',
       message: err.message || 'Unknown error'
     }
     
@@ -1065,6 +1014,104 @@ authRouter.delete('/admin/users/:id', requireAuth, requirePermission('*'), async
   } catch (err: any) {
     console.error('Delete user error:', err)
     res.status(500).json({ error: err.message || 'Failed to delete user' })
+  }
+})
+
+// Admin: Get registration requests
+authRouter.get('/admin/registration-requests', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const status = req.query.status as 'pending' | 'approved' | 'rejected' | undefined
+    const requests = await getRegistrationRequests(status)
+    res.json({ requests })
+  } catch (err: any) {
+    console.error('Get registration requests error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get registration requests' })
+  }
+})
+
+// Admin: Approve registration request
+authRouter.post('/admin/registration-requests/:id/approve', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const requestId = req.params.id
+    
+    const { user, enrollmentToken } = await approveRegistrationRequest(requestId, auth.userId)
+    
+    // Send enrollment email to the user
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+    const enrollmentUrl = `${baseUrl}/enroll?token=${enrollmentToken}`
+    
+    try {
+      await sendAuthEmail({
+        to: user.email,
+        subject: 'Welcome to BOAZ-OS - Complete Your Account Setup',
+        checkPreferences: false, // Always send for new account approval
+        html: `
+          <h2>Welcome to BOAZ-OS!</h2>
+          <p>Your registration request has been approved! Your account has been created successfully.</p>
+          <p>To complete your account setup and enable account recovery features, please click the link below:</p>
+          <p><a href="${enrollmentUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Complete Account Setup</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${enrollmentUrl}</code></p>
+          <p>This link will expire in 7 days.</p>
+          <p>If you didn't request this account, please contact support.</p>
+        `,
+        text: `
+Welcome to BOAZ-OS!
+
+Your registration request has been approved! Your account has been created successfully.
+
+To complete your account setup and enable account recovery features, please click the link below:
+
+${enrollmentUrl}
+
+This link will expire in 7 days.
+
+If you didn't request this account, please contact support.
+        `,
+      })
+      
+      res.json({
+        message: 'Registration request approved and enrollment email sent successfully',
+        user,
+        emailSent: true,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send enrollment email:', emailErr)
+      res.status(201).json({
+        message: 'Registration request approved, but email could not be sent',
+        user,
+        enrollmentToken, // Include token so admin can manually share it
+        emailSent: false,
+      })
+    }
+  } catch (err: any) {
+    console.error('Approve registration request error:', err)
+    if (err.message === 'Registration request not found or already processed') {
+      return res.status(404).json({ error: err.message })
+    }
+    if (err.message === 'User already exists') {
+      return res.status(409).json({ error: err.message })
+    }
+    res.status(500).json({ error: err.message || 'Failed to approve registration request' })
+  }
+})
+
+// Admin: Reject registration request
+authRouter.post('/admin/registration-requests/:id/reject', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const requestId = req.params.id
+    
+    await rejectRegistrationRequest(requestId, auth.userId)
+    
+    res.json({ message: 'Registration request rejected successfully' })
+  } catch (err: any) {
+    console.error('Reject registration request error:', err)
+    if (err.message === 'Registration request not found or already processed') {
+      return res.status(404).json({ error: err.message })
+    }
+    res.status(500).json({ error: err.message || 'Failed to reject registration request' })
   }
 })
 

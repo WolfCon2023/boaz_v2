@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -17,7 +17,8 @@ type Session = {
 
 export default function AdminPortal() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'sessions' | 'users'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests'>('sessions')
+  const [registrationRequestStatus, setRegistrationRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
   const [userIdFilter, setUserIdFilter] = useState<string>('')
   const [emailFilter, setEmailFilter] = useState<string>('')
   const [error, setError] = useState('')
@@ -248,6 +249,83 @@ export default function AdminPortal() {
     },
   })
 
+  // Fetch registration requests
+  type RegistrationRequest = {
+    id: string
+    email: string
+    name?: string
+    phoneNumber?: string
+    workLocation?: string
+    status: 'pending' | 'approved' | 'rejected'
+    createdAt: number
+    reviewedAt?: number
+    reviewedBy?: string
+  }
+
+  const { data: registrationRequestsData } = useQuery<{ requests: RegistrationRequest[] }>({
+    queryKey: ['admin', 'registration-requests', registrationRequestStatus],
+    queryFn: async () => {
+      const params = registrationRequestStatus ? { status: registrationRequestStatus } : {}
+      const res = await http.get('/api/auth/admin/registration-requests', { params })
+      return res.data
+    },
+    enabled: activeTab === 'registration-requests' && isAdmin && !isLoadingRoles,
+    staleTime: 30 * 1000, // Cache for 30 seconds
+    retry: false, // Don't retry on 403
+  })
+
+  // Approve registration request mutation
+  const approveRegistrationRequest = useMutation({
+    mutationFn: async (requestId: string) => {
+      const res = await http.post(`/api/auth/admin/registration-requests/${requestId}/approve`)
+      return res.data
+    },
+    onSuccess: (data) => {
+      if (data.emailSent) {
+        setMessage(`Registration request approved. Enrollment email sent to ${data.user?.email || 'user'}.`)
+      } else {
+        setMessage(`Registration request approved, but email failed to send. Enrollment token: ${data.enrollmentToken || 'N/A'}`)
+        setError('Email could not be sent. Please share the enrollment link manually.')
+      }
+      queryClient.invalidateQueries({ queryKey: ['admin', 'registration-requests'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      setTimeout(() => {
+        setMessage('')
+        setError('')
+      }, 10000)
+    },
+    onError: (err: any) => {
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else {
+        setError(err.response?.data?.error || 'Failed to approve registration request')
+      }
+      setMessage('')
+    },
+  })
+
+  // Reject registration request mutation
+  const rejectRegistrationRequest = useMutation({
+    mutationFn: async (requestId: string) => {
+      const res = await http.post(`/api/auth/admin/registration-requests/${requestId}/reject`)
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('Registration request rejected successfully')
+      setError('')
+      queryClient.invalidateQueries({ queryKey: ['admin', 'registration-requests'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else {
+        setError(err.response?.data?.error || 'Failed to reject registration request')
+      }
+      setMessage('')
+    },
+  })
+
   // Resend welcome email mutation
   const resendWelcomeEmail = useMutation({
     mutationFn: async (userId: string) => {
@@ -356,6 +434,17 @@ export default function AdminPortal() {
         >
           <Users className="mr-2 inline h-4 w-4" />
           Users
+        </button>
+        <button
+          onClick={() => setActiveTab('registration-requests')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'registration-requests'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <Clock className="mr-2 inline h-4 w-4" />
+          Registration Requests
         </button>
       </div>
 
@@ -931,6 +1020,185 @@ export default function AdminPortal() {
         )}
         </div>
         </>
+      )}
+
+      {/* Registration Requests */}
+      {activeTab === 'registration-requests' && (
+        <div className="space-y-6">
+          {/* Status Filter */}
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Filter className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+              <h2 className="text-sm font-semibold">Filter by Status</h2>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRegistrationRequestStatus(undefined)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  registrationRequestStatus === undefined
+                    ? 'bg-[color:var(--color-primary-600)] text-white'
+                    : 'bg-[color:var(--color-border)] text-[color:var(--color-text)] hover:bg-[color:var(--color-border)]/80'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setRegistrationRequestStatus('pending')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  registrationRequestStatus === 'pending'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-[color:var(--color-border)] text-[color:var(--color-text)] hover:bg-[color:var(--color-border)]/80'
+                }`}
+              >
+                <Clock className="mr-1 inline h-3 w-3" />
+                Pending
+              </button>
+              <button
+                onClick={() => setRegistrationRequestStatus('approved')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  registrationRequestStatus === 'approved'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-[color:var(--color-border)] text-[color:var(--color-text)] hover:bg-[color:var(--color-border)]/80'
+                }`}
+              >
+                <CheckCircle className="mr-1 inline h-3 w-3" />
+                Approved
+              </button>
+              <button
+                onClick={() => setRegistrationRequestStatus('rejected')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  registrationRequestStatus === 'rejected'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-[color:var(--color-border)] text-[color:var(--color-text)] hover:bg-[color:var(--color-border)]/80'
+                }`}
+              >
+                <XCircle className="mr-1 inline h-3 w-3" />
+                Rejected
+              </button>
+            </div>
+          </div>
+
+          {/* Registration Requests List */}
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Registration Requests</h2>
+              <div className="text-sm text-[color:var(--color-text-muted)]">
+                {registrationRequestsData?.requests?.length || 0} request(s)
+              </div>
+            </div>
+
+            {!isAdmin ? (
+              <div className="text-center py-8 text-[color:var(--color-text-muted)]">
+                You don't have permission to view registration requests.
+              </div>
+            ) : !registrationRequestsData ? (
+              <div className="text-center py-8 text-[color:var(--color-text-muted)]">Loading...</div>
+            ) : registrationRequestsData.requests.length === 0 ? (
+              <div className="text-center py-8 text-[color:var(--color-text-muted)]">
+                No registration requests found.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {registrationRequestsData.requests.map((request) => (
+                  <div
+                    key={request.id}
+                    className={`rounded-lg border p-4 ${
+                      request.status === 'pending'
+                        ? 'border-amber-300 bg-amber-50'
+                        : request.status === 'approved'
+                        ? 'border-green-300 bg-green-50'
+                        : 'border-red-300 bg-red-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-semibold text-lg">{request.email}</span>
+                          {request.status === 'pending' && (
+                            <span className="rounded-full bg-amber-600 px-2 py-0.5 text-xs font-medium text-white">
+                              Pending
+                            </span>
+                          )}
+                          {request.status === 'approved' && (
+                            <span className="rounded-full bg-green-600 px-2 py-0.5 text-xs font-medium text-white">
+                              Approved
+                            </span>
+                          )}
+                          {request.status === 'rejected' && (
+                            <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-medium text-white">
+                              Rejected
+                            </span>
+                          )}
+                        </div>
+                        {request.name && (
+                          <div className="text-sm text-[color:var(--color-text-muted)] mb-1">
+                            <strong>Name:</strong> {request.name}
+                          </div>
+                        )}
+                        {request.phoneNumber && (
+                          <div className="text-sm text-[color:var(--color-text-muted)] mb-1">
+                            <strong>Phone:</strong> {request.phoneNumber}
+                          </div>
+                        )}
+                        {request.workLocation && (
+                          <div className="text-sm text-[color:var(--color-text-muted)] mb-1">
+                            <strong>Work Location:</strong> {request.workLocation}
+                          </div>
+                        )}
+                        <div className="text-xs text-[color:var(--color-text-muted)] mt-2">
+                          Submitted: {formatDateTime(request.createdAt)}
+                        </div>
+                        {request.reviewedAt && (
+                          <div className="text-xs text-[color:var(--color-text-muted)]">
+                            Reviewed: {formatDateTime(request.reviewedAt)}
+                          </div>
+                        )}
+                      </div>
+                      {request.status === 'pending' && (
+                        <div className="ml-4 flex gap-2">
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Are you sure you want to approve the registration request for ${request.email}? An enrollment email will be sent to the user.`
+                                )
+                              ) {
+                                approveRegistrationRequest.mutate(request.id)
+                              }
+                            }}
+                            disabled={approveRegistrationRequest.isPending}
+                            className="flex items-center gap-1 rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+                            title="Approve registration request"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Are you sure you want to reject the registration request for ${request.email}? This action cannot be undone.`
+                                )
+                              ) {
+                                rejectRegistrationRequest.mutate(request.id)
+                              }
+                            }}
+                            disabled={rejectRegistrationRequest.isPending}
+                            className="flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                            title="Reject registration request"
+                          >
+                            <XCircle className="h-4 w-4" />
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

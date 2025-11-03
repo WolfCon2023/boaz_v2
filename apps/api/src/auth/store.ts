@@ -767,3 +767,247 @@ export async function resetUserToTemporaryPassword(userId: string): Promise<{ te
   }
 }
 
+// Registration Request Types
+export type RegistrationRequest = {
+  id: string
+  email: string
+  password: string // Not returned, kept for type compatibility
+  name?: string
+  phoneNumber?: string
+  workLocation?: string
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt: number
+  reviewedAt?: number
+  reviewedBy?: string
+}
+
+type RegistrationRequestDoc = {
+  _id: ObjectId
+  email: string
+  passwordHash: string
+  name?: string
+  phoneNumber?: string
+  workLocation?: string
+  status: 'pending' | 'approved' | 'rejected'
+  createdAt: number
+  reviewedAt?: number
+  reviewedBy?: string // userId of admin who reviewed
+}
+
+// Ensure registration_requests collection and indexes
+async function ensureRegistrationRequestsCollection(db: any) {
+  try {
+    await db.collection('registration_requests').createIndex({ email: 1 }).catch(() => {})
+    await db.collection('registration_requests').createIndex({ status: 1 }).catch(() => {})
+    await db.collection('registration_requests').createIndex({ createdAt: -1 }).catch(() => {})
+  } catch (err) {
+    console.warn('Warning: Could not ensure registration_requests collection/index:', err)
+  }
+}
+
+export async function createRegistrationRequest(
+  email: string,
+  password: string,
+  name?: string,
+  phoneNumber?: string,
+  workLocation?: string
+): Promise<RegistrationRequest> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  await ensureRegistrationRequestsCollection(db)
+
+  const emailLower = email.toLowerCase()
+
+  // Check if user already exists
+  const existingUser = await db.collection<UserDoc>('users').findOne({ email: emailLower })
+  if (existingUser) {
+    throw new Error('Email already registered')
+  }
+
+  // Check if there's already a pending request for this email
+  const existingRequest = await db.collection<RegistrationRequestDoc>('registration_requests').findOne({
+    email: emailLower,
+    status: 'pending',
+  })
+  if (existingRequest) {
+    throw new Error('Registration request already pending for this email')
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10)
+  const now = Date.now()
+
+  const requestDoc: RegistrationRequestDoc = {
+    _id: new ObjectId(),
+    email: emailLower,
+    passwordHash,
+    name: name?.trim() || undefined,
+    phoneNumber: phoneNumber?.trim() || undefined,
+    workLocation: workLocation?.trim() || undefined,
+    status: 'pending',
+    createdAt: now,
+  }
+
+  await db.collection<RegistrationRequestDoc>('registration_requests').insertOne(requestDoc)
+
+  return {
+    id: requestDoc._id.toString(),
+    email: requestDoc.email,
+    password: '', // Don't return password hash
+    name: requestDoc.name,
+    phoneNumber: requestDoc.phoneNumber,
+    workLocation: requestDoc.workLocation,
+    status: requestDoc.status,
+    createdAt: requestDoc.createdAt,
+  }
+}
+
+export async function getRegistrationRequests(status?: 'pending' | 'approved' | 'rejected'): Promise<RegistrationRequest[]> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  const query: any = {}
+  if (status) {
+    query.status = status
+  }
+
+  const requests = await db.collection<RegistrationRequestDoc>('registration_requests')
+    .find(query)
+    .sort({ createdAt: -1 })
+    .toArray()
+
+  return requests.map((req) => ({
+    id: req._id.toString(),
+    email: req.email,
+    password: '', // Don't return password hash
+    name: req.name,
+    phoneNumber: req.phoneNumber,
+    workLocation: req.workLocation,
+    status: req.status,
+    createdAt: req.createdAt,
+    reviewedAt: req.reviewedAt,
+    reviewedBy: req.reviewedBy,
+  }))
+}
+
+export async function approveRegistrationRequest(
+  requestId: string,
+  reviewedByUserId: string
+): Promise<{ user: User; enrollmentToken: string }> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  let requestObjectId: ObjectId
+  try {
+    requestObjectId = new ObjectId(requestId)
+  } catch {
+    throw new Error('Invalid request ID')
+  }
+
+  const requestDoc = await db.collection<RegistrationRequestDoc>('registration_requests').findOne({
+    _id: requestObjectId,
+    status: 'pending',
+  })
+
+  if (!requestDoc) {
+    throw new Error('Registration request not found or already processed')
+  }
+
+  // Check if user already exists (race condition check)
+  const existingUser = await db.collection<UserDoc>('users').findOne({ email: requestDoc.email })
+  if (existingUser) {
+    // Mark request as approved anyway for record-keeping
+    await db.collection<RegistrationRequestDoc>('registration_requests').updateOne(
+      { _id: requestObjectId },
+      {
+        $set: {
+          status: 'approved',
+          reviewedAt: Date.now(),
+          reviewedBy: reviewedByUserId,
+        },
+      }
+    )
+    throw new Error('User already exists')
+  }
+
+  // Create the user account
+  const userDoc: UserDoc = {
+    _id: new ObjectId(),
+    email: requestDoc.email,
+    passwordHash: requestDoc.passwordHash,
+    name: requestDoc.name,
+    phoneNumber: requestDoc.phoneNumber,
+    workLocation: requestDoc.workLocation,
+    verified: false, // User needs to complete enrollment
+    failedAttempts: 0,
+    lockoutUntil: null,
+    securityQuestions: undefined,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+
+  await db.collection<UserDoc>('users').insertOne(userDoc)
+
+  // Mark request as approved
+  await db.collection<RegistrationRequestDoc>('registration_requests').updateOne(
+    { _id: requestObjectId },
+    {
+      $set: {
+        status: 'approved',
+        reviewedAt: Date.now(),
+        reviewedBy: reviewedByUserId,
+      },
+    }
+  )
+
+  // Create enrollment token
+  const enrollmentToken = await createEnrollmentToken(userDoc.email)
+
+  return {
+    user: {
+      id: userDoc._id.toString(),
+      email: userDoc.email,
+      name: userDoc.name,
+      phoneNumber: userDoc.phoneNumber,
+      workLocation: userDoc.workLocation,
+      createdAt: userDoc.createdAt,
+    },
+    enrollmentToken,
+  }
+}
+
+export async function rejectRegistrationRequest(requestId: string, reviewedByUserId: string): Promise<void> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  let requestObjectId: ObjectId
+  try {
+    requestObjectId = new ObjectId(requestId)
+  } catch {
+    throw new Error('Invalid request ID')
+  }
+
+  const result = await db.collection<RegistrationRequestDoc>('registration_requests').updateOne(
+    { _id: requestObjectId, status: 'pending' },
+    {
+      $set: {
+        status: 'rejected',
+        reviewedAt: Date.now(),
+        reviewedBy: reviewedByUserId,
+      },
+    }
+  )
+
+  if (result.matchedCount === 0) {
+    throw new Error('Registration request not found or already processed')
+  }
+}
+
