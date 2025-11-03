@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -17,7 +17,7 @@ type Session = {
 
 export default function AdminPortal() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests' | 'access-report'>('sessions')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [registrationRequestStatus, setRegistrationRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
   const [appAccessRequestStatus, setAppAccessRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
@@ -677,6 +677,17 @@ export default function AdminPortal() {
         >
           <FolderOpen className="mr-2 inline h-4 w-4" />
           App Access Requests
+        </button>
+        <button
+          onClick={() => setActiveTab('access-report')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'access-report'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <FileText className="mr-2 inline h-4 w-4" />
+          Access Report
         </button>
       </div>
 
@@ -1638,6 +1649,193 @@ export default function AdminPortal() {
           </div>
         </div>
       )}
+
+      {/* Access Report */}
+      {activeTab === 'access-report' && (
+        <div className="space-y-6">
+          {!isAdmin ? (
+            <div className="text-center py-8 text-[color:var(--color-text-muted)]">
+              You don't have permission to view access reports.
+            </div>
+          ) : (
+            <AccessReportView />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Access Report Component
+function AccessReportView() {
+  const { data: reportData, isLoading } = useQuery<{ report: Array<{
+    userId: string
+    email: string
+    name?: string
+    createdAt: number
+    lastLoginAt?: number
+    roles: string[]
+    applicationAccess: string[]
+    isVerified: boolean
+    passwordChangeRequired: boolean
+  }> }>({
+    queryKey: ['admin', 'access-report'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/admin/access-report')
+      return res.data
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: false,
+  })
+
+  const exportToCSV = () => {
+    if (!reportData?.report) return
+
+    const headers = ['Email', 'Name', 'Roles', 'Applications', 'Account Created', 'Last Login', 'Verified', 'Password Change Required']
+    const rows = reportData.report.map(user => [
+      user.email,
+      user.name || 'N/A',
+      user.roles.join(', ') || 'None',
+      user.applicationAccess.join(', ') || 'None',
+      formatDateTime(user.createdAt),
+      user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Never',
+      user.isVerified ? 'Yes' : 'No',
+      user.passwordChangeRequired ? 'Yes' : 'No',
+    ])
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `access-report-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">Loading access report...</div>
+      </div>
+    )
+  }
+
+  if (!reportData?.report) {
+    return (
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="py-8 text-center text-sm text-[color:var(--color-text-muted)]">Failed to load access report.</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Access Report</h2>
+          <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
+            User access overview with last login times and application permissions
+          </p>
+        </div>
+        <button
+          onClick={exportToCSV}
+          className="flex items-center gap-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+        >
+          <Download className="h-4 w-4" />
+          Export CSV
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[color:var(--color-border)]">
+                <th className="px-4 py-3 text-left font-semibold">Email</th>
+                <th className="px-4 py-3 text-left font-semibold">Name</th>
+                <th className="px-4 py-3 text-left font-semibold">Roles</th>
+                <th className="px-4 py-3 text-left font-semibold">Applications</th>
+                <th className="px-4 py-3 text-left font-semibold">Account Created</th>
+                <th className="px-4 py-3 text-left font-semibold">Last Login</th>
+                <th className="px-4 py-3 text-center font-semibold">Verified</th>
+                <th className="px-4 py-3 text-center font-semibold">Password Change Required</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reportData.report.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
+                    No users found
+                  </td>
+                </tr>
+              ) : (
+                reportData.report.map((user) => (
+                  <tr key={user.userId} className="border-b border-[color:var(--color-border)]">
+                    <td className="px-4 py-3">{user.email}</td>
+                    <td className="px-4 py-3">{user.name || 'N/A'}</td>
+                    <td className="px-4 py-3">
+                      {user.roles.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {user.roles.map((role, idx) => (
+                            <span key={idx} className="rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-xs">
+                              {role}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[color:var(--color-text-muted)]">None</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {user.applicationAccess.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {user.applicationAccess.map((app, idx) => (
+                            <span key={idx} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
+                              {app}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[color:var(--color-text-muted)]">None</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-[color:var(--color-text-muted)]">
+                      {formatDateTime(user.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 text-[color:var(--color-text-muted)]">
+                      {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : <span className="italic">Never</span>}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {user.isVerified ? (
+                        <CheckCircle className="mx-auto h-5 w-5 text-green-600" />
+                      ) : (
+                        <XCircle className="mx-auto h-5 w-5 text-red-600" />
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {user.passwordChangeRequired ? (
+                        <span className="text-xs text-yellow-600">Yes</span>
+                      ) : (
+                        <span className="text-xs text-[color:var(--color-text-muted)]">No</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 text-xs text-[color:var(--color-text-muted)]">
+          Total users: {reportData.report.length}
+        </div>
+      </div>
     </div>
   )
 }

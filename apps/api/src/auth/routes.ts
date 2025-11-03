@@ -36,6 +36,7 @@ import {
   rejectApplicationAccessRequest,
   getUserApplicationAccessRequests,
   getApplicationAccessRequestById,
+  generateAccessReport,
 } from './store.js'
 import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
@@ -1364,6 +1365,17 @@ authRouter.post('/admin/app-access-requests/:id/reject', requireAuth, requirePer
       return res.status(404).json({ error: err.message })
     }
     res.status(500).json({ error: err.message || 'Failed to reject application access request' })
+  }
+})
+
+// Admin: Generate access report
+authRouter.get('/admin/access-report', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const report = await generateAccessReport()
+    res.json({ report })
+  } catch (err: any) {
+    console.error('Generate access report error:', err)
+    res.status(500).json({ error: err.message || 'Failed to generate access report' })
   }
 })
 

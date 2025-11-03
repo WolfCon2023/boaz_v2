@@ -1506,3 +1506,100 @@ export async function rejectApplicationAccessRequest(
   }
 }
 
+// Access Report Types
+export type UserAccessReport = {
+  userId: string
+  email: string
+  name?: string
+  createdAt: number
+  lastLoginAt?: number
+  roles: string[]
+  applicationAccess: string[]
+  isVerified: boolean
+  passwordChangeRequired: boolean
+}
+
+export async function generateAccessReport(): Promise<UserAccessReport[]> {
+  const db = await getDb()
+  if (!db) {
+    throw new Error('Database unavailable')
+  }
+
+  // Get all users
+  const users = await db.collection<UserDoc>('users').find({}).toArray()
+
+  // Get all sessions grouped by user to find last login
+  // SessionDoc structure matches sessions.ts
+  const sessions = await db.collection<any>('sessions')
+    .find({ revoked: { $ne: true } })
+    .sort({ createdAt: -1 })
+    .toArray()
+
+  // Group sessions by userId to get most recent login per user
+  const userLastLogin = new Map<string, number>()
+  for (const session of sessions) {
+    const userId = session.userId.toString()
+    if (!userLastLogin.has(userId)) {
+      // Use createdAt as the login time, lastUsedAt might be from refresh
+      userLastLogin.set(userId, session.createdAt.getTime())
+    }
+  }
+
+  // Get all user roles
+  const userRoles = await db.collection<UserRoleDoc>('user_roles').find({}).toArray()
+  const roleIds = [...new Set(userRoles.map(ur => ur.roleId.toString()))]
+  const roles = await db.collection<RoleDoc>('roles').find({
+    _id: { $in: roleIds.map(id => new ObjectId(id)) }
+  }).toArray()
+  const roleMap = new Map(roles.map(r => [r._id.toString(), r.name]))
+
+  // Build user role map
+  const userRoleMap = new Map<string, string[]>()
+  for (const ur of userRoles) {
+    const userId = ur.userId
+    const roleName = roleMap.get(ur.roleId.toString()) || 'Unknown'
+    if (!userRoleMap.has(userId)) {
+      userRoleMap.set(userId, [])
+    }
+    userRoleMap.get(userId)!.push(roleName)
+  }
+
+  // Get all application access
+  const appAccess = await db.collection<ApplicationAccessDoc>('user_apps').find({}).toArray()
+  const userAppMap = new Map<string, string[]>()
+  for (const access of appAccess) {
+    if (!userAppMap.has(access.userId)) {
+      userAppMap.set(access.userId, [])
+    }
+    userAppMap.get(access.userId)!.push(access.appKey)
+  }
+
+  // Build report
+  const report: UserAccessReport[] = users.map(user => {
+    const userId = user._id.toString()
+    return {
+      userId,
+      email: user.email,
+      name: user.name,
+      createdAt: user.createdAt,
+      lastLoginAt: userLastLogin.get(userId),
+      roles: userRoleMap.get(userId) || [],
+      applicationAccess: userAppMap.get(userId) || [],
+      isVerified: user.verified || false,
+      passwordChangeRequired: user.passwordChangeRequired || false,
+    }
+  })
+
+  // Sort by last login (most recent first), then by email
+  report.sort((a, b) => {
+    if (a.lastLoginAt && b.lastLoginAt) {
+      return b.lastLoginAt - a.lastLoginAt
+    }
+    if (a.lastLoginAt && !b.lastLoginAt) return -1
+    if (!a.lastLoginAt && b.lastLoginAt) return 1
+    return a.email.localeCompare(b.email)
+  })
+
+  return report
+}
+
