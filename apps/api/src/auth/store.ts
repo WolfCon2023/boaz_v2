@@ -1538,10 +1538,13 @@ export async function generateAccessReport(): Promise<UserAccessReport[]> {
   // Group sessions by userId to get most recent login per user
   const userLastLogin = new Map<string, number>()
   for (const session of sessions) {
-    const userId = session.userId.toString()
-    if (!userLastLogin.has(userId)) {
+    const userId = session.userId?.toString() || session.userId
+    if (!userId) continue
+    const userIdStr = typeof userId === 'string' ? userId : userId.toString()
+    if (!userLastLogin.has(userIdStr)) {
       // Use createdAt as the login time, lastUsedAt might be from refresh
-      userLastLogin.set(userId, session.createdAt.getTime())
+      const createdAt = session.createdAt instanceof Date ? session.createdAt : new Date(session.createdAt)
+      userLastLogin.set(userIdStr, createdAt.getTime())
     }
   }
 
@@ -1556,8 +1559,10 @@ export async function generateAccessReport(): Promise<UserAccessReport[]> {
   // Build user role map
   const userRoleMap = new Map<string, string[]>()
   for (const ur of userRoles) {
-    const userId = ur.userId
-    const roleName = roleMap.get(ur.roleId.toString()) || 'Unknown'
+    const userId = typeof ur.userId === 'string' ? ur.userId : ur.userId?.toString() || ''
+    if (!userId) continue
+    const roleIdStr = typeof ur.roleId === 'string' ? ur.roleId : ur.roleId?.toString() || ''
+    const roleName = roleMap.get(roleIdStr) || 'Unknown'
     if (!userRoleMap.has(userId)) {
       userRoleMap.set(userId, [])
     }
