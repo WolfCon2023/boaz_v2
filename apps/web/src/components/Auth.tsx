@@ -68,10 +68,10 @@ export function RequireApplication({ appKey, children }: { appKey: string; child
 
   if (!hasAccess) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="w-full max-w-md rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-center">
-          <h1 className="mb-2 text-xl font-semibold">Access Denied</h1>
-          <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">
+      <div className="flex min-h-[60vh] items-center justify-center py-8 w-full">
+        <div className="w-[min(90vw,28rem)] mx-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-center">
+          <h1 className="mb-3 text-xl font-semibold">Access Denied</h1>
+          <p className="mb-4 text-sm text-[color:var(--color-text-muted)] leading-normal">
             You don't have access to this application. Please contact an administrator to request access.
           </p>
           <a

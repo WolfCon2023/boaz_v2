@@ -476,6 +476,60 @@ export default function AdminPortal() {
   // Show access denied message if user doesn't have admin permissions (but only after roles have loaded)
   const showAccessDenied = !isLoadingRoles && !isAdmin
 
+  // Show loading state while checking roles
+  if (isLoadingRoles) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center py-8 w-full">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-[color:var(--color-primary-600)] border-t-transparent"></div>
+          <p className="text-sm text-[color:var(--color-text-muted)]">Checking access...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show access denied message if user doesn't have admin permissions
+  if (showAccessDenied) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center py-8 w-full">
+        <div className="w-[min(90vw,28rem)] mx-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-center">
+          <h1 className="mb-3 text-xl font-semibold">Access Denied</h1>
+          <p className="mb-4 text-sm text-[color:var(--color-text-muted)] leading-normal">
+            You don't have administrator permissions to access this portal. Admin access requires a role with the <code className="rounded bg-[color:var(--color-muted)] px-1 py-0.5 text-xs">*</code> permission.
+          </p>
+          {currentUserRoles && (
+            <div className="mb-4 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 text-sm text-left">
+              <p className="font-medium mb-2">Current Roles:</p>
+              {currentUserRoles.roles && currentUserRoles.roles.length > 0 ? (
+                <ul className="mt-1 list-inside list-disc space-y-1">
+                  {currentUserRoles.roles.map((role, idx) => (
+                    <li key={idx}>
+                      {role.name} - Permissions: {role.permissions.length > 0 ? role.permissions.join(', ') : 'None'}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1">No roles assigned</p>
+              )}
+              {currentUserRoles.userId && (
+                <p className="mt-2 text-xs text-[color:var(--color-text-muted)]">User ID: {currentUserRoles.userId}</p>
+              )}
+            </div>
+          )}
+          <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">
+            Please contact your system administrator to assign you the admin role.
+          </p>
+          <a
+            href="/dashboard"
+            className="inline-block rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+          >
+            Go to Dashboard
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -544,38 +598,6 @@ export default function AdminPortal() {
       {message && (
         <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800">
           {message}
-        </div>
-      )}
-
-      {/* Access Denied Warning */}
-      {showAccessDenied && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6">
-          <h2 className="mb-2 text-lg font-semibold text-amber-900">Access Denied</h2>
-          <p className="mb-4 text-sm text-amber-800">
-            You don't have administrator permissions to access this portal. Admin access requires a role with the <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">*</code> permission.
-          </p>
-          {currentUserRoles && (
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-100 p-3 text-sm">
-              <p className="font-medium text-amber-900">Current Roles:</p>
-              {currentUserRoles.roles && currentUserRoles.roles.length > 0 ? (
-                <ul className="mt-1 list-inside list-disc space-y-1 text-amber-800">
-                  {currentUserRoles.roles.map((role, idx) => (
-                    <li key={idx}>
-                      {role.name} - Permissions: {role.permissions.length > 0 ? role.permissions.join(', ') : 'None'}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-1 text-amber-800">No roles assigned</p>
-              )}
-              {currentUserRoles.userId && (
-                <p className="mt-2 text-xs text-amber-700">User ID: {currentUserRoles.userId}</p>
-              )}
-            </div>
-          )}
-          <p className="text-sm text-amber-800">
-            Please contact your system administrator to assign you the admin role.
-          </p>
         </div>
       )}
 

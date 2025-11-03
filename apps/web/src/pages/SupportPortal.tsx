@@ -67,31 +67,31 @@ export default function SupportPortal() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       <div className="text-center">
         <div className="text-2xl font-semibold">Support Portal</div>
-        <div className="text-sm text-[color:var(--color-text-muted)]">Submit a ticket or check your ticket status</div>
+        <div className="mt-2 text-sm text-[color:var(--color-text-muted)]">Submit a ticket or check your ticket status</div>
       </div>
 
-      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-        <div className="mb-2 text-base font-semibold">Submit a ticket</div>
-        <form className="grid gap-2" onSubmit={submitTicket}>
-          <input name="requesterName" placeholder="Your name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <input name="requesterEmail" type="email" required placeholder="Your email (required)" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <input name="shortDescription" required placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <textarea name="description" placeholder="Describe the issue" maxLength={2500} className="h-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <button className="inline-flex w-fit self-start justify-center rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Submit</button>
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="mb-4 text-base font-semibold">Submit a ticket</div>
+        <form className="space-y-3" onSubmit={submitTicket}>
+          <input name="requesterName" placeholder="Your name" className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="requesterEmail" type="email" required placeholder="Your email (required)" className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="shortDescription" required placeholder="Short description" className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <textarea name="description" placeholder="Describe the issue" maxLength={2500} className="w-full h-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm resize-y" />
+          <button className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Submit</button>
         </form>
         {submitResult && (
-          <div className="mt-2 text-sm">Thank you! Your ticket number is <span className="font-semibold">{submitResult.ticketNumber}</span>.</div>
+          <div className="mt-4 text-sm">Thank you! Your ticket number is <span className="font-semibold">{submitResult.ticketNumber}</span>.</div>
         )}
       </div>
 
-      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-        <div className="mb-2 text-base font-semibold">Check status</div>
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="mb-4 text-base font-semibold">Check status</div>
         <div className="flex items-center gap-2">
           <input value={lookupNumber} onChange={(e) => setLookupNumber(e.target.value)} placeholder="Ticket number" className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <button className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => lookupTicket(lookupNumber)} disabled={!lookupNumber || loading}>Lookup</button>
+          <button className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => lookupTicket(lookupNumber)} disabled={!lookupNumber || loading}>Lookup</button>
         </div>
         {loading && <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">Loading...</div>}
         {found && (
@@ -115,8 +115,6 @@ export default function SupportPortal() {
           </div>
         )}
       </div>
-
-      
     </div>
   )
 }

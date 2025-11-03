@@ -53,7 +53,7 @@ export function Topbar() {
           <span className="text-sm sm:text-base font-semibold">Back Office Applications ZoneOS (BOAZ-OS)</span>
         </Link>
         <div className="absolute right-4 flex items-center gap-3">
-          <Link to="/apps/helpdesk" className="hidden sm:inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-sm hover:bg-[color:var(--color-muted)]">Support</Link>
+          <Link to="/apps/support" className="hidden sm:inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-sm hover:bg-[color:var(--color-muted)]">Support</Link>
           <button className="rounded-full p-2 hover:bg-[color:var(--color-muted)]" aria-label="Notifications">
             <Bell className="w-5 h-5" />
           </button>

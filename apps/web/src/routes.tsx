@@ -29,6 +29,7 @@ import KnowledgeBase from '@/pages/KnowledgeBase'
 import SupportPortal from '@/pages/SupportPortal'
 import { PublicShell } from '@/components/PublicShell'
 import Helpdesk from '@/pages/Helpdesk'
+import Support from '@/pages/Support'
 import Marketing from '@/pages/Marketing'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
 
@@ -60,7 +61,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/support/tickets', element: <RequireAuth><RequireApplication appKey="crm"><SupportTickets /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/support/kb', element: <RequireAuth><RequireApplication appKey="crm"><KnowledgeBase /></RequireApplication></RequireAuth> },
       { path: 'apps/helpdesk', element: <RequireAuth><RequireApplication appKey="helpdesk"><Helpdesk /></RequireApplication></RequireAuth> },
-      { path: 'apps/support', element: <Navigate to="/apps/helpdesk" replace /> },
+      { path: 'apps/support', element: <RequireAuth><Support /></RequireAuth> },
     ],
   },
   {
