@@ -1031,8 +1031,12 @@ type ApplicationAccessDoc = {
 
 // Application catalog (should match frontend)
 export const APPLICATION_CATALOG = [
-  { key: 'crm', name: 'CRM', description: 'Contacts, deals, pipelines, and customer management' },
-  { key: 'helpdesk', name: 'Helpdesk', description: 'Support tickets and customer service' },
+  { key: 'crm', name: 'CRM', description: 'Contacts, deals, pipelines' },
+  { key: 'scheduler', name: 'Scheduler', description: 'Calendar and bookings' },
+  { key: 'helpdesk', name: 'Helpdesk', description: 'Tickets and SLAs' },
+  { key: 'billing', name: 'Billing', description: 'Invoices and payments' },
+  { key: 'analytics', name: 'Analytics', description: 'Dashboards and reports' },
+  { key: 'stratflow', name: 'StratFlow', description: 'Projects and tasks' },
   { key: 'marketplace', name: 'Marketplace', description: 'Product and service marketplace' },
   { key: 'workspace', name: 'Workspace', description: 'Personal workspace and tools' },
   { key: 'dashboard', name: 'Dashboard', description: 'Main dashboard and analytics' },
