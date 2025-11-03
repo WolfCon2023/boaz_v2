@@ -206,7 +206,7 @@ export default function Support() {
 
         {/* FAQ List */}
         <div className="space-y-2">
-          {filteredFaqs.map((faq, index) => {
+          {filteredFaqs.map((faq) => {
             const globalIndex = faqs.findIndex(f => f === faq)
             const isExpanded = expandedFaq === globalIndex
             return (
