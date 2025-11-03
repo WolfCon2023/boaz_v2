@@ -35,13 +35,23 @@ export default function Workspace() {
     },
   })
   
+  const [requestedApps, setRequestedApps] = useState<Set<string>>(new Set())
+  
   const requestAccess = useMutation({
     mutationFn: async (appKey: string) => {
       const res = await http.post(`/api/auth/me/applications/${appKey}/request`)
       return { appKey, data: res.data }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      setRequestedApps(prev => new Set(prev).add(result.appKey))
       queryClient.invalidateQueries({ queryKey: ['user', 'applications'] })
+      setTimeout(() => {
+        setRequestedApps(prev => {
+          const next = new Set(prev)
+          next.delete(result.appKey)
+          return next
+        })
+      }, 5000)
     },
   })
   
@@ -99,16 +109,21 @@ export default function Workspace() {
             {hasAccess ? (
               <a href={`/apps/${appKey}`} className="text-[color:var(--color-primary)] underline">Open</a>
             ) : (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  requestAccess.mutate(appKey)
-                }}
-                disabled={requestAccess.isPending}
-                className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
-              >
-                {requestAccess.isPending ? 'Requesting...' : 'Request Access'}
-              </button>
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    requestAccess.mutate(appKey)
+                  }}
+                  disabled={requestAccess.isPending}
+                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                >
+                  {requestAccess.isPending ? 'Requesting...' : 'Request Access'}
+                </button>
+                {requestedApps.has(appKey) && (
+                  <div className="mt-2 text-xs text-green-600">Your access request has been submitted</div>
+                )}
+              </>
             )}
           </div>
         </div>

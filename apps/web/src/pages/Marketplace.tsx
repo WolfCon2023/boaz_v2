@@ -85,7 +85,7 @@ export default function Marketplace() {
                   )}
                 </div>
                 {requestedApps.has(app.key) && (
-                  <div className="mt-2 text-xs text-green-600">Access request submitted</div>
+                  <div className="mt-2 text-xs text-green-600">Your access request has been submitted</div>
                 )}
               </div>
             </li>
