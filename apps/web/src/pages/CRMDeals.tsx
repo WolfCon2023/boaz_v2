@@ -189,35 +189,6 @@ export default function CRMDeals() {
       qc.invalidateQueries({ queryKey: ['deal-history'] })
     },
   })
-  
-  // History query
-  const historyQ = useQuery({
-    queryKey: ['deal-history', editing?._id, showHistory],
-    enabled: Boolean(editing?._id && showHistory),
-    queryFn: async () => {
-      const res = await http.get(`/api/crm/deals/${editing?._id}/history`)
-      return res.data as {
-        data: {
-          history: Array<{
-            _id: string
-            eventType: string
-            description: string
-            userName?: string
-            userEmail?: string
-            oldValue?: any
-            newValue?: any
-            createdAt: string
-          }>
-          deal: any
-        }
-      }
-    },
-  })
-  
-  // Reset history visibility when editing changes
-  React.useEffect(() => {
-    setShowHistory(false)
-  }, [editing?._id])
   async function applyBulkStage() {
     if (!bulkStage || selectedIds.size === 0) return
     const ids = Array.from(selectedIds)
@@ -272,6 +243,35 @@ export default function CRMDeals() {
   const [editing, setEditing] = React.useState<Deal | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   const [showHistory, setShowHistory] = React.useState(false)
+  
+  // History query
+  const historyQ = useQuery({
+    queryKey: ['deal-history', editing?._id, showHistory],
+    enabled: Boolean(editing?._id && showHistory),
+    queryFn: async () => {
+      const res = await http.get(`/api/crm/deals/${editing?._id}/history`)
+      return res.data as {
+        data: {
+          history: Array<{
+            _id: string
+            eventType: string
+            description: string
+            userName?: string
+            userEmail?: string
+            oldValue?: any
+            newValue?: any
+            createdAt: string
+          }>
+          deal: any
+        }
+      }
+    },
+  })
+  
+  // Reset history visibility when editing changes
+  React.useEffect(() => {
+    setShowHistory(false)
+  }, [editing?._id])
 
   async function saveCurrentView() {
     const viewConfig = { q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, cols, pageSize }
