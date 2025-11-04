@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
-import { Package, Layers, Tag, FileText, TrendingUp, Download, TrendingDown, DollarSign, PackageIcon, BarChart3, PieChart } from 'lucide-react'
+import { Package, Layers, Tag, FileText, TrendingUp, Download, TrendingDown, DollarSign, PackageIcon, BarChart3, PieChart, FileDown } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, Legend } from 'recharts'
 
 type Product = {
@@ -585,20 +585,72 @@ export default function CRMProducts() {
 
       {/* Profitability Report Tab */}
       {activeTab === 'profitability' && (
-        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
-          <div className="p-6">
+        <>
+          <style>{`
+            @media print {
+              body * {
+                visibility: hidden;
+              }
+              .print-report, .print-report * {
+                visibility: visible;
+              }
+              .print-report {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white;
+                color: black;
+                padding: 2rem;
+              }
+              .no-print {
+                display: none !important;
+              }
+              .print-page-break {
+                page-break-after: always;
+              }
+              .print-section {
+                margin-bottom: 2rem;
+              }
+              @page {
+                margin: 1in;
+              }
+              .print-report h1,
+              .print-report h2,
+              .print-report h3 {
+                color: #000 !important;
+                page-break-after: avoid;
+              }
+              .print-report .rounded-2xl,
+              .print-report .rounded-xl {
+                border: 1px solid #ddd !important;
+                page-break-inside: avoid;
+              }
+            }
+          `}</style>
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] print-report">
+            <div className="p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Product Profitability Report</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  const productsWithCost = products.filter(p => (p.cost ?? 0) > 0)
-                  const totalRevenue = productsWithCost.reduce((sum, p) => sum + p.basePrice, 0)
-                  const totalCost = productsWithCost.reduce((sum, p) => sum + (p.cost ?? 0), 0)
+              <h2 className="text-lg font-semibold print:text-2xl print:font-bold">Product Profitability Report</h2>
+              <div className="flex gap-2 no-print">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+                >
+                  <FileDown className="h-4 w-4" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                  const productsWithCost = products.filter((p: Product) => (p.cost ?? 0) > 0)
+                  const totalRevenue = productsWithCost.reduce((sum: number, p: Product) => sum + p.basePrice, 0)
+                  const totalCost = productsWithCost.reduce((sum: number, p: Product) => sum + (p.cost ?? 0), 0)
                   const totalMargin = totalRevenue - totalCost
                   const overallMarginPercent = totalRevenue > 0 ? ((totalMargin / totalRevenue) * 100) : 0
                   
-                  const byCategory = productsWithCost.reduce((acc, p) => {
+                  const byCategory = productsWithCost.reduce((acc: Record<string, { revenue: number; cost: number; count: number; products: Product[] }>, p: Product) => {
                     const cat = p.category || 'Uncategorized'
                     if (!acc[cat]) {
                       acc[cat] = { revenue: 0, cost: 0, count: 0, products: [] }
@@ -608,7 +660,7 @@ export default function CRMProducts() {
                     acc[cat].count += 1
                     acc[cat].products.push(p)
                     return acc
-                  }, {} as Record<string, { revenue: number; cost: number; count: number; products: Product[] }>)
+                  }, {})
                   
                   // Build CSV data
                   const csvRows: string[] = []
@@ -638,7 +690,7 @@ export default function CRMProducts() {
                       data.cost.toFixed(2),
                       margin.toFixed(2),
                       marginPercent.toFixed(2) + '%'
-                    ].map(x => '"' + String(x).replaceAll('"', '""') + '"').join(','))
+                    ].map((x: any) => '"' + String(x).replaceAll('"', '""') + '"').join(','))
                   })
                   csvRows.push('')
                   csvRows.push('')
@@ -646,27 +698,26 @@ export default function CRMProducts() {
                   // All products with margins (sorted by margin)
                   csvRows.push('ALL PRODUCTS BY MARGIN')
                   csvRows.push('Product Name,SKU,Category,Type,Price,Cost,Margin,Margin %')
-                  [...productsWithCost]
-                    .sort((a, b) => {
-                      const marginA = a.basePrice - (a.cost ?? 0)
-                      const marginB = b.basePrice - (b.cost ?? 0)
-                      return marginB - marginA
-                    })
-                    .forEach((product) => {
-                      const cost = product.cost ?? 0
-                      const margin = product.basePrice - cost
-                      const marginPercent = product.basePrice > 0 ? ((margin / product.basePrice) * 100) : 0
-                      csvRows.push([
-                        product.name,
-                        product.sku || '',
-                        product.category || 'Uncategorized',
-                        product.type,
-                        product.basePrice.toFixed(2),
-                        cost.toFixed(2),
-                        margin.toFixed(2),
-                        marginPercent.toFixed(2) + '%'
-                      ].map(x => '"' + String(x).replaceAll('"', '""') + '"').join(','))
-                    })
+                  const sortedProducts = [...productsWithCost].sort((a: Product, b: Product) => {
+                    const marginA = a.basePrice - (a.cost ?? 0)
+                    const marginB = b.basePrice - (b.cost ?? 0)
+                    return marginB - marginA
+                  })
+                  sortedProducts.forEach((product: Product) => {
+                    const cost = product.cost ?? 0
+                    const margin = product.basePrice - cost
+                    const marginPercent = product.basePrice > 0 ? ((margin / product.basePrice) * 100) : 0
+                    csvRows.push([
+                      product.name,
+                      product.sku || '',
+                      product.category || 'Uncategorized',
+                      product.type,
+                      product.basePrice.toFixed(2),
+                      cost.toFixed(2),
+                      margin.toFixed(2),
+                      marginPercent.toFixed(2) + '%'
+                    ].map((x: any) => '"' + String(x).replaceAll('"', '""') + '"').join(','))
+                  })
                   
                   const csv = csvRows.join('\n')
                   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -678,12 +729,13 @@ export default function CRMProducts() {
                   a.click()
                   document.body.removeChild(a)
                   URL.revokeObjectURL(url)
-                }}
-                className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-              >
-                <Download className="h-4 w-4" />
-                Export CSV
-              </button>
+                  }}
+                  className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                >
+                  <Download className="h-4 w-4" />
+                  Export CSV
+                </button>
+              </div>
             </div>
             {(() => {
               const productsWithCost = products.filter(p => (p.cost ?? 0) > 0)
@@ -744,14 +796,20 @@ export default function CRMProducts() {
 
               return (
                 <div className="space-y-8">
+                  {/* Report Header for Print */}
+                  <div className="no-print print-section border-b border-[color:var(--color-border)] pb-6 mb-8">
+                    <h1 className="text-3xl font-bold text-[color:var(--color-text)] mb-2">Product Profitability Report</h1>
+                    <p className="text-sm text-[color:var(--color-text-muted)]">Generated on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                  </div>
+
                   {/* Summary Cards - Enhanced */}
-                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="print-section grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 p-6 shadow-lg transition-all hover:shadow-xl hover:scale-[1.02]">
                       <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-blue-200/20 dark:bg-blue-800/20 blur-2xl"></div>
                       <div className="relative flex items-start justify-between">
                         <div className="flex-1">
                           <div className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-wide">Total Products</div>
-                          <div className="mt-2 text-3xl font-bold text-[color:var(--color-text)]">{products.length}</div>
+                          <div className="mt-2 text-3xl font-bold text-blue-900 dark:text-blue-100">{products.length}</div>
                           <div className="mt-2 flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
                             <PackageIcon className="h-3 w-3" />
                             <span>{productsWithCost.length} with cost data</span>
@@ -838,7 +896,7 @@ export default function CRMProducts() {
                   </div>
 
                   {/* Charts Section */}
-                  <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="print-section print-page-break grid gap-6 lg:grid-cols-2">
                     {/* Margin by Category - Bar Chart */}
                     <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-sm">
                       <div className="mb-4 flex items-center justify-between">
@@ -884,48 +942,73 @@ export default function CRMProducts() {
                     </div>
 
                     {/* Margin Distribution - Pie Chart */}
-                    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-sm">
+                    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-sm overflow-hidden">
                       <div className="mb-4 flex items-center justify-between">
-                        <h3 className="text-base font-semibold flex items-center gap-2">
-                          <PieChart className="h-4 w-4" />
-                          Margin Distribution
+                        <h3 className="text-base font-semibold flex items-center gap-2 pr-2">
+                          <PieChart className="h-4 w-4 flex-shrink-0" />
+                          <span className="break-words">Margin Distribution</span>
                         </h3>
                       </div>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <RechartsPieChart>
-                          <Pie
-                            data={pieChartData}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                          >
-                            {pieChartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: 'var(--color-panel)',
-                              border: '1px solid var(--color-border)',
-                              borderRadius: '8px',
-                              padding: '8px'
-                            }}
-                            formatter={(value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                          />
-                          <Legend />
-                        </RechartsPieChart>
-                      </ResponsiveContainer>
+                      <div className="overflow-hidden">
+                        <ResponsiveContainer width="100%" height={300}>
+                          <RechartsPieChart>
+                            <Pie
+                              data={pieChartData}
+                              cx="50%"
+                              cy="45%"
+                              labelLine={false}
+                              outerRadius={70}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {pieChartData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: 'var(--color-panel)',
+                                border: '1px solid var(--color-border)',
+                                borderRadius: '8px',
+                                padding: '8px'
+                              }}
+                              formatter={(value: number, name: string, props: any) => {
+                                const entry = props.payload
+                                return [
+                                  `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${((value / pieChartData.reduce((sum, d) => sum + d.value, 0)) * 100).toFixed(1)}%)`,
+                                  entry.name
+                                ]
+                              }}
+                            />
+                            <Legend 
+                              verticalAlign="bottom" 
+                              height={50}
+                              wrapperStyle={{ 
+                                paddingTop: '10px', 
+                                fontSize: '11px', 
+                                width: '100%',
+                                overflow: 'hidden',
+                                wordWrap: 'break-word'
+                              }}
+                              iconType="circle"
+                              iconSize={8}
+                              layout="horizontal"
+                              formatter={(value, entry: any) => {
+                                const total = pieChartData.reduce((sum, d) => sum + d.value, 0)
+                                const percent = ((entry.payload.value / total) * 100).toFixed(1)
+                                return `${value} (${percent}%)`
+                              }}
+                            />
+                          </RechartsPieChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   </div>
 
                   {/* By Category - Enhanced Cards */}
-                  <div>
-                    <h3 className="mb-4 text-base font-semibold flex items-center gap-2">
-                      <Package className="h-4 w-4" />
+                  <div className="print-section print-page-break">
+                    <h3 className="mb-4 text-lg font-bold text-[color:var(--color-text)] flex items-center gap-2">
+                      <Package className="h-5 w-5" />
                       Profitability by Category
                     </h3>
                     <div className="grid gap-4 md:grid-cols-2">
@@ -1001,13 +1084,13 @@ export default function CRMProducts() {
                   </div>
 
                   {/* Top Products by Margin - Enhanced with Chart */}
-                  <div className="space-y-4">
+                  <div className="print-section print-page-break space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-base font-semibold flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4" />
+                      <h3 className="text-lg font-bold text-[color:var(--color-text)] flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
                         Top Products by Margin
                       </h3>
-                      <span className="text-xs text-[color:var(--color-text-muted)]">Showing top 10</span>
+                      <span className="text-xs text-[color:var(--color-text-muted)] no-print">Showing top 10</span>
                     </div>
                     
                     {/* Horizontal Bar Chart */}
@@ -1128,6 +1211,7 @@ export default function CRMProducts() {
             })()}
           </div>
         </div>
+        </>
       )}
 
       {/* Terms Tab */}
