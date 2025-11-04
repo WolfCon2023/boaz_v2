@@ -27,6 +27,54 @@ type QuoteApprovalRequestDoc = {
   updatedAt: Date
 }
 
+// Types for quote history
+type QuoteHistoryEntry = {
+  _id: ObjectId
+  quoteId: ObjectId
+  eventType: 'created' | 'updated' | 'status_changed' | 'approval_requested' | 'approved' | 'rejected' | 'version_changed' | 'signed' | 'field_changed'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add history entry
+async function addQuoteHistory(
+  db: any,
+  quoteId: ObjectId,
+  eventType: QuoteHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection<QuoteHistoryEntry>('quote_history').insertOne({
+      _id: new ObjectId(),
+      quoteId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    })
+  } catch (err) {
+    console.error('Failed to add quote history:', err)
+    // Don't fail the main operation if history fails
+  }
+}
+
 // List with search/sort
 quotesRouter.get('/', async (req, res) => {
   const db = await getDb()
@@ -100,6 +148,29 @@ quotesRouter.post('/', async (req, res) => {
   }
 
   const result = await db.collection('quotes').insertOne(doc)
+  
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  if (auth) {
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    await addQuoteHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Quote created: ${title}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email
+    )
+  } else {
+    await addQuoteHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Quote created: ${title}`
+    )
+  }
+  
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
@@ -110,35 +181,160 @@ quotesRouter.put('/:id', async (req, res) => {
   try {
     const _id = new ObjectId(req.params.id)
     const raw = req.body ?? {}
+    
+    // Get current quote for comparison
+    const currentQuote = await db.collection('quotes').findOne({ _id })
+    if (!currentQuote) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+    
     const update: any = { updatedAt: new Date() }
-    if (typeof raw.title === 'string') update.title = raw.title.trim()
-    if (typeof raw.status === 'string') update.status = raw.status
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    let user: any = null
+    if (auth) {
+      user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    }
+    
+    // Track status changes
+    if (typeof raw.status === 'string' && raw.status !== (currentQuote as any).status) {
+      update.status = raw.status
+      await addQuoteHistory(
+        db,
+        _id,
+        'status_changed',
+        `Status changed from "${(currentQuote as any).status}" to "${raw.status}"`,
+        auth?.userId,
+        user?.name,
+        auth?.email,
+        (currentQuote as any).status,
+        raw.status
+      )
+    }
+    
+    // Track title changes
+    if (typeof raw.title === 'string') {
+      const newTitle = raw.title.trim()
+      if (newTitle !== (currentQuote as any).title) {
+        update.title = newTitle
+        await addQuoteHistory(
+          db,
+          _id,
+          'field_changed',
+          `Title changed from "${(currentQuote as any).title}" to "${newTitle}"`,
+          auth?.userId,
+          user?.name,
+          auth?.email,
+          (currentQuote as any).title,
+          newTitle
+        )
+      }
+    }
+    
     if (typeof raw.approver === 'string') update.approver = raw.approver
     if (raw.approvedAt) update.approvedAt = new Date(raw.approvedAt)
-    if (typeof raw.signerName === 'string') update.signerName = raw.signerName
-    if (typeof raw.signerEmail === 'string') update.signerEmail = raw.signerEmail
-    if (typeof raw.esignStatus === 'string') {
+    
+    // Track signer changes
+    if (typeof raw.signerName === 'string' && raw.signerName !== (currentQuote as any).signerName) {
+      update.signerName = raw.signerName
+      await addQuoteHistory(
+        db,
+        _id,
+        'field_changed',
+        `Signer name changed to "${raw.signerName}"`,
+        auth?.userId,
+        user?.name,
+        auth?.email
+      )
+    }
+    if (typeof raw.signerEmail === 'string' && raw.signerEmail !== (currentQuote as any).signerEmail) {
+      update.signerEmail = raw.signerEmail
+      await addQuoteHistory(
+        db,
+        _id,
+        'field_changed',
+        `Signer email changed to "${raw.signerEmail}"`,
+        auth?.userId,
+        user?.name,
+        auth?.email
+      )
+    }
+    
+    // Track e-sign status changes
+    if (typeof raw.esignStatus === 'string' && raw.esignStatus !== (currentQuote as any).esignStatus) {
       update.esignStatus = raw.esignStatus
       // simple auto-transitions for signedAt
       if (raw.esignStatus === 'Signed' && !raw.signedAt) {
         update.signedAt = new Date()
+        await addQuoteHistory(
+          db,
+          _id,
+          'signed',
+          `Quote signed by ${(currentQuote as any).signerName || (currentQuote as any).signerEmail || 'Unknown'}`,
+          auth?.userId,
+          user?.name,
+          auth?.email
+        )
+      } else {
+        await addQuoteHistory(
+          db,
+          _id,
+          'field_changed',
+          `E-sign status changed from "${(currentQuote as any).esignStatus}" to "${raw.esignStatus}"`,
+          auth?.userId,
+          user?.name,
+          auth?.email,
+          (currentQuote as any).esignStatus,
+          raw.esignStatus
+        )
       }
       if (raw.esignStatus !== 'Signed' && raw.signedAt === null) {
         update.signedAt = null
       }
     }
     if (raw.signedAt) update.signedAt = new Date(raw.signedAt)
+    
+    // Track version changes (when items/total change)
     if (Array.isArray(raw.items)) {
+      const oldTotal = (currentQuote as any).total || 0
+      const newTotal = Number(raw.total) || 0
+      const oldVersion = (currentQuote as any).version || 1
+      
       update.items = raw.items
       update.subtotal = Number(raw.subtotal) || 0
       update.tax = Number(raw.tax) || 0
-      update.total = Number(raw.total) || 0
-      // bump version
-      const q = await db.collection('quotes').findOne({ _id }, { projection: { version: 1 } })
-      update.version = (q as any)?.version ? (q as any).version + 1 : 2
+      update.total = newTotal
+      update.version = oldVersion + 1
+      
+      await addQuoteHistory(
+        db,
+        _id,
+        'version_changed',
+        `Quote updated to version ${oldVersion + 1}. Total changed from $${oldTotal.toFixed(2)} to $${newTotal.toFixed(2)}`,
+        auth?.userId,
+        user?.name,
+        auth?.email,
+        { version: oldVersion, total: oldTotal },
+        { version: oldVersion + 1, total: newTotal }
+      )
     }
+    
     if (raw.accountId && ObjectId.isValid(raw.accountId)) update.accountId = new ObjectId(raw.accountId)
+    
     await db.collection('quotes').updateOne({ _id }, { $set: update })
+    
+    // Add general update entry if no specific changes were tracked
+    if (Object.keys(update).length === 1) { // Only updatedAt
+      await addQuoteHistory(
+        db,
+        _id,
+        'updated',
+        'Quote updated',
+        auth?.userId,
+        user?.name,
+        auth?.email
+      )
+    }
+    
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
@@ -153,9 +349,60 @@ quotesRouter.get('/:id/history', async (req, res) => {
     const _id = new ObjectId(req.params.id)
     const q = await db.collection('quotes').findOne({ _id })
     if (!q) return res.status(404).json({ data: null, error: 'not_found' })
-    const createdAt = (q as any).createdAt || _id.getTimestamp()
-    // Any events by account (if denormalized) could be added here
-    res.json({ data: { createdAt, quote: { title: (q as any).title, status: (q as any).status, total: (q as any).total, quoteNumber: (q as any).quoteNumber, updatedAt: (q as any).updatedAt } }, error: null })
+    
+    // Get all history entries for this quote, sorted by date (newest first)
+    const historyEntries = await db.collection<QuoteHistoryEntry>('quote_history')
+      .find({ quoteId: _id })
+      .sort({ createdAt: -1 })
+      .toArray()
+    
+    // Get approval requests for this quote
+    const approvalRequests = await db.collection<QuoteApprovalRequestDoc>('quote_approval_requests')
+      .find({ quoteId: _id })
+      .sort({ createdAt: -1 })
+      .toArray()
+    
+    // Add approval request events to history
+    for (const req of approvalRequests) {
+      if (req.status === 'pending') {
+        // Check if this is already in history
+        const exists = historyEntries.some(h => 
+          h.eventType === 'approval_requested' && 
+          h.metadata?.approvalRequestId?.toString() === req._id.toString()
+        )
+        if (!exists) {
+          historyEntries.push({
+            _id: new ObjectId(),
+            quoteId: _id,
+            eventType: 'approval_requested',
+            description: `Approval requested from ${req.approverEmail}`,
+            userId: req.requesterId,
+            userEmail: req.requesterEmail,
+            userName: req.requesterName,
+            createdAt: req.requestedAt,
+            metadata: { approvalRequestId: req._id },
+          } as QuoteHistoryEntry)
+        }
+      }
+    }
+    
+    // Sort all entries by date (newest first)
+    historyEntries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    
+    res.json({ 
+      data: { 
+        history: historyEntries,
+        quote: { 
+          title: (q as any).title, 
+          status: (q as any).status, 
+          total: (q as any).total, 
+          quoteNumber: (q as any).quoteNumber, 
+          createdAt: (q as any).createdAt || _id.getTimestamp(),
+          updatedAt: (q as any).updatedAt 
+        } 
+      }, 
+      error: null 
+    })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }
@@ -259,6 +506,20 @@ quotesRouter.post('/:id/request-approval', requireAuth, async (req, res) => {
     await db.collection('quotes').updateOne(
       { _id: quoteId },
       { $set: { status: 'Submitted for Review', updatedAt: now } }
+    )
+    
+    // Add history entry
+    await addQuoteHistory(
+      db,
+      quoteId,
+      'approval_requested',
+      `Approval requested from ${approverEmail}`,
+      auth.userId,
+      requesterData.name,
+      requesterData.email,
+      quoteData.status,
+      'Submitted for Review',
+      { approvalRequestId: approvalRequest._id, approverEmail }
     )
     
     // Send email to approver
@@ -500,6 +761,20 @@ quotesRouter.post('/:id/approve', requireAuth, async (req, res) => {
       return res.status(404).json({ data: null, error: 'quote_not_found' })
     }
     
+    // Add history entry for approval
+    await addQuoteHistory(
+      db,
+      quoteId,
+      'approved',
+      `Quote approved by ${userData.name || userData.email}${typeof reviewNotes === 'string' && reviewNotes ? `: ${reviewNotes}` : ''}`,
+      auth.userId,
+      userData.name,
+      userData.email,
+      (currentQuote as any)?.status,
+      'Approved',
+      { approvalRequestId: approvalRequest._id, reviewNotes }
+    )
+    
     // Send email to requester
     try {
       const quote = await db.collection('quotes').findOne({ _id: quoteId })
@@ -607,6 +882,9 @@ quotesRouter.post('/:id/reject', requireAuth, async (req, res) => {
       }
     )
     
+    // Get current quote for history
+    const currentQuote = await db.collection('quotes').findOne({ _id: quoteId })
+    
     // Update quote
     await db.collection('quotes').updateOne(
       { _id: quoteId },
@@ -616,6 +894,20 @@ quotesRouter.post('/:id/reject', requireAuth, async (req, res) => {
           updatedAt: now,
         }
       }
+    )
+    
+    // Add history entry for rejection
+    await addQuoteHistory(
+      db,
+      quoteId,
+      'rejected',
+      `Quote rejected by ${userData.name || userData.email}${typeof reviewNotes === 'string' && reviewNotes ? `: ${reviewNotes}` : ''}`,
+      auth.userId,
+      userData.name,
+      userData.email,
+      (currentQuote as any)?.status,
+      'Rejected',
+      { approvalRequestId: approvalRequest._id, reviewNotes }
     )
     
     // Send email to requester

@@ -54,6 +54,7 @@ export default function CRMApprovalQueue() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quote-approval-queue'] })
       qc.invalidateQueries({ queryKey: ['quotes'] })
+      qc.invalidateQueries({ queryKey: ['quote-history'] })
       setSelectedRequest(null)
       setReviewNotes('')
       alert('Quote approved successfully!')
@@ -72,6 +73,7 @@ export default function CRMApprovalQueue() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quote-approval-queue'] })
       qc.invalidateQueries({ queryKey: ['quotes'] })
+      qc.invalidateQueries({ queryKey: ['quote-history'] })
       setSelectedRequest(null)
       setReviewNotes('')
       alert('Quote rejected.')
