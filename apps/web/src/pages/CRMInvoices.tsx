@@ -27,12 +27,15 @@ type InvoiceLineItem = {
   productId?: string
   productName?: string
   productSku?: string
+  bundleId?: string
+  bundleName?: string
   description?: string
   quantity: number
   unitPrice: number
   taxRate?: number
   cost?: number
   lineTotal: number
+  isBundle?: boolean
 }
 
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
@@ -45,6 +48,37 @@ type Product = {
   basePrice: number
   taxRate?: number
   cost?: number
+  isActive?: boolean
+  type?: string
+}
+
+type Bundle = {
+  _id: string
+  sku?: string
+  name: string
+  description?: string
+  bundlePrice: number
+  items: Array<{
+    productId: string
+    quantity: number
+    priceOverride?: number
+  }>
+  currency?: string
+  isActive?: boolean
+}
+
+type Discount = {
+  _id: string
+  code?: string
+  name: string
+  type: 'percentage' | 'fixed' | 'tiered'
+  value: number
+  scope: 'global' | 'product' | 'bundle' | 'account'
+  minQuantity?: number
+  minAmount?: number
+  maxDiscount?: number
+  startDate?: string
+  endDate?: string
   isActive?: boolean
 }
 
@@ -98,7 +132,31 @@ export default function CRMInvoices() {
       return res.data as { data: { items: Product[] } }
     },
   })
-  const products = (productsData?.data.items ?? []).filter((p: Product) => p.isActive !== false)
+  const products = React.useMemo(() => (productsData?.data.items ?? []).filter((p: Product) => p.isActive !== false && p.type !== 'bundle'), [productsData?.data.items])
+
+  // Bundles query
+  const { data: bundlesData } = useQuery({
+    queryKey: ['bundles-for-invoices'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/products/bundles', { params: { sort: 'name', dir: 'asc', limit: 1000 } })
+      return res.data as { data: { items: Bundle[] } }
+    },
+  })
+  const bundles = React.useMemo(() => (bundlesData?.data.items ?? []).filter((b: Bundle) => b.isActive !== false), [bundlesData?.data.items])
+
+  // Discounts query
+  const { data: discountsData } = useQuery({
+    queryKey: ['discounts-for-invoices'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/products/discounts', { params: { sort: 'name', dir: 'asc', limit: 1000 } })
+      return res.data as { data: { items: Discount[] } }
+    },
+  })
+  const discounts = React.useMemo(() => (discountsData?.data.items ?? []).filter((d: Discount) => d.isActive !== false), [discountsData?.data.items])
+
+  // Discount code state
+  const [discountCode, setDiscountCode] = React.useState('')
+  const [appliedDiscount, setAppliedDiscount] = React.useState<Discount | null>(null)
 
   const create = useMutation({
     mutationFn: async (payload: any) => { const res = await http.post('/api/crm/invoices', payload); return res.data },
@@ -268,27 +326,86 @@ export default function CRMInvoices() {
   const [editing, setEditing] = React.useState<Invoice | null>(null)
   const [lineItems, setLineItems] = React.useState<InvoiceLineItem[]>([])
   const [showHistory, setShowHistory] = React.useState(false)
+  const editingIdRef = React.useRef<string | null>(null)
 
   // Initialize line items when editing changes
   React.useEffect(() => {
+    const currentEditingId = editing?._id || null
+    
+    // Only run if editing actually changed
+    if (editingIdRef.current === currentEditingId) {
+      return
+    }
+    
+    editingIdRef.current = currentEditingId
+    
     if (editing && editing.items && Array.isArray(editing.items)) {
       setLineItems(editing.items.map((item: any) => ({
         productId: item.productId,
         productName: item.productName || item.name,
         productSku: item.productSku || item.sku,
+        bundleId: item.bundleId,
+        bundleName: item.bundleName,
         description: item.description || '',
         quantity: item.quantity || 1,
         unitPrice: item.unitPrice || item.price || 0,
         taxRate: item.taxRate,
         cost: item.cost,
         lineTotal: (item.quantity || 1) * (item.unitPrice || item.price || 0),
+        isBundle: item.isBundle || false,
       })))
+      // Load discount if present
+      const editingDiscountCode = (editing as any).discountCode
+      const editingDiscountId = (editing as any).discountId
+      if (editingDiscountCode) {
+        setDiscountCode(editingDiscountCode)
+        // Try to find the discount - only update if discounts array is available
+        if (discounts.length > 0) {
+          const discount = discounts.find((d: Discount) => 
+            d.code?.toUpperCase() === editingDiscountCode?.toUpperCase() || 
+            d._id === editingDiscountId
+          )
+          setAppliedDiscount(discount || null)
+        } else {
+          // If discounts haven't loaded yet, clear applied discount
+          setAppliedDiscount(null)
+        }
+      } else {
+        setDiscountCode('')
+        setAppliedDiscount(null)
+      }
     } else if (editing) {
       setLineItems([])
+      setDiscountCode('')
+      setAppliedDiscount(null)
+    } else {
+      // When editing is null, reset everything
+      setLineItems([])
+      setDiscountCode('')
+      setAppliedDiscount(null)
     }
-  }, [editing])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?._id])
 
-  // Calculate totals from line items
+  // When discounts load, try to match discount code if editing has one
+  React.useEffect(() => {
+    if (!editing || discounts.length === 0) return
+    
+    const editingDiscountCode = (editing as any).discountCode
+    const editingDiscountId = (editing as any).discountId
+    
+    if (editingDiscountCode && !appliedDiscount) {
+      const discount = discounts.find((d: Discount) => 
+        d.code?.toUpperCase() === editingDiscountCode?.toUpperCase() || 
+        d._id === editingDiscountId
+      )
+      if (discount) {
+        setAppliedDiscount(discount)
+      }
+    }
+  }, [discounts.length, editing?._id, editing?.discountCode, editing?.discountId, appliedDiscount?._id])
+
+  // Calculate totals from line items and apply discount
   const calculatedTotals = React.useMemo(() => {
     let subtotal = 0
     let tax = 0
@@ -304,14 +421,43 @@ export default function CRMInvoices() {
       }
     })
 
+    // Apply discount
+    let discountAmount = 0
+    if (appliedDiscount && subtotal > 0) {
+      const now = new Date()
+      const startDate = appliedDiscount.startDate ? new Date(appliedDiscount.startDate) : null
+      const endDate = appliedDiscount.endDate ? new Date(appliedDiscount.endDate) : null
+      
+      // Check date validity
+      if ((!startDate || now >= startDate) && (!endDate || now <= endDate)) {
+        // Check minimum amount
+        if (!appliedDiscount.minAmount || subtotal >= appliedDiscount.minAmount) {
+          if (appliedDiscount.type === 'percentage') {
+            discountAmount = (subtotal * appliedDiscount.value) / 100
+            if (appliedDiscount.maxDiscount) {
+              discountAmount = Math.min(discountAmount, appliedDiscount.maxDiscount)
+            }
+          } else if (appliedDiscount.type === 'fixed') {
+            discountAmount = Math.min(appliedDiscount.value, subtotal)
+          }
+          // Note: tiered discounts would need more complex logic
+        }
+      }
+    }
+
+    const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount)
+    const total = subtotalAfterDiscount + tax
+
     return {
       subtotal,
+      discountAmount,
+      subtotalAfterDiscount,
       tax,
-      total: subtotal + tax,
+      total,
       totalCost,
       hasCostData: totalCost > 0,
     }
-  }, [lineItems])
+  }, [lineItems, appliedDiscount])
 
   const historyQ = useQuery({
     queryKey: ['invoice-history', editing?._id, showHistory],
@@ -495,20 +641,28 @@ export default function CRMInvoices() {
                 
                 if (lineItems.length > 0) {
                   // Use calculated totals from line items
-                  payload.subtotal = calculatedTotals.subtotal
+                  payload.subtotal = calculatedTotals.subtotalAfterDiscount
                   payload.tax = calculatedTotals.tax
                   payload.total = calculatedTotals.total
                   payload.balance = calculatedTotals.total - (editing.balance ? (editing.total || 0) - (editing.balance || 0) : 0)
+                  if (calculatedTotals.discountAmount > 0 && appliedDiscount) {
+                    payload.discountCode = appliedDiscount.code || appliedDiscount.name
+                    payload.discountAmount = calculatedTotals.discountAmount
+                    payload.discountId = appliedDiscount._id
+                  }
                   payload.items = lineItems.map(item => ({
                     productId: item.productId,
                     productName: item.productName,
                     productSku: item.productSku,
+                    bundleId: item.bundleId,
+                    bundleName: item.bundleName,
                     description: item.description,
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
                     taxRate: item.taxRate,
                     cost: item.cost,
                     lineTotal: item.lineTotal,
+                    isBundle: item.isBundle,
                   }))
                 } else if (manualSubtotal != null || manualTax != null) {
                   // Use manual totals
@@ -551,12 +705,15 @@ export default function CRMInvoices() {
                           productId: '',
                           productName: '',
                           productSku: '',
+                          bundleId: '',
+                          bundleName: '',
                           description: '',
                           quantity: 1,
                           unitPrice: 0,
                           taxRate: undefined,
                           cost: undefined,
                           lineTotal: 0,
+                          isBundle: false,
                         }])
                       }}
                       className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
@@ -587,30 +744,59 @@ export default function CRMInvoices() {
                                 <tr key={index} className="border-b border-[color:var(--color-border)]">
                                   <td className="px-2 py-1.5">
                                     <select
-                                      value={item.productId || ''}
+                                      value={item.isBundle ? `bundle-${item.bundleId}` : (item.productId || '')}
                                       onChange={(e) => {
                                         const newItems = [...lineItems]
-                                        const selectedProduct = products.find((p: Product) => p._id === e.target.value)
-                                        if (selectedProduct) {
-                                          newItems[index] = {
-                                            ...newItems[index],
-                                            productId: selectedProduct._id,
-                                            productName: selectedProduct.name,
-                                            productSku: selectedProduct.sku || '',
-                                            description: selectedProduct.description || '',
-                                            unitPrice: selectedProduct.basePrice,
-                                            taxRate: selectedProduct.taxRate,
-                                            cost: selectedProduct.cost,
-                                            lineTotal: newItems[index].quantity * selectedProduct.basePrice,
+                                        const value = e.target.value
+                                        
+                                        if (value.startsWith('bundle-')) {
+                                          const bundleId = value.replace('bundle-', '')
+                                          const selectedBundle = bundles.find((b: Bundle) => b._id === bundleId)
+                                          if (selectedBundle) {
+                                            newItems[index] = {
+                                              ...newItems[index],
+                                              bundleId: selectedBundle._id,
+                                              bundleName: selectedBundle.name,
+                                              productId: '',
+                                              productName: '',
+                                              productSku: '',
+                                              description: selectedBundle.description || '',
+                                              unitPrice: selectedBundle.bundlePrice,
+                                              taxRate: undefined,
+                                              cost: undefined,
+                                              lineTotal: newItems[index].quantity * selectedBundle.bundlePrice,
+                                              isBundle: true,
+                                            }
                                           }
                                         } else {
-                                          newItems[index] = {
-                                            ...newItems[index],
-                                            productId: '',
-                                            productName: '',
-                                            productSku: '',
-                                            unitPrice: 0,
-                                            lineTotal: 0,
+                                          const selectedProduct = products.find((p: Product) => p._id === value)
+                                          if (selectedProduct) {
+                                            newItems[index] = {
+                                              ...newItems[index],
+                                              productId: selectedProduct._id,
+                                              productName: selectedProduct.name,
+                                              productSku: selectedProduct.sku || '',
+                                              bundleId: '',
+                                              bundleName: '',
+                                              description: selectedProduct.description || '',
+                                              unitPrice: selectedProduct.basePrice,
+                                              taxRate: selectedProduct.taxRate,
+                                              cost: selectedProduct.cost,
+                                              lineTotal: newItems[index].quantity * selectedProduct.basePrice,
+                                              isBundle: false,
+                                            }
+                                          } else {
+                                            newItems[index] = {
+                                              ...newItems[index],
+                                              productId: '',
+                                              productName: '',
+                                              productSku: '',
+                                              bundleId: '',
+                                              bundleName: '',
+                                              unitPrice: 0,
+                                              lineTotal: 0,
+                                              isBundle: false,
+                                            }
                                           }
                                         }
                                         setLineItems(newItems)
@@ -618,11 +804,24 @@ export default function CRMInvoices() {
                                       className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs text-[color:var(--color-text)]"
                                     >
                                       <option value="" className="text-gray-900">(Manual Item)</option>
-                                      {products.map((p: Product) => (
-                                        <option key={p._id} value={p._id} className="text-gray-900">
-                                          {p.sku ? `${p.sku} - ` : ''}{p.name} (${p.basePrice.toFixed(2)})
-                                        </option>
-                                      ))}
+                                      {products.length > 0 && (
+                                        <optgroup label="Products" className="text-gray-900">
+                                          {products.map((p: Product) => (
+                                            <option key={p._id} value={p._id} className="text-gray-900">
+                                              {p.sku ? `${p.sku} - ` : ''}{p.name} (${p.basePrice.toFixed(2)})
+                                            </option>
+                                          ))}
+                                        </optgroup>
+                                      )}
+                                      {bundles.length > 0 && (
+                                        <optgroup label="Bundles" className="text-gray-900">
+                                          {bundles.map((b: Bundle) => (
+                                            <option key={`bundle-${b._id}`} value={`bundle-${b._id}`} className="text-gray-900 font-semibold">
+                                              {b.sku ? `${b.sku} - ` : ''}{b.name} (${b.bundlePrice.toFixed(2)})
+                                            </option>
+                                          ))}
+                                        </optgroup>
+                                      )}
                                     </select>
                                   </td>
                                   <td className="px-2 py-1.5">
@@ -706,11 +905,61 @@ export default function CRMInvoices() {
                         </table>
                       </div>
 
+                      {/* Discount Code Input */}
+                      <div className="mt-3 flex gap-2">
+                        <input
+                          type="text"
+                          value={discountCode}
+                          onChange={(e) => {
+                            const code = e.target.value.toUpperCase().trim()
+                            setDiscountCode(code)
+                            if (code) {
+                              const discount = discounts.find((d: Discount) => d.code?.toUpperCase() === code)
+                              setAppliedDiscount(discount || null)
+                            } else {
+                              setAppliedDiscount(null)
+                            }
+                          }}
+                          placeholder="Enter discount code"
+                          className="flex-1 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
+                        />
+                        {appliedDiscount && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiscountCode('')
+                              setAppliedDiscount(null)
+                            }}
+                            className="rounded border border-red-400 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      {appliedDiscount && (
+                        <div className="rounded-lg border border-green-400 bg-green-50 p-2 text-xs">
+                          <div className="font-semibold text-green-800">{appliedDiscount.name}</div>
+                          {appliedDiscount.description && (
+                            <div className="text-green-700">{appliedDiscount.description}</div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Calculated Totals */}
                       <div className="mt-3 space-y-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
                         <div className="flex justify-between text-sm">
                           <span className="text-[color:var(--color-text-muted)]">Subtotal:</span>
                           <span className="font-medium">${calculatedTotals.subtotal.toFixed(2)}</span>
+                        </div>
+                        {calculatedTotals.discountAmount > 0 && (
+                          <div className="flex justify-between text-sm text-green-600">
+                            <span>Discount ({appliedDiscount?.name || discountCode}):</span>
+                            <span className="font-medium">-${calculatedTotals.discountAmount.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm">
+                          <span className="text-[color:var(--color-text-muted)]">Subtotal After Discount:</span>
+                          <span className="font-medium">${calculatedTotals.subtotalAfterDiscount.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-[color:var(--color-text-muted)]">Tax:</span>
@@ -729,14 +978,14 @@ export default function CRMInvoices() {
                             <div className="flex justify-between text-xs">
                               <span className="text-[color:var(--color-text-muted)]">Margin:</span>
                               <span className={`font-semibold ${
-                                ((calculatedTotals.subtotal - calculatedTotals.totalCost) / calculatedTotals.subtotal * 100) >= 50 ? 'text-green-600' :
-                                ((calculatedTotals.subtotal - calculatedTotals.totalCost) / calculatedTotals.subtotal * 100) >= 30 ? 'text-green-500' :
-                                ((calculatedTotals.subtotal - calculatedTotals.totalCost) / calculatedTotals.subtotal * 100) >= 10 ? 'text-yellow-600' :
+                                ((calculatedTotals.subtotalAfterDiscount - calculatedTotals.totalCost) / calculatedTotals.subtotalAfterDiscount * 100) >= 50 ? 'text-green-600' :
+                                ((calculatedTotals.subtotalAfterDiscount - calculatedTotals.totalCost) / calculatedTotals.subtotalAfterDiscount * 100) >= 30 ? 'text-green-500' :
+                                ((calculatedTotals.subtotalAfterDiscount - calculatedTotals.totalCost) / calculatedTotals.subtotalAfterDiscount * 100) >= 10 ? 'text-yellow-600' :
                                 'text-red-600'
                               }`}>
-                                ${(calculatedTotals.subtotal - calculatedTotals.totalCost).toFixed(2)} (
-                                {calculatedTotals.subtotal > 0 
-                                  ? ((calculatedTotals.subtotal - calculatedTotals.totalCost) / calculatedTotals.subtotal * 100).toFixed(1)
+                                ${(calculatedTotals.subtotalAfterDiscount - calculatedTotals.totalCost).toFixed(2)} (
+                                {calculatedTotals.subtotalAfterDiscount > 0 
+                                  ? ((calculatedTotals.subtotalAfterDiscount - calculatedTotals.totalCost) / calculatedTotals.subtotalAfterDiscount * 100).toFixed(1)
                                   : '0'
                                 }%)
                               </span>
