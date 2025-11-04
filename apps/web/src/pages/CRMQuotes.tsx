@@ -402,6 +402,48 @@ export default function CRMQuotes() {
                 </select>
                 <input name="subtotal" type="number" step="0.01" defaultValue={editing.subtotal as any} placeholder="Subtotal" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="tax" type="number" step="0.01" defaultValue={editing.tax as any} placeholder="Tax" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                {(() => {
+                  // Calculate margin if we have items with product data
+                  const items = (editing as any).items || []
+                  const subtotal = editing.subtotal ?? 0
+                  
+                  // If items have cost data, calculate total margin
+                  let totalCost = 0
+                  let hasCostData = false
+                  if (Array.isArray(items) && items.length > 0) {
+                    items.forEach((item: any) => {
+                      if (item.cost != null && item.quantity != null) {
+                        totalCost += (item.cost * item.quantity)
+                        hasCostData = true
+                      }
+                    })
+                  }
+                  
+                  if (hasCostData && totalCost > 0) {
+                    const totalMargin = subtotal - totalCost
+                    const marginPercent = subtotal > 0 ? ((totalMargin / subtotal) * 100) : 0
+                    const marginColor = marginPercent >= 50 ? 'text-green-600' : marginPercent >= 30 ? 'text-green-500' : marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                    
+                    return (
+                      <div className="col-span-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
+                        <div className="text-xs text-[color:var(--color-text-muted)] mb-1">Profit Margin</div>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-sm font-medium">Total Cost: </span>
+                            <span className="text-sm">${totalCost.toFixed(2)}</span>
+                          </div>
+                          <div>
+                            <span className="text-sm font-medium">Margin: </span>
+                            <span className={`text-sm font-semibold ${marginColor}`}>
+                              ${totalMargin.toFixed(2)} ({marginPercent.toFixed(1)}%)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
                 <label className="col-span-full text-sm">Account
                   <select name="accountId" className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                     <option value="">(no change)</option>

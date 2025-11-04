@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
-import { Package, Layers, Tag, FileText } from 'lucide-react'
+import { Package, Layers, Tag, FileText, TrendingUp } from 'lucide-react'
 
 type Product = {
   _id: string
@@ -79,10 +79,12 @@ type CustomTerms = {
 
 export default function CRMProducts() {
   const qc = useQueryClient()
-  const [activeTab, setActiveTab] = React.useState<'products' | 'bundles' | 'discounts' | 'terms'>('products')
+  const [activeTab, setActiveTab] = React.useState<'products' | 'bundles' | 'discounts' | 'terms' | 'profitability'>('products')
   const [q, setQ] = React.useState('')
   const [editing, setEditing] = React.useState<Product | Bundle | Discount | CustomTerms | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
+  const [productFormPrice, setProductFormPrice] = React.useState(0)
+  const [productFormCost, setProductFormCost] = React.useState(0)
 
   // Products query
   const { data: productsData } = useQuery({
@@ -267,6 +269,17 @@ export default function CRMProducts() {
     }
   }, [editing])
 
+  // Update form state when editing product
+  React.useEffect(() => {
+    if (editing && activeTab === 'products') {
+      setProductFormPrice((editing as Product).basePrice || 0)
+      setProductFormCost((editing as Product).cost || 0)
+    } else if (!editing) {
+      setProductFormPrice(0)
+      setProductFormCost(0)
+    }
+  }, [editing, activeTab])
+
   return (
     <div className="space-y-4">
       <CRMNav />
@@ -322,6 +335,18 @@ export default function CRMProducts() {
           <FileText className="h-4 w-4" />
           Custom Terms
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('profitability')}
+          className={`flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'profitability'
+              ? 'border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'border-transparent text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <TrendingUp className="h-4 w-4" />
+          Profitability Report
+        </button>
       </div>
 
       {/* Products Tab */}
@@ -349,6 +374,9 @@ export default function CRMProducts() {
                 <th className="px-4 py-2">Name</th>
                 <th className="px-4 py-2">Type</th>
                 <th className="px-4 py-2">Price</th>
+                <th className="px-4 py-2">Cost</th>
+                <th className="px-4 py-2">Margin</th>
+                <th className="px-4 py-2">Margin %</th>
                 <th className="px-4 py-2">Category</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2">Updated</th>
@@ -356,41 +384,55 @@ export default function CRMProducts() {
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
-                <tr key={product._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
-                  <td className="px-4 py-2">{product.sku || '—'}</td>
-                  <td className="px-4 py-2">{product.name}</td>
-                  <td className="px-4 py-2 capitalize">{product.type}</td>
-                  <td className="px-4 py-2">${product.basePrice.toFixed(2)}</td>
-                  <td className="px-4 py-2">{product.category || '—'}</td>
-                  <td className="px-4 py-2">
-                    <span className={`rounded px-2 py-0.5 text-xs ${product.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                      {product.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2">{product.updatedAt ? formatDateTime(product.updatedAt) : '—'}</td>
-                  <td className="px-4 py-2">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditing(product)}
-                        className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm(`Delete "${product.name}"?`)) deleteProduct.mutate(product._id)
-                        }}
-                        className="rounded border border-red-400 px-2 py-1 text-xs text-red-400 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {products.map((product) => {
+                const cost = product.cost ?? 0
+                const margin = product.basePrice - cost
+                const marginPercent = product.basePrice > 0 ? ((margin / product.basePrice) * 100) : 0
+                const marginColor = marginPercent >= 50 ? 'text-green-600' : marginPercent >= 30 ? 'text-green-500' : marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                
+                return (
+                  <tr key={product._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+                    <td className="px-4 py-2">{product.sku || '—'}</td>
+                    <td className="px-4 py-2">{product.name}</td>
+                    <td className="px-4 py-2 capitalize">{product.type}</td>
+                    <td className="px-4 py-2">${product.basePrice.toFixed(2)}</td>
+                    <td className="px-4 py-2">{cost > 0 ? `$${cost.toFixed(2)}` : '—'}</td>
+                    <td className={`px-4 py-2 font-medium ${marginColor}`}>
+                      {cost > 0 ? `$${margin.toFixed(2)}` : '—'}
+                    </td>
+                    <td className={`px-4 py-2 font-medium ${marginColor}`}>
+                      {cost > 0 ? `${marginPercent.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className="px-4 py-2">{product.category || '—'}</td>
+                    <td className="px-4 py-2">
+                      <span className={`rounded px-2 py-0.5 text-xs ${product.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {product.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">{product.updatedAt ? formatDateTime(product.updatedAt) : '—'}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(product)}
+                          className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Delete "${product.name}"?`)) deleteProduct.mutate(product._id)
+                          }}
+                          className="rounded border border-red-400 px-2 py-1 text-xs text-red-400 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -540,6 +582,146 @@ export default function CRMProducts() {
         </div>
       )}
 
+      {/* Profitability Report Tab */}
+      {activeTab === 'profitability' && (
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+          <div className="p-6">
+            <h2 className="mb-4 text-lg font-semibold">Product Profitability Report</h2>
+            {(() => {
+              const productsWithCost = products.filter(p => (p.cost ?? 0) > 0)
+              const totalRevenue = productsWithCost.reduce((sum, p) => sum + p.basePrice, 0)
+              const totalCost = productsWithCost.reduce((sum, p) => sum + (p.cost ?? 0), 0)
+              const totalMargin = totalRevenue - totalCost
+              const overallMarginPercent = totalRevenue > 0 ? ((totalMargin / totalRevenue) * 100) : 0
+              
+              const byCategory = productsWithCost.reduce((acc, p) => {
+                const cat = p.category || 'Uncategorized'
+                if (!acc[cat]) {
+                  acc[cat] = { revenue: 0, cost: 0, count: 0, products: [] }
+                }
+                acc[cat].revenue += p.basePrice
+                acc[cat].cost += (p.cost ?? 0)
+                acc[cat].count += 1
+                acc[cat].products.push(p)
+                return acc
+              }, {} as Record<string, { revenue: number; cost: number; count: number; products: Product[] }>)
+
+              return (
+                <div className="space-y-6">
+                  {/* Summary Cards */}
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Total Products</div>
+                      <div className="mt-1 text-2xl font-semibold">{products.length}</div>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{productsWithCost.length} with cost data</div>
+                    </div>
+                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Total Revenue Potential</div>
+                      <div className="mt-1 text-2xl font-semibold">${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Total Cost</div>
+                      <div className="mt-1 text-2xl font-semibold">${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Total Margin</div>
+                      <div className={`mt-1 text-2xl font-semibold ${totalMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ${totalMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className={`mt-1 text-xs ${overallMarginPercent >= 50 ? 'text-green-600' : overallMarginPercent >= 30 ? 'text-green-500' : overallMarginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
+                        {overallMarginPercent.toFixed(1)}% margin
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* By Category */}
+                  <div>
+                    <h3 className="mb-3 text-base font-semibold">Profitability by Category</h3>
+                    <div className="space-y-2">
+                      {Object.entries(byCategory).map(([category, data]) => {
+                        const margin = data.revenue - data.cost
+                        const marginPercent = data.revenue > 0 ? ((margin / data.revenue) * 100) : 0
+                        return (
+                          <div key={category} className="rounded-lg border border-[color:var(--color-border)] p-4">
+                            <div className="mb-2 flex items-center justify-between">
+                              <div className="font-medium">{category}</div>
+                              <div className={`text-sm font-semibold ${marginPercent >= 50 ? 'text-green-600' : marginPercent >= 30 ? 'text-green-500' : marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                {marginPercent.toFixed(1)}% margin
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <div className="text-xs text-[color:var(--color-text-muted)]">Products</div>
+                                <div className="font-medium">{data.count}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-[color:var(--color-text-muted)]">Revenue</div>
+                                <div className="font-medium">${data.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-[color:var(--color-text-muted)]">Cost</div>
+                                <div className="font-medium">${data.cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-[color:var(--color-text-muted)]">Margin</div>
+                                <div className={`font-medium ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  ${margin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Top Products by Margin */}
+                  <div>
+                    <h3 className="mb-3 text-base font-semibold">Top Products by Margin</h3>
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-[color:var(--color-text-muted)]">
+                        <tr>
+                          <th className="px-4 py-2">Product</th>
+                          <th className="px-4 py-2">Price</th>
+                          <th className="px-4 py-2">Cost</th>
+                          <th className="px-4 py-2">Margin</th>
+                          <th className="px-4 py-2">Margin %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...productsWithCost]
+                          .sort((a, b) => {
+                            const marginA = a.basePrice - (a.cost ?? 0)
+                            const marginB = b.basePrice - (b.cost ?? 0)
+                            return marginB - marginA
+                          })
+                          .slice(0, 10)
+                          .map((product) => {
+                            const cost = product.cost ?? 0
+                            const margin = product.basePrice - cost
+                            const marginPercent = product.basePrice > 0 ? ((margin / product.basePrice) * 100) : 0
+                            const marginColor = marginPercent >= 50 ? 'text-green-600' : marginPercent >= 30 ? 'text-green-500' : marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                            
+                            return (
+                              <tr key={product._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+                                <td className="px-4 py-2">{product.name}</td>
+                                <td className="px-4 py-2">${product.basePrice.toFixed(2)}</td>
+                                <td className="px-4 py-2">${cost.toFixed(2)}</td>
+                                <td className={`px-4 py-2 font-medium ${marginColor}`}>${margin.toFixed(2)}</td>
+                                <td className={`px-4 py-2 font-medium ${marginColor}`}>{marginPercent.toFixed(1)}%</td>
+                              </tr>
+                            )
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Terms Tab */}
       {activeTab === 'terms' && (
         <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
@@ -622,32 +804,37 @@ export default function CRMProducts() {
               </div>
 
               {/* Product Form */}
-              {activeTab === 'products' && (
-                <form
-                  className="space-y-4"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    const fd = new FormData(e.currentTarget)
-                    const payload: any = {
-                      sku: String(fd.get('sku') || '').trim() || undefined,
-                      name: String(fd.get('name') || '').trim(),
-                      description: String(fd.get('description') || '').trim() || undefined,
-                      type: String(fd.get('type') || 'product'),
-                      basePrice: Number(fd.get('basePrice') || 0),
-                      currency: String(fd.get('currency') || 'USD'),
-                      cost: fd.get('cost') ? Number(fd.get('cost')) : undefined,
-                      taxRate: fd.get('taxRate') ? Number(fd.get('taxRate')) : undefined,
-                      isActive: fd.get('isActive') === 'on',
-                      category: String(fd.get('category') || '').trim() || undefined,
-                    }
-                    if (editing._id) {
-                      updateProduct.mutate({ _id: editing._id, ...payload })
-                    } else {
-                      createProduct.mutate(payload)
-                    }
-                  }}
-                >
-                  <div className="grid gap-4 sm:grid-cols-2">
+              {activeTab === 'products' && (() => {
+                const margin = productFormPrice - productFormCost
+                const marginPercent = productFormPrice > 0 ? ((margin / productFormPrice) * 100) : 0
+                const marginColor = marginPercent >= 50 ? 'text-green-600' : marginPercent >= 30 ? 'text-green-500' : marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'
+                
+                return (
+                  <form
+                    className="space-y-4"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const fd = new FormData(e.currentTarget)
+                      const payload: any = {
+                        sku: String(fd.get('sku') || '').trim() || undefined,
+                        name: String(fd.get('name') || '').trim(),
+                        description: String(fd.get('description') || '').trim() || undefined,
+                        type: String(fd.get('type') || 'product'),
+                        basePrice: Number(fd.get('basePrice') || 0),
+                        currency: String(fd.get('currency') || 'USD'),
+                        cost: fd.get('cost') ? Number(fd.get('cost')) : undefined,
+                        taxRate: fd.get('taxRate') ? Number(fd.get('taxRate')) : undefined,
+                        isActive: fd.get('isActive') === 'on',
+                        category: String(fd.get('category') || '').trim() || undefined,
+                      }
+                      if (editing._id) {
+                        updateProduct.mutate({ _id: editing._id, ...payload })
+                      } else {
+                        createProduct.mutate(payload)
+                      }
+                    }}
+                  >
+                    <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="block text-sm font-medium mb-1">SKU</label>
                       <input name="sku" defaultValue={(editing as Product).sku} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
@@ -670,20 +857,49 @@ export default function CRMProducts() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Base Price *</label>
-                      <input name="basePrice" type="number" step="0.01" required defaultValue={(editing as Product).basePrice || 0} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                      <input 
+                        name="basePrice" 
+                        type="number" 
+                        step="0.01" 
+                        required 
+                        defaultValue={(editing as Product).basePrice || 0} 
+                        onChange={(e) => setProductFormPrice(parseFloat(e.target.value) || 0)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" 
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Currency</label>
                       <input name="currency" defaultValue={(editing as Product).currency || 'USD'} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Cost</label>
-                      <input name="cost" type="number" step="0.01" defaultValue={(editing as Product).cost} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                      <label className="block text-sm font-medium mb-1">Cost (COGS)</label>
+                      <input 
+                        name="cost" 
+                        type="number" 
+                        step="0.01" 
+                        defaultValue={(editing as Product).cost} 
+                        onChange={(e) => setProductFormCost(parseFloat(e.target.value) || 0)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" 
+                      />
+                      <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">Cost of goods sold - used for margin calculations</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Tax Rate (%)</label>
                       <input name="taxRate" type="number" step="0.01" defaultValue={(editing as Product).taxRate} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                     </div>
+                    {productFormCost > 0 && (
+                      <div className="sm:col-span-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
+                        <div className="text-xs text-[color:var(--color-text-muted)] mb-1">Projected Margin</div>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-sm font-medium">Margin: </span>
+                            <span className={`font-semibold ${marginColor}`}>
+                              ${margin.toFixed(2)} ({marginPercent.toFixed(1)}%)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-sm font-medium mb-1">Category</label>
                       <input name="category" defaultValue={(editing as Product).category} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
@@ -704,7 +920,8 @@ export default function CRMProducts() {
                     </button>
                   </div>
                 </form>
-              )}
+                )
+              })()}
 
               {/* Bundle Form */}
               {activeTab === 'bundles' && (
