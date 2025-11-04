@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
+import { Plus, X, Package } from 'lucide-react'
 
 type Quote = {
   _id: string
@@ -21,8 +22,33 @@ type Quote = {
   approver?: string
   signerName?: string
   signerEmail?: string
+  items?: QuoteLineItem[]
 }
+
+type QuoteLineItem = {
+  productId?: string
+  productName?: string
+  productSku?: string
+  description?: string
+  quantity: number
+  unitPrice: number
+  taxRate?: number
+  cost?: number
+  lineTotal: number
+}
+
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
+
+type Product = {
+  _id: string
+  sku?: string
+  name: string
+  description?: string
+  basePrice: number
+  taxRate?: number
+  cost?: number
+  isActive?: boolean
+}
 
 export default function CRMQuotes() {
   const qc = useQueryClient()
@@ -69,6 +95,16 @@ export default function CRMQuotes() {
   })
   const accounts = accountsQ.data?.data.items ?? []
   const acctById = React.useMemo(() => new Map(accounts.map((a) => [a._id, a])), [accounts])
+
+  // Products query for line items
+  const { data: productsData } = useQuery({
+    queryKey: ['products-for-quotes'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/products', { params: { sort: 'name', dir: 'asc', limit: 1000 } })
+      return res.data as { data: { items: Product[] } }
+    },
+  })
+  const products = (productsData?.data.items ?? []).filter((p: Product) => p.isActive !== false)
 
   const create = useMutation({
     mutationFn: async (payload: any) => {
@@ -210,7 +246,53 @@ export default function CRMQuotes() {
   }, [showColsMenu])
 
   const [editing, setEditing] = React.useState<Quote | null>(null)
+  const [lineItems, setLineItems] = React.useState<QuoteLineItem[]>([])
   const [showHistory, setShowHistory] = React.useState(false)
+
+  // Initialize line items when editing changes
+  React.useEffect(() => {
+    if (editing && editing.items && Array.isArray(editing.items)) {
+      setLineItems(editing.items.map((item: any) => ({
+        productId: item.productId,
+        productName: item.productName || item.name,
+        productSku: item.productSku || item.sku,
+        description: item.description || '',
+        quantity: item.quantity || 1,
+        unitPrice: item.unitPrice || item.price || 0,
+        taxRate: item.taxRate,
+        cost: item.cost,
+        lineTotal: (item.quantity || 1) * (item.unitPrice || item.price || 0),
+      })))
+    } else if (editing) {
+      setLineItems([])
+    }
+  }, [editing])
+
+  // Calculate totals from line items
+  const calculatedTotals = React.useMemo(() => {
+    let subtotal = 0
+    let tax = 0
+    let totalCost = 0
+
+    lineItems.forEach((item) => {
+      subtotal += item.lineTotal
+      if (item.taxRate) {
+        tax += item.lineTotal * (item.taxRate / 100)
+      }
+      if (item.cost) {
+        totalCost += item.cost * item.quantity
+      }
+    })
+
+    return {
+      subtotal,
+      tax,
+      total: subtotal + tax,
+      totalCost,
+      hasCostData: totalCost > 0,
+    }
+  }, [lineItems])
+
   const historyQ = useQuery({
     queryKey: ['quote-history', editing?._id, showHistory],
     enabled: Boolean(editing?._id && showHistory),
@@ -377,14 +459,35 @@ export default function CRMQuotes() {
                     signerName: String(fd.get('signerName')||'') || undefined,
                     signerEmail: String(fd.get('signerEmail')||'') || undefined,
                   }
-                  const subtotal = fd.get('subtotal') ? Number(fd.get('subtotal')) : undefined
-                  const tax = fd.get('tax') ? Number(fd.get('tax')) : undefined
-                  if (subtotal != null || tax != null) {
-                    payload.subtotal = subtotal ?? editing.subtotal ?? 0
-                    payload.tax = tax ?? editing.tax ?? 0
+                  
+                  // Use calculated totals from line items, or manual override
+                  const manualSubtotal = fd.get('subtotal') ? Number(fd.get('subtotal')) : null
+                  const manualTax = fd.get('tax') ? Number(fd.get('tax')) : null
+                  
+                  if (lineItems.length > 0) {
+                    // Use calculated totals from line items
+                    payload.subtotal = calculatedTotals.subtotal
+                    payload.tax = calculatedTotals.tax
+                    payload.total = calculatedTotals.total
+                    payload.items = lineItems.map(item => ({
+                      productId: item.productId,
+                      productName: item.productName,
+                      productSku: item.productSku,
+                      description: item.description,
+                      quantity: item.quantity,
+                      unitPrice: item.unitPrice,
+                      taxRate: item.taxRate,
+                      cost: item.cost,
+                      lineTotal: item.lineTotal,
+                    }))
+                  } else if (manualSubtotal != null || manualTax != null) {
+                    // Use manual totals
+                    payload.subtotal = manualSubtotal ?? editing.subtotal ?? 0
+                    payload.tax = manualTax ?? editing.tax ?? 0
                     payload.total = (payload.subtotal || 0) + (payload.tax || 0)
-                    payload.items = [] // keep simple for now
+                    payload.items = []
                   }
+                  
                   const accSel = String(fd.get('accountId')||'')
                   if (accSel) payload.accountId = accSel
                   update.mutate(payload)
