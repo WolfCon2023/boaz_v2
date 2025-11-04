@@ -56,7 +56,7 @@ async function addQuoteHistory(
   metadata?: Record<string, any>
 ) {
   try {
-    await db.collection<QuoteHistoryEntry>('quote_history').insertOne({
+    await db.collection('quote_history').insertOne({
       _id: new ObjectId(),
       quoteId,
       eventType,
@@ -68,7 +68,7 @@ async function addQuoteHistory(
       newValue,
       metadata,
       createdAt: new Date(),
-    })
+    } as QuoteHistoryEntry)
   } catch (err) {
     console.error('Failed to add quote history:', err)
     // Don't fail the main operation if history fails
@@ -351,16 +351,16 @@ quotesRouter.get('/:id/history', async (req, res) => {
     if (!q) return res.status(404).json({ data: null, error: 'not_found' })
     
     // Get all history entries for this quote, sorted by date (newest first)
-    const historyEntries = await db.collection<QuoteHistoryEntry>('quote_history')
+    const historyEntries = await db.collection('quote_history')
       .find({ quoteId: _id })
       .sort({ createdAt: -1 })
-      .toArray()
+      .toArray() as QuoteHistoryEntry[]
     
     // Get approval requests for this quote
-    const approvalRequests = await db.collection<QuoteApprovalRequestDoc>('quote_approval_requests')
+    const approvalRequests = await db.collection('quote_approval_requests')
       .find({ quoteId: _id })
       .sort({ createdAt: -1 })
-      .toArray()
+      .toArray() as QuoteApprovalRequestDoc[]
     
     // Add approval request events to history
     for (const req of approvalRequests) {
@@ -472,11 +472,11 @@ quotesRouter.post('/:id/request-approval', requireAuth, async (req, res) => {
     }
     
     // Check if there's already a pending request
-    const existingRequest = await db.collection<QuoteApprovalRequestDoc>('quote_approval_requests').findOne({
+    const existingRequest = await db.collection('quote_approval_requests').findOne({
       quoteId,
       approverEmail: approverEmail.toLowerCase(),
       status: 'pending'
-    })
+    }) as QuoteApprovalRequestDoc | null
     
     if (existingRequest) {
       return res.status(400).json({ data: null, error: 'approval_request_already_exists' })
@@ -629,11 +629,11 @@ quotesRouter.get('/approval-queue', requireAuth, async (req, res) => {
     }
     
     // Get approval requests
-    const requests = await db.collection<QuoteApprovalRequestDoc>('quote_approval_requests')
+    const requests = await db.collection('quote_approval_requests')
       .find(query)
       .sort({ requestedAt: -1 })
       .limit(100)
-      .toArray()
+      .toArray() as QuoteApprovalRequestDoc[]
     
     // Get quote details for each request
     const quoteIds = requests.map(r => r.quoteId)
@@ -714,11 +714,11 @@ quotesRouter.post('/:id/approve', requireAuth, async (req, res) => {
     const userData = user as any
     
     // Get approval request
-    const approvalRequest = await db.collection<QuoteApprovalRequestDoc>('quote_approval_requests').findOne({
+    const approvalRequest = await db.collection('quote_approval_requests').findOne({
       quoteId,
       approverEmail: userData.email.toLowerCase(),
       status: 'pending'
-    })
+    }) as QuoteApprovalRequestDoc | null
     
     if (!approvalRequest) {
       return res.status(404).json({ data: null, error: 'approval_request_not_found' })
@@ -857,11 +857,11 @@ quotesRouter.post('/:id/reject', requireAuth, async (req, res) => {
     const userData = user as any
     
     // Get approval request
-    const approvalRequest = await db.collection<QuoteApprovalRequestDoc>('quote_approval_requests').findOne({
+    const approvalRequest = await db.collection('quote_approval_requests').findOne({
       quoteId,
       approverEmail: userData.email.toLowerCase(),
       status: 'pending'
-    })
+    }) as QuoteApprovalRequestDoc | null
     
     if (!approvalRequest) {
       return res.status(404).json({ data: null, error: 'approval_request_not_found' })
