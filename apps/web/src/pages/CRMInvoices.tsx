@@ -108,6 +108,10 @@ export default function CRMInvoices() {
   const [showColsMenu, setShowColsMenu] = React.useState(false)
   const [draggedCol, setDraggedCol] = React.useState<string | null>(null)
   const initializedFromUrl = React.useRef(false)
+  const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)
+  const [inlineTitle, setInlineTitle] = React.useState<string>('')
+  const [inlineStatus, setInlineStatus] = React.useState<string>('')
+  const [inlineDueDate, setInlineDueDate] = React.useState<string>('')
   const { data, isFetching } = useQuery({
     queryKey: ['invoices', q, sort, dir],
     queryFn: async () => {
@@ -169,6 +173,28 @@ export default function CRMInvoices() {
     mutationFn: async (payload: any) => { const { _id, ...rest } = payload; const res = await http.put(`/api/crm/invoices/${_id}`, rest); return res.data },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
   })
+
+  function startInlineEdit(inv: Invoice) {
+    setInlineEditId(inv._id)
+    setInlineTitle(inv.title ?? '')
+    setInlineStatus(inv.status ?? '')
+    setInlineDueDate(inv.dueDate ? inv.dueDate.slice(0,10) : '')
+  }
+  async function saveInlineEdit() {
+    if (!inlineEditId) return
+    const payload: any = { _id: inlineEditId }
+    payload.title = inlineTitle || undefined
+    payload.status = inlineStatus || undefined
+    payload.dueDate = inlineDueDate || undefined
+    await update.mutateAsync(payload)
+    cancelInlineEdit()
+  }
+  function cancelInlineEdit() {
+    setInlineEditId(null)
+    setInlineTitle('')
+    setInlineStatus('')
+    setInlineDueDate('')
+  }
   const pay = useMutation({
     mutationFn: async ({ id, amount, method }: { id: string; amount: number; method?: string }) => {
       const res = await http.post(`/api/crm/invoices/${id}/payments`, { amount, method })
@@ -588,14 +614,48 @@ export default function CRMInvoices() {
               {cols.filter((c)=> c.visible).map((col)=> (
                 <th key={col.key} draggable onDragStart={()=>handleDragStart(col.key)} onDragOver={(e)=>{e.preventDefault()}} onDrop={()=>handleDrop(col.key)} className={`px-4 py-2 cursor-move ${draggedCol===col.key ? 'opacity-50' : ''}`} title="Drag to reorder">{col.label}</th>
               ))}
+              <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.map((inv) => (
-              <tr key={inv._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(inv)}>
+              <tr key={inv._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
                 {cols.filter((c)=> c.visible).map((col)=> (
-                  <td key={col.key} className="px-4 py-2">{getColValue(inv, col.key)}</td>
+                  <td key={col.key} className="px-4 py-2">
+                    {inlineEditId === inv._id ? (
+                      col.key === 'title' ? (
+                        <input value={inlineTitle} onChange={(e) => setInlineTitle(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'status' ? (
+                        <select value={inlineStatus} onChange={(e) => setInlineStatus(e.target.value)} className="w-full rounded border bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)]">
+                          <option>Draft</option>
+                          <option>Sent</option>
+                          <option>Paid</option>
+                          <option>Overdue</option>
+                          <option>Void</option>
+                        </select>
+                      ) : col.key === 'dueDate' ? (
+                        <input type="date" value={inlineDueDate} onChange={(e) => setInlineDueDate(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : (
+                        getColValue(inv, col.key)
+                      )
+                    ) : (
+                      getColValue(inv, col.key)
+                    )}
+                  </td>
                 ))}
+                <td className="px-4 py-2 whitespace-nowrap">
+                  {inlineEditId === inv._id ? (
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(inv)}>Edit</button>
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(inv)}>Open</button>
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

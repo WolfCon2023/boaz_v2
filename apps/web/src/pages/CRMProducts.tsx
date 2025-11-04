@@ -86,6 +86,12 @@ export default function CRMProducts() {
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   const [productFormPrice, setProductFormPrice] = React.useState(0)
   const [productFormCost, setProductFormCost] = React.useState(0)
+  const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)
+  const [inlineName, setInlineName] = React.useState<string>('')
+  const [inlinePrice, setInlinePrice] = React.useState<string>('')
+  const [inlineCost, setInlineCost] = React.useState<string>('')
+  const [inlineCategory, setInlineCategory] = React.useState<string>('')
+  const [inlineIsActive, setInlineIsActive] = React.useState<boolean>(true)
 
   // Products query
   const { data: productsData } = useQuery({
@@ -149,6 +155,42 @@ export default function CRMProducts() {
       setEditing(null)
     },
   })
+
+  function startInlineEdit(p: Product) {
+    setInlineEditId(p._id)
+    setInlineName(p.name ?? '')
+    setInlinePrice(typeof p.basePrice === 'number' ? String(p.basePrice) : '')
+    setInlineCost(typeof p.cost === 'number' ? String(p.cost) : '')
+    setInlineCategory(p.category ?? '')
+    setInlineIsActive(p.isActive !== false)
+  }
+  async function saveInlineEdit() {
+    if (!inlineEditId) return
+    const payload: any = { _id: inlineEditId }
+    payload.name = inlineName || undefined
+    if (inlinePrice.trim() !== '') {
+      const n = Number(inlinePrice)
+      if (Number.isFinite(n)) payload.basePrice = n
+    }
+    if (inlineCost.trim() !== '') {
+      const n = Number(inlineCost)
+      if (Number.isFinite(n)) payload.cost = n
+    } else {
+      payload.cost = undefined
+    }
+    payload.category = inlineCategory || undefined
+    payload.isActive = inlineIsActive
+    await updateProduct.mutateAsync(payload)
+    cancelInlineEdit()
+  }
+  function cancelInlineEdit() {
+    setInlineEditId(null)
+    setInlineName('')
+    setInlinePrice('')
+    setInlineCost('')
+    setInlineCategory('')
+    setInlineIsActive(true)
+  }
 
   const deleteProduct = useMutation({
     mutationFn: async (id: string) => {
@@ -394,42 +436,87 @@ export default function CRMProducts() {
                 return (
                   <tr key={product._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
                     <td className="px-4 py-2">{product.sku || '—'}</td>
-                    <td className="px-4 py-2">{product.name}</td>
+                    <td className="px-4 py-2">
+                      {inlineEditId === product._id ? (
+                        <input value={inlineName} onChange={(e) => setInlineName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : (
+                        product.name
+                      )}
+                    </td>
                     <td className="px-4 py-2 capitalize">{product.type}</td>
-                    <td className="px-4 py-2">${product.basePrice.toFixed(2)}</td>
-                    <td className="px-4 py-2">{cost > 0 ? `$${cost.toFixed(2)}` : '—'}</td>
+                    <td className="px-4 py-2">
+                      {inlineEditId === product._id ? (
+                        <input type="number" step="0.01" value={inlinePrice} onChange={(e) => setInlinePrice(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : (
+                        `$${product.basePrice.toFixed(2)}`
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {inlineEditId === product._id ? (
+                        <input type="number" step="0.01" value={inlineCost} onChange={(e) => setInlineCost(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : (
+                        cost > 0 ? `$${cost.toFixed(2)}` : '—'
+                      )}
+                    </td>
                     <td className={`px-4 py-2 font-medium ${marginColor}`}>
                       {cost > 0 ? `$${margin.toFixed(2)}` : '—'}
                     </td>
                     <td className={`px-4 py-2 font-medium ${marginColor}`}>
                       {cost > 0 ? `${marginPercent.toFixed(1)}%` : '—'}
                     </td>
-                    <td className="px-4 py-2">{product.category || '—'}</td>
                     <td className="px-4 py-2">
-                      <span className={`rounded px-2 py-0.5 text-xs ${product.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {product.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      {inlineEditId === product._id ? (
+                        <input value={inlineCategory} onChange={(e) => setInlineCategory(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : (
+                        product.category || '—'
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {inlineEditId === product._id ? (
+                        <select value={inlineIsActive ? 'active' : 'inactive'} onChange={(e) => setInlineIsActive(e.target.value === 'active')} className="w-full rounded border bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)]">
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      ) : (
+                        <span className={`rounded px-2 py-0.5 text-xs ${product.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                          {product.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2">{product.updatedAt ? formatDateTime(product.updatedAt) : '—'}</td>
                     <td className="px-4 py-2">
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setEditing(product)}
-                          className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`Delete "${product.name}"?`)) deleteProduct.mutate(product._id)
-                          }}
-                          className="rounded border border-red-400 px-2 py-1 text-xs text-red-400 hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {inlineEditId === product._id ? (
+                        <div className="flex items-center gap-2">
+                          <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
+                          <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startInlineEdit(product)}
+                            className="rounded-lg border px-2 py-1 text-xs"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditing(product)}
+                            className="rounded-lg border px-2 py-1 text-xs"
+                          >
+                            Open
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Delete "${product.name}"?`)) deleteProduct.mutate(product._id)
+                            }}
+                            className="rounded border border-red-400 px-2 py-1 text-xs text-red-400 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
