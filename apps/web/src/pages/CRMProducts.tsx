@@ -93,12 +93,38 @@ export default function CRMProducts() {
   const [inlineCategory, setInlineCategory] = React.useState<string>('')
   const [inlineIsActive, setInlineIsActive] = React.useState<boolean>(true)
   const [showHistory, setShowHistory] = React.useState(false)
+  
+  // Sort state - separate for each tab
+  const [productSort, setProductSort] = React.useState<'name' | 'sku' | 'basePrice' | 'updatedAt' | 'createdAt'>('updatedAt')
+  const [productDir, setProductDir] = React.useState<'asc' | 'desc'>('desc')
+  const [bundleSort, setBundleSort] = React.useState<'name' | 'sku' | 'bundlePrice' | 'updatedAt' | 'createdAt'>('updatedAt')
+  const [bundleDir, setBundleDir] = React.useState<'asc' | 'desc'>('desc')
+  const [discountSort, setDiscountSort] = React.useState<'name' | 'code' | 'value' | 'updatedAt' | 'createdAt'>('updatedAt')
+  const [discountDir, setDiscountDir] = React.useState<'asc' | 'desc'>('desc')
+  const [termsSort, setTermsSort] = React.useState<'name' | 'updatedAt' | 'createdAt'>('updatedAt')
+  const [termsDir, setTermsDir] = React.useState<'asc' | 'desc'>('desc')
+  
+  // Helper function to handle column header click for sorting
+  const handleSort = (column: string, currentSort: string, currentDir: string, setSort: (s: any) => void, setDir: (d: 'asc' | 'desc') => void) => {
+    if (currentSort === column) {
+      setDir(currentDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSort(column)
+      setDir('asc')
+    }
+  }
+  
+  // Helper function to get sort indicator
+  const getSortIndicator = (column: string, currentSort: string, currentDir: string) => {
+    if (currentSort !== column) return null
+    return currentDir === 'asc' ? '↑' : '↓'
+  }
 
   // Products query
   const { data: productsData } = useQuery({
-    queryKey: ['products', q],
+    queryKey: ['products', q, productSort, productDir],
     queryFn: async () => {
-      const res = await http.get('/api/crm/products', { params: { q, sort: 'updatedAt', dir: 'desc' } })
+      const res = await http.get('/api/crm/products', { params: { q, sort: productSort, dir: productDir } })
       return res.data as { data: { items: Product[] } }
     },
   })
@@ -106,9 +132,9 @@ export default function CRMProducts() {
 
   // Bundles query
   const { data: bundlesData } = useQuery({
-    queryKey: ['bundles', q],
+    queryKey: ['bundles', q, bundleSort, bundleDir],
     queryFn: async () => {
-      const res = await http.get('/api/crm/products/bundles', { params: { q, sort: 'updatedAt', dir: 'desc' } })
+      const res = await http.get('/api/crm/products/bundles', { params: { q, sort: bundleSort, dir: bundleDir } })
       return res.data as { data: { items: Bundle[] } }
     },
   })
@@ -116,9 +142,9 @@ export default function CRMProducts() {
 
   // Discounts query
   const { data: discountsData } = useQuery({
-    queryKey: ['discounts', q],
+    queryKey: ['discounts', q, discountSort, discountDir],
     queryFn: async () => {
-      const res = await http.get('/api/crm/products/discounts', { params: { q, sort: 'updatedAt', dir: 'desc' } })
+      const res = await http.get('/api/crm/products/discounts', { params: { q, sort: discountSort, dir: discountDir } })
       return res.data as { data: { items: Discount[] } }
     },
   })
@@ -126,9 +152,9 @@ export default function CRMProducts() {
 
   // Terms query
   const { data: termsData } = useQuery({
-    queryKey: ['terms', q],
+    queryKey: ['terms', q, termsSort, termsDir],
     queryFn: async () => {
-      const res = await http.get('/api/crm/products/terms', { params: { q, sort: 'updatedAt', dir: 'desc' } })
+      const res = await http.get('/api/crm/products/terms', { params: { q, sort: termsSort, dir: termsDir } })
       return res.data as { data: { items: CustomTerms[] } }
     },
   })
@@ -445,16 +471,36 @@ export default function CRMProducts() {
           <table className="w-full text-sm">
             <thead className="text-left text-[color:var(--color-text-muted)]">
               <tr>
-                <th className="px-4 py-2">SKU</th>
-                <th className="px-4 py-2">Name</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('sku', productSort, productDir, setProductSort, setProductDir)}
+                >
+                  SKU {getSortIndicator('sku', productSort, productDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('name', productSort, productDir, setProductSort, setProductDir)}
+                >
+                  Name {getSortIndicator('name', productSort, productDir)}
+                </th>
                 <th className="px-4 py-2">Type</th>
-                <th className="px-4 py-2">Price</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('basePrice', productSort, productDir, setProductSort, setProductDir)}
+                >
+                  Price {getSortIndicator('basePrice', productSort, productDir)}
+                </th>
                 <th className="px-4 py-2">Cost</th>
                 <th className="px-4 py-2">Margin</th>
                 <th className="px-4 py-2">Margin %</th>
                 <th className="px-4 py-2">Category</th>
                 <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Updated</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('updatedAt', productSort, productDir, setProductSort, setProductDir)}
+                >
+                  Updated {getSortIndicator('updatedAt', productSort, productDir)}
+                </th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
@@ -579,12 +625,32 @@ export default function CRMProducts() {
           <table className="w-full text-sm">
             <thead className="text-left text-[color:var(--color-text-muted)]">
               <tr>
-                <th className="px-4 py-2">SKU</th>
-                <th className="px-4 py-2">Name</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('sku', bundleSort, bundleDir, setBundleSort, setBundleDir)}
+                >
+                  SKU {getSortIndicator('sku', bundleSort, bundleDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('name', bundleSort, bundleDir, setBundleSort, setBundleDir)}
+                >
+                  Name {getSortIndicator('name', bundleSort, bundleDir)}
+                </th>
                 <th className="px-4 py-2">Items</th>
-                <th className="px-4 py-2">Bundle Price</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('bundlePrice', bundleSort, bundleDir, setBundleSort, setBundleDir)}
+                >
+                  Bundle Price {getSortIndicator('bundlePrice', bundleSort, bundleDir)}
+                </th>
                 <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Updated</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('updatedAt', bundleSort, bundleDir, setBundleSort, setBundleDir)}
+                >
+                  Updated {getSortIndicator('updatedAt', bundleSort, bundleDir)}
+                </th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
@@ -649,13 +715,33 @@ export default function CRMProducts() {
           <table className="w-full text-sm">
             <thead className="text-left text-[color:var(--color-text-muted)]">
               <tr>
-                <th className="px-4 py-2">Code</th>
-                <th className="px-4 py-2">Name</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('code', discountSort, discountDir, setDiscountSort, setDiscountDir)}
+                >
+                  Code {getSortIndicator('code', discountSort, discountDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('name', discountSort, discountDir, setDiscountSort, setDiscountDir)}
+                >
+                  Name {getSortIndicator('name', discountSort, discountDir)}
+                </th>
                 <th className="px-4 py-2">Type</th>
-                <th className="px-4 py-2">Value</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('value', discountSort, discountDir, setDiscountSort, setDiscountDir)}
+                >
+                  Value {getSortIndicator('value', discountSort, discountDir)}
+                </th>
                 <th className="px-4 py-2">Scope</th>
                 <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Updated</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('updatedAt', discountSort, discountDir, setDiscountSort, setDiscountDir)}
+                >
+                  Updated {getSortIndicator('updatedAt', discountSort, discountDir)}
+                </th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
@@ -1354,10 +1440,20 @@ export default function CRMProducts() {
           <table className="w-full text-sm">
             <thead className="text-left text-[color:var(--color-text-muted)]">
               <tr>
-                <th className="px-4 py-2">Name</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('name', termsSort, termsDir, setTermsSort, setTermsDir)}
+                >
+                  Name {getSortIndicator('name', termsSort, termsDir)}
+                </th>
                 <th className="px-4 py-2">Default</th>
                 <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Updated</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('updatedAt', termsSort, termsDir, setTermsSort, setTermsDir)}
+                >
+                  Updated {getSortIndicator('updatedAt', termsSort, termsDir)}
+                </th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
