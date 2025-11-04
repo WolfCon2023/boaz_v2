@@ -95,13 +95,13 @@ export default function CRMProducts() {
   const [showHistory, setShowHistory] = React.useState(false)
   
   // Sort state - separate for each tab
-  const [productSort, setProductSort] = React.useState<'name' | 'sku' | 'basePrice' | 'updatedAt' | 'createdAt'>('updatedAt')
+  const [productSort, setProductSort] = React.useState<'name' | 'sku' | 'type' | 'basePrice' | 'cost' | 'category' | 'isActive' | 'updatedAt' | 'createdAt'>('updatedAt')
   const [productDir, setProductDir] = React.useState<'asc' | 'desc'>('desc')
-  const [bundleSort, setBundleSort] = React.useState<'name' | 'sku' | 'bundlePrice' | 'updatedAt' | 'createdAt'>('updatedAt')
+  const [bundleSort, setBundleSort] = React.useState<'name' | 'sku' | 'bundlePrice' | 'isActive' | 'updatedAt' | 'createdAt'>('updatedAt')
   const [bundleDir, setBundleDir] = React.useState<'asc' | 'desc'>('desc')
-  const [discountSort, setDiscountSort] = React.useState<'name' | 'code' | 'value' | 'updatedAt' | 'createdAt'>('updatedAt')
+  const [discountSort, setDiscountSort] = React.useState<'name' | 'code' | 'type' | 'value' | 'scope' | 'isActive' | 'updatedAt' | 'createdAt'>('updatedAt')
   const [discountDir, setDiscountDir] = React.useState<'asc' | 'desc'>('desc')
-  const [termsSort, setTermsSort] = React.useState<'name' | 'updatedAt' | 'createdAt'>('updatedAt')
+  const [termsSort, setTermsSort] = React.useState<'name' | 'isDefault' | 'isActive' | 'updatedAt' | 'createdAt'>('updatedAt')
   const [termsDir, setTermsDir] = React.useState<'asc' | 'desc'>('desc')
   
   // Helper function to handle column header click for sorting
@@ -483,18 +483,38 @@ export default function CRMProducts() {
                 >
                   Name {getSortIndicator('name', productSort, productDir)}
                 </th>
-                <th className="px-4 py-2">Type</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('type', productSort, productDir, setProductSort, setProductDir)}
+                >
+                  Type {getSortIndicator('type', productSort, productDir)}
+                </th>
                 <th 
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('basePrice', productSort, productDir, setProductSort, setProductDir)}
                 >
                   Price {getSortIndicator('basePrice', productSort, productDir)}
                 </th>
-                <th className="px-4 py-2">Cost</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('cost', productSort, productDir, setProductSort, setProductDir)}
+                >
+                  Cost {getSortIndicator('cost', productSort, productDir)}
+                </th>
                 <th className="px-4 py-2">Margin</th>
                 <th className="px-4 py-2">Margin %</th>
-                <th className="px-4 py-2">Category</th>
-                <th className="px-4 py-2">Status</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('category', productSort, productDir, setProductSort, setProductDir)}
+                >
+                  Category {getSortIndicator('category', productSort, productDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('isActive', productSort, productDir, setProductSort, setProductDir)}
+                >
+                  Status {getSortIndicator('isActive', productSort, productDir)}
+                </th>
                 <th 
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('updatedAt', productSort, productDir, setProductSort, setProductDir)}
@@ -644,7 +664,12 @@ export default function CRMProducts() {
                 >
                   Bundle Price {getSortIndicator('bundlePrice', bundleSort, bundleDir)}
                 </th>
-                <th className="px-4 py-2">Status</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('isActive', bundleSort, bundleDir, setBundleSort, setBundleDir)}
+                >
+                  Status {getSortIndicator('isActive', bundleSort, bundleDir)}
+                </th>
                 <th 
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('updatedAt', bundleSort, bundleDir, setBundleSort, setBundleDir)}
@@ -727,15 +752,30 @@ export default function CRMProducts() {
                 >
                   Name {getSortIndicator('name', discountSort, discountDir)}
                 </th>
-                <th className="px-4 py-2">Type</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('type', discountSort, discountDir, setDiscountSort, setDiscountDir)}
+                >
+                  Type {getSortIndicator('type', discountSort, discountDir)}
+                </th>
                 <th 
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('value', discountSort, discountDir, setDiscountSort, setDiscountDir)}
                 >
                   Value {getSortIndicator('value', discountSort, discountDir)}
                 </th>
-                <th className="px-4 py-2">Scope</th>
-                <th className="px-4 py-2">Status</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('scope', discountSort, discountDir, setDiscountSort, setDiscountDir)}
+                >
+                  Scope {getSortIndicator('scope', discountSort, discountDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('isActive', discountSort, discountDir, setDiscountSort, setDiscountDir)}
+                >
+                  Status {getSortIndicator('isActive', discountSort, discountDir)}
+                </th>
                 <th 
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('updatedAt', discountSort, discountDir, setDiscountSort, setDiscountDir)}
@@ -1446,8 +1486,18 @@ export default function CRMProducts() {
                 >
                   Name {getSortIndicator('name', termsSort, termsDir)}
                 </th>
-                <th className="px-4 py-2">Default</th>
-                <th className="px-4 py-2">Status</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('isDefault', termsSort, termsDir, setTermsSort, setTermsDir)}
+                >
+                  Default {getSortIndicator('isDefault', termsSort, termsDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('isActive', termsSort, termsDir, setTermsSort, setTermsDir)}
+                >
+                  Status {getSortIndicator('isActive', termsSort, termsDir)}
+                </th>
                 <th 
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('updatedAt', termsSort, termsDir, setTermsSort, setTermsDir)}

@@ -142,7 +142,7 @@ productsRouter.get('/', async (req, res) => {
   const sortKeyRaw = (req.query.sort as string) ?? 'updatedAt'
   const dirParam = ((req.query.dir as string) ?? 'desc').toLowerCase()
   const dir: SortDirection = dirParam === 'asc' ? 1 : -1
-  const allowed = new Set(['name', 'sku', 'basePrice', 'createdAt', 'updatedAt'])
+  const allowed = new Set(['name', 'sku', 'type', 'basePrice', 'cost', 'category', 'isActive', 'createdAt', 'updatedAt'])
   const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'updatedAt'
   const sort: Sort = { [sortField]: dir }
 
@@ -360,7 +360,7 @@ productsRouter.get('/bundles', async (req, res) => {
   const sortKeyRaw = (req.query.sort as string) ?? 'updatedAt'
   const dirParam = ((req.query.dir as string) ?? 'desc').toLowerCase()
   const dir: SortDirection = dirParam === 'asc' ? 1 : -1
-  const allowed = new Set(['name', 'sku', 'bundlePrice', 'createdAt', 'updatedAt'])
+  const allowed = new Set(['name', 'sku', 'bundlePrice', 'isActive', 'createdAt', 'updatedAt'])
   const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'updatedAt'
   const sort: Sort = { [sortField]: dir }
 
@@ -485,7 +485,7 @@ productsRouter.get('/discounts', async (req, res) => {
   const sortKeyRaw = (req.query.sort as string) ?? 'updatedAt'
   const dirParam = ((req.query.dir as string) ?? 'desc').toLowerCase()
   const dir: SortDirection = dirParam === 'asc' ? 1 : -1
-  const allowed = new Set(['name', 'code', 'value', 'startDate', 'endDate', 'createdAt', 'updatedAt'])
+  const allowed = new Set(['name', 'code', 'type', 'value', 'scope', 'isActive', 'startDate', 'endDate', 'createdAt', 'updatedAt'])
   const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'updatedAt'
   const sort: Sort = { [sortField]: dir }
 
@@ -612,7 +612,7 @@ productsRouter.get('/terms', async (req, res) => {
   const sortKeyRaw = (req.query.sort as string) ?? 'updatedAt'
   const dirParam = ((req.query.dir as string) ?? 'desc').toLowerCase()
   const dir: SortDirection = dirParam === 'asc' ? 1 : -1
-  const allowed = new Set(['name', 'isDefault', 'createdAt', 'updatedAt'])
+  const allowed = new Set(['name', 'isDefault', 'isActive', 'createdAt', 'updatedAt'])
   const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'updatedAt'
   const sort: Sort = { [sortField]: dir }
 
