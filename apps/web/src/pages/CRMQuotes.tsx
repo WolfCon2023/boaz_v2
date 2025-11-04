@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
@@ -483,10 +483,33 @@ export default function CRMQuotes() {
     return () => { try { document.body.removeChild(el) } catch {}; setPortalEl(null) }
   }, [editing])
 
+  // Check if user has manager role for approval queue link
+  const { data: rolesData } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
+    queryKey: ['user', 'roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/roles')
+      return res.data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const isManager = rolesData?.roles?.some(r => r.name === 'manager') || rolesData?.isAdmin || false
+
   return (
     <div className="space-y-4">
       <CRMNav />
-      <h1 className="text-xl font-semibold">Quotes</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Quotes</h1>
+        {isManager && (
+          <Link
+            to="/apps/crm/quotes/approval-queue"
+            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+          >
+            <Send className="h-4 w-4" />
+            Approval Queue
+          </Link>
+        )}
+      </div>
 
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">

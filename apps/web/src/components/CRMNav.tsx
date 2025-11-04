@@ -1,8 +1,26 @@
 import { NavLink } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { http } from '@/lib/http'
+import { useAccessToken } from './Auth'
 
 const base = 'inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]'
 
 export function CRMNav() {
+  const token = useAccessToken()
+  
+  // Check if user has manager role
+  const { data: rolesData } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
+    queryKey: ['user', 'roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/roles')
+      return res.data
+    },
+    enabled: !!token,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const isManager = rolesData?.roles?.some(r => r.name === 'manager') || rolesData?.isAdmin || false
+
   return (
     <div className="flex flex-wrap items-center gap-2 p-4">
       <NavLink to="/apps/crm" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>CRM Home</NavLink>
@@ -17,6 +35,9 @@ export function CRMNav() {
       <NavLink to="/apps/crm/outreach/sequences" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Outreach Sequences</NavLink>
       <NavLink to="/apps/crm/outreach/templates" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Outreach Templates</NavLink>
       <NavLink to="/apps/crm/quotes" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Quotes</NavLink>
+      {isManager && (
+        <NavLink to="/apps/crm/quotes/approval-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Approval Queue</NavLink>
+      )}
       <NavLink to="/apps/crm/support/tickets" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Tickets</NavLink>
     </div>
   )
