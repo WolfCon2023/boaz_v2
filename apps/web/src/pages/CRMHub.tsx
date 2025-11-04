@@ -5,6 +5,7 @@ export default function CRMHub() {
     { label: 'Contacts', desc: 'People and relationships', href: '/apps/crm/contacts' },
     { label: 'Accounts', desc: 'Companies and organizations', href: '/apps/crm/accounts' },
     { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
+    { label: 'Products', desc: 'Product catalog, bundles, discounts, and terms', href: '/apps/crm/products' },
     { label: 'Quotes', desc: 'Quotes, proposals, and e-sign', href: '/apps/crm/quotes' },
     { label: 'Invoices', desc: 'Billing, payments, and refunds', href: '/apps/crm/invoices' },
     { label: 'Outreach', desc: 'Email/SMS templates, sequences, events', href: '/apps/crm/outreach/templates' },

@@ -18,6 +18,7 @@ import { outreachSchedulerRouter } from './crm/outreach_scheduler.js'
 import { supportTicketsRouter } from './crm/support_tickets.js'
 import { kbRouter } from './crm/kb.js'
 import { supportAlertsRouter } from './crm/support_alerts.js'
+import { productsRouter } from './crm/products.js'
 import { marketingSegmentsRouter } from './marketing/segments.js'
 import { marketingCampaignsRouter } from './marketing/campaigns.js'
 import { marketingTrackingRouter } from './marketing/tracking.js'
@@ -78,6 +79,7 @@ app.use('/api/crm/outreach/scheduler', outreachSchedulerRouter)
 app.use('/api/crm/support', supportTicketsRouter)
 app.use('/api/crm/support', kbRouter)
 app.use('/api/crm/support', supportAlertsRouter)
+app.use('/api/crm/products', productsRouter)
 app.use('/api/marketing', marketingSegmentsRouter)
 app.use('/api/marketing', marketingCampaignsRouter)
 app.use('/api/marketing', marketingTrackingRouter)
