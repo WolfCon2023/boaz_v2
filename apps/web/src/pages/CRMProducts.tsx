@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
-import { Package, Layers, Tag, FileText, TrendingUp } from 'lucide-react'
+import { Package, Layers, Tag, FileText, TrendingUp, Download, TrendingDown, DollarSign, PackageIcon, BarChart3, PieChart } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, Legend } from 'recharts'
 
 type Product = {
   _id: string
@@ -586,7 +587,104 @@ export default function CRMProducts() {
       {activeTab === 'profitability' && (
         <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
           <div className="p-6">
-            <h2 className="mb-4 text-lg font-semibold">Product Profitability Report</h2>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Product Profitability Report</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  const productsWithCost = products.filter(p => (p.cost ?? 0) > 0)
+                  const totalRevenue = productsWithCost.reduce((sum, p) => sum + p.basePrice, 0)
+                  const totalCost = productsWithCost.reduce((sum, p) => sum + (p.cost ?? 0), 0)
+                  const totalMargin = totalRevenue - totalCost
+                  const overallMarginPercent = totalRevenue > 0 ? ((totalMargin / totalRevenue) * 100) : 0
+                  
+                  const byCategory = productsWithCost.reduce((acc, p) => {
+                    const cat = p.category || 'Uncategorized'
+                    if (!acc[cat]) {
+                      acc[cat] = { revenue: 0, cost: 0, count: 0, products: [] }
+                    }
+                    acc[cat].revenue += p.basePrice
+                    acc[cat].cost += (p.cost ?? 0)
+                    acc[cat].count += 1
+                    acc[cat].products.push(p)
+                    return acc
+                  }, {} as Record<string, { revenue: number; cost: number; count: number; products: Product[] }>)
+                  
+                  // Build CSV data
+                  const csvRows: string[] = []
+                  
+                  // Summary section
+                  csvRows.push('PROFITABILITY REPORT SUMMARY')
+                  csvRows.push('')
+                  csvRows.push('Total Products,' + products.length)
+                  csvRows.push('Products with Cost Data,' + productsWithCost.length)
+                  csvRows.push('Total Revenue Potential,' + totalRevenue.toFixed(2))
+                  csvRows.push('Total Cost,' + totalCost.toFixed(2))
+                  csvRows.push('Total Margin,' + totalMargin.toFixed(2))
+                  csvRows.push('Overall Margin %,' + overallMarginPercent.toFixed(2) + '%')
+                  csvRows.push('')
+                  csvRows.push('')
+                  
+                  // Category breakdown
+                  csvRows.push('PROFITABILITY BY CATEGORY')
+                  csvRows.push('Category,Product Count,Revenue,Cost,Margin,Margin %')
+                  Object.entries(byCategory).forEach(([category, data]) => {
+                    const margin = data.revenue - data.cost
+                    const marginPercent = data.revenue > 0 ? ((margin / data.revenue) * 100) : 0
+                    csvRows.push([
+                      category,
+                      data.count.toString(),
+                      data.revenue.toFixed(2),
+                      data.cost.toFixed(2),
+                      margin.toFixed(2),
+                      marginPercent.toFixed(2) + '%'
+                    ].map(x => '"' + String(x).replaceAll('"', '""') + '"').join(','))
+                  })
+                  csvRows.push('')
+                  csvRows.push('')
+                  
+                  // All products with margins (sorted by margin)
+                  csvRows.push('ALL PRODUCTS BY MARGIN')
+                  csvRows.push('Product Name,SKU,Category,Type,Price,Cost,Margin,Margin %')
+                  [...productsWithCost]
+                    .sort((a, b) => {
+                      const marginA = a.basePrice - (a.cost ?? 0)
+                      const marginB = b.basePrice - (b.cost ?? 0)
+                      return marginB - marginA
+                    })
+                    .forEach((product) => {
+                      const cost = product.cost ?? 0
+                      const margin = product.basePrice - cost
+                      const marginPercent = product.basePrice > 0 ? ((margin / product.basePrice) * 100) : 0
+                      csvRows.push([
+                        product.name,
+                        product.sku || '',
+                        product.category || 'Uncategorized',
+                        product.type,
+                        product.basePrice.toFixed(2),
+                        cost.toFixed(2),
+                        margin.toFixed(2),
+                        marginPercent.toFixed(2) + '%'
+                      ].map(x => '"' + String(x).replaceAll('"', '""') + '"').join(','))
+                    })
+                  
+                  const csv = csvRows.join('\n')
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `profitability-report-${new Date().toISOString().split('T')[0]}.csv`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                }}
+                className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </button>
+            </div>
             {(() => {
               const productsWithCost = products.filter(p => (p.cost ?? 0) > 0)
               const totalRevenue = productsWithCost.reduce((sum, p) => sum + p.basePrice, 0)
@@ -606,114 +704,424 @@ export default function CRMProducts() {
                 return acc
               }, {} as Record<string, { revenue: number; cost: number; count: number; products: Product[] }>)
 
+              // Prepare chart data
+              const categoryChartData = Object.entries(byCategory).map(([category, data]) => {
+                const margin = data.revenue - data.cost
+                const marginPercent = data.revenue > 0 ? ((margin / data.revenue) * 100) : 0
+                return {
+                  name: category,
+                  revenue: data.revenue,
+                  cost: data.cost,
+                  margin: margin,
+                  marginPercent: marginPercent,
+                  products: data.count
+                }
+              }).sort((a, b) => b.margin - a.margin)
+
+              const topProductsChartData = [...productsWithCost]
+                .sort((a, b) => {
+                  const marginA = a.basePrice - (a.cost ?? 0)
+                  const marginB = b.basePrice - (b.cost ?? 0)
+                  return marginB - marginA
+                })
+                .slice(0, 10)
+                .map(p => ({
+                  name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
+                  fullName: p.name,
+                  margin: p.basePrice - (p.cost ?? 0),
+                  marginPercent: p.basePrice > 0 ? (((p.basePrice - (p.cost ?? 0)) / p.basePrice) * 100) : 0,
+                  revenue: p.basePrice,
+                  cost: p.cost ?? 0
+                }))
+
+              const pieChartData = categoryChartData.map(cat => ({
+                name: cat.name,
+                value: cat.margin,
+                products: cat.products
+              }))
+
+              const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16']
+
               return (
-                <div className="space-y-6">
-                  {/* Summary Cards */}
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
-                      <div className="text-xs text-[color:var(--color-text-muted)]">Total Products</div>
-                      <div className="mt-1 text-2xl font-semibold">{products.length}</div>
-                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{productsWithCost.length} with cost data</div>
-                    </div>
-                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
-                      <div className="text-xs text-[color:var(--color-text-muted)]">Total Revenue Potential</div>
-                      <div className="mt-1 text-2xl font-semibold">${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    </div>
-                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
-                      <div className="text-xs text-[color:var(--color-text-muted)]">Total Cost</div>
-                      <div className="mt-1 text-2xl font-semibold">${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    </div>
-                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
-                      <div className="text-xs text-[color:var(--color-text-muted)]">Total Margin</div>
-                      <div className={`mt-1 text-2xl font-semibold ${totalMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        ${totalMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className="space-y-8">
+                  {/* Summary Cards - Enhanced */}
+                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 p-6 shadow-lg transition-all hover:shadow-xl hover:scale-[1.02]">
+                      <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-blue-200/20 dark:bg-blue-800/20 blur-2xl"></div>
+                      <div className="relative flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-wide">Total Products</div>
+                          <div className="mt-2 text-3xl font-bold text-[color:var(--color-text)]">{products.length}</div>
+                          <div className="mt-2 flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
+                            <PackageIcon className="h-3 w-3" />
+                            <span>{productsWithCost.length} with cost data</span>
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-blue-500/10 p-3">
+                          <PackageIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                        </div>
                       </div>
-                      <div className={`mt-1 text-xs ${overallMarginPercent >= 50 ? 'text-green-600' : overallMarginPercent >= 30 ? 'text-green-500' : overallMarginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
-                        {overallMarginPercent.toFixed(1)}% margin
+                    </div>
+
+                    <div className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20 p-6 shadow-lg transition-all hover:shadow-xl hover:scale-[1.02]">
+                      <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-emerald-200/20 dark:bg-emerald-800/20 blur-2xl"></div>
+                      <div className="relative flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-wide">Revenue Potential</div>
+                          <div className="mt-2 text-3xl font-bold text-emerald-700 dark:text-emerald-400">
+                            ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </div>
+                          <div className="mt-2 flex items-center gap-1 text-xs text-[color:var(--color-text-muted)]">
+                            <TrendingUp className="h-3 w-3" />
+                            <span>Total potential</span>
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-emerald-500/10 p-3">
+                          <DollarSign className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/20 p-6 shadow-lg transition-all hover:shadow-xl hover:scale-[1.02]">
+                      <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-amber-200/20 dark:bg-amber-800/20 blur-2xl"></div>
+                      <div className="relative flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-wide">Total Cost</div>
+                          <div className="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-400">
+                            ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </div>
+                          <div className="mt-2 flex items-center gap-1 text-xs text-[color:var(--color-text-muted)]">
+                            <span>COGS</span>
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-amber-500/10 p-3">
+                          <TrendingDown className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="group relative overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 p-6 shadow-lg transition-all hover:shadow-xl hover:scale-[1.02]">
+                      <div className="absolute top-0 right-0 -mt-4 -mr-4 h-24 w-24 rounded-full bg-green-200/20 dark:bg-green-800/20 blur-2xl"></div>
+                      <div className="relative flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="text-xs font-medium text-[color:var(--color-text-muted)] uppercase tracking-wide">Profit Margin</div>
+                          <div className={`mt-2 text-3xl font-bold ${totalMargin >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                            ${totalMargin.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <div className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              overallMarginPercent >= 50 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                              overallMarginPercent >= 30 ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' :
+                              overallMarginPercent >= 10 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                              'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            }`}>
+                              {overallMarginPercent.toFixed(1)}%
+                            </div>
+                            <div className="h-1.5 flex-1 rounded-full bg-[color:var(--color-muted)] overflow-hidden">
+                              <div 
+                                className={`h-full transition-all ${
+                                  overallMarginPercent >= 50 ? 'bg-green-500' :
+                                  overallMarginPercent >= 30 ? 'bg-green-400' :
+                                  overallMarginPercent >= 10 ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${Math.min(overallMarginPercent, 100)}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-green-500/10 p-3">
+                          <BarChart3 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* By Category */}
+                  {/* Charts Section */}
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    {/* Margin by Category - Bar Chart */}
+                    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-sm">
+                      <div className="mb-4 flex items-center justify-between">
+                        <h3 className="text-base font-semibold flex items-center gap-2">
+                          <BarChart3 className="h-4 w-4" />
+                          Margin by Category
+                        </h3>
+                      </div>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={categoryChartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+                          <XAxis 
+                            dataKey="name" 
+                            tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={80}
+                          />
+                          <YAxis 
+                            tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+                            tickFormatter={(value) => `$${value.toLocaleString()}`}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'var(--color-panel)',
+                              border: '1px solid var(--color-border)',
+                              borderRadius: '8px',
+                              padding: '8px'
+                            }}
+                            formatter={(value: number, name: string) => {
+                              if (name === 'margin') return [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Margin']
+                              if (name === 'marginPercent') return [`${value.toFixed(1)}%`, 'Margin %']
+                              return [value, name]
+                            }}
+                          />
+                          <Bar dataKey="margin" fill="var(--color-primary-600)" radius={[8, 8, 0, 0]}>
+                            {categoryChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Margin Distribution - Pie Chart */}
+                    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-sm">
+                      <div className="mb-4 flex items-center justify-between">
+                        <h3 className="text-base font-semibold flex items-center gap-2">
+                          <PieChart className="h-4 w-4" />
+                          Margin Distribution
+                        </h3>
+                      </div>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <RechartsPieChart>
+                          <Pie
+                            data={pieChartData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                          >
+                            {pieChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'var(--color-panel)',
+                              border: '1px solid var(--color-border)',
+                              borderRadius: '8px',
+                              padding: '8px'
+                            }}
+                            formatter={(value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                          />
+                          <Legend />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* By Category - Enhanced Cards */}
                   <div>
-                    <h3 className="mb-3 text-base font-semibold">Profitability by Category</h3>
-                    <div className="space-y-2">
-                      {Object.entries(byCategory).map(([category, data]) => {
-                        const margin = data.revenue - data.cost
-                        const marginPercent = data.revenue > 0 ? ((margin / data.revenue) * 100) : 0
-                        return (
-                          <div key={category} className="rounded-lg border border-[color:var(--color-border)] p-4">
-                            <div className="mb-2 flex items-center justify-between">
-                              <div className="font-medium">{category}</div>
-                              <div className={`text-sm font-semibold ${marginPercent >= 50 ? 'text-green-600' : marginPercent >= 30 ? 'text-green-500' : marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'}`}>
-                                {marginPercent.toFixed(1)}% margin
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-4 gap-4 text-sm">
-                              <div>
-                                <div className="text-xs text-[color:var(--color-text-muted)]">Products</div>
-                                <div className="font-medium">{data.count}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-[color:var(--color-text-muted)]">Revenue</div>
-                                <div className="font-medium">${data.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-[color:var(--color-text-muted)]">Cost</div>
-                                <div className="font-medium">${data.cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-[color:var(--color-text-muted)]">Margin</div>
-                                <div className={`font-medium ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  ${margin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <h3 className="mb-4 text-base font-semibold flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Profitability by Category
+                    </h3>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {Object.entries(byCategory)
+                        .sort(([, a], [, b]) => {
+                          const marginA = a.revenue - a.cost
+                          const marginB = b.revenue - b.cost
+                          return marginB - marginA
+                        })
+                        .map(([category, data], index) => {
+                          const margin = data.revenue - data.cost
+                          const marginPercent = data.revenue > 0 ? ((margin / data.revenue) * 100) : 0
+                          const color = COLORS[index % COLORS.length]
+                          return (
+                            <div key={category} className="group relative overflow-hidden rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-sm transition-all hover:shadow-md hover:border-[color:var(--color-primary-300)]">
+                              <div className="absolute top-0 left-0 h-1 w-full" style={{ backgroundColor: color }}></div>
+                              <div className="mt-1 flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="font-semibold text-[color:var(--color-text)]">{category}</h4>
+                                    <span className="rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-xs font-medium text-[color:var(--color-text-muted)]">
+                                      {data.count} {data.count === 1 ? 'product' : 'products'}
+                                    </span>
+                                  </div>
+                                  <div className="mt-3 grid grid-cols-3 gap-4">
+                                    <div>
+                                      <div className="text-xs text-[color:var(--color-text-muted)]">Revenue</div>
+                                      <div className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">
+                                        ${data.revenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-[color:var(--color-text-muted)]">Cost</div>
+                                      <div className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">
+                                        ${data.cost.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-[color:var(--color-text-muted)]">Margin</div>
+                                      <div className={`mt-1 text-sm font-semibold ${margin >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                        ${margin.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="mt-4">
+                                    <div className="mb-1 flex items-center justify-between text-xs">
+                                      <span className="text-[color:var(--color-text-muted)]">Margin Percentage</span>
+                                      <span className={`font-semibold ${
+                                        marginPercent >= 50 ? 'text-green-600 dark:text-green-400' :
+                                        marginPercent >= 30 ? 'text-green-500 dark:text-green-400' :
+                                        marginPercent >= 10 ? 'text-yellow-600 dark:text-yellow-400' :
+                                        'text-red-600 dark:text-red-400'
+                                      }`}>
+                                        {marginPercent.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                    <div className="h-2 rounded-full bg-[color:var(--color-muted)] overflow-hidden">
+                                      <div 
+                                        className="h-full transition-all rounded-full"
+                                        style={{ 
+                                          width: `${Math.min(marginPercent, 100)}%`,
+                                          backgroundColor: color
+                                        }}
+                                      ></div>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
                     </div>
                   </div>
 
-                  {/* Top Products by Margin */}
-                  <div>
-                    <h3 className="mb-3 text-base font-semibold">Top Products by Margin</h3>
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-[color:var(--color-text-muted)]">
-                        <tr>
-                          <th className="px-4 py-2">Product</th>
-                          <th className="px-4 py-2">Price</th>
-                          <th className="px-4 py-2">Cost</th>
-                          <th className="px-4 py-2">Margin</th>
-                          <th className="px-4 py-2">Margin %</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...productsWithCost]
-                          .sort((a, b) => {
-                            const marginA = a.basePrice - (a.cost ?? 0)
-                            const marginB = b.basePrice - (b.cost ?? 0)
-                            return marginB - marginA
-                          })
-                          .slice(0, 10)
-                          .map((product) => {
-                            const cost = product.cost ?? 0
-                            const margin = product.basePrice - cost
-                            const marginPercent = product.basePrice > 0 ? ((margin / product.basePrice) * 100) : 0
-                            const marginColor = marginPercent >= 50 ? 'text-green-600' : marginPercent >= 30 ? 'text-green-500' : marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'
-                            
-                            return (
-                              <tr key={product._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
-                                <td className="px-4 py-2">{product.name}</td>
-                                <td className="px-4 py-2">${product.basePrice.toFixed(2)}</td>
-                                <td className="px-4 py-2">${cost.toFixed(2)}</td>
-                                <td className={`px-4 py-2 font-medium ${marginColor}`}>${margin.toFixed(2)}</td>
-                                <td className={`px-4 py-2 font-medium ${marginColor}`}>{marginPercent.toFixed(1)}%</td>
-                              </tr>
-                            )
-                          })}
-                      </tbody>
-                    </table>
+                  {/* Top Products by Margin - Enhanced with Chart */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-semibold flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" />
+                        Top Products by Margin
+                      </h3>
+                      <span className="text-xs text-[color:var(--color-text-muted)]">Showing top 10</span>
+                    </div>
+                    
+                    {/* Horizontal Bar Chart */}
+                    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-sm">
+                      <ResponsiveContainer width="100%" height={400}>
+                        <BarChart data={topProductsChartData} layout="vertical" margin={{ top: 5, right: 30, left: 120, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" opacity={0.3} />
+                          <XAxis 
+                            type="number"
+                            tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+                            tickFormatter={(value) => `$${value.toLocaleString()}`}
+                          />
+                          <YAxis 
+                            type="category" 
+                            dataKey="name"
+                            tick={{ fill: 'var(--color-text-muted)', fontSize: 12 }}
+                            width={110}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'var(--color-panel)',
+                              border: '1px solid var(--color-border)',
+                              borderRadius: '8px',
+                              padding: '8px'
+                            }}
+                            formatter={(value: number, name: string, props: any) => {
+                              if (name === 'margin') return [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Margin']
+                              if (name === 'marginPercent') return [`${value.toFixed(1)}%`, 'Margin %']
+                              if (name === 'revenue') return [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Price']
+                              if (name === 'cost') return [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Cost']
+                              return [value, name]
+                            }}
+                            labelFormatter={(label) => `Product: ${topProductsChartData.find(d => d.name === label)?.fullName || label}`}
+                          />
+                          <Bar dataKey="margin" fill="var(--color-primary-600)" radius={[0, 8, 8, 0]}>
+                            {topProductsChartData.map((entry, index) => {
+                              const color = entry.marginPercent >= 50 ? '#10b981' : entry.marginPercent >= 30 ? '#3b82f6' : entry.marginPercent >= 10 ? '#f59e0b' : '#ef4444'
+                              return <Cell key={`cell-${index}`} fill={color} />
+                            })}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Enhanced Table */}
+                    <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-sm">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-[color:var(--color-muted)]">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">Product</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">Category</th>
+                              <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">Price</th>
+                              <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">Cost</th>
+                              <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">Margin</th>
+                              <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-[color:var(--color-text-muted)]">Margin %</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[color:var(--color-border)]">
+                            {topProductsChartData.map((product, index) => {
+                              const marginColor = product.marginPercent >= 50 ? 'text-green-600 dark:text-green-400' : 
+                                                  product.marginPercent >= 30 ? 'text-green-500 dark:text-green-400' : 
+                                                  product.marginPercent >= 10 ? 'text-yellow-600 dark:text-yellow-400' : 
+                                                  'text-red-600 dark:text-red-400'
+                              
+                              return (
+                                <tr key={product.fullName} className="transition-colors hover:bg-[color:var(--color-muted)]">
+                                  <td className="px-6 py-4">
+                                    <div className="font-medium text-[color:var(--color-text)]">{product.fullName}</div>
+                                    {products.find(p => p.name === product.fullName)?.sku && (
+                                      <div className="text-xs text-[color:var(--color-text-muted)] mt-0.5">
+                                        SKU: {products.find(p => p.name === product.fullName)?.sku}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <span className="inline-flex items-center rounded-full bg-[color:var(--color-muted)] px-2.5 py-0.5 text-xs font-medium text-[color:var(--color-text)]">
+                                      {products.find(p => p.name === product.fullName)?.category || 'Uncategorized'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-right font-medium text-[color:var(--color-text)]">
+                                    ${product.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </td>
+                                  <td className="px-6 py-4 text-right font-medium text-[color:var(--color-text)]">
+                                    ${product.cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </td>
+                                  <td className={`px-6 py-4 text-right font-semibold ${marginColor}`}>
+                                    ${product.margin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <span className={`font-semibold ${marginColor}`}>
+                                        {product.marginPercent.toFixed(1)}%
+                                      </span>
+                                      <div className="w-16 h-2 rounded-full bg-[color:var(--color-muted)] overflow-hidden">
+                                        <div 
+                                          className={`h-full transition-all ${
+                                            product.marginPercent >= 50 ? 'bg-green-500' :
+                                            product.marginPercent >= 30 ? 'bg-green-400' :
+                                            product.marginPercent >= 10 ? 'bg-yellow-500' :
+                                            'bg-red-500'
+                                          }`}
+                                          style={{ width: `${Math.min(product.marginPercent, 100)}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )

@@ -866,7 +866,8 @@ async function main() {
         updatedAt: now,
       },
     ])
-    console.log('Seeded 4 custom terms')
+    const insertedCount = await db.collection('custom_terms').countDocuments()
+    console.log(`Seeded ${insertedCount} custom terms`)
   } else {
     console.log(`Terms collection already has ${termsCount} items, skipping seed`)
   }
