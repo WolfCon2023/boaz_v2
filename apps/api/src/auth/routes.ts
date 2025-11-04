@@ -1470,6 +1470,55 @@ authRouter.get('/me/roles', requireAuth, async (req, res) => {
   }
 })
 
+// Get all users with manager role (for quote approver selection)
+authRouter.get('/managers', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    const ObjectId = (await import('mongodb')).ObjectId
+    
+    // Find manager role
+    const managerRole = await db.collection('roles').findOne({ name: 'manager' })
+    if (!managerRole) {
+      return res.json({ managers: [] })
+    }
+    
+    // Get all users with manager role
+    const userRoles = await db.collection('user_roles').find({ roleId: managerRole._id } as any).toArray()
+    const managerUserIds = userRoles.map((ur: any) => ur.userId)
+    
+    if (managerUserIds.length === 0) {
+      return res.json({ managers: [] })
+    }
+    
+    // Get user details
+    const userIdObjects = managerUserIds.map((id: string) => {
+      try {
+        return new ObjectId(id)
+      } catch {
+        return null
+      }
+    }).filter(Boolean) as ObjectId[]
+    
+    const managers = await db.collection('users')
+      .find({ _id: { $in: userIdObjects } })
+      .sort({ name: 1, email: 1 })
+      .toArray()
+    
+    const managersList = managers.map((m: any) => ({
+      id: m._id.toString(),
+      email: m.email,
+      name: m.name || undefined,
+    }))
+    
+    res.json({ managers: managersList })
+  } catch (err: any) {
+    console.error('Get managers error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get managers' })
+  }
+})
+
 // Self-assign admin role (development/initial setup only - should be restricted in production)
 authRouter.post('/me/self-assign-admin', requireAuth, async (req, res) => {
   try {

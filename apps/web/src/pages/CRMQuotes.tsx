@@ -133,6 +133,16 @@ export default function CRMQuotes() {
   const accounts = accountsQ.data?.data.items ?? []
   const acctById = React.useMemo(() => new Map(accounts.map((a) => [a._id, a])), [accounts])
 
+  // Managers query for approver selection
+  const { data: managersData } = useQuery({
+    queryKey: ['managers'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/managers')
+      return res.data as { managers: Array<{ id: string; email: string; name?: string }> }
+    },
+  })
+  const managers = managersData?.managers ?? []
+
   // Products query for line items
   const { data: productsData } = useQuery({
     queryKey: ['products-for-quotes'],
@@ -1010,27 +1020,39 @@ export default function CRMQuotes() {
                   </select>
                 </label>
                 <div className="flex gap-2">
-                  <input name="approver" defaultValue={editing.approver ?? ''} placeholder="Approver email" className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                  {editing.approver && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!editing.approver) {
-                          alert('Please enter an approver email first')
-                          return
-                        }
-                        if (confirm(`Send approval request to ${editing.approver}?`)) {
-                          requestApproval.mutate(editing._id)
-                        }
-                      }}
-                      disabled={requestApproval.isPending}
-                      className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                      title="Send approval request to manager"
-                    >
-                      <Send className="h-3 w-3" />
-                      Request Approval
-                    </button>
-                  )}
+                  <select
+                    name="approver"
+                    id="approver-select"
+                    defaultValue={editing.approver ?? ''}
+                    className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                  >
+                    <option value="">Select Manager (Approver)</option>
+                    {managers.map((manager) => (
+                      <option key={manager.id} value={manager.email}>
+                        {manager.name ? `${manager.name} (${manager.email})` : manager.email}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const select = document.getElementById('approver-select') as HTMLSelectElement
+                      const approverEmail = select?.value || editing.approver
+                      if (!approverEmail) {
+                        alert('Please select an approver first')
+                        return
+                      }
+                      if (confirm(`Send approval request to ${approverEmail}?`)) {
+                        requestApproval.mutate(editing._id)
+                      }
+                    }}
+                    disabled={requestApproval.isPending || managers.length === 0}
+                    className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                    title={managers.length === 0 ? 'No managers available' : 'Send approval request to manager'}
+                  >
+                    <Send className="h-3 w-3" />
+                    Request Approval
+                  </button>
                 </div>
                 <input name="signerName" defaultValue={editing.signerName ?? ''} placeholder="Signer name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="signerEmail" defaultValue={editing.signerEmail ?? ''} placeholder="Signer email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
