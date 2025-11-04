@@ -21,6 +21,8 @@ type Invoice = {
   subtotal?: number
   tax?: number
   items?: InvoiceLineItem[]
+  discountCode?: string
+  discountId?: string
 }
 
 type InvoiceLineItem = {
@@ -71,6 +73,7 @@ type Discount = {
   _id: string
   code?: string
   name: string
+  description?: string
   type: 'percentage' | 'fixed' | 'tiered'
   value: number
   scope: 'global' | 'product' | 'bundle' | 'account'

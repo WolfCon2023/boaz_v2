@@ -23,6 +23,8 @@ type Quote = {
   signerName?: string
   signerEmail?: string
   items?: QuoteLineItem[]
+  discountCode?: string
+  discountId?: string
 }
 
 type QuoteLineItem = {
@@ -73,6 +75,7 @@ type Discount = {
   _id: string
   code?: string
   name: string
+  description?: string
   type: 'percentage' | 'fixed' | 'tiered'
   value: number
   scope: 'global' | 'product' | 'bundle' | 'account'
