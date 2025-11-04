@@ -186,20 +186,6 @@ productsRouter.delete('/:id', async (req, res) => {
   }
 })
 
-// GET /api/crm/products/:id (must be after /bundles, /discounts, /terms routes)
-productsRouter.get('/:id', async (req, res) => {
-  const db = await getDb()
-  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  try {
-    const _id = new ObjectId(req.params.id)
-    const product = await db.collection<ProductDoc>('products').findOne({ _id })
-    if (!product) return res.status(404).json({ data: null, error: 'not_found' })
-    res.json({ data: product, error: null })
-  } catch {
-    res.status(400).json({ data: null, error: 'invalid_id' })
-  }
-})
-
 // ===== BUNDLES =====
 
 // GET /api/crm/bundles?q=&isActive=&sort=&dir=
@@ -570,6 +556,20 @@ productsRouter.delete('/terms/:id', async (req, res) => {
     const _id = new ObjectId(req.params.id)
     await db.collection<CustomTermsDoc>('custom_terms').deleteOne({ _id })
     res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// GET /api/crm/products/:id (must be LAST - after /bundles, /discounts, /terms routes)
+productsRouter.get('/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const product = await db.collection<ProductDoc>('products').findOne({ _id })
+    if (!product) return res.status(404).json({ data: null, error: 'not_found' })
+    res.json({ data: product, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }
