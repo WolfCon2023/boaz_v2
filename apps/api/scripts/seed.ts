@@ -698,11 +698,11 @@ async function main() {
   }
   
   // Custom Terms - seed only if collection is empty
-  const termsCount = await db.collection('terms').countDocuments()
+  const termsCount = await db.collection('custom_terms').countDocuments()
   console.log(`Terms collection has ${termsCount} items`)
   if (termsCount === 0) {
     const now = new Date()
-    await db.collection('terms').insertMany([
+    await db.collection('custom_terms').insertMany([
       {
         name: 'Standard Terms and Conditions',
         description: 'Default terms for all quotes and invoices',

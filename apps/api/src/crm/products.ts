@@ -114,20 +114,6 @@ productsRouter.get('/', async (req, res) => {
   res.json({ data: { items }, error: null })
 })
 
-// GET /api/crm/products/:id
-productsRouter.get('/:id', async (req, res) => {
-  const db = await getDb()
-  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  try {
-    const _id = new ObjectId(req.params.id)
-    const product = await db.collection<ProductDoc>('products').findOne({ _id })
-    if (!product) return res.status(404).json({ data: null, error: 'not_found' })
-    res.json({ data: product, error: null })
-  } catch {
-    res.status(400).json({ data: null, error: 'invalid_id' })
-  }
-})
-
 // POST /api/crm/products
 productsRouter.post('/', async (req, res) => {
   const db = await getDb()
@@ -195,6 +181,20 @@ productsRouter.delete('/:id', async (req, res) => {
     const _id = new ObjectId(req.params.id)
     await db.collection<ProductDoc>('products').deleteOne({ _id })
     res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// GET /api/crm/products/:id (must be after /bundles, /discounts, /terms routes)
+productsRouter.get('/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const product = await db.collection<ProductDoc>('products').findOne({ _id })
+    if (!product) return res.status(404).json({ data: null, error: 'not_found' })
+    res.json({ data: product, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }
