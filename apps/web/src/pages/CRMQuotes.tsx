@@ -382,14 +382,24 @@ export default function CRMQuotes() {
           const fd = new FormData(e.currentTarget)
           const title = String(fd.get('title')||'')
           const accNum = fd.get('accountNumber') ? Number(fd.get('accountNumber')) : undefined
-          const subtotal = fd.get('subtotal') ? Number(fd.get('subtotal')) : 0
-          const tax = fd.get('tax') ? Number(fd.get('tax')) : 0
-          const total = subtotal + tax
-          const payload: any = { title, subtotal, tax, total }
+          
+          // Allow creating with empty items - totals will be 0
+          const payload: any = { 
+            title, 
+            subtotal: 0, 
+            tax: 0, 
+            total: 0,
+            items: []
+          }
+          
           const acc = accounts.find((a) => a.accountNumber === accNum)
           if (acc?._id) payload.accountId = acc._id; else if (accNum) payload.accountNumber = accNum
-          create.mutate(payload)
-          ;(e.currentTarget as HTMLFormElement).reset()
+          
+          create.mutate(payload, {
+            onSuccess: () => {
+              ;(e.currentTarget as HTMLFormElement).reset()
+            }
+          })
         }}>
           <input name="title" required placeholder="Quote title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="accountNumber" required className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
@@ -398,8 +408,6 @@ export default function CRMQuotes() {
               <option key={a._id} value={a.accountNumber ?? ''}>{(a.accountNumber ?? '—')} — {a.name ?? 'Account'}</option>
             ))}
           </select>
-          <input name="subtotal" type="number" step="0.01" placeholder="Subtotal" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <input name="tax" type="number" step="0.01" placeholder="Tax" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add quote</button>
         </form>
 
@@ -444,7 +452,7 @@ export default function CRMQuotes() {
         <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
           <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+            <div className="w-[min(90vw,64rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
               <div className="mb-3 text-base font-semibold">Edit quote</div>
               <form
                 className="grid gap-2 sm:grid-cols-2"
@@ -503,50 +511,229 @@ export default function CRMQuotes() {
                   <option>Sent for Signature</option>
                   <option>Signed</option>
                 </select>
-                <input name="subtotal" type="number" step="0.01" defaultValue={editing.subtotal as any} placeholder="Subtotal" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <input name="tax" type="number" step="0.01" defaultValue={editing.tax as any} placeholder="Tax" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                {(() => {
-                  // Calculate margin if we have items with product data
-                  const items = (editing as any).items || []
-                  const subtotal = editing.subtotal ?? 0
-                  
-                  // If items have cost data, calculate total margin
-                  let totalCost = 0
-                  let hasCostData = false
-                  if (Array.isArray(items) && items.length > 0) {
-                    items.forEach((item: any) => {
-                      if (item.cost != null && item.quantity != null) {
-                        totalCost += (item.cost * item.quantity)
-                        hasCostData = true
-                      }
-                    })
-                  }
-                  
-                  if (hasCostData && totalCost > 0) {
-                    const totalMargin = subtotal - totalCost
-                    const marginPercent = subtotal > 0 ? ((totalMargin / subtotal) * 100) : 0
-                    const marginColor = marginPercent >= 50 ? 'text-green-600' : marginPercent >= 30 ? 'text-green-500' : marginPercent >= 10 ? 'text-yellow-600' : 'text-red-600'
-                    
-                    return (
-                      <div className="col-span-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
-                        <div className="text-xs text-[color:var(--color-text-muted)] mb-1">Profit Margin</div>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="text-sm font-medium">Total Cost: </span>
-                            <span className="text-sm">${totalCost.toFixed(2)}</span>
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium">Margin: </span>
-                            <span className={`text-sm font-semibold ${marginColor}`}>
-                              ${totalMargin.toFixed(2)} ({marginPercent.toFixed(1)}%)
-                            </span>
-                          </div>
-                        </div>
+
+                {/* Line Items Section */}
+                <div className="col-span-full mt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Line Items
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLineItems([...lineItems, {
+                          productId: '',
+                          productName: '',
+                          productSku: '',
+                          description: '',
+                          quantity: 1,
+                          unitPrice: 0,
+                          taxRate: undefined,
+                          cost: undefined,
+                          lineTotal: 0,
+                        }])
+                      }}
+                      className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add Item
+                    </button>
+                  </div>
+
+                  {lineItems.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="text-left text-[color:var(--color-text-muted)] border-b border-[color:var(--color-border)]">
+                            <tr>
+                              <th className="px-2 py-1.5">Product</th>
+                              <th className="px-2 py-1.5">Description</th>
+                              <th className="px-2 py-1.5 w-20">Qty</th>
+                              <th className="px-2 py-1.5 w-24">Price</th>
+                              <th className="px-2 py-1.5 w-20">Tax %</th>
+                              <th className="px-2 py-1.5 w-24">Total</th>
+                              <th className="px-2 py-1.5 w-8"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lineItems.map((item, index) => {
+                              return (
+                                <tr key={index} className="border-b border-[color:var(--color-border)]">
+                                  <td className="px-2 py-1.5">
+                                    <select
+                                      value={item.productId || ''}
+                                      onChange={(e) => {
+                                        const newItems = [...lineItems]
+                                        const selectedProduct = products.find((p: Product) => p._id === e.target.value)
+                                        if (selectedProduct) {
+                                          newItems[index] = {
+                                            ...newItems[index],
+                                            productId: selectedProduct._id,
+                                            productName: selectedProduct.name,
+                                            productSku: selectedProduct.sku || '',
+                                            description: selectedProduct.description || '',
+                                            unitPrice: selectedProduct.basePrice,
+                                            taxRate: selectedProduct.taxRate,
+                                            cost: selectedProduct.cost,
+                                            lineTotal: newItems[index].quantity * selectedProduct.basePrice,
+                                          }
+                                        } else {
+                                          newItems[index] = {
+                                            ...newItems[index],
+                                            productId: '',
+                                            productName: '',
+                                            productSku: '',
+                                            unitPrice: 0,
+                                            lineTotal: 0,
+                                          }
+                                        }
+                                        setLineItems(newItems)
+                                      }}
+                                      className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs text-[color:var(--color-text)]"
+                                    >
+                                      <option value="" className="text-gray-900">(Manual Item)</option>
+                                      {products.map((p: Product) => (
+                                        <option key={p._id} value={p._id} className="text-gray-900">
+                                          {p.sku ? `${p.sku} - ` : ''}{p.name} (${p.basePrice.toFixed(2)})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <input
+                                      type="text"
+                                      value={item.description || ''}
+                                      onChange={(e) => {
+                                        const newItems = [...lineItems]
+                                        newItems[index].description = e.target.value
+                                        setLineItems(newItems)
+                                      }}
+                                      placeholder="Description"
+                                      className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <input
+                                      type="number"
+                                      min="0.01"
+                                      step="0.01"
+                                      value={item.quantity || 1}
+                                      onChange={(e) => {
+                                        const newItems = [...lineItems]
+                                        const qty = parseFloat(e.target.value) || 1
+                                        newItems[index].quantity = qty
+                                        newItems[index].lineTotal = qty * newItems[index].unitPrice
+                                        setLineItems(newItems)
+                                      }}
+                                      className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={item.unitPrice || 0}
+                                      onChange={(e) => {
+                                        const newItems = [...lineItems]
+                                        const price = parseFloat(e.target.value) || 0
+                                        newItems[index].unitPrice = price
+                                        newItems[index].lineTotal = newItems[index].quantity * price
+                                        setLineItems(newItems)
+                                      }}
+                                      className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={item.taxRate || ''}
+                                      onChange={(e) => {
+                                        const newItems = [...lineItems]
+                                        newItems[index].taxRate = e.target.value ? parseFloat(e.target.value) : undefined
+                                        setLineItems(newItems)
+                                      }}
+                                      placeholder="0"
+                                      className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-1.5 font-medium">
+                                    ${item.lineTotal.toFixed(2)}
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLineItems(lineItems.filter((_, i) => i !== index))
+                                      }}
+                                      className="rounded p-1 hover:bg-[color:var(--color-muted)] text-red-600"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </div>
-                    )
-                  }
-                  return null
-                })()}
+
+                      {/* Calculated Totals */}
+                      <div className="mt-3 space-y-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-[color:var(--color-text-muted)]">Subtotal:</span>
+                          <span className="font-medium">${calculatedTotals.subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-[color:var(--color-text-muted)]">Tax:</span>
+                          <span className="font-medium">${calculatedTotals.tax.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-[color:var(--color-border)] pt-2 text-sm font-semibold">
+                          <span>Total:</span>
+                          <span>${calculatedTotals.total.toFixed(2)}</span>
+                        </div>
+                        {calculatedTotals.hasCostData && (
+                          <div className="mt-2 border-t border-[color:var(--color-border)] pt-2 space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-[color:var(--color-text-muted)]">Total Cost:</span>
+                              <span>${calculatedTotals.totalCost.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-[color:var(--color-text-muted)]">Margin:</span>
+                              <span className={`font-semibold ${
+                                ((calculatedTotals.subtotal - calculatedTotals.totalCost) / calculatedTotals.subtotal * 100) >= 50 ? 'text-green-600' :
+                                ((calculatedTotals.subtotal - calculatedTotals.totalCost) / calculatedTotals.subtotal * 100) >= 30 ? 'text-green-500' :
+                                ((calculatedTotals.subtotal - calculatedTotals.totalCost) / calculatedTotals.subtotal * 100) >= 10 ? 'text-yellow-600' :
+                                'text-red-600'
+                              }`}>
+                                ${(calculatedTotals.subtotal - calculatedTotals.totalCost).toFixed(2)} (
+                                {calculatedTotals.subtotal > 0 
+                                  ? ((calculatedTotals.subtotal - calculatedTotals.totalCost) / calculatedTotals.subtotal * 100).toFixed(1)
+                                  : '0'
+                                }%)
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4 text-center text-sm text-[color:var(--color-text-muted)]">
+                      No line items. Click "Add Item" to add products or manual line items.
+                    </div>
+                  )}
+                </div>
+
+                {/* Manual Override (hidden if line items exist) */}
+                {lineItems.length === 0 && (
+                  <>
+                    <input name="subtotal" type="number" step="0.01" defaultValue={editing.subtotal as any} placeholder="Subtotal" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                    <input name="tax" type="number" step="0.01" defaultValue={editing.tax as any} placeholder="Tax" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                  </>
+                )}
                 <label className="col-span-full text-sm">Account
                   <select name="accountId" className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                     <option value="">(no change)</option>
