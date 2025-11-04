@@ -1356,9 +1356,67 @@ authRouter.post('/admin/app-access-requests/:id/reject', requireAuth, requirePer
     const auth = (req as any).auth as { userId: string; email: string }
     const requestId = req.params.id
     
+    // Get request details before rejecting (to get user email and app info)
+    const request = await getApplicationAccessRequestById(requestId)
+    if (!request) {
+      return res.status(404).json({ error: 'Application access request not found' })
+    }
+
+    // Check if request is still pending
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Application access request has already been processed' })
+    }
+
+    // Get app info
+    const appInfo = APPLICATION_CATALOG.find(app => app.key === request.appKey)
+    const appName = appInfo?.name || request.appKey
+
+    // Reject the request
     await rejectApplicationAccessRequest(requestId, auth.userId)
+
+    // Send email notification
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+    const supportUrl = `${baseUrl}/apps/support`
     
-    res.json({ message: 'Application access request rejected' })
+    try {
+      await sendAuthEmail({
+        to: request.userEmail,
+        subject: `Application Access Request - ${appName}`,
+        checkPreferences: true, // Respect user email preferences
+        html: `
+          <h2>Application Access Request Update</h2>
+          <p>Your request for access to <strong>${appName}</strong> has been reviewed.</p>
+          <p>Unfortunately, your request has been denied at this time. If you believe this is in error or would like to discuss your access needs, please contact your administrator or submit a support ticket.</p>
+          <p><a href="${supportUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Contact Support</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${supportUrl}</code></p>
+          <p>If you have questions about why your request was denied, please reach out to your administrator.</p>
+        `,
+        text: `
+Application Access Request Update
+
+Your request for access to ${appName} has been reviewed.
+
+Unfortunately, your request has been denied at this time. If you believe this is in error or would like to discuss your access needs, please contact your administrator or submit a support ticket.
+
+Contact Support: ${supportUrl}
+
+If you have questions about why your request was denied, please reach out to your administrator.
+        `,
+      })
+      
+      res.json({
+        message: 'Application access request rejected and email sent',
+        emailSent: true,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send access denied email:', emailErr)
+      // Don't fail the rejection if email fails
+      res.json({
+        message: 'Application access request rejected, but email failed to send',
+        emailSent: false,
+      })
+    }
   } catch (err: any) {
     console.error('Reject application access request error:', err)
     if (err.message === 'Application access request not found or already processed') {

@@ -367,12 +367,17 @@ export default function AdminPortal() {
       const res = await http.post(`/api/auth/admin/app-access-requests/${requestId}/reject`)
       return res.data
     },
-    onSuccess: () => {
-      setMessage('Application access request rejected')
+    onSuccess: (data) => {
+      if (data.emailSent) {
+        setMessage('Application access request rejected. Email notification sent.')
+      } else {
+        setMessage('Application access request rejected, but email failed to send.')
+      }
       setError('')
       queryClient.invalidateQueries({ queryKey: ['admin', 'app-access-requests'] })
       setTimeout(() => {
         setMessage('')
+        setError('')
       }, 5000)
     },
     onError: (err: any) => {
