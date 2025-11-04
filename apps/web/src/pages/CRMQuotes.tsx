@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
-import { Plus, X, Package } from 'lucide-react'
+import { Plus, X, Package, Send } from 'lucide-react'
 
 type Quote = {
   _id: string
@@ -178,6 +178,21 @@ export default function CRMQuotes() {
       return res.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['quotes'] }),
+  })
+
+  const requestApproval = useMutation({
+    mutationFn: async (quoteId: string) => {
+      const res = await http.post(`/api/crm/quotes/${quoteId}/request-approval`)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['quotes'] })
+      alert('Approval request sent successfully!')
+    },
+    onError: (err: any) => {
+      const errorMsg = err.response?.data?.error || 'Failed to send approval request'
+      alert(errorMsg)
+    },
   })
 
   const [page, setPage] = React.useState(0)
@@ -991,7 +1006,29 @@ export default function CRMQuotes() {
                     ))}
                   </select>
                 </label>
-                <input name="approver" defaultValue={editing.approver ?? ''} placeholder="Approver" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="flex gap-2">
+                  <input name="approver" defaultValue={editing.approver ?? ''} placeholder="Approver email" className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                  {editing.approver && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!editing.approver) {
+                          alert('Please enter an approver email first')
+                          return
+                        }
+                        if (confirm(`Send approval request to ${editing.approver}?`)) {
+                          requestApproval.mutate(editing._id)
+                        }
+                      }}
+                      disabled={requestApproval.isPending}
+                      className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                      title="Send approval request to manager"
+                    >
+                      <Send className="h-3 w-3" />
+                      Request Approval
+                    </button>
+                  )}
+                </div>
                 <input name="signerName" defaultValue={editing.signerName ?? ''} placeholder="Signer name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="signerEmail" defaultValue={editing.signerEmail ?? ''} placeholder="Signer email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
