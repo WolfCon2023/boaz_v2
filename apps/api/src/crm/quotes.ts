@@ -478,17 +478,27 @@ quotesRouter.post('/:id/approve', requireAuth, async (req, res) => {
       }
     )
     
-    // Update quote
-    await db.collection('quotes').updateOne(
+    // Update quote - ensure status is set to Approved and approver info is saved
+    const quoteUpdate: any = {
+      status: 'Approved',
+      approvedAt: now,
+      updatedAt: now,
+    }
+    
+    // Ensure approver field is set if not already set
+    const currentQuote = await db.collection('quotes').findOne({ _id: quoteId })
+    if (currentQuote && !currentQuote.approver) {
+      quoteUpdate.approver = userData.email
+    }
+    
+    const updateResult = await db.collection('quotes').updateOne(
       { _id: quoteId },
-      {
-        $set: {
-          status: 'Approved',
-          approvedAt: now,
-          updatedAt: now,
-        }
-      }
+      { $set: quoteUpdate }
     )
+    
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).json({ data: null, error: 'quote_not_found' })
+    }
     
     // Send email to requester
     try {
