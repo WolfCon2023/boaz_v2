@@ -94,6 +94,41 @@ export default function CRMAccounts() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
   })
 
+  const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)
+  const [inlineName, setInlineName] = React.useState<string>('')
+  const [inlineCompanyName, setInlineCompanyName] = React.useState<string>('')
+  const [inlinePrimaryContactName, setInlinePrimaryContactName] = React.useState<string>('')
+  const [inlinePrimaryContactEmail, setInlinePrimaryContactEmail] = React.useState<string>('')
+  const [inlinePrimaryContactPhone, setInlinePrimaryContactPhone] = React.useState<string>('')
+
+  function startInlineEdit(a: Account) {
+    setInlineEditId(a._id)
+    setInlineName(a.name ?? '')
+    setInlineCompanyName(a.companyName ?? '')
+    setInlinePrimaryContactName(a.primaryContactName ?? '')
+    setInlinePrimaryContactEmail(a.primaryContactEmail ?? '')
+    setInlinePrimaryContactPhone(a.primaryContactPhone ?? '')
+  }
+  async function saveInlineEdit() {
+    if (!inlineEditId) return
+    const payload: any = { _id: inlineEditId }
+    payload.name = inlineName || undefined
+    payload.companyName = inlineCompanyName || undefined
+    payload.primaryContactName = inlinePrimaryContactName || undefined
+    payload.primaryContactEmail = inlinePrimaryContactEmail || undefined
+    payload.primaryContactPhone = inlinePrimaryContactPhone || undefined
+    await update.mutateAsync(payload)
+    cancelInlineEdit()
+  }
+  function cancelInlineEdit() {
+    setInlineEditId(null)
+    setInlineName('')
+    setInlineCompanyName('')
+    setInlinePrimaryContactName('')
+    setInlinePrimaryContactEmail('')
+    setInlinePrimaryContactPhone('')
+  }
+
   // Initialize from URL and localStorage once
   React.useEffect(() => {
     if (initializedFromUrl.current) return
@@ -337,15 +372,46 @@ export default function CRMAccounts() {
                   title="Drag to reorder"
                 >{col.label}</th>
               ))}
+              <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.map((a) => (
-              <tr key={a._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(a)}>
+              <tr key={a._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
                 {cols.filter((c) => c.visible).map((col) => (
-                  <td key={col.key} className="px-4 py-2">{getColValue(a, col.key)}</td>
+                  <td key={col.key} className="px-4 py-2">
+                    {inlineEditId === a._id ? (
+                      col.key === 'name' ? (
+                        <input value={inlineName} onChange={(e) => setInlineName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'companyName' ? (
+                        <input value={inlineCompanyName} onChange={(e) => setInlineCompanyName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'primaryContactName' ? (
+                        <input value={inlinePrimaryContactName} onChange={(e) => setInlinePrimaryContactName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'primaryContactEmail' ? (
+                        <input type="email" value={inlinePrimaryContactEmail} onChange={(e) => setInlinePrimaryContactEmail(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'primaryContactPhone' ? (
+                        <input value={inlinePrimaryContactPhone} onChange={(e) => setInlinePrimaryContactPhone(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : (
+                        getColValue(a, col.key)
+                      )
+                    ) : (
+                      getColValue(a, col.key)
+                    )}
+                  </td>
                 ))}
-                
+                <td className="px-4 py-2 whitespace-nowrap">
+                  {inlineEditId === a._id ? (
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(a)}>Edit</button>
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(a)}>Open</button>
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

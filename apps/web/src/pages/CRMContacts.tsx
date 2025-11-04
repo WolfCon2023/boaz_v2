@@ -42,6 +42,12 @@ export default function CRMContacts() {
   const [draggedCol, setDraggedCol] = React.useState<string | null>(null)
   const initializedFromUrl = React.useRef(false)
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)
+  const [inlineName, setInlineName] = React.useState<string>('')
+  const [inlineEmail, setInlineEmail] = React.useState<string>('')
+  const [inlineCompany, setInlineCompany] = React.useState<string>('')
+  const [inlineMobilePhone, setInlineMobilePhone] = React.useState<string>('')
+  const [inlineOfficePhone, setInlineOfficePhone] = React.useState<string>('')
   const create = useMutation({
     mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }) => {
       const res = await http.post('/api/crm/contacts', payload)
@@ -72,6 +78,34 @@ export default function CRMContacts() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
   })
+
+  function startInlineEdit(c: Contact) {
+    setInlineEditId(c._id)
+    setInlineName(c.name ?? '')
+    setInlineEmail(c.email ?? '')
+    setInlineCompany(c.company ?? '')
+    setInlineMobilePhone(c.mobilePhone ?? '')
+    setInlineOfficePhone(c.officePhone ?? '')
+  }
+  async function saveInlineEdit() {
+    if (!inlineEditId) return
+    const payload: any = { _id: inlineEditId }
+    payload.name = inlineName || undefined
+    payload.email = inlineEmail || undefined
+    payload.company = inlineCompany || undefined
+    payload.mobilePhone = inlineMobilePhone || undefined
+    payload.officePhone = inlineOfficePhone || undefined
+    await update.mutateAsync(payload)
+    cancelInlineEdit()
+  }
+  function cancelInlineEdit() {
+    setInlineEditId(null)
+    setInlineName('')
+    setInlineEmail('')
+    setInlineCompany('')
+    setInlineMobilePhone('')
+    setInlineOfficePhone('')
+  }
 
   const [editing, setEditing] = React.useState<Contact | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
@@ -401,17 +435,49 @@ export default function CRMContacts() {
                   title="Drag to reorder"
                 >{col.label}</th>
               ))}
+              <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {visibleItems.map((c) => (
-              <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(c)}>
+              <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
                 <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" checked={selectedIds.has(c._id)} onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) next.add(c._id); else next.delete(c._id); setSelectedIds(next) }} />
                 </td>
                 {cols.filter((c) => c.visible).map((col) => (
-                  <td key={col.key} className="px-4 py-2">{getColValue(c, col.key)}</td>
+                  <td key={col.key} className="px-4 py-2">
+                    {inlineEditId === c._id ? (
+                      col.key === 'name' ? (
+                        <input value={inlineName} onChange={(e) => setInlineName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'email' ? (
+                        <input type="email" value={inlineEmail} onChange={(e) => setInlineEmail(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'company' ? (
+                        <input value={inlineCompany} onChange={(e) => setInlineCompany(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'mobilePhone' ? (
+                        <input value={inlineMobilePhone} onChange={(e) => setInlineMobilePhone(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : col.key === 'officePhone' ? (
+                        <input value={inlineOfficePhone} onChange={(e) => setInlineOfficePhone(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                      ) : (
+                        getColValue(c, col.key)
+                      )
+                    ) : (
+                      getColValue(c, col.key)
+                    )}
+                  </td>
                 ))}
+                <td className="px-4 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  {inlineEditId === c._id ? (
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(c)}>Edit</button>
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(c)}>Open</button>
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
