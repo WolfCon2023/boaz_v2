@@ -92,6 +92,7 @@ export default function CRMProducts() {
   const [inlineCost, setInlineCost] = React.useState<string>('')
   const [inlineCategory, setInlineCategory] = React.useState<string>('')
   const [inlineIsActive, setInlineIsActive] = React.useState<boolean>(true)
+  const [showHistory, setShowHistory] = React.useState(false)
 
   // Products query
   const { data: productsData } = useQuery({
@@ -152,9 +153,39 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] })
+      qc.invalidateQueries({ queryKey: ['product-history'] })
       setEditing(null)
     },
   })
+  
+  // History query (only for products)
+  const historyQ = useQuery({
+    queryKey: ['product-history', editing?._id, showHistory, activeTab],
+    enabled: Boolean(editing?._id && showHistory && activeTab === 'products'),
+    queryFn: async () => {
+      const res = await http.get(`/api/crm/products/${editing?._id}/history`)
+      return res.data as {
+        data: {
+          history: Array<{
+            _id: string
+            eventType: string
+            description: string
+            userName?: string
+            userEmail?: string
+            oldValue?: any
+            newValue?: any
+            createdAt: string
+          }>
+          product: any
+        }
+      }
+    },
+  })
+  
+  // Reset history visibility when editing changes
+  React.useEffect(() => {
+    setShowHistory(false)
+  }, [editing?._id])
 
   function startInlineEdit(p: Product) {
     setInlineEditId(p._id)
@@ -198,6 +229,7 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] })
+      qc.invalidateQueries({ queryKey: ['product-history'] })
     },
   })
 
@@ -1491,6 +1523,11 @@ export default function CRMProducts() {
                     </div>
                   </div>
                   <div className="flex justify-end gap-2 pt-4 border-t border-[color:var(--color-border)]">
+                    {activeTab === 'products' && editing._id && (
+                      <button type="button" onClick={() => setShowHistory((v) => !v)} className="mr-auto rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]">
+                        {showHistory ? 'Hide history' : 'View history'}
+                      </button>
+                    )}
                     <button type="button" onClick={() => setEditing(null)} className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]">
                       Cancel
                     </button>
@@ -1498,6 +1535,71 @@ export default function CRMProducts() {
                       Save
                     </button>
                   </div>
+                  {activeTab === 'products' && showHistory && historyQ.data && (
+                    <div className="mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
+                      <h3 className="mb-3 text-sm font-semibold">Product History</h3>
+                      {historyQ.data.data.history && historyQ.data.data.history.length > 0 ? (
+                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                          {historyQ.data.data.history.map((entry) => {
+                            const getEventIcon = (type: string) => {
+                              switch (type) {
+                                case 'created': return '✨'
+                                case 'field_changed': return '📋'
+                                case 'updated': return '📝'
+                                default: return '📌'
+                              }
+                            }
+                            const getEventColor = (type: string) => {
+                              switch (type) {
+                                case 'created': return 'text-blue-600'
+                                case 'field_changed': return 'text-gray-600'
+                                case 'updated': return 'text-gray-600'
+                                default: return 'text-gray-600'
+                              }
+                            }
+                            return (
+                              <div key={entry._id} className="flex gap-3 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3 text-xs">
+                                <div className="flex-shrink-0 text-lg">{getEventIcon(entry.eventType)}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className={`font-medium ${getEventColor(entry.eventType)}`}>
+                                    {entry.description}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[color:var(--color-text-muted)]">
+                                    {entry.userName && (
+                                      <span>by {entry.userName}</span>
+                                    )}
+                                    {entry.userEmail && !entry.userName && (
+                                      <span>by {entry.userEmail}</span>
+                                    )}
+                                    <span>•</span>
+                                    <span>{formatDateTime(entry.createdAt)}</span>
+                                  </div>
+                                  {(entry.oldValue !== undefined || entry.newValue !== undefined) && (
+                                    <div className="mt-2 space-y-1 pl-2 border-l-2 border-[color:var(--color-border)]">
+                                      {entry.oldValue !== undefined && (
+                                        <div className="text-[color:var(--color-text-muted)]">
+                                          <span className="font-medium">From:</span> {typeof entry.oldValue === 'object' ? JSON.stringify(entry.oldValue) : String(entry.oldValue)}
+                                        </div>
+                                      )}
+                                      {entry.newValue !== undefined && (
+                                        <div className="text-[color:var(--color-text-muted)]">
+                                          <span className="font-medium">To:</span> {typeof entry.newValue === 'object' ? JSON.stringify(entry.newValue) : String(entry.newValue)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-[color:var(--color-text-muted)]">
+                          No history available for this product.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </form>
                 )
               })()}

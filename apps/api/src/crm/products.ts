@@ -3,6 +3,54 @@ import { ObjectId, Sort, SortDirection } from 'mongodb'
 import { getDb } from '../db.js'
 
 export type ProductType = 'product' | 'service' | 'bundle'
+
+// Types for product history
+type ProductHistoryEntry = {
+  _id: ObjectId
+  productId: ObjectId
+  eventType: 'created' | 'updated' | 'field_changed'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add history entry
+async function addProductHistory(
+  db: any,
+  productId: ObjectId,
+  eventType: ProductHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('product_history').insertOne({
+      _id: new ObjectId(),
+      productId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as ProductHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add product history:', err)
+    // Don't fail the main operation if history fails
+  }
+}
 export type DiscountType = 'percentage' | 'fixed' | 'tiered'
 export type DiscountScope = 'global' | 'product' | 'bundle' | 'account'
 
@@ -141,6 +189,29 @@ productsRouter.post('/', async (req, res) => {
   }
 
   const result = await db.collection<ProductDoc>('products').insertOne(doc as ProductDoc)
+  
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  if (auth) {
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    await addProductHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Product created: ${name}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email
+    )
+  } else {
+    await addProductHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Product created: ${name}`
+    )
+  }
+  
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
@@ -150,24 +221,115 @@ productsRouter.put('/:id', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
     const _id = new ObjectId(req.params.id)
+    
+    // Get current product for comparison
+    const currentProduct = await db.collection<ProductDoc>('products').findOne({ _id })
+    if (!currentProduct) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+    
     const raw = req.body ?? {}
     const update: Partial<ProductDoc> = { updatedAt: new Date() }
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    let user: any = null
+    if (auth) {
+      user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    }
     
-    if (raw.name !== undefined) update.name = String(raw.name).trim()
-    if (raw.sku !== undefined) update.sku = String(raw.sku).trim() || undefined
-    if (raw.description !== undefined) update.description = String(raw.description).trim() || undefined
-    if (raw.type !== undefined) update.type = raw.type as ProductType
-    if (raw.basePrice !== undefined) update.basePrice = Number(raw.basePrice) || 0
-    if (raw.currency !== undefined) update.currency = String(raw.currency).trim()
-    if (raw.cost !== undefined) update.cost = raw.cost != null ? Number(raw.cost) : undefined
-    if (raw.taxRate !== undefined) update.taxRate = raw.taxRate != null ? Number(raw.taxRate) : undefined
-    if (raw.isActive !== undefined) update.isActive = Boolean(raw.isActive)
-    if (raw.category !== undefined) update.category = String(raw.category).trim() || undefined
+    // Track field changes
+    const fieldsToTrack = ['name', 'sku', 'description', 'type', 'basePrice', 'currency', 'cost', 'taxRate', 'isActive', 'category']
+    let hasChanges = false
+    
+    for (const field of fieldsToTrack) {
+      if (raw[field] !== undefined) {
+        const newValue = field === 'basePrice' || field === 'cost' || field === 'taxRate' ? (raw[field] != null ? Number(raw[field]) : undefined) :
+                        field === 'isActive' ? Boolean(raw[field]) :
+                        field === 'type' ? raw[field] :
+                        String(raw[field]).trim() || undefined
+        const oldValue = (currentProduct as any)[field]
+        
+        if (newValue !== oldValue) {
+          hasChanges = true
+          const fieldName = field === 'basePrice' ? 'Base price' : field === 'isActive' ? 'Active status' : field.charAt(0).toUpperCase() + field.slice(1)
+          await addProductHistory(
+            db,
+            _id,
+            'field_changed',
+            `${fieldName} changed from "${oldValue ?? 'empty'}" to "${newValue ?? 'empty'}"`,
+            auth?.userId,
+            user?.name,
+            auth?.email,
+            oldValue,
+            newValue
+          )
+        }
+        
+        if (field === 'name') update.name = String(raw.name).trim()
+        else if (field === 'sku') update.sku = String(raw.sku).trim() || undefined
+        else if (field === 'description') update.description = String(raw.description).trim() || undefined
+        else if (field === 'type') update.type = raw.type as ProductType
+        else if (field === 'basePrice') update.basePrice = Number(raw.basePrice) || 0
+        else if (field === 'currency') update.currency = String(raw.currency).trim()
+        else if (field === 'cost') update.cost = raw.cost != null ? Number(raw.cost) : undefined
+        else if (field === 'taxRate') update.taxRate = raw.taxRate != null ? Number(raw.taxRate) : undefined
+        else if (field === 'isActive') update.isActive = Boolean(raw.isActive)
+        else if (field === 'category') update.category = String(raw.category).trim() || undefined
+      }
+    }
+    
     if (raw.tags !== undefined) update.tags = Array.isArray(raw.tags) ? raw.tags.map(String).filter(Boolean) : undefined
     if (raw.metadata !== undefined) update.metadata = raw.metadata && typeof raw.metadata === 'object' ? raw.metadata : undefined
 
     await db.collection<ProductDoc>('products').updateOne({ _id }, { $set: update })
+    
+    // Add general update entry if no specific changes were tracked
+    if (!hasChanges) {
+      await addProductHistory(
+        db,
+        _id,
+        'updated',
+        'Product updated',
+        auth?.userId,
+        user?.name,
+        auth?.email
+      )
+    }
+    
     res.json({ data: { ok: true }, error: null })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// GET /api/crm/products/:id/history
+productsRouter.get('/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const p = await db.collection<ProductDoc>('products').findOne({ _id })
+    if (!p) return res.status(404).json({ data: null, error: 'not_found' })
+    
+    // Get all history entries for this product, sorted by date (newest first)
+    const historyEntries = await db.collection('product_history')
+      .find({ productId: _id })
+      .sort({ createdAt: -1 })
+      .toArray() as ProductHistoryEntry[]
+    
+    res.json({ 
+      data: { 
+        history: historyEntries,
+        product: { 
+          name: p.name, 
+          sku: p.sku, 
+          basePrice: p.basePrice, 
+          cost: p.cost,
+          createdAt: p.createdAt || _id.getTimestamp(),
+          updatedAt: p.updatedAt 
+        } 
+      }, 
+      error: null 
+    })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }

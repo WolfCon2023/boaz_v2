@@ -4,7 +4,7 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
-import { formatDate } from '@/lib/dateFormat'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 
 type Deal = { _id: string; dealNumber?: number; title?: string; amount?: number; stage?: string; closeDate?: string; accountId?: string; accountNumber?: number; marketingCampaignId?: string }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
@@ -184,8 +184,40 @@ export default function CRMDeals() {
       const res = await http.put(`/api/crm/deals/${_id}`, rest)
       return res.data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['deals'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      qc.invalidateQueries({ queryKey: ['deal-history'] })
+    },
   })
+  
+  // History query
+  const historyQ = useQuery({
+    queryKey: ['deal-history', editing?._id, showHistory],
+    enabled: Boolean(editing?._id && showHistory),
+    queryFn: async () => {
+      const res = await http.get(`/api/crm/deals/${editing?._id}/history`)
+      return res.data as {
+        data: {
+          history: Array<{
+            _id: string
+            eventType: string
+            description: string
+            userName?: string
+            userEmail?: string
+            oldValue?: any
+            newValue?: any
+            createdAt: string
+          }>
+          deal: any
+        }
+      }
+    },
+  })
+  
+  // Reset history visibility when editing changes
+  React.useEffect(() => {
+    setShowHistory(false)
+  }, [editing?._id])
   async function applyBulkStage() {
     if (!bulkStage || selectedIds.size === 0) return
     const ids = Array.from(selectedIds)
@@ -239,6 +271,7 @@ export default function CRMDeals() {
 
   const [editing, setEditing] = React.useState<Deal | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
+  const [showHistory, setShowHistory] = React.useState(false)
 
   async function saveCurrentView() {
     const viewConfig = { q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, cols, pageSize }
@@ -640,10 +673,80 @@ export default function CRMDeals() {
                   </select>
                 </label>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
-                  <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) http.delete(`/api/crm/deals/${editing._id}`).then(() => { qc.invalidateQueries({ queryKey: ['deals'] }); setEditing(null) }) }}>Delete</button>
+                  <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) http.delete(`/api/crm/deals/${editing._id}`).then(() => { qc.invalidateQueries({ queryKey: ['deals'] }); qc.invalidateQueries({ queryKey: ['deal-history'] }); setEditing(null) }) }}>Delete</button>
+                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
                 </div>
+                {showHistory && historyQ.data && (
+                  <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
+                    <h3 className="mb-3 text-sm font-semibold">Deal History</h3>
+                    {historyQ.data.data.history && historyQ.data.data.history.length > 0 ? (
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {historyQ.data.data.history.map((entry) => {
+                          const getEventIcon = (type: string) => {
+                            switch (type) {
+                              case 'created': return '✨'
+                              case 'stage_changed': return '🔄'
+                              case 'amount_changed': return '💰'
+                              case 'field_changed': return '📋'
+                              case 'updated': return '📝'
+                              default: return '📌'
+                            }
+                          }
+                          const getEventColor = (type: string) => {
+                            switch (type) {
+                              case 'created': return 'text-blue-600'
+                              case 'stage_changed': return 'text-purple-600'
+                              case 'amount_changed': return 'text-green-600'
+                              case 'field_changed': return 'text-gray-600'
+                              case 'updated': return 'text-gray-600'
+                              default: return 'text-gray-600'
+                            }
+                          }
+                          return (
+                            <div key={entry._id} className="flex gap-3 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3 text-xs">
+                              <div className="flex-shrink-0 text-lg">{getEventIcon(entry.eventType)}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className={`font-medium ${getEventColor(entry.eventType)}`}>
+                                  {entry.description}
+                                </div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[color:var(--color-text-muted)]">
+                                  {entry.userName && (
+                                    <span>by {entry.userName}</span>
+                                  )}
+                                  {entry.userEmail && !entry.userName && (
+                                    <span>by {entry.userEmail}</span>
+                                  )}
+                                  <span>•</span>
+                                  <span>{formatDateTime(entry.createdAt)}</span>
+                                </div>
+                                {(entry.oldValue !== undefined || entry.newValue !== undefined) && (
+                                  <div className="mt-2 space-y-1 pl-2 border-l-2 border-[color:var(--color-border)]">
+                                    {entry.oldValue !== undefined && (
+                                      <div className="text-[color:var(--color-text-muted)]">
+                                        <span className="font-medium">From:</span> {typeof entry.oldValue === 'object' ? JSON.stringify(entry.oldValue) : String(entry.oldValue)}
+                                      </div>
+                                    )}
+                                    {entry.newValue !== undefined && (
+                                      <div className="text-[color:var(--color-text-muted)]">
+                                        <span className="font-medium">To:</span> {typeof entry.newValue === 'object' ? JSON.stringify(entry.newValue) : String(entry.newValue)}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-[color:var(--color-text-muted)]">
+                        No history available for this deal.
+                      </div>
+                    )}
+                  </div>
+                )}
               </form>
             </div>
           </div>

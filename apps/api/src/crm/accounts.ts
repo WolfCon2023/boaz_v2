@@ -1,8 +1,57 @@
 import { Router } from 'express'
 import { getDb } from '../db.js'
 import { z } from 'zod'
+import { ObjectId } from 'mongodb'
 
 export const accountsRouter = Router()
+
+// Types for account history
+type AccountHistoryEntry = {
+  _id: ObjectId
+  accountId: ObjectId
+  eventType: 'created' | 'updated' | 'field_changed'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add history entry
+async function addAccountHistory(
+  db: any,
+  accountId: ObjectId,
+  eventType: AccountHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('account_history').insertOne({
+      _id: new ObjectId(),
+      accountId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as AccountHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add account history:', err)
+    // Don't fail the main operation if history fails
+  }
+}
 
 accountsRouter.get('/', async (req, res) => {
   const db = await getDb()
@@ -83,6 +132,29 @@ accountsRouter.post('/', async (req, res) => {
   }
   const doc = { ...parsed.data, accountNumber }
   const result = await db.collection('accounts').insertOne(doc)
+  
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  if (auth) {
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    await addAccountHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email
+    )
+  } else {
+    await addAccountHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`
+    )
+  }
+  
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
@@ -100,9 +172,58 @@ accountsRouter.put('/:id', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
-    const { ObjectId } = await import('mongodb')
     const _id = new ObjectId(req.params.id)
-    await db.collection('accounts').updateOne({ _id }, { $set: parsed.data })
+    
+    // Get current account for comparison
+    const currentAccount = await db.collection('accounts').findOne({ _id })
+    if (!currentAccount) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+    
+    const update: any = parsed.data
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    let user: any = null
+    if (auth) {
+      user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    }
+    
+    // Track field changes
+    const fieldsToTrack = ['name', 'companyName', 'primaryContactName', 'primaryContactEmail', 'primaryContactPhone']
+    let hasChanges = false
+    
+    for (const field of fieldsToTrack) {
+      if (update[field] !== undefined && update[field] !== (currentAccount as any)[field]) {
+        hasChanges = true
+        const fieldName = field === 'companyName' ? 'Company name' : field === 'primaryContactName' ? 'Primary contact name' : field === 'primaryContactEmail' ? 'Primary contact email' : field === 'primaryContactPhone' ? 'Primary contact phone' : 'Name'
+        await addAccountHistory(
+          db,
+          _id,
+          'field_changed',
+          `${fieldName} changed from "${(currentAccount as any)[field] ?? 'empty'}" to "${update[field] ?? 'empty'}"`,
+          auth?.userId,
+          user?.name,
+          auth?.email,
+          (currentAccount as any)[field],
+          update[field]
+        )
+      }
+    }
+    
+    await db.collection('accounts').updateOne({ _id }, { $set: update })
+    
+    // Add general update entry if no specific changes were tracked
+    if (!hasChanges) {
+      await addAccountHistory(
+        db,
+        _id,
+        'updated',
+        'Account updated',
+        auth?.userId,
+        user?.name,
+        auth?.email
+      )
+    }
+    
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
@@ -114,16 +235,40 @@ accountsRouter.get('/:id/history', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
-    const { ObjectId } = await import('mongodb')
     const _id = new ObjectId(req.params.id)
     const account = await db.collection('accounts').findOne({ _id })
     if (!account) return res.status(404).json({ data: null, error: 'not_found' })
     const createdAt = _id.getTimestamp()
+    
+    // Get all history entries for this account, sorted by date (newest first)
+    const historyEntries = await db.collection('account_history')
+      .find({ accountId: _id })
+      .sort({ createdAt: -1 })
+      .toArray() as AccountHistoryEntry[]
+    
+    // Related records (deals, quotes, invoices, activities)
     const deals = await db.collection('deals').find({ accountId: _id }).project({ title: 1, amount: 1, stage: 1, dealNumber: 1, closeDate: 1 }).sort({ _id: -1 }).limit(200).toArray()
     const quotes = await db.collection('quotes').find({ accountId: _id }).project({ title: 1, status: 1, quoteNumber: 1, total: 1, updatedAt: 1, createdAt: 1 }).sort({ updatedAt: -1 }).limit(200).toArray()
     const invoices = await db.collection('invoices').find({ accountId: _id }).project({ title: 1, invoiceNumber: 1, total: 1, status: 1, issuedAt: 1, dueDate: 1, updatedAt: 1 }).sort({ updatedAt: -1 }).limit(200).toArray()
     const activities = await db.collection('activities').find({ accountId: _id }).project({ type: 1, subject: 1, at: 1 }).sort({ at: -1 }).limit(200).toArray()
-    res.json({ data: { createdAt, deals, quotes, invoices, activities }, error: null })
+    
+    res.json({ 
+      data: { 
+        history: historyEntries,
+        createdAt, 
+        deals, 
+        quotes, 
+        invoices, 
+        activities,
+        account: {
+          name: (account as any).name,
+          companyName: (account as any).companyName,
+          accountNumber: (account as any).accountNumber,
+          createdAt,
+        }
+      }, 
+      error: null 
+    })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }
