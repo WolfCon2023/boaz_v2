@@ -933,7 +933,7 @@ export default function CRMProducts() {
                             }}
                           />
                           <Bar dataKey="margin" fill="var(--color-primary-600)" radius={[8, 8, 0, 0]}>
-                            {categoryChartData.map((entry, index) => (
+                            {categoryChartData.map((_entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Bar>
@@ -961,7 +961,7 @@ export default function CRMProducts() {
                               fill="#8884d8"
                               dataKey="value"
                             >
-                              {pieChartData.map((entry, index) => (
+                              {pieChartData.map((_entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
                             </Pie>
@@ -972,7 +972,7 @@ export default function CRMProducts() {
                                 borderRadius: '8px',
                                 padding: '8px'
                               }}
-                              formatter={(value: number, name: string, props: any) => {
+                              formatter={(value: number, _name: string, props: any) => {
                                 const entry = props.payload
                                 return [
                                   `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${((value / pieChartData.reduce((sum, d) => sum + d.value, 0)) * 100).toFixed(1)}%)`,
@@ -1116,7 +1116,7 @@ export default function CRMProducts() {
                               borderRadius: '8px',
                               padding: '8px'
                             }}
-                            formatter={(value: number, name: string, props: any) => {
+                            formatter={(value: number, name: string, _props: any) => {
                               if (name === 'margin') return [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Margin']
                               if (name === 'marginPercent') return [`${value.toFixed(1)}%`, 'Margin %']
                               if (name === 'revenue') return [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Price']
@@ -1150,7 +1150,7 @@ export default function CRMProducts() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[color:var(--color-border)]">
-                            {topProductsChartData.map((product, index) => {
+                            {topProductsChartData.map((product, _index) => {
                               const marginColor = product.marginPercent >= 50 ? 'text-green-600 dark:text-green-400' : 
                                                   product.marginPercent >= 30 ? 'text-green-500 dark:text-green-400' : 
                                                   product.marginPercent >= 10 ? 'text-yellow-600 dark:text-yellow-400' : 
