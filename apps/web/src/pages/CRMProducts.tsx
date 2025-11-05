@@ -462,6 +462,40 @@ export default function CRMProducts() {
             />
             <button
               type="button"
+              onClick={() => {
+                const headers = ['SKU', 'Name', 'Type', 'Price', 'Cost', 'Margin', 'Margin %', 'Category', 'Status', 'Updated']
+                const rows = products.map((product) => {
+                  const cost = product.cost ?? 0
+                  const margin = product.basePrice - cost
+                  const marginPercent = product.basePrice > 0 ? ((margin / product.basePrice) * 100) : 0
+                  return [
+                    product.sku || '',
+                    product.name || '',
+                    product.type || '',
+                    product.basePrice?.toFixed(2) || '0.00',
+                    cost > 0 ? cost.toFixed(2) : '',
+                    cost > 0 ? margin.toFixed(2) : '',
+                    cost > 0 ? `${marginPercent.toFixed(1)}%` : '',
+                    product.category || '',
+                    product.isActive ? 'Active' : 'Inactive',
+                    product.updatedAt ? new Date(product.updatedAt).toISOString() : ''
+                  ]
+                })
+                const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"' + String(x).replaceAll('"', '""') + '"').join(','))].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'products.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            >
+              Export CSV
+            </button>
+            <button
+              type="button"
               onClick={() => setEditing({} as Product)}
               className="ml-auto rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
             >
@@ -636,6 +670,31 @@ export default function CRMProducts() {
             />
             <button
               type="button"
+              onClick={() => {
+                const headers = ['SKU', 'Name', 'Items', 'Bundle Price', 'Status', 'Updated']
+                const rows = bundles.map((bundle) => [
+                  bundle.sku || '',
+                  bundle.name || '',
+                  bundle.items?.length || 0,
+                  bundle.bundlePrice?.toFixed(2) || '0.00',
+                  bundle.isActive ? 'Active' : 'Inactive',
+                  bundle.updatedAt ? new Date(bundle.updatedAt).toISOString() : ''
+                ])
+                const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"' + String(x).replaceAll('"', '""') + '"').join(','))].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'bundles.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            >
+              Export CSV
+            </button>
+            <button
+              type="button"
               onClick={() => setEditing({} as Bundle)}
               className="ml-auto rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
             >
@@ -729,6 +788,32 @@ export default function CRMProducts() {
               placeholder="Search discounts..."
               className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
             />
+            <button
+              type="button"
+              onClick={() => {
+                const headers = ['Code', 'Name', 'Type', 'Value', 'Scope', 'Status', 'Updated']
+                const rows = discounts.map((discount) => [
+                  discount.code || '',
+                  discount.name || '',
+                  discount.type || '',
+                  discount.type === 'percentage' ? `${discount.value}%` : `$${discount.value?.toFixed(2) || '0.00'}`,
+                  discount.scope || '',
+                  discount.isActive ? 'Active' : 'Inactive',
+                  discount.updatedAt ? new Date(discount.updatedAt).toISOString() : ''
+                ])
+                const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"' + String(x).replaceAll('"', '""') + '"').join(','))].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'discounts.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            >
+              Export CSV
+            </button>
             <button
               type="button"
               onClick={() => setEditing({} as Discount)}
@@ -1469,6 +1554,29 @@ export default function CRMProducts() {
               placeholder="Search terms..."
               className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
             />
+            <button
+              type="button"
+              onClick={() => {
+                const headers = ['Name', 'Default', 'Status', 'Updated']
+                const rows = terms.map((term) => [
+                  term.name || '',
+                  term.isDefault ? 'Yes' : 'No',
+                  term.isActive ? 'Active' : 'Inactive',
+                  term.updatedAt ? new Date(term.updatedAt).toISOString() : ''
+                ])
+                const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"' + String(x).replaceAll('"', '""') + '"').join(','))].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'custom-terms.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            >
+              Export CSV
+            </button>
             <button
               type="button"
               onClick={() => setEditing({} as CustomTerms)}
