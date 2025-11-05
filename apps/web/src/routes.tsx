@@ -34,6 +34,7 @@ import Helpdesk from '@/pages/Helpdesk'
 import Support from '@/pages/Support'
 import Marketing from '@/pages/Marketing'
 import RequestStatus from '@/pages/RequestStatus'
+import TermsReview from '@/pages/TermsReview'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
 
 export const router = createBrowserRouter([
@@ -93,6 +94,10 @@ export const router = createBrowserRouter([
   {
     path: '/enroll',
     element: <PublicShell><Enroll /></PublicShell>,
+  },
+  {
+    path: '/terms/review/:token',
+    element: <PublicShell><TermsReview /></PublicShell>,
   },
   {
     path: '/change-password',

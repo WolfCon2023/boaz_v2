@@ -93,6 +93,12 @@ export default function CRMProducts() {
   const [inlineCategory, setInlineCategory] = React.useState<string>('')
   const [inlineIsActive, setInlineIsActive] = React.useState<boolean>(true)
   const [showHistory, setShowHistory] = React.useState(false)
+  const [sendingTerms, setSendingTerms] = React.useState<CustomTerms | null>(null)
+  const [sendTermsRecipientEmail, setSendTermsRecipientEmail] = React.useState('')
+  const [sendTermsRecipientName, setSendTermsRecipientName] = React.useState('')
+  const [sendTermsCustomMessage, setSendTermsCustomMessage] = React.useState('')
+  const [sendTermsAccountId, setSendTermsAccountId] = React.useState('')
+  const [sendTermsContactId, setSendTermsContactId] = React.useState('')
   
   // Sort state - separate for each tab
   const [productSort, setProductSort] = React.useState<'name' | 'sku' | 'type' | 'basePrice' | 'cost' | 'category' | 'isActive' | 'updatedAt' | 'createdAt'>('updatedAt')
@@ -159,6 +165,42 @@ export default function CRMProducts() {
     },
   })
   const terms = termsData?.data.items ?? []
+  
+  // Accounts and Contacts queries for sending terms
+  const accountsQ = useQuery({
+    queryKey: ['accounts-pick-terms'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/accounts', { params: { limit: 1000, sort: 'name', dir: 'asc' } })
+      return res.data as { data: { items: Array<{ _id: string; name?: string; accountNumber?: number; primaryContactEmail?: string; primaryContactName?: string }> } }
+    },
+  })
+  const accounts = accountsQ.data?.data.items ?? []
+  
+  const contactsQ = useQuery({
+    queryKey: ['contacts-pick-terms'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/contacts', { params: { limit: 1000 } })
+      return res.data as { data: { items: Array<{ _id: string; name?: string; email?: string; company?: string }> } }
+    },
+  })
+  const contacts = contactsQ.data?.data.items ?? []
+  
+  // Send terms for review mutation
+  const sendTermsForReview = useMutation({
+    mutationFn: async (payload: { termsId: string; accountId?: string; contactId?: string; recipientEmail: string; recipientName?: string; customMessage?: string }) => {
+      const res = await http.post(`/api/crm/products/terms/${payload.termsId}/send-for-review`, payload)
+      return res.data
+    },
+    onSuccess: () => {
+      setSendingTerms(null)
+      setSendTermsRecipientEmail('')
+      setSendTermsRecipientName('')
+      setSendTermsCustomMessage('')
+      setSendTermsAccountId('')
+      setSendTermsContactId('')
+      alert('Terms review request sent successfully!')
+    },
+  })
 
   // Products mutations
   const createProduct = useMutation({
@@ -1639,6 +1681,13 @@ export default function CRMProducts() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => setSendingTerms(term)}
+                        className="rounded border border-blue-400 px-2 py-1 text-xs text-blue-400 hover:bg-blue-50"
+                      >
+                        Send for Review
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => {
                           if (confirm(`Delete "${term.name}"?`)) deleteTerms.mutate(term._id)
                         }}
@@ -2081,6 +2130,137 @@ export default function CRMProducts() {
                   </div>
                 </form>
               )}
+            </div>
+          </div>
+        </div>,
+        portalEl
+      )}
+
+      {/* Send Terms for Review Modal */}
+      {sendingTerms && portalEl && createPortal(
+        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
+          <div className="absolute inset-0 bg-black/60" onClick={() => setSendingTerms(null)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
+              <div className="mb-4 text-lg font-semibold">Send Terms for Review</div>
+              <div className="mb-4 p-3 rounded-lg bg-[color:var(--color-muted)]">
+                <div className="text-sm font-medium">{sendingTerms.name}</div>
+                {sendingTerms.description && <div className="text-xs text-[color:var(--color-text-muted)] mt-1">{sendingTerms.description}</div>}
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const selectedAccount = sendTermsAccountId ? accounts.find(a => a._id === sendTermsAccountId) : null
+                  const selectedContact = sendTermsContactId ? contacts.find(c => c._id === sendTermsContactId) : null
+                  
+                  sendTermsForReview.mutate({
+                    termsId: sendingTerms._id,
+                    accountId: sendTermsAccountId || undefined,
+                    contactId: sendTermsContactId || undefined,
+                    recipientEmail: sendTermsRecipientEmail || selectedContact?.email || selectedAccount?.primaryContactEmail || '',
+                    recipientName: sendTermsRecipientName || selectedContact?.name || selectedAccount?.primaryContactName || undefined,
+                    customMessage: sendTermsCustomMessage || undefined,
+                  })
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium mb-1">Account (Optional)</label>
+                  <select
+                    value={sendTermsAccountId}
+                    onChange={(e) => {
+                      setSendTermsAccountId(e.target.value)
+                      const account = accounts.find(a => a._id === e.target.value)
+                      if (account) {
+                        setSendTermsRecipientEmail(account.primaryContactEmail || '')
+                        setSendTermsRecipientName(account.primaryContactName || '')
+                      }
+                    }}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+                  >
+                    <option value="">Select account (optional)</option>
+                    {accounts.map((acc) => (
+                      <option key={acc._id} value={acc._id}>
+                        {acc.accountNumber ? `#${acc.accountNumber} - ` : ''}{acc.name || 'Unnamed Account'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Contact (Optional)</label>
+                  <select
+                    value={sendTermsContactId}
+                    onChange={(e) => {
+                      setSendTermsContactId(e.target.value)
+                      const contact = contacts.find(c => c._id === e.target.value)
+                      if (contact) {
+                        setSendTermsRecipientEmail(contact.email || '')
+                        setSendTermsRecipientName(contact.name || '')
+                      }
+                    }}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+                  >
+                    <option value="">Select contact (optional)</option>
+                    {contacts.map((contact) => (
+                      <option key={contact._id} value={contact._id}>
+                        {contact.name || 'Unnamed'} {contact.email ? `(${contact.email})` : ''} {contact.company ? `- ${contact.company}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Recipient Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={sendTermsRecipientEmail}
+                    onChange={(e) => setSendTermsRecipientEmail(e.target.value)}
+                    placeholder="customer@example.com"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Recipient Name (Optional)</label>
+                  <input
+                    type="text"
+                    value={sendTermsRecipientName}
+                    onChange={(e) => setSendTermsRecipientName(e.target.value)}
+                    placeholder="Customer Name"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Custom Message (Optional)</label>
+                  <textarea
+                    value={sendTermsCustomMessage}
+                    onChange={(e) => setSendTermsCustomMessage(e.target.value)}
+                    placeholder="Add a personal message to accompany the terms..."
+                    rows={4}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  />
+                </div>
+                
+                <div className="flex items-center justify-end gap-2 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setSendingTerms(null)}
+                    className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={sendTermsForReview.isPending}
+                    className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                  >
+                    {sendTermsForReview.isPending ? 'Sending...' : 'Send for Review'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>,

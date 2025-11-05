@@ -1,6 +1,9 @@
 import { Router } from 'express'
 import { ObjectId, Sort, SortDirection } from 'mongodb'
 import { getDb } from '../db.js'
+import { sendAuthEmail } from '../auth/email.js'
+import { env } from '../env.js'
+import { requireAuth } from '../auth/middleware.js'
 
 export type ProductType = 'product' | 'service' | 'bundle'
 
@@ -722,6 +725,164 @@ productsRouter.delete('/terms/:id', async (req, res) => {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }
 })
+
+// ===== TERMS REVIEW REQUESTS =====
+
+// TermsReviewRequestDoc type defined at end of file for reuse
+
+// POST /api/crm/terms/:id/send-for-review
+productsRouter.post('/terms/:id/send-for-review', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const termsId = new ObjectId(req.params.id)
+    const { accountId, contactId, recipientEmail, recipientName, customMessage } = req.body || {}
+    
+    if (!recipientEmail || typeof recipientEmail !== 'string') {
+      return res.status(400).json({ data: null, error: 'recipient_email_required' })
+    }
+    
+    // Get terms
+    const terms = await db.collection<CustomTermsDoc>('custom_terms').findOne({ _id: termsId })
+    if (!terms) {
+      return res.status(404).json({ data: null, error: 'terms_not_found' })
+    }
+    
+    // Get sender info
+    const sender = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    if (!sender) {
+      return res.status(404).json({ data: null, error: 'sender_not_found' })
+    }
+    const senderData = sender as any
+    
+    // Validate account/contact if provided
+    if (accountId && !ObjectId.isValid(accountId)) {
+      return res.status(400).json({ data: null, error: 'invalid_account_id' })
+    }
+    if (contactId && !ObjectId.isValid(contactId)) {
+      return res.status(400).json({ data: null, error: 'invalid_contact_id' })
+    }
+    
+    // Generate unique review token
+    const reviewToken = Buffer.from(`${termsId.toString()}-${Date.now()}-${Math.random()}`).toString('base64url')
+    
+    // Create review request
+    const now = new Date()
+    const reviewRequest: TermsReviewRequestDoc = {
+      _id: new ObjectId(),
+      termsId,
+      termsName: terms.name,
+      accountId: accountId ? new ObjectId(accountId) : undefined,
+      contactId: contactId ? new ObjectId(contactId) : undefined,
+      recipientEmail: recipientEmail.toLowerCase().trim(),
+      recipientName: recipientName?.trim() || undefined,
+      senderId: auth.userId,
+      senderEmail: senderData.email,
+      senderName: senderData.name,
+      status: 'pending',
+      customMessage: customMessage?.trim() || undefined,
+      reviewToken,
+      sentAt: now,
+      createdAt: now,
+      updatedAt: now,
+    }
+    
+    await db.collection('terms_review_requests').insertOne(reviewRequest)
+    
+    // Send email with review link
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+    const reviewUrl = `${baseUrl}/terms/review/${reviewToken}`
+    
+    try {
+      await sendAuthEmail({
+        to: recipientEmail,
+        subject: `Terms & Conditions Review Request: ${terms.name}`,
+        checkPreferences: false,
+        html: `
+          <h2>Terms & Conditions Review Request</h2>
+          <p>${senderData.name || senderData.email} has requested that you review and approve the following terms and conditions:</p>
+          <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3>${terms.name}</h3>
+            ${terms.description ? `<p><em>${terms.description}</em></p>` : ''}
+            ${customMessage ? `<p><strong>Message from sender:</strong> ${customMessage}</p>` : ''}
+          </div>
+          <p><a href="${reviewUrl}" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Review & Approve Terms</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code style="background: #f5f5f5; padding: 5px; border-radius: 3px;">${reviewUrl}</code></p>
+          <p style="color: #666; font-size: 12px; margin-top: 30px;">This link will allow you to review the full terms and conditions and provide your approval or feedback.</p>
+        `,
+        text: `
+Terms & Conditions Review Request
+
+${senderData.name || senderData.email} has requested that you review and approve the following terms and conditions:
+
+${terms.name}
+${terms.description ? `\n${terms.description}` : ''}
+${customMessage ? `\nMessage from sender: ${customMessage}` : ''}
+
+Review & Approve Terms: ${reviewUrl}
+
+This link will allow you to review the full terms and conditions and provide your approval or feedback.
+        `,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send terms review email:', emailErr)
+      // Don't fail the request if email fails
+    }
+    
+    res.json({ data: { reviewRequestId: reviewRequest._id, reviewToken, message: 'Terms review request sent' }, error: null })
+  } catch (err: any) {
+    console.error('Send terms for review error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_send_terms_review' })
+  }
+})
+
+// GET /api/crm/terms/:id/review-requests
+productsRouter.get('/terms/:id/review-requests', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const termsId = new ObjectId(req.params.id)
+    const requests = await db.collection('terms_review_requests')
+      .find({ termsId })
+      .sort({ sentAt: -1 })
+      .limit(100)
+      .toArray()
+    
+    res.json({ data: { items: requests }, error: null })
+  } catch (err: any) {
+    console.error('Get review requests error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests' })
+  }
+})
+
+// Types exported for use in other modules
+export type TermsReviewRequestDoc = {
+  _id: ObjectId
+  termsId: ObjectId
+  termsName: string
+  accountId?: ObjectId
+  contactId?: ObjectId
+  recipientEmail: string
+  recipientName?: string
+  senderId?: string
+  senderEmail?: string
+  senderName?: string
+  status: 'pending' | 'viewed' | 'approved' | 'rejected'
+  customMessage?: string
+  reviewToken: string
+  sentAt: Date
+  viewedAt?: Date
+  respondedAt?: Date
+  responseNotes?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Public review routes are registered in index.ts at /api/terms/review/*
 
 // GET /api/crm/products/:id (must be LAST - after /bundles, /discounts, /terms routes)
 productsRouter.get('/:id', async (req, res) => {
