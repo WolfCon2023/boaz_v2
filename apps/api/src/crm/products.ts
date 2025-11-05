@@ -3,7 +3,7 @@ import { ObjectId, Sort, SortDirection } from 'mongodb'
 import { getDb } from '../db.js'
 import { sendAuthEmail } from '../auth/email.js'
 import { env } from '../env.js'
-import { requireAuth } from '../auth/middleware.js'
+import { requireAuth } from '../auth/rbac.js'
 
 export type ProductType = 'product' | 'service' | 'bundle'
 

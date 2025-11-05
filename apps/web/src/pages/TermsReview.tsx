@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { formatDateTime } from '@/lib/dateFormat'
@@ -7,7 +7,6 @@ import { CheckCircle, XCircle, FileText, Clock, AlertCircle } from 'lucide-react
 
 export default function TermsReview() {
   const { token } = useParams<{ token: string }>()
-  const navigate = useNavigate()
   const [signerName, setSignerName] = React.useState('')
   const [notes, setNotes] = React.useState('')
   const [action, setAction] = React.useState<'approve' | 'reject' | null>(null)
