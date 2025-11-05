@@ -392,6 +392,22 @@ export default function CRMContacts() {
               <option value="asc">Asc</option>
               <option value="desc">Desc</option>
             </select>
+            <button
+              className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+              onClick={() => {
+                const visibleCols = cols.filter((c) => c.visible)
+                const headers = visibleCols.map((c) => c.label)
+                const rows = visibleItems.map((c) => visibleCols.map((col) => getColValue(c, col.key)))
+                const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"' + String(x).replaceAll('"', '""') + '"').join(','))].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'contacts.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+            >Export CSV</button>
           </div>
           {!anySelected && (
             <span className="ml-auto text-[11px] text-[color:var(--color-text-muted)]">Tip: select rows to bulk enroll in a sequence</span>
