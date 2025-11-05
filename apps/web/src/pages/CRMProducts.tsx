@@ -179,8 +179,25 @@ export default function CRMProducts() {
   const contactsQ = useQuery({
     queryKey: ['contacts-pick-terms'],
     queryFn: async () => {
-      const res = await http.get('/api/crm/contacts', { params: { limit: 1000 } })
-      return res.data as { data: { items: Array<{ _id: string; name?: string; email?: string; company?: string }> } }
+      // Fetch contacts using page-based pagination to get all items
+      const allContacts: Array<{ _id: string; name?: string; email?: string; company?: string }> = []
+      let page = 0
+      const pageSize = 100
+      let hasMore = true
+      
+      while (hasMore && page < 10) { // Limit to 1000 contacts max
+        const res = await http.get('/api/crm/contacts', { params: { page, limit: pageSize } })
+        const data = res.data as { data: { items: Array<{ _id: string; name?: string; email?: string; company?: string }>; total?: number; pageSize?: number } }
+        if (data?.data?.items) {
+          allContacts.push(...data.data.items)
+          hasMore = data.data.items.length === pageSize
+          page++
+        } else {
+          hasMore = false
+        }
+      }
+      
+      return { data: { items: allContacts } }
     },
   })
   const contacts = contactsQ.data?.data.items ?? []
@@ -398,9 +415,12 @@ export default function CRMProducts() {
   })
 
   React.useEffect(() => {
-    if (!editing) return
+    if (!editing && !sendingTerms) {
+      setPortalEl(null)
+      return
+    }
     const el = document.createElement('div')
-    el.setAttribute('data-overlay', 'product-editor')
+    el.setAttribute('data-overlay', editing ? 'product-editor' : 'terms-send-modal')
     Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' })
     document.body.appendChild(el)
     setPortalEl(el)
@@ -410,7 +430,7 @@ export default function CRMProducts() {
       } catch {}
       setPortalEl(null)
     }
-  }, [editing])
+  }, [editing, sendingTerms])
 
   // Update form state when editing product
   React.useEffect(() => {
