@@ -156,7 +156,23 @@ export default function CRMDeals() {
           limit: pageSize,
         },
       })
-      return res.data as { data: { items: Deal[]; total: number; page: number; limit: number } }
+      const result = res.data as { data: { items: Deal[]; total: number; page: number; limit: number } }
+      // Ensure all deal IDs are properly formatted strings
+      if (result?.data?.items) {
+        result.data.items = result.data.items.map((deal) => {
+          // Ensure _id is a string and valid ObjectId format
+          if (deal._id) {
+            const idStr = String(deal._id)
+            // If ID is invalid, log a warning but don't break the UI
+            if (!/^[0-9a-fA-F]{24}$/.test(idStr)) {
+              console.warn(`Invalid deal ID detected: "${idStr}" (${idStr.length} chars) for deal "${deal.title || 'Unknown'}"`)
+            }
+            return { ...deal, _id: idStr }
+          }
+          return deal
+        })
+      }
+      return result
     },
     placeholderData: keepPreviousData,
   })
@@ -200,7 +216,9 @@ export default function CRMDeals() {
     onError: (err: any) => {
       const errorMsg = err?.response?.data?.error || err?.message || 'Failed to update deal'
       const details = err?.response?.data?.details
-      toast.showToast(`Error: ${errorMsg}${details ? ` (${JSON.stringify(details)})` : ''}`, 'error')
+      const fullMessage = details ? `${errorMsg}: ${details}` : errorMsg
+      toast.showToast(`Error: ${fullMessage}`, 'error')
+      console.error('Deal update error:', { error: errorMsg, details, err })
     },
   })
   async function applyBulkStage() {
@@ -219,7 +237,17 @@ export default function CRMDeals() {
     setSelectedIds(new Set())
   }
   function startInlineEdit(d: Deal) {
-    setInlineEditId(d._id)
+    // Validate deal ID before starting inline edit
+    const dealId = d._id
+    if (!dealId || typeof dealId !== 'string') {
+      toast.showToast('Cannot edit: Invalid deal ID', 'error')
+      return
+    }
+    if (!/^[0-9a-fA-F]{24}$/.test(dealId)) {
+      toast.showToast(`Cannot edit: Invalid deal ID format "${dealId}" (${dealId.length} chars, expected 24). This deal may be corrupted.`, 'error')
+      return
+    }
+    setInlineEditId(dealId)
     setInlineTitle(d.title ?? '')
     setInlineAmount(typeof d.amount === 'number' ? String(d.amount) : '')
     setInlineStage(d.stage ?? '')
@@ -227,6 +255,15 @@ export default function CRMDeals() {
   }
   async function saveInlineEdit() {
     if (!inlineEditId) return
+    // Validate deal ID before saving
+    if (typeof inlineEditId !== 'string') {
+      toast.showToast('Cannot save: Invalid deal ID', 'error')
+      return
+    }
+    if (!/^[0-9a-fA-F]{24}$/.test(inlineEditId)) {
+      toast.showToast(`Cannot save: Invalid deal ID format "${inlineEditId}" (${inlineEditId.length} chars, expected 24). This deal may be corrupted.`, 'error')
+      return
+    }
     const payload: any = { _id: inlineEditId }
     if (inlineTitle && inlineTitle.trim()) payload.title = inlineTitle.trim()
     if (inlineStage && inlineStage.trim()) payload.stage = inlineStage.trim()
@@ -614,7 +651,20 @@ export default function CRMDeals() {
                   ) : (
                     <div className="flex items-center gap-2">
                       <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(d)}>Edit</button>
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(d)}>Open</button>
+                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => {
+                        // Validate deal ID before opening
+                        const dealId = d._id
+                        if (!dealId || typeof dealId !== 'string') {
+                          toast.showToast('Invalid deal: missing ID', 'error')
+                          return
+                        }
+                        // Ensure ID is exactly 24 hex characters (valid MongoDB ObjectId)
+                        if (!/^[0-9a-fA-F]{24}$/.test(dealId)) {
+                          toast.showToast(`Invalid deal ID format: "${dealId}" (${dealId.length} chars, expected 24). This deal may be corrupted.`, 'error')
+                          return
+                        }
+                        setEditing(d)
+                      }}>Open</button>
                     </div>
                   )}
                 </td>
@@ -651,6 +701,15 @@ export default function CRMDeals() {
                 className="grid gap-2 sm:grid-cols-2"
                 onSubmit={(e) => {
                   e.preventDefault()
+                  // Validate deal ID before submitting
+                  if (!editing._id || typeof editing._id !== 'string') {
+                    toast.showToast('Cannot save: Invalid deal ID', 'error')
+                    return
+                  }
+                  if (!/^[0-9a-fA-F]{24}$/.test(editing._id)) {
+                    toast.showToast(`Cannot save: Invalid deal ID format "${editing._id}" (${editing._id.length} chars, expected 24). This deal may be corrupted.`, 'error')
+                    return
+                  }
                   const fd = new FormData(e.currentTarget)
                   const title = String(fd.get('title')||'').trim() || undefined
                   const amountRaw = fd.get('amount')

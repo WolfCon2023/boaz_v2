@@ -129,7 +129,14 @@ dealsRouter.get('/', async (req, res) => {
     coll.find(filter).sort(sort).skip(skip).limit(limit).toArray(),
     coll.countDocuments(filter),
   ])
-  res.json({ data: { items, total, page, limit }, error: null })
+  // Ensure all _id fields are serialized as strings
+  const serializedItems = items.map((item: any) => ({
+    ...item,
+    _id: item._id ? String(item._id) : item._id,
+    accountId: item.accountId ? String(item.accountId) : item.accountId,
+    marketingCampaignId: item.marketingCampaignId ? String(item.marketingCampaignId) : item.marketingCampaignId,
+  }))
+  res.json({ data: { items: serializedItems, total, page, limit }, error: null })
 })
 
 dealsRouter.post('/', async (req, res) => {
@@ -260,7 +267,15 @@ dealsRouter.post('/', async (req, res) => {
       )
     }
     
-    return res.status(201).json({ data: { _id: result.insertedId, ...doc, dealNumber }, error: null })
+    // Ensure _id is serialized as a string
+    const responseData = {
+      _id: String(result.insertedId),
+      ...doc,
+      dealNumber,
+      accountId: doc.accountId ? String(doc.accountId) : doc.accountId,
+      marketingCampaignId: doc.marketingCampaignId ? String(doc.marketingCampaignId) : doc.marketingCampaignId,
+    }
+    return res.status(201).json({ data: responseData, error: null })
   } catch (e) {
     return res.status(500).json({ data: null, error: 'deals_insert_error' })
   }
@@ -336,11 +351,21 @@ dealsRouter.put('/:id', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload' })
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  if (!ObjectId.isValid(req.params.id)) {
-    return res.status(400).json({ data: null, error: 'invalid_id' })
+  
+  // Trim and validate the ID
+  const idParam = String(req.params.id || '').trim()
+  if (!idParam) {
+    return res.status(400).json({ data: null, error: 'invalid_id', details: 'ID parameter is empty' })
+  }
+  if (!ObjectId.isValid(idParam)) {
+    return res.status(400).json({ 
+      data: null, 
+      error: 'invalid_id', 
+      details: `ID "${idParam}" (length: ${idParam.length}) is not a valid ObjectId. Must be exactly 24 hex characters.` 
+    })
   }
   try {
-    const _id = new ObjectId(req.params.id)
+    const _id = new ObjectId(idParam)
     
     // Get current deal for comparison
     const currentDeal = await db.collection('deals').findOne({ _id })
@@ -452,8 +477,18 @@ dealsRouter.put('/:id', async (req, res) => {
     }
     
     res.json({ data: { ok: true }, error: null })
-  } catch {
-    res.status(400).json({ data: null, error: 'invalid_id' })
+  } catch (err: any) {
+    // If it's already a validation error, return it
+    if (err?.response) {
+      throw err
+    }
+    // Otherwise, it's likely an ObjectId construction error
+    console.error('Deal update error:', { id: idParam, error: err })
+    res.status(400).json({ 
+      data: null, 
+      error: 'invalid_id',
+      details: `Failed to process ID "${idParam}": ${err?.message || 'Unknown error'}`
+    })
   }
 })
 
