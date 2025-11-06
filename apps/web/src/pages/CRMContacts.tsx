@@ -170,7 +170,7 @@ export default function CRMContacts() {
   // Refs for outreach action inputs to avoid nested forms
   const seqSelectRef = React.useRef<HTMLSelectElement | null>(null)
   const oneOffSubjectRef = React.useRef<HTMLInputElement | null>(null)
-  const oneOffTextRef = React.useRef<HTMLInputElement | null>(null)
+  const oneOffTextRef = React.useRef<HTMLTextAreaElement | null>(null)
   const oneOffAttachmentRef = React.useRef<HTMLInputElement | null>(null)
   const seqNameById = React.useMemo(() => {
     const list = seqs.data?.data.items ?? []
