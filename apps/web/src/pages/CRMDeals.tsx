@@ -183,6 +183,9 @@ export default function CRMDeals() {
   const update = useMutation({
     mutationFn: async (payload: Partial<Deal> & { _id: string } & { accountId?: string; accountNumber?: number }) => {
       const { _id, ...rest } = payload as any
+      if (!_id || typeof _id !== 'string') {
+        throw new Error('Invalid deal ID')
+      }
       const res = await http.put(`/api/crm/deals/${_id}`, rest)
       return res.data
     },
@@ -312,7 +315,12 @@ export default function CRMDeals() {
     if (key === 'dealNumber') return d.dealNumber ?? ''
     if (key === 'account') {
       const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
-      return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
+      if (a) {
+        const accNum = a.accountNumber ?? '—'
+        const accName = a.name ?? 'Account'
+        return `${accNum} — ${accName}`
+      }
+      return d.accountNumber ?? '—'
     }
     if (key === 'title') return d.title ?? ''
     if (key === 'amount') return typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'
@@ -465,7 +473,12 @@ export default function CRMDeals() {
                 if (col.key === 'dealNumber') return d.dealNumber ?? ''
                 if (col.key === 'account') {
                   const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
-                  return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (d.accountNumber ?? '—')
+                  if (a) {
+                    const accNum = a.accountNumber ?? '—'
+                    const accName = a.name ?? 'Account'
+                    return `${accNum} — ${accName}`
+                  }
+                  return d.accountNumber ?? '—'
                 }
                 if (col.key === 'title') return d.title ?? ''
                 if (col.key === 'amount') return typeof d.amount === 'number' ? d.amount : ''

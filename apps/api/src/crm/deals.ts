@@ -322,6 +322,9 @@ dealsRouter.put('/:id', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload' })
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  if (!ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ data: null, error: 'invalid_id' })
+  }
   try {
     const _id = new ObjectId(req.params.id)
     
