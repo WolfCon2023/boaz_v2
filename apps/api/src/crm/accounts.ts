@@ -110,28 +110,61 @@ accountsRouter.post('/', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   // Generate accountNumber starting at 998801
+  // Retry logic to handle race conditions and duplicate key errors
   let accountNumber: number | undefined
-  try {
-    const { getNextSequence } = await import('../db.js')
-    accountNumber = await getNextSequence('accountNumber')
-  } catch {}
-  // Fallback if counter not initialized
-  if (accountNumber === undefined) {
+  let result: any
+  let attempts = 0
+  const maxAttempts = 10
+  
+  while (attempts < maxAttempts) {
     try {
-      const last = await db
-        .collection('accounts')
-        .find({ accountNumber: { $type: 'number' } })
-        .project({ accountNumber: 1 })
-        .sort({ accountNumber: -1 })
-        .limit(1)
-        .toArray()
-      accountNumber = Number((last[0] as any)?.accountNumber ?? 998800) + 1
-    } catch {
-      accountNumber = 998801
+      // Try to get next sequence (only on first attempt)
+      if (accountNumber === undefined) {
+        try {
+          const { getNextSequence } = await import('../db.js')
+          accountNumber = await getNextSequence('accountNumber')
+        } catch {}
+        // Fallback if counter not initialized
+        if (accountNumber === undefined) {
+          try {
+            const last = await db
+              .collection('accounts')
+              .find({ accountNumber: { $type: 'number' } })
+              .project({ accountNumber: 1 })
+              .sort({ accountNumber: -1 })
+              .limit(1)
+              .toArray()
+            accountNumber = Number((last[0] as any)?.accountNumber ?? 998800) + 1
+          } catch {
+            accountNumber = 998801
+          }
+        }
+      } else {
+        // If previous attempt failed, increment and try next number
+        accountNumber++
+      }
+      
+      const doc = { ...parsed.data, accountNumber }
+      result = await db.collection('accounts').insertOne(doc)
+      break // Success, exit loop
+    } catch (err: any) {
+      // Check if it's a duplicate key error
+      if (err.code === 11000 && err.keyPattern?.accountNumber) {
+        attempts++
+        if (attempts >= maxAttempts) {
+          return res.status(500).json({ data: null, error: 'failed_to_generate_account_number' })
+        }
+        // Continue loop to retry with incremented number
+        continue
+      }
+      // Other errors, rethrow
+      throw err
     }
   }
-  const doc = { ...parsed.data, accountNumber }
-  const result = await db.collection('accounts').insertOne(doc)
+  
+  if (!result || accountNumber === undefined) {
+    return res.status(500).json({ data: null, error: 'failed_to_create_account' })
+  }
   
   // Add history entry for creation
   const auth = (req as any).auth as { userId: string; email: string } | undefined
@@ -155,7 +188,8 @@ accountsRouter.post('/', async (req, res) => {
     )
   }
   
-  res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
+  const finalDoc = { ...parsed.data, accountNumber }
+  res.status(201).json({ data: { _id: result.insertedId, ...finalDoc }, error: null })
 })
 
 // PUT /api/crm/accounts/:id
