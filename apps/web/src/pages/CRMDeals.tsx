@@ -193,6 +193,11 @@ export default function CRMDeals() {
       qc.invalidateQueries({ queryKey: ['deals'] })
       qc.invalidateQueries({ queryKey: ['deal-history'] })
     },
+    onError: (err: any) => {
+      const errorMsg = err?.response?.data?.error || err?.message || 'Failed to update deal'
+      const details = err?.response?.data?.details
+      toast.showToast(`Error: ${errorMsg}${details ? ` (${JSON.stringify(details)})` : ''}`, 'error')
+    },
   })
   async function applyBulkStage() {
     if (!bulkStage || selectedIds.size === 0) return
@@ -219,12 +224,18 @@ export default function CRMDeals() {
   async function saveInlineEdit() {
     if (!inlineEditId) return
     const payload: any = { _id: inlineEditId }
-    payload.title = inlineTitle || undefined
-    payload.stage = inlineStage || undefined
-    payload.closeDate = inlineCloseDate || undefined
+    if (inlineTitle && inlineTitle.trim()) payload.title = inlineTitle.trim()
+    if (inlineStage && inlineStage.trim()) payload.stage = inlineStage.trim()
+    if (inlineCloseDate && inlineCloseDate.trim()) payload.closeDate = inlineCloseDate.trim()
     if (inlineAmount.trim() !== '') {
       const n = Number(inlineAmount)
       if (Number.isFinite(n)) payload.amount = n
+    }
+    // Ensure at least one field is being updated
+    const { _id, ...rest } = payload
+    if (Object.keys(rest).length === 0) {
+      toast.showToast('No changes to save', 'warning')
+      return
     }
     await update.mutateAsync(payload)
     cancelInlineEdit()
