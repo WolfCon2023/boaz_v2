@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { Type, Image, MousePointerClick, Minus, Columns } from 'lucide-react'
 
 type Segment = { _id: string; name: string; description?: string }
 type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null; mjml?: string; previewText?: string }
@@ -268,6 +269,295 @@ function SegmentsTab() {
   )
 }
 
+type SimpleBlock = {
+  id: string
+  type: 'text' | 'heading' | 'image' | 'button' | 'divider' | 'two-columns'
+  content: string
+  imageUrl?: string
+  buttonUrl?: string
+  buttonText?: string
+  backgroundColor?: string
+  textColor?: string
+  align?: 'left' | 'center' | 'right'
+}
+
+function SimpleBuilderUI({
+  blocks,
+  setBlocks,
+  onRender,
+  onSave,
+  testTo,
+  setTestTo,
+  onSendTest,
+  testing,
+}: {
+  blocks: SimpleBlock[]
+  setBlocks: React.Dispatch<React.SetStateAction<SimpleBlock[]>>
+  onRender: () => void
+  onSave: () => void
+  testTo: string
+  setTestTo: (v: string) => void
+  onSendTest: () => void
+  testing: boolean
+}) {
+  const [editingBlockId, setEditingBlockId] = React.useState<string | null>(null)
+  const [editingBlock, setEditingBlock] = React.useState<Partial<SimpleBlock> | null>(null)
+  
+  function addBlock(type: SimpleBlock['type']) {
+    const newBlock: SimpleBlock = {
+      id: Date.now().toString(),
+      type,
+      content: '',
+      backgroundColor: '#ffffff',
+      textColor: '#000000',
+      align: 'left',
+    }
+    if (type === 'button') {
+      newBlock.buttonText = 'Click here'
+      newBlock.buttonUrl = 'https://example.com'
+    }
+    setBlocks([...blocks, newBlock])
+    setEditingBlockId(newBlock.id)
+    setEditingBlock(newBlock)
+  }
+  
+  function updateBlock(id: string, updates: Partial<SimpleBlock>) {
+    setBlocks(blocks.map(b => b.id === id ? { ...b, ...updates } : b))
+    if (editingBlockId === id) {
+      setEditingBlock({ ...editingBlock, ...updates })
+    }
+  }
+  
+  function removeBlock(id: string) {
+    setBlocks(blocks.filter(b => b.id !== id))
+    if (editingBlockId === id) {
+      setEditingBlockId(null)
+      setEditingBlock(null)
+    }
+  }
+  
+  function moveBlock(id: string, direction: 'up' | 'down') {
+    const index = blocks.findIndex(b => b.id === id)
+    if (index === -1) return
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    if (newIndex < 0 || newIndex >= blocks.length) return
+    const newBlocks = [...blocks]
+    ;[newBlocks[index], newBlocks[newIndex]] = [newBlocks[newIndex], newBlocks[index]]
+    setBlocks(newBlocks)
+  }
+  
+  function startEdit(id: string) {
+    const block = blocks.find(b => b.id === id)
+    if (block) {
+      setEditingBlockId(id)
+      setEditingBlock({ ...block })
+    }
+  }
+  
+  function saveEdit() {
+    if (editingBlockId && editingBlock) {
+      updateBlock(editingBlockId, editingBlock)
+      setEditingBlockId(null)
+      setEditingBlock(null)
+    }
+  }
+  
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => addBlock('heading')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+          <Type size={14} /> Heading
+        </button>
+        <button type="button" onClick={() => addBlock('text')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+          <Type size={14} /> Text
+        </button>
+        <button type="button" onClick={() => addBlock('image')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+          <Image size={14} /> Image
+        </button>
+        <button type="button" onClick={() => addBlock('button')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+          <MousePointerClick size={14} /> Button
+        </button>
+        <button type="button" onClick={() => addBlock('divider')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+          <Minus size={14} /> Divider
+        </button>
+        <button type="button" onClick={() => addBlock('two-columns')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+          <Columns size={14} /> Two Columns
+        </button>
+      </div>
+      
+      <div className="space-y-2 max-h-96 overflow-y-auto">
+        {blocks.length === 0 ? (
+          <div className="text-center py-8 text-sm text-[color:var(--color-text-muted)]">
+            No blocks yet. Add a block above to get started.
+          </div>
+        ) : (
+          blocks.map((block, index) => (
+            <div key={block.id} className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                    {block.type === 'heading' && '📝 Heading'}
+                    {block.type === 'text' && '📄 Text'}
+                    {block.type === 'image' && '🖼️ Image'}
+                    {block.type === 'button' && '🔘 Button'}
+                    {block.type === 'divider' && '➖ Divider'}
+                    {block.type === 'two-columns' && '📊 Two Columns'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => moveBlock(block.id, 'up')}
+                    disabled={index === 0}
+                    className="p-1 disabled:opacity-50"
+                    title="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveBlock(block.id, 'down')}
+                    disabled={index === blocks.length - 1}
+                    className="p-1 disabled:opacity-50"
+                    title="Move down"
+                  >
+                    ↓
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  {editingBlockId === block.id ? (
+                    <>
+                      <button type="button" onClick={saveEdit} className="text-xs px-2 py-1 rounded border">Save</button>
+                      <button type="button" onClick={() => { setEditingBlockId(null); setEditingBlock(null) }} className="text-xs px-2 py-1 rounded border">Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => startEdit(block.id)} className="text-xs px-2 py-1 rounded border">Edit</button>
+                      <button type="button" onClick={() => removeBlock(block.id)} className="text-xs px-2 py-1 rounded border border-red-400 text-red-400">Remove</button>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              {editingBlockId === block.id && editingBlock ? (
+                <div className="space-y-2 pt-2 border-t">
+                  {block.type === 'heading' || block.type === 'text' || block.type === 'two-columns' ? (
+                    <>
+                      <textarea
+                        value={editingBlock.content || ''}
+                        onChange={(e) => setEditingBlock({ ...editingBlock, content: e.target.value })}
+                        placeholder={block.type === 'two-columns' ? 'Left content ||| Right content' : 'Enter content...'}
+                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent h-24"
+                      />
+                      <div className="grid grid-cols-3 gap-2">
+                        <input
+                          type="color"
+                          value={editingBlock.backgroundColor || '#ffffff'}
+                          onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                          className="h-8 rounded border"
+                          title="Background color"
+                        />
+                        <input
+                          type="color"
+                          value={editingBlock.textColor || '#000000'}
+                          onChange={(e) => setEditingBlock({ ...editingBlock, textColor: e.target.value })}
+                          className="h-8 rounded border"
+                          title="Text color"
+                        />
+                        <select
+                          value={editingBlock.align || 'left'}
+                          onChange={(e) => setEditingBlock({ ...editingBlock, align: e.target.value as 'left' | 'center' | 'right' })}
+                          className="rounded-lg border px-2 py-1 text-sm bg-[color:var(--color-panel)]"
+                        >
+                          <option value="left">Left</option>
+                          <option value="center">Center</option>
+                          <option value="right">Right</option>
+                        </select>
+                      </div>
+                    </>
+                  ) : block.type === 'image' ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editingBlock.imageUrl || ''}
+                        onChange={(e) => setEditingBlock({ ...editingBlock, imageUrl: e.target.value })}
+                        placeholder="Image URL"
+                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={editingBlock.content || ''}
+                        onChange={(e) => setEditingBlock({ ...editingBlock, content: e.target.value })}
+                        placeholder="Alt text"
+                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                      />
+                      <input
+                        type="color"
+                        value={editingBlock.backgroundColor || '#ffffff'}
+                        onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                        className="h-8 rounded border"
+                        title="Background color"
+                      />
+                    </>
+                  ) : block.type === 'button' ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editingBlock.buttonText || ''}
+                        onChange={(e) => setEditingBlock({ ...editingBlock, buttonText: e.target.value })}
+                        placeholder="Button text"
+                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={editingBlock.buttonUrl || ''}
+                        onChange={(e) => setEditingBlock({ ...editingBlock, buttonUrl: e.target.value })}
+                        placeholder="Button URL"
+                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                      />
+                      <input
+                        type="color"
+                        value={editingBlock.backgroundColor || '#ffffff'}
+                        onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                        className="h-8 rounded border"
+                        title="Background color"
+                      />
+                    </>
+                  ) : block.type === 'divider' ? (
+                    <input
+                      type="color"
+                      value={editingBlock.backgroundColor || '#ffffff'}
+                      onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                      className="h-8 rounded border"
+                      title="Background color"
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <div className="text-sm text-[color:var(--color-text-muted)]">
+                  {block.type === 'heading' && <div className="font-bold text-lg">{block.content || '(Empty heading)'}</div>}
+                  {block.type === 'text' && <div>{block.content || '(Empty text)'}</div>}
+                  {block.type === 'image' && <div>🖼️ {block.imageUrl || '(No image URL)'}</div>}
+                  {block.type === 'button' && <div>🔘 {block.buttonText || '(Empty button)'}</div>}
+                  {block.type === 'divider' && <div className="border-t my-2"></div>}
+                  {block.type === 'two-columns' && <div className="grid grid-cols-2 gap-2 text-xs">{block.content.split('|||')[0] || '(Left)'} | {block.content.split('|||')[1] || '(Right)'}</div>}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+      
+      <div className="flex items-center gap-2 pt-2 border-t">
+        <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={onRender}>Render preview</button>
+        <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={onSave}>Save campaign</button>
+        <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Test email" className="rounded-lg border px-3 py-2 text-sm bg-transparent flex-1" />
+        <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={onSendTest} disabled={!testTo || testing}>
+          {testing ? 'Sending…' : 'Send test'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function CampaignsTab() {
   const qc = useQueryClient()
   const { data: segments } = useQuery({ queryKey: ['mkt-segments'], queryFn: async () => (await http.get('/api/marketing/segments')).data })
@@ -299,19 +589,195 @@ function CampaignsTab() {
   const [editing, setEditing] = React.useState<Campaign | null>(null)
   const [renamingId, setRenamingId] = React.useState<string | null>(null)
   const [renamingName, setRenamingName] = React.useState<string>('')
+  const [builderMode, setBuilderMode] = React.useState<'simple' | 'mjml'>('simple')
   const [mjml, setMjml] = React.useState<string>('')
   const [previewHtml, setPreviewHtml] = React.useState<string>('')
   const [subject, setSubject] = React.useState<string>('')
   const [previewText, setPreviewText] = React.useState<string>('')
   const [segmentId, setSegmentId] = React.useState<string>('')
+  
+  // Simple builder state
+  type SimpleBlock = {
+    id: string
+    type: 'text' | 'heading' | 'image' | 'button' | 'divider' | 'two-columns'
+    content: string
+    imageUrl?: string
+    buttonUrl?: string
+    buttonText?: string
+    backgroundColor?: string
+    textColor?: string
+    align?: 'left' | 'center' | 'right'
+  }
+  const [simpleBlocks, setSimpleBlocks] = React.useState<SimpleBlock[]>([])
+  
   React.useEffect(() => {
     if (editing) {
       setSubject(editing.subject || '')
       setPreviewText(editing.previewText || '')
       setMjml(editing.mjml || '')
       setSegmentId(String(editing.segmentId || ''))
+      
+      // Try to parse existing MJML into simple blocks if possible
+      if (editing.mjml && builderMode === 'simple') {
+        try {
+          const parsed = parseMjmlToBlocks(editing.mjml)
+          if (parsed.length > 0) {
+            setSimpleBlocks(parsed)
+          }
+        } catch {
+          // If parsing fails, start with empty blocks
+          setSimpleBlocks([])
+        }
+      }
+    } else {
+      setSimpleBlocks([])
     }
-  }, [editing])
+  }, [editing, builderMode])
+  
+  // Convert simple blocks to MJML
+  function blocksToMjml(blocks: SimpleBlock[]): string {
+    if (blocks.length === 0) {
+      return '<mjml>\n  <mj-body>\n  </mj-body>\n</mjml>'
+    }
+    
+    const sections = blocks.map((block) => {
+      const bgColor = block.backgroundColor || '#ffffff'
+      const textColor = block.textColor || '#000000'
+      const align = block.align || 'left'
+      
+      switch (block.type) {
+        case 'heading':
+          return `    <mj-section background-color="${bgColor}">
+      <mj-column>
+        <mj-text align="${align}" color="${textColor}" font-size="24px" font-weight="700">${escapeHtml(block.content)}</mj-text>
+      </mj-column>
+    </mj-section>`
+        
+        case 'text':
+          return `    <mj-section background-color="${bgColor}">
+      <mj-column>
+        <mj-text align="${align}" color="${textColor}" font-size="16px">${escapeHtml(block.content).replace(/\n/g, '<br />')}</mj-text>
+      </mj-column>
+    </mj-section>`
+        
+        case 'image':
+          return `    <mj-section background-color="${bgColor}">
+      <mj-column>
+        <mj-image src="${escapeHtml(block.imageUrl || '')}" alt="${escapeHtml(block.content)}" />
+      </mj-column>
+    </mj-section>`
+        
+        case 'button':
+          return `    <mj-section background-color="${bgColor}">
+      <mj-column>
+        <mj-button href="${escapeHtml(block.buttonUrl || '#')}" background-color="#2563eb" color="#ffffff">${escapeHtml(block.buttonText || block.content)}</mj-button>
+      </mj-column>
+    </mj-section>`
+        
+        case 'divider':
+          return `    <mj-section background-color="${bgColor}">
+      <mj-column>
+        <mj-divider border-color="#e5e7eb" border-width="1px" />
+      </mj-column>
+    </mj-section>`
+        
+        case 'two-columns':
+          const [left, right] = block.content.split('|||')
+          return `    <mj-section background-color="${bgColor}">
+      <mj-column>
+        <mj-text align="${align}" color="${textColor}" font-size="16px">${escapeHtml(left || '').replace(/\n/g, '<br />')}</mj-text>
+      </mj-column>
+      <mj-column>
+        <mj-text align="${align}" color="${textColor}" font-size="16px">${escapeHtml(right || '').replace(/\n/g, '<br />')}</mj-text>
+      </mj-column>
+    </mj-section>`
+        
+        default:
+          return ''
+      }
+    }).filter(Boolean).join('\n')
+    
+    return `<mjml>
+  <mj-body>
+${sections}
+    <mj-section>
+      <mj-column>
+        <mj-text align="center" font-size="12px" color="#64748b">© ${new Date().getFullYear()} — <a href="{{unsubscribeUrl}}" style="color:#60a5fa">Unsubscribe</a></mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>`
+  }
+  
+  function escapeHtml(text: string): string {
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
+  }
+  
+  function parseMjmlToBlocks(mjml: string): SimpleBlock[] {
+    // Simple parser - try to extract common patterns
+    const blocks: SimpleBlock[] = []
+    const sectionRegex = /<mj-section[^>]*background-color="([^"]*)"[^>]*>([\s\S]*?)<\/mj-section>/gi
+    let match
+    let id = 0
+    
+    while ((match = sectionRegex.exec(mjml)) !== null) {
+      const bgColor = match[1] || '#ffffff'
+      const sectionContent = match[2]
+      
+      // Check for heading
+      if (/<mj-text[^>]*font-size="24px"[^>]*font-weight="700"[^>]*>([\s\S]*?)<\/mj-text>/i.test(sectionContent)) {
+        const textMatch = sectionContent.match(/<mj-text[^>]*>([\s\S]*?)<\/mj-text>/i)
+        if (textMatch) {
+          blocks.push({ id: String(id++), type: 'heading', content: textMatch[1].replace(/<[^>]*>/g, ''), backgroundColor: bgColor })
+        }
+      }
+      // Check for button
+      else if (/<mj-button/i.test(sectionContent)) {
+        const buttonMatch = sectionContent.match(/<mj-button[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/mj-button>/i)
+        if (buttonMatch) {
+          blocks.push({ id: String(id++), type: 'button', content: buttonMatch[2], buttonUrl: buttonMatch[1], buttonText: buttonMatch[2], backgroundColor: bgColor })
+        }
+      }
+      // Check for image
+      else if (/<mj-image/i.test(sectionContent)) {
+        const imageMatch = sectionContent.match(/<mj-image[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>/i)
+        if (imageMatch) {
+          blocks.push({ id: String(id++), type: 'image', content: imageMatch[2], imageUrl: imageMatch[1], backgroundColor: bgColor })
+        }
+      }
+      // Check for divider
+      else if (/<mj-divider/i.test(sectionContent)) {
+        blocks.push({ id: String(id++), type: 'divider', content: '', backgroundColor: bgColor })
+      }
+      // Default to text
+      else {
+        const textMatch = sectionContent.match(/<mj-text[^>]*>([\s\S]*?)<\/mj-text>/i)
+        if (textMatch) {
+          const text = textMatch[1].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '')
+          const columns = sectionContent.match(/<mj-column>/g)
+          if (columns && columns.length >= 2) {
+            const colMatches = sectionContent.matchAll(/<mj-column>[\s\S]*?<mj-text[^>]*>([\s\S]*?)<\/mj-text>[\s\S]*?<\/mj-column>/gi)
+            const cols = Array.from(colMatches).map(m => m[1].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, ''))
+            blocks.push({ id: String(id++), type: 'two-columns', content: cols.join('|||'), backgroundColor: bgColor })
+          } else {
+            blocks.push({ id: String(id++), type: 'text', content: text, backgroundColor: bgColor })
+          }
+        }
+      }
+    }
+    
+    return blocks
+  }
+  
+  // Update MJML when simple blocks change
+  React.useEffect(() => {
+    if (builderMode === 'simple') {
+      const generatedMjml = blocksToMjml(simpleBlocks)
+      setMjml(generatedMjml)
+    }
+  }, [simpleBlocks, builderMode])
   const [testTo, setTestTo] = React.useState<string>('')
   const [testing, setTesting] = React.useState<boolean>(false)
   const [sending, setSending] = React.useState<boolean>(false)
@@ -466,7 +932,23 @@ function CampaignsTab() {
           <div className="flex items-center justify-between">
             <div className="text-base font-semibold">Builder — {editing.name}</div>
             <div className="flex items-center gap-2">
-              <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setPreviewHtml(''); setMjml('') }}>Close</button>
+              <div className="flex items-center gap-1 rounded-lg border p-1">
+                <button
+                  type="button"
+                  onClick={() => setBuilderMode('simple')}
+                  className={`px-3 py-1 text-xs rounded ${builderMode === 'simple' ? 'bg-[color:var(--color-primary-600)] text-white' : ''}`}
+                >
+                  Simple Builder
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBuilderMode('mjml')}
+                  className={`px-3 py-1 text-xs rounded ${builderMode === 'mjml' ? 'bg-[color:var(--color-primary-600)] text-white' : ''}`}
+                >
+                  MJML Builder
+                </button>
+              </div>
+              <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setPreviewHtml(''); setMjml(''); setSimpleBlocks([]) }}>Close</button>
               <button className="rounded-lg border border-red-400 text-red-400 px-2 py-1 text-sm" onClick={async () => {
                 if (!editing) return
                 if (!confirm('Delete this campaign? This cannot be undone.')) return
@@ -474,46 +956,61 @@ function CampaignsTab() {
               }}>Delete</button>
             </div>
           </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+            <input value={previewText} onChange={(e) => setPreviewText(e.target.value)} placeholder="Preview text (inbox snippet)" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+            <select value={segmentId} onChange={(e) => setSegmentId(e.target.value)} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
+              <option value="">Select segment…</option>
+              {((segments?.data?.items ?? []) as any[]).map((s) => (<option key={s._id} value={s._id}>{s.name}</option>))}
+            </select>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <div className="grid gap-2 sm:grid-cols-3">
-                <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
-                <input value={previewText} onChange={(e) => setPreviewText(e.target.value)} placeholder="Preview text (inbox snippet)" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
-                <select value={segmentId} onChange={(e) => setSegmentId(e.target.value)} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
-                  <option value="">Select segment…</option>
-                  {((segments?.data?.items ?? []) as any[]).map((s) => (<option key={s._id} value={s._id}>{s.name}</option>))}
-                </select>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <select onChange={(e) => {
-                  const key = e.target.value
-                  const t = (tplData?.data?.items as Template[] | undefined)?.find((x) => x.key === key)
-                  if (t) setMjml(t.mjml)
-                }} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
-                  <option value="">Insert template…</option>
-                  {(tplData?.data?.items ?? []).map((t: Template) => (<option key={t.key} value={t.key}>{t.name}</option>))}
-                </select>
-                <select onChange={(e) => { insertSnippet(e.target.value); e.currentTarget.selectedIndex = 0 }} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
-                  <option value="">Insert block…</option>
-                  <option value="hero">Hero</option>
-                  <option value="text">Text</option>
-                  <option value="button">Button</option>
-                  <option value="twoCols">Two columns</option>
-                  <option value="footer">Footer</option>
-                </select>
-                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={saveCampaign}>Save</button>
-              </div>
-              <div className="text-xs text-[color:var(--color-text-muted)]">MJML</div>
-              <textarea value={mjml} onChange={(e) => setMjml(e.target.value)} className="h-72 w-full rounded-lg border px-3 py-2 text-sm bg-transparent" placeholder="<mjml>...</mjml>" />
-              <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                Tip: MJML uses tags like {`<mj-section>`}, {`<mj-column>`}, {`<mj-text>`}, {`<mj-image>`}, {`<mj-button>`}. Use “Insert block…” to add common pieces.
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={renderPreview}>Render preview</button>
-                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => { setMjml(''); setPreviewHtml('') }}>Clear</button>
-                <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Test email to" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
-                <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={sendTest} disabled={!testTo || testing}>{testing ? 'Sending…' : 'Send test'}</button>
-              </div>
+              {builderMode === 'simple' ? (
+                <SimpleBuilderUI
+                  blocks={simpleBlocks}
+                  setBlocks={setSimpleBlocks}
+                  onRender={renderPreview}
+                  onSave={saveCampaign}
+                  testTo={testTo}
+                  setTestTo={setTestTo}
+                  onSendTest={sendTest}
+                  testing={testing}
+                />
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select onChange={(e) => {
+                      const key = e.target.value
+                      const t = (tplData?.data?.items as Template[] | undefined)?.find((x) => x.key === key)
+                      if (t) setMjml(t.mjml)
+                    }} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
+                      <option value="">Insert template…</option>
+                      {(tplData?.data?.items ?? []).map((t: Template) => (<option key={t.key} value={t.key}>{t.name}</option>))}
+                    </select>
+                    <select onChange={(e) => { insertSnippet(e.target.value); e.currentTarget.selectedIndex = 0 }} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
+                      <option value="">Insert block…</option>
+                      <option value="hero">Hero</option>
+                      <option value="text">Text</option>
+                      <option value="button">Button</option>
+                      <option value="twoCols">Two columns</option>
+                      <option value="footer">Footer</option>
+                    </select>
+                    <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={saveCampaign}>Save</button>
+                  </div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">MJML</div>
+                  <textarea value={mjml} onChange={(e) => setMjml(e.target.value)} className="h-72 w-full rounded-lg border px-3 py-2 text-sm bg-transparent" placeholder="<mjml>...</mjml>" />
+                  <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                    Tip: MJML uses tags like {`<mj-section>`}, {`<mj-column>`}, {`<mj-text>`}, {`<mj-image>`}, {`<mj-button>`}. Use "Insert block…" to add common pieces.
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={renderPreview}>Render preview</button>
+                    <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => { setMjml(''); setPreviewHtml('') }}>Clear</button>
+                    <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Test email to" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
+                    <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={sendTest} disabled={!testTo || testing}>{testing ? 'Sending…' : 'Send test'}</button>
+                  </div>
+                </>
+              )}
             </div>
             <div className="space-y-2">
               <div className="text-xs text-[color:var(--color-text-muted)]">Preview</div>
