@@ -718,7 +718,6 @@ function RoiDrilldown({ selectedCampaignId, startDate, endDate, campaigns, onCle
 }
 
 function UnsubscribesTab() {
-  const qc = useQueryClient()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'email' | 'at' | 'campaignId'>('at')
   const [dir, setDir] = React.useState<'asc' | 'desc'>('desc')
