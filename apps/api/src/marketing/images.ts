@@ -9,7 +9,14 @@ export const marketingImagesRouter = Router()
 
 // Setup multer for image uploads
 const uploadDir = env.UPLOAD_DIR || path.join(process.cwd(), 'uploads', 'marketing')
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true })
+  }
+} catch (err) {
+  console.error('Failed to create upload directory:', err)
+  // Continue anyway - multer will handle errors during upload
+}
 
 const storage = multer.diskStorage({
   destination: (_req: any, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => cb(null, uploadDir),
