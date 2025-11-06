@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { getDb } from '../db.js'
 import { z } from 'zod'
 import { ObjectId } from 'mongodb'
-import { requireAuth } from '../auth/rbac.js'
+import { requireAuth, requirePermission } from '../auth/rbac.js'
 
 export const dealsRouter = Router()
 
@@ -87,10 +87,35 @@ dealsRouter.get('/', async (req, res) => {
 
   const coll = db.collection('deals')
   
-  // Backfill deal numbers for deals that don't have them
+  // Backfill deal numbers for deals that don't have them or have duplicates
   try {
+    // Find deals without numbers or with duplicate numbers
     const dealsWithoutNumber = await coll.find({ $or: [{ dealNumber: { $exists: false } }, { dealNumber: null }] }).limit(100).toArray()
-    if (dealsWithoutNumber.length > 0) {
+    
+    // Find deals with duplicate dealNumbers (group by dealNumber and find those with count > 1)
+    const allDeals = await coll.find({ dealNumber: { $type: 'number' } }).project({ _id: 1, dealNumber: 1 }).toArray()
+    const dealNumberCounts = new Map<number, string[]>()
+    for (const deal of allDeals) {
+      const num = (deal as any).dealNumber
+      if (typeof num === 'number') {
+        if (!dealNumberCounts.has(num)) {
+          dealNumberCounts.set(num, [])
+        }
+        dealNumberCounts.get(num)!.push(String((deal as any)._id))
+      }
+    }
+    // Get IDs of deals with duplicate numbers (keep first, fix the rest)
+    const duplicateDealIds: string[] = []
+    for (const [num, ids] of dealNumberCounts.entries()) {
+      if (ids.length > 1) {
+        // Keep the first one, mark the rest for renumbering
+        duplicateDealIds.push(...ids.slice(1))
+      }
+    }
+    
+    const dealsToFix = [...dealsWithoutNumber, ...(duplicateDealIds.length > 0 ? await coll.find({ _id: { $in: duplicateDealIds.map(id => new ObjectId(id)) } }).limit(100).toArray() : [])]
+    
+    if (dealsToFix.length > 0) {
       // Get current max deal number
       const maxDoc = await coll.find({ dealNumber: { $type: 'number' } }).project({ dealNumber: 1 }).sort({ dealNumber: -1 }).limit(1).next()
       let nextNumber = typeof maxDoc?.dealNumber === 'number' ? maxDoc.dealNumber : 100000
@@ -102,14 +127,14 @@ dealsRouter.get('/', async (req, res) => {
         if (counterValue > nextNumber) nextNumber = counterValue - 1
       } catch {}
       
-      // Assign numbers to deals without them
-      for (const deal of dealsWithoutNumber) {
+      // Assign unique numbers to deals
+      for (const deal of dealsToFix) {
         nextNumber += 1
         await coll.updateOne({ _id: deal._id }, { $set: { dealNumber: nextNumber } })
       }
       
       // Update counter if we assigned numbers
-      if (dealsWithoutNumber.length > 0) {
+      if (dealsToFix.length > 0) {
         try {
           const counters = db.collection('counters')
           await counters.updateOne(
@@ -129,13 +154,19 @@ dealsRouter.get('/', async (req, res) => {
     coll.find(filter).sort(sort).skip(skip).limit(limit).toArray(),
     coll.countDocuments(filter),
   ])
-  // Ensure all _id fields are serialized as strings
-  const serializedItems = items.map((item: any) => ({
-    ...item,
-    _id: item._id ? String(item._id) : item._id,
-    accountId: item.accountId ? String(item.accountId) : item.accountId,
-    marketingCampaignId: item.marketingCampaignId ? String(item.marketingCampaignId) : item.marketingCampaignId,
-  }))
+  // Ensure all _id fields are serialized as strings and validate accountId
+  const serializedItems = items.map((item: any) => {
+    const accountIdStr = item.accountId ? String(item.accountId) : null
+    // Validate accountId is a valid ObjectId (24 hex chars), if not, set to null
+    const validAccountId = accountIdStr && /^[0-9a-fA-F]{24}$/.test(accountIdStr) ? accountIdStr : null
+    
+    return {
+      ...item,
+      _id: item._id ? String(item._id) : item._id,
+      accountId: validAccountId,
+      marketingCampaignId: item.marketingCampaignId ? String(item.marketingCampaignId) : item.marketingCampaignId,
+    }
+  })
   res.json({ data: { items: serializedItems, total, page, limit }, error: null })
 })
 
@@ -156,18 +187,33 @@ dealsRouter.post('/', async (req, res) => {
     let accountObjectId: ObjectId | null = null
     let accountNumberValue: number | undefined
     if (accountIdRaw) {
+      // Validate accountId is exactly 24 hex characters
+      if (!/^[0-9a-fA-F]{24}$/.test(accountIdRaw)) {
+        return res.status(400).json({ 
+          data: null, 
+          error: 'invalid_accountId',
+          details: `Account ID "${accountIdRaw}" (length: ${accountIdRaw.length}) is not a valid ObjectId. Must be exactly 24 hex characters.`
+        })
+      }
       if (!ObjectId.isValid(accountIdRaw)) {
-        return res.status(400).json({ data: null, error: 'invalid_accountId' })
+        return res.status(400).json({ 
+          data: null, 
+          error: 'invalid_accountId',
+          details: `Account ID "${accountIdRaw}" failed MongoDB ObjectId validation.`
+        })
       }
       accountObjectId = new ObjectId(accountIdRaw)
-      // Fetch accountNumber for denormalization
+      // Verify the account actually exists
       const acc = await db.collection('accounts').findOne({ _id: accountObjectId })
+      if (!acc) {
+        return res.status(400).json({ data: null, error: 'account_not_found', details: `Account with ID "${accountIdRaw}" does not exist.` })
+      }
       if (typeof (acc as any)?.accountNumber === 'number') {
         accountNumberValue = (acc as any).accountNumber as number
       }
     } else if (typeof accountNumberParsed === 'number' && Number.isFinite(accountNumberParsed)) {
       const acc = await db.collection('accounts').findOne({ accountNumber: accountNumberParsed })
-      if (!acc?._id) return res.status(400).json({ data: null, error: 'account_not_found' })
+      if (!acc?._id) return res.status(400).json({ data: null, error: 'account_not_found', details: `Account with number ${accountNumberParsed} does not exist.` })
       accountObjectId = acc._id as ObjectId
       accountNumberValue = accountNumberParsed
     } else {
@@ -380,7 +426,34 @@ dealsRouter.put('/:id', async (req, res) => {
       user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
     }
     
-    if (update.accountId) update.accountId = new ObjectId(update.accountId)
+    if (update.accountId) {
+      // Validate accountId is exactly 24 hex characters
+      const accountIdStr = String(update.accountId).trim()
+      if (!/^[0-9a-fA-F]{24}$/.test(accountIdStr)) {
+        return res.status(400).json({ 
+          data: null, 
+          error: 'invalid_accountId',
+          details: `Account ID "${accountIdStr}" (length: ${accountIdStr.length}) is not a valid ObjectId. Must be exactly 24 hex characters.`
+        })
+      }
+      if (!ObjectId.isValid(accountIdStr)) {
+        return res.status(400).json({ 
+          data: null, 
+          error: 'invalid_accountId',
+          details: `Account ID "${accountIdStr}" failed MongoDB ObjectId validation.`
+        })
+      }
+      // Verify the account actually exists
+      const acc = await db.collection('accounts').findOne({ _id: new ObjectId(accountIdStr) })
+      if (!acc) {
+        return res.status(400).json({ 
+          data: null, 
+          error: 'account_not_found', 
+          details: `Account with ID "${accountIdStr}" does not exist.` 
+        })
+      }
+      update.accountId = new ObjectId(accountIdStr)
+    }
     if (update.marketingCampaignId === '') {
       update.marketingCampaignId = null
     } else if (update.marketingCampaignId && ObjectId.isValid(update.marketingCampaignId)) {
@@ -523,6 +596,99 @@ dealsRouter.get('/:id/history', async (req, res) => {
     })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// POST /api/crm/deals/fix-invalid-accountids (Admin only)
+// This endpoint fixes deals with invalid accountId values by matching them to accounts using accountNumber
+dealsRouter.post('/fix-invalid-accountids', requireAuth, requirePermission('*'), async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    // Find all deals
+    const allDeals = await db.collection('deals').find({}).toArray()
+    
+    const results = {
+      total: allDeals.length,
+      fixed: 0,
+      notFound: 0,
+      alreadyValid: 0,
+      errors: [] as Array<{ dealId: string; error: string }>
+    }
+    
+    for (const deal of allDeals) {
+      const dealId = (deal as any)._id
+      const accountId = (deal as any).accountId
+      const accountNumber = (deal as any).accountNumber
+      
+      // Check if accountId is invalid (not 24 hex characters or not a valid ObjectId)
+      const accountIdStr = accountId ? String(accountId) : null
+      const isValidAccountId = accountIdStr && /^[0-9a-fA-F]{24}$/.test(accountIdStr) && ObjectId.isValid(accountIdStr)
+      
+      if (isValidAccountId) {
+        // Verify the account actually exists
+        try {
+          const acc = await db.collection('accounts').findOne({ _id: new ObjectId(accountIdStr) })
+          if (acc) {
+            results.alreadyValid++
+            continue
+          }
+        } catch {
+          // AccountId is invalid, continue to fix it
+        }
+      }
+      
+      // Try to fix by matching accountNumber
+      if (typeof accountNumber === 'number') {
+        try {
+          const acc = await db.collection('accounts').findOne({ accountNumber })
+          if (acc && acc._id) {
+            // Found matching account, update the deal
+            await db.collection('deals').updateOne(
+              { _id: dealId },
+              { $set: { accountId: acc._id } }
+            )
+            results.fixed++
+            continue
+          }
+        } catch (err: any) {
+          results.errors.push({
+            dealId: String(dealId),
+            error: `Failed to find account for deal: ${err.message}`
+          })
+        }
+      }
+      
+      // No matching account found, set accountId to null
+      if (accountId) {
+        try {
+          await db.collection('deals').updateOne(
+            { _id: dealId },
+            { $set: { accountId: null } }
+          )
+          results.notFound++
+        } catch (err: any) {
+          results.errors.push({
+            dealId: String(dealId),
+            error: `Failed to update deal: ${err.message}`
+          })
+        }
+      } else {
+        results.alreadyValid++
+      }
+    }
+    
+    res.json({
+      data: {
+        message: `Fixed ${results.fixed} deals, ${results.notFound} deals had no matching account (accountId set to null), ${results.alreadyValid} deals were already valid.`,
+        results
+      },
+      error: null
+    })
+  } catch (err: any) {
+    console.error('Fix invalid accountIds error:', err)
+    res.status(500).json({ data: null, error: 'fix_failed', details: err.message })
   }
 })
 
