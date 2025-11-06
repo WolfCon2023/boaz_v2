@@ -8,6 +8,7 @@ import { hasEmailNotificationsEnabled } from './preferences-helper.js'
  * @param subject - Email subject
  * @param text - Plain text email body
  * @param html - HTML email body
+ * @param attachments - Array of attachment objects with filename, content (base64 or buffer), and contentType
  * @param checkPreferences - If true, checks user's email notification preference before sending. Defaults to false for critical emails.
  */
 export async function sendAuthEmail({ 
@@ -15,12 +16,14 @@ export async function sendAuthEmail({
   subject, 
   text, 
   html,
+  attachments,
   checkPreferences = false 
 }: { 
   to: string
   subject: string
   text?: string
   html?: string
+  attachments?: Array<{ filename: string; content: string | Buffer; contentType?: string }>
   checkPreferences?: boolean
 }) {
   // Check user preferences if requested
@@ -36,7 +39,7 @@ export async function sendAuthEmail({
   // Try SendGrid first
   if (env.SENDGRID_API_KEY && env.OUTBOUND_EMAIL_FROM) {
     try {
-      const sgPayload = {
+      const sgPayload: any = {
         personalizations: [{ to: [{ email: to }] }],
         from: { email: env.OUTBOUND_EMAIL_FROM },
         subject,
@@ -45,6 +48,17 @@ export async function sendAuthEmail({
           text ? { type: 'text/plain', value: String(text) } : undefined,
         ].filter(Boolean),
       }
+      
+      // Add attachments if provided
+      if (attachments && attachments.length > 0) {
+        sgPayload.attachments = attachments.map((att) => ({
+          content: typeof att.content === 'string' ? att.content : att.content.toString('base64'),
+          filename: att.filename,
+          type: att.contentType,
+          disposition: 'attachment',
+        }))
+      }
+      
       const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
         headers: {
@@ -64,20 +78,35 @@ export async function sendAuthEmail({
   // Try Mailgun
   if (env.MAILGUN_API_KEY && env.MAILGUN_DOMAIN && env.OUTBOUND_EMAIL_FROM) {
     try {
-      const form = new URLSearchParams({
-        to,
-        from: env.OUTBOUND_EMAIL_FROM,
-        subject,
-        text: text || '',
-        html: html || '',
-      })
+      // Use form-data package for Node.js multipart/form-data
+      const FormData = (await import('form-data')).default
+      const formData = new FormData()
+      formData.append('to', to)
+      formData.append('from', env.OUTBOUND_EMAIL_FROM)
+      formData.append('subject', subject)
+      if (text) formData.append('text', text)
+      if (html) formData.append('html', html)
+      
+      // Add attachments if provided
+      if (attachments && attachments.length > 0) {
+        for (const att of attachments) {
+          const content = typeof att.content === 'string' 
+            ? Buffer.from(att.content, 'base64')
+            : att.content
+          formData.append('attachment', content, {
+            filename: att.filename,
+            contentType: att.contentType || 'application/octet-stream',
+          })
+        }
+      }
+      
       const r = await fetch(`https://api.mailgun.net/v3/${env.MAILGUN_DOMAIN}/messages`, {
         method: 'POST',
         headers: {
           Authorization: 'Basic ' + Buffer.from('api:' + env.MAILGUN_API_KEY).toString('base64'),
-          'Content-Type': 'application/x-www-form-urlencoded',
+          ...formData.getHeaders(),
         },
-        body: form.toString(),
+        body: formData as any,
       })
       if (r.ok) {
         return { sent: true, provider: 'mailgun' }
@@ -97,7 +126,21 @@ export async function sendAuthEmail({
         auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
       })
       const fromAddr = env.ALERT_FROM || env.SMTP_USER || 'no-reply@example.com'
-      await transporter.sendMail({ from: fromAddr, to, subject, text, html })
+      
+      const mailOptions: any = { from: fromAddr, to, subject, text, html }
+      
+      // Add attachments if provided
+      if (attachments && attachments.length > 0) {
+        mailOptions.attachments = attachments.map((att) => ({
+          filename: att.filename,
+          content: typeof att.content === 'string' 
+            ? Buffer.from(att.content, 'base64')
+            : att.content,
+          contentType: att.contentType,
+        }))
+      }
+      
+      await transporter.sendMail(mailOptions)
       return { sent: true, provider: 'smtp' }
     } catch (e) {
       throw new Error('All email providers failed')

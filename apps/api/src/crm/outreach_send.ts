@@ -1,4 +1,7 @@
 import { Router } from 'express'
+import multer, { FileFilterCallback } from 'multer'
+import fs from 'fs'
+import path from 'path'
 import { getDb } from '../db.js'
 import { env } from '../env.js'
 import { requireAuth } from '../auth/rbac.js'
@@ -6,12 +9,56 @@ import { sendAuthEmail } from '../auth/email.js'
 
 export const outreachSendRouter = Router()
 
-// POST /api/crm/outreach/send/email { to, subject, text, html, variant }
-outreachSendRouter.post('/email', requireAuth, async (req, res) => {
+// Setup multer for file uploads
+const uploadDir = env.UPLOAD_DIR || path.join(process.cwd(), 'uploads')
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true })
+
+const storage = multer.diskStorage({
+  destination: (_req: any, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => cb(null, uploadDir),
+  filename: (_req: any, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_')
+    const ts = Date.now()
+    cb(null, `${ts}-${safe}`)
+  },
+})
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
+  fileFilter: (_req: any, file: Express.Multer.File, cb: FileFilterCallback) => {
+    // Allow most file types for email attachments
+    cb(null, true)
+  },
+})
+
+// POST /api/crm/outreach/send/email { to, subject, text, html, variant } + file attachment
+outreachSendRouter.post('/email', requireAuth, upload.single('attachment'), async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
   const { to, subject, text, html, variant } = req.body ?? {}
   if (!to || !(subject || text || html)) return res.status(400).json({ data: null, error: 'invalid_payload' })
+  
+  const file = (req as any).file as Express.Multer.File | undefined
+  let attachment: { filename: string; content: Buffer; contentType?: string } | undefined
+  
+  // Process attachment if provided
+  if (file) {
+    try {
+      const fileContent = fs.readFileSync(file.path)
+      attachment = {
+        filename: file.originalname,
+        content: fileContent,
+        contentType: file.mimetype,
+      }
+      // Clean up temp file after reading
+      fs.unlinkSync(file.path)
+    } catch (err) {
+      console.error('Error reading attachment file:', err)
+      // Continue without attachment if file read fails
+    }
+  }
+  
   try {
     // Log sent event immediately
     await db.collection('outreach_events').insertOne({ channel: 'email', event: 'sent', recipient: to, variant: variant ?? null, at: new Date() })
@@ -24,6 +71,7 @@ outreachSendRouter.post('/email', requireAuth, async (req, res) => {
       subject: subject || 'Message',
       text: text || undefined,
       html: html || undefined,
+      attachments: attachment ? [attachment] : undefined,
       checkPreferences: false, // Don't check preferences for one-off emails
     })
     

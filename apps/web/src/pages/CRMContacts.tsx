@@ -169,7 +169,9 @@ export default function CRMContacts() {
 
   // Refs for outreach action inputs to avoid nested forms
   const seqSelectRef = React.useRef<HTMLSelectElement | null>(null)
+  const oneOffSubjectRef = React.useRef<HTMLInputElement | null>(null)
   const oneOffTextRef = React.useRef<HTMLInputElement | null>(null)
+  const oneOffAttachmentRef = React.useRef<HTMLInputElement | null>(null)
   const seqNameById = React.useMemo(() => {
     const list = seqs.data?.data.items ?? []
     return new Map(list.map((s) => [s._id, s.name ?? 'Sequence']))
@@ -572,26 +574,54 @@ export default function CRMContacts() {
                   </div>
                   <div>
                     <label className="text-xs">Send one‑off email</label>
-                    <input ref={oneOffTextRef} placeholder="Body" className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
+                    <input ref={oneOffSubjectRef} placeholder="Subject" className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
+                    <textarea ref={oneOffTextRef} placeholder="Body" rows={3} className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
+                    <input 
+                      ref={oneOffAttachmentRef}
+                      type="file"
+                      className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs file:mr-4 file:rounded file:border-0 file:bg-[color:var(--color-primary-600)] file:px-3 file:py-1 file:text-xs file:text-white file:hover:bg-[color:var(--color-primary-700)]"
+                    />
                     <button type="button" className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={async () => { 
                       const to = editing.email || ''
+                      const subject = oneOffSubjectRef.current?.value || ''
                       const text = oneOffTextRef.current?.value || ''
+                      const file = oneOffAttachmentRef.current?.files?.[0]
+                      
                       if (!to) {
                         alert('Contact email is required')
+                        return
+                      }
+                      if (!subject) {
+                        alert('Email subject is required')
                         return
                       }
                       if (!text) {
                         alert('Email body is required')
                         return
                       }
+                      
                       try {
-                        const res = await http.post('/api/crm/outreach/send/email', { to, subject: 'Message', text })
+                        const formData = new FormData()
+                        formData.append('to', to)
+                        formData.append('subject', subject)
+                        formData.append('text', text)
+                        if (file) {
+                          formData.append('attachment', file)
+                        }
+                        
+                        const res = await http.post('/api/crm/outreach/send/email', formData, {
+                          headers: {
+                            'Content-Type': 'multipart/form-data',
+                          },
+                        })
                         const data = res.data?.data
                         if (data?.queued) {
                           const provider = data.provider || 'email service'
                           const warning = data.warning ? ` (${data.warning})` : ''
                           alert(`Email sent successfully via ${provider}!${warning}`)
+                          if (oneOffSubjectRef.current) oneOffSubjectRef.current.value = ''
                           if (oneOffTextRef.current) oneOffTextRef.current.value = ''
+                          if (oneOffAttachmentRef.current) oneOffAttachmentRef.current.value = ''
                         } else {
                           alert('Email may not have been sent. Please check the server logs.')
                         }
