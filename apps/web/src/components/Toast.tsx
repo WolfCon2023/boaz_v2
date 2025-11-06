@@ -22,7 +22,7 @@ export function useToast() {
   if (!context) {
     // Fallback to a no-op if used outside provider (for backwards compatibility)
     return {
-      showToast: (message: string, type?: ToastType) => {
+      showToast: (message: string, _type?: ToastType) => {
         console.warn('Toast used outside provider:', message)
         // Fallback to alert for backwards compatibility
         alert(`Message from BOAZ: ${message}`)
