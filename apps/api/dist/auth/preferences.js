@@ -7,6 +7,10 @@ const PrefsSchema = z.object({
     theme: z.enum(['light', 'dark']).optional(),
     layout: z.enum(['default', 'compact']).optional(),
     locale: z.string().optional(),
+    timezone: z.string().optional(),
+    dateFormat: z.enum(['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD']).optional(),
+    timeFormat: z.enum(['12h', '24h']).optional(),
+    emailNotifications: z.boolean().optional(),
 });
 preferencesRouter.get('/preferences/me', requireAuth, async (req, res) => {
     const db = await getDb();

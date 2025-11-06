@@ -3,6 +3,28 @@ import { getDb } from '../db.js';
 import { z } from 'zod';
 import { ObjectId } from 'mongodb';
 export const dealsRouter = Router();
+// Helper function to add history entry
+async function addDealHistory(db, dealId, eventType, description, userId, userName, userEmail, oldValue, newValue, metadata) {
+    try {
+        await db.collection('deal_history').insertOne({
+            _id: new ObjectId(),
+            dealId,
+            eventType,
+            description,
+            userId,
+            userName,
+            userEmail,
+            oldValue,
+            newValue,
+            metadata,
+            createdAt: new Date(),
+        });
+    }
+    catch (err) {
+        console.error('Failed to add deal history:', err);
+        // Don't fail the main operation if history fails
+    }
+}
 dealsRouter.get('/', async (req, res) => {
     const db = await getDb();
     if (!db)
@@ -124,6 +146,15 @@ dealsRouter.post('/', async (req, res) => {
             }
         }
         const result = await db.collection('deals').insertOne(doc);
+        // Add history entry for creation
+        const auth = req.auth;
+        if (auth) {
+            const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+            await addDealHistory(db, result.insertedId, 'created', `Deal created: ${title}`, auth.userId, user?.name, auth.email);
+        }
+        else {
+            await addDealHistory(db, result.insertedId, 'created', `Deal created: ${title}`);
+        }
         if (doc.dealNumber == null) {
             // Emergency fallback: assign after insert
             try {
@@ -166,6 +197,19 @@ dealsRouter.patch('/:id/stage', async (req, res) => {
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     try {
         const _id = new ObjectId(req.params.id);
+        const currentDeal = await db.collection('deals').findOne({ _id });
+        if (!currentDeal) {
+            return res.status(404).json({ data: null, error: 'not_found' });
+        }
+        const auth = req.auth;
+        let user = null;
+        if (auth) {
+            user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        }
+        // Track stage change
+        if (parsed.data.stage !== currentDeal.stage) {
+            await addDealHistory(db, _id, 'stage_changed', `Stage changed from "${currentDeal.stage}" to "${parsed.data.stage}"`, auth?.userId, user?.name, auth?.email, currentDeal.stage, parsed.data.stage);
+        }
         await db.collection('deals').updateOne({ _id }, { $set: { stage: parsed.data.stage } });
         res.json({ data: { ok: true }, error: null });
     }
@@ -206,7 +250,17 @@ dealsRouter.put('/:id', async (req, res) => {
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     try {
         const _id = new ObjectId(req.params.id);
+        // Get current deal for comparison
+        const currentDeal = await db.collection('deals').findOne({ _id });
+        if (!currentDeal) {
+            return res.status(404).json({ data: null, error: 'not_found' });
+        }
         const update = { ...parsed.data };
+        const auth = req.auth;
+        let user = null;
+        if (auth) {
+            user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        }
         if (update.accountId)
             update.accountId = new ObjectId(update.accountId);
         if (update.marketingCampaignId && ObjectId.isValid(update.marketingCampaignId))
@@ -216,6 +270,24 @@ dealsRouter.put('/:id', async (req, res) => {
         const closedWon = 'Contract Signed / Closed Won';
         if (update.closeDate)
             update.closeDate = new Date(`${update.closeDate}T12:00:00Z`);
+        // Track stage changes
+        if (update.stage && update.stage !== currentDeal.stage) {
+            await addDealHistory(db, _id, 'stage_changed', `Stage changed from "${currentDeal.stage}" to "${update.stage}"`, auth?.userId, user?.name, auth?.email, currentDeal.stage, update.stage);
+        }
+        // Track amount changes
+        if (update.amount !== undefined && update.amount !== currentDeal.amount) {
+            const oldAmount = currentDeal.amount ?? 0;
+            const newAmount = update.amount ?? 0;
+            await addDealHistory(db, _id, 'amount_changed', `Amount changed from $${oldAmount.toLocaleString()} to $${newAmount.toLocaleString()}`, auth?.userId, user?.name, auth?.email, oldAmount, newAmount);
+        }
+        // Track title changes
+        if (update.title && update.title !== currentDeal.title) {
+            await addDealHistory(db, _id, 'field_changed', `Title changed from "${currentDeal.title}" to "${update.title}"`, auth?.userId, user?.name, auth?.email, currentDeal.title, update.title);
+        }
+        // Track closeDate changes
+        if (update.closeDate && update.closeDate.toString() !== (currentDeal.closeDate?.toString() || '')) {
+            await addDealHistory(db, _id, 'field_changed', `Close date changed to ${new Date(update.closeDate).toLocaleDateString()}`, auth?.userId, user?.name, auth?.email);
+        }
         // Auto-populate closeDate when moving to Closed Won
         if (update.stage === closedWon && !update.closeDate) {
             update.closeDate = new Date();
@@ -226,7 +298,45 @@ dealsRouter.put('/:id', async (req, res) => {
             updateDoc.$unset = { closeDate: '' };
         }
         await db.collection('deals').updateOne({ _id }, updateDoc);
+        // Add general update entry if no specific changes were tracked
+        if (!update.stage && update.amount === undefined && !update.title && !update.closeDate) {
+            await addDealHistory(db, _id, 'updated', 'Deal updated', auth?.userId, user?.name, auth?.email);
+        }
         res.json({ data: { ok: true }, error: null });
+    }
+    catch {
+        res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+});
+// GET /api/crm/deals/:id/history
+dealsRouter.get('/:id/history', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const _id = new ObjectId(req.params.id);
+        const d = await db.collection('deals').findOne({ _id });
+        if (!d)
+            return res.status(404).json({ data: null, error: 'not_found' });
+        // Get all history entries for this deal, sorted by date (newest first)
+        const historyEntries = await db.collection('deal_history')
+            .find({ dealId: _id })
+            .sort({ createdAt: -1 })
+            .toArray();
+        res.json({
+            data: {
+                history: historyEntries,
+                deal: {
+                    title: d.title,
+                    stage: d.stage,
+                    amount: d.amount,
+                    dealNumber: d.dealNumber,
+                    createdAt: d.createdAt || _id.getTimestamp(),
+                    updatedAt: d.updatedAt
+                }
+            },
+            error: null
+        });
     }
     catch {
         res.status(400).json({ data: null, error: 'invalid_id' });

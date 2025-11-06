@@ -22,8 +22,19 @@ function buildFilterFromRules(rules) {
     return ands.length ? { $and: ands } : {};
 }
 function injectUnsubscribe(html, unsubscribeUrl) {
-    if (html.includes('{{unsubscribeUrl}}'))
+    // Support both {{unsubscribeUrl}} and {{unsubscribeurl}} (case-insensitive)
+    if (html.includes('{{unsubscribeUrl}}')) {
         return html.replaceAll('{{unsubscribeUrl}}', unsubscribeUrl);
+    }
+    if (html.includes('{{unsubscribeurl}}')) {
+        return html.replaceAll('{{unsubscribeurl}}', unsubscribeUrl);
+    }
+    // Case-insensitive replacement as fallback
+    const regex = /\{\{unsubscribeurl\}\}/gi;
+    if (regex.test(html)) {
+        return html.replace(regex, unsubscribeUrl);
+    }
+    // If no placeholder found, append footer
     const footer = `<p style="font-size:12px;color:#64748b">You received this email because you subscribed. <a href="${unsubscribeUrl}">Unsubscribe</a></p>`;
     return html + footer;
 }

@@ -3,6 +3,28 @@ import { getDb } from '../db.js';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 export const crmRouter = Router();
+// Helper function to add history entry
+async function addContactHistory(db, contactId, eventType, description, userId, userName, userEmail, oldValue, newValue, metadata) {
+    try {
+        await db.collection('contact_history').insertOne({
+            _id: new ObjectId(),
+            contactId,
+            eventType,
+            description,
+            userId,
+            userName,
+            userEmail,
+            oldValue,
+            newValue,
+            metadata,
+            createdAt: new Date(),
+        });
+    }
+    catch (err) {
+        console.error('Failed to add contact history:', err);
+        // Don't fail the main operation if history fails
+    }
+}
 // GET /api/crm/contacts?q=&cursor=&limit=&page=
 crmRouter.get('/contacts', async (req, res) => {
     try {
@@ -76,6 +98,15 @@ crmRouter.post('/contacts', async (req, res) => {
     const { name, company, email, mobilePhone, officePhone, isPrimary, primaryPhone } = parsed.data;
     const doc = { name, company, email, mobilePhone, officePhone, isPrimary: Boolean(isPrimary), primaryPhone };
     const result = await db.collection('contacts').insertOne(doc);
+    // Add history entry for creation
+    const auth = req.auth;
+    if (auth) {
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        await addContactHistory(db, result.insertedId, 'created', `Contact created: ${name}`, auth.userId, user?.name, auth.email);
+    }
+    else {
+        await addContactHistory(db, result.insertedId, 'created', `Contact created: ${name}`);
+    }
     res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null });
 });
 // PUT /api/crm/contacts/:id
@@ -97,8 +128,31 @@ crmRouter.put('/contacts/:id', async (req, res) => {
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     try {
         const _id = new ObjectId(req.params.id);
+        // Get current contact for comparison
+        const currentContact = await db.collection('contacts').findOne({ _id });
+        if (!currentContact) {
+            return res.status(404).json({ data: null, error: 'not_found' });
+        }
         const update = parsed.data;
+        const auth = req.auth;
+        let user = null;
+        if (auth) {
+            user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        }
+        // Track field changes
+        const fieldsToTrack = ['name', 'company', 'email', 'mobilePhone', 'officePhone', 'isPrimary', 'primaryPhone'];
+        let hasChanges = false;
+        for (const field of fieldsToTrack) {
+            if (update[field] !== undefined && update[field] !== currentContact[field]) {
+                hasChanges = true;
+                await addContactHistory(db, _id, 'field_changed', `${field === 'isPrimary' ? 'Primary contact status' : field === 'primaryPhone' ? 'Primary phone' : field.charAt(0).toUpperCase() + field.slice(1)} changed from "${currentContact[field] ?? 'empty'}" to "${update[field] ?? 'empty'}"`, auth?.userId, user?.name, auth?.email, currentContact[field], update[field]);
+            }
+        }
         await db.collection('contacts').updateOne({ _id }, { $set: update });
+        // Add general update entry if no specific changes were tracked
+        if (!hasChanges) {
+            await addContactHistory(db, _id, 'updated', 'Contact updated', auth?.userId, user?.name, auth?.email);
+        }
         res.json({ data: { ok: true }, error: null });
     }
     catch {
@@ -130,6 +184,11 @@ crmRouter.get('/contacts/:id/history', async (req, res) => {
         if (!contact)
             return res.status(404).json({ data: null, error: 'not_found' });
         const createdAt = _id.getTimestamp();
+        // Get all history entries for this contact, sorted by date (newest first)
+        const historyEntries = await db.collection('contact_history')
+            .find({ contactId: _id })
+            .sort({ createdAt: -1 })
+            .toArray();
         // Enrollments
         const enrollments = await db
             .collection('outreach_enrollments')
@@ -172,7 +231,21 @@ crmRouter.get('/contacts/:id/history', async (req, res) => {
                 .limit(200)
                 .toArray()
             : [];
-        res.json({ data: { createdAt, enrollments: enrollmentsOut, events }, error: null });
+        res.json({
+            data: {
+                history: historyEntries,
+                createdAt,
+                enrollments: enrollmentsOut,
+                events,
+                contact: {
+                    name: contact.name,
+                    email: contact.email,
+                    company: contact.company,
+                    createdAt,
+                }
+            },
+            error: null
+        });
     }
     catch {
         res.status(400).json({ data: null, error: 'invalid_id' });

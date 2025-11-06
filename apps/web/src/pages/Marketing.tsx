@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { http } from '@/lib/http'
+import { http, apiBaseURL, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { Type, Image, MousePointerClick, Minus, Columns } from 'lucide-react'
@@ -475,11 +475,52 @@ function SimpleBuilderUI({
                     </>
                   ) : block.type === 'image' ? (
                     <>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            
+                            try {
+                              const formData = new FormData()
+                              formData.append('image', file)
+                              
+                              const res = await http.post('/api/marketing/images/upload', formData, {
+                                headers: { 'Content-Type': 'multipart/form-data' },
+                              })
+                              
+                              if (res.data?.data?.url) {
+                                // Construct the full image URL using the API base URL
+                                const imageUrl = getApiUrl(res.data.data.url)
+                                setEditingBlock({ ...editingBlock, imageUrl })
+                              }
+                            } catch (err: any) {
+                              alert(`Failed to upload image: ${err?.response?.data?.error || err?.message || 'Unknown error'}`)
+                            }
+                            
+                            // Reset the input
+                            e.target.value = ''
+                          }}
+                          className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent text-xs"
+                        />
+                        {editingBlock.imageUrl && (
+                          <img 
+                            src={editingBlock.imageUrl} 
+                            alt="Preview" 
+                            className="h-12 w-12 object-cover rounded border"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none'
+                            }}
+                          />
+                        )}
+                      </div>
                       <input
                         type="text"
                         value={editingBlock.imageUrl || ''}
                         onChange={(e) => setEditingBlock({ ...editingBlock, imageUrl: e.target.value })}
-                        placeholder="Image URL"
+                        placeholder="Or enter image URL"
                         className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
                       />
                       <input
@@ -535,7 +576,29 @@ function SimpleBuilderUI({
                 <div className="text-sm text-[color:var(--color-text-muted)]">
                   {block.type === 'heading' && <div className="font-bold text-lg">{block.content || '(Empty heading)'}</div>}
                   {block.type === 'text' && <div>{block.content || '(Empty text)'}</div>}
-                  {block.type === 'image' && <div>🖼️ {block.imageUrl || '(No image URL)'}</div>}
+                  {block.type === 'image' && (
+                    <div className="space-y-1">
+                      {block.imageUrl ? (
+                        <img 
+                          src={block.imageUrl} 
+                          alt={block.content || 'Image'} 
+                          className="max-w-full h-24 object-contain rounded border"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none'
+                            const parent = (e.target as HTMLImageElement).parentElement
+                            if (parent) {
+                              const errorDiv = document.createElement('div')
+                              errorDiv.textContent = `🖼️ ${block.imageUrl}`
+                              errorDiv.className = 'text-xs'
+                              parent.appendChild(errorDiv)
+                            }
+                          }}
+                        />
+                      ) : (
+                        <div>🖼️ (No image URL)</div>
+                      )}
+                    </div>
+                  )}
                   {block.type === 'button' && <div>🔘 {block.buttonText || '(Empty button)'}</div>}
                   {block.type === 'divider' && <div className="border-t my-2"></div>}
                   {block.type === 'two-columns' && <div className="grid grid-cols-2 gap-2 text-xs">{block.content.split('|||')[0] || '(Left)'} | {block.content.split('|||')[1] || '(Right)'}</div>}

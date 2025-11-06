@@ -16,6 +16,30 @@ export async function ensureDefaultRoles() {
     if (count === 0) {
         await db.collection('roles').insertMany(DEFAULT_ROLES.map((r) => ({ _id: new ObjectId(), name: r.name, permissions: r.permissions })));
     }
+    // Ensure indexes for user_roles collection (for performance)
+    try {
+        await db.collection('user_roles').createIndex({ userId: 1 }).catch(() => {
+            // Index might already exist
+        });
+        await db.collection('user_roles').createIndex({ roleId: 1 }).catch(() => {
+            // Index might already exist
+        });
+        await db.collection('user_roles').createIndex({ userId: 1, roleId: 1 }, { unique: true }).catch(() => {
+            // Index might already exist - ensures one role assignment per user
+        });
+    }
+    catch (err) {
+        console.warn('Warning: Could not ensure user_roles indexes:', err);
+    }
+    // Ensure index for roles collection
+    try {
+        await db.collection('roles').createIndex({ name: 1 }, { unique: true }).catch(() => {
+            // Index might already exist
+        });
+    }
+    catch (err) {
+        console.warn('Warning: Could not ensure roles index:', err);
+    }
 }
 export function requireAuth(req, res, next) {
     const auth = req.headers.authorization;
@@ -46,5 +70,19 @@ export function requirePermission(permission) {
         if (allPerms.has('*') || allPerms.has(permission))
             return next();
         return res.status(403).json({ error: 'forbidden' });
+    };
+}
+export function requireApplication(appKey) {
+    return async function (req, res, next) {
+        const auth = req.auth;
+        if (!auth)
+            return res.status(401).json({ error: 'Unauthorized' });
+        // Import here to avoid circular dependency
+        const { hasApplicationAccess } = await import('./store.js');
+        const hasAccess = await hasApplicationAccess(auth.userId, appKey);
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Access denied: Application access required' });
+        }
+        next();
     };
 }

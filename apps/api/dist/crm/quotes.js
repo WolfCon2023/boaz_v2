@@ -1,7 +1,32 @@
 import { Router } from 'express';
 import { getDb } from '../db.js';
 import { ObjectId } from 'mongodb';
+import { requireAuth } from '../auth/rbac.js';
+import { sendAuthEmail } from '../auth/email.js';
+import { env } from '../env.js';
 export const quotesRouter = Router();
+// Helper function to add history entry
+async function addQuoteHistory(db, quoteId, eventType, description, userId, userName, userEmail, oldValue, newValue, metadata) {
+    try {
+        await db.collection('quote_history').insertOne({
+            _id: new ObjectId(),
+            quoteId,
+            eventType,
+            description,
+            userId,
+            userName,
+            userEmail,
+            oldValue,
+            newValue,
+            metadata,
+            createdAt: new Date(),
+        });
+    }
+    catch (err) {
+        console.error('Failed to add quote history:', err);
+        // Don't fail the main operation if history fails
+    }
+}
 // List with search/sort
 quotesRouter.get('/', async (req, res) => {
     const db = await getDb();
@@ -81,6 +106,15 @@ quotesRouter.post('/', async (req, res) => {
         }
     }
     const result = await db.collection('quotes').insertOne(doc);
+    // Add history entry for creation
+    const auth = req.auth;
+    if (auth) {
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        await addQuoteHistory(db, result.insertedId, 'created', `Quote created: ${title}`, auth.userId, user?.name, auth.email);
+    }
+    else {
+        await addQuoteHistory(db, result.insertedId, 'created', `Quote created: ${title}`);
+    }
     res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null });
 });
 // Update (basic fields + version bump on items/total changes)
@@ -91,24 +125,53 @@ quotesRouter.put('/:id', async (req, res) => {
     try {
         const _id = new ObjectId(req.params.id);
         const raw = req.body ?? {};
+        // Get current quote for comparison
+        const currentQuote = await db.collection('quotes').findOne({ _id });
+        if (!currentQuote) {
+            return res.status(404).json({ data: null, error: 'not_found' });
+        }
         const update = { updatedAt: new Date() };
-        if (typeof raw.title === 'string')
-            update.title = raw.title.trim();
-        if (typeof raw.status === 'string')
+        const auth = req.auth;
+        let user = null;
+        if (auth) {
+            user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        }
+        // Track status changes
+        if (typeof raw.status === 'string' && raw.status !== currentQuote.status) {
             update.status = raw.status;
+            await addQuoteHistory(db, _id, 'status_changed', `Status changed from "${currentQuote.status}" to "${raw.status}"`, auth?.userId, user?.name, auth?.email, currentQuote.status, raw.status);
+        }
+        // Track title changes
+        if (typeof raw.title === 'string') {
+            const newTitle = raw.title.trim();
+            if (newTitle !== currentQuote.title) {
+                update.title = newTitle;
+                await addQuoteHistory(db, _id, 'field_changed', `Title changed from "${currentQuote.title}" to "${newTitle}"`, auth?.userId, user?.name, auth?.email, currentQuote.title, newTitle);
+            }
+        }
         if (typeof raw.approver === 'string')
             update.approver = raw.approver;
         if (raw.approvedAt)
             update.approvedAt = new Date(raw.approvedAt);
-        if (typeof raw.signerName === 'string')
+        // Track signer changes
+        if (typeof raw.signerName === 'string' && raw.signerName !== currentQuote.signerName) {
             update.signerName = raw.signerName;
-        if (typeof raw.signerEmail === 'string')
+            await addQuoteHistory(db, _id, 'field_changed', `Signer name changed to "${raw.signerName}"`, auth?.userId, user?.name, auth?.email);
+        }
+        if (typeof raw.signerEmail === 'string' && raw.signerEmail !== currentQuote.signerEmail) {
             update.signerEmail = raw.signerEmail;
-        if (typeof raw.esignStatus === 'string') {
+            await addQuoteHistory(db, _id, 'field_changed', `Signer email changed to "${raw.signerEmail}"`, auth?.userId, user?.name, auth?.email);
+        }
+        // Track e-sign status changes
+        if (typeof raw.esignStatus === 'string' && raw.esignStatus !== currentQuote.esignStatus) {
             update.esignStatus = raw.esignStatus;
             // simple auto-transitions for signedAt
             if (raw.esignStatus === 'Signed' && !raw.signedAt) {
                 update.signedAt = new Date();
+                await addQuoteHistory(db, _id, 'signed', `Quote signed by ${currentQuote.signerName || currentQuote.signerEmail || 'Unknown'}`, auth?.userId, user?.name, auth?.email);
+            }
+            else {
+                await addQuoteHistory(db, _id, 'field_changed', `E-sign status changed from "${currentQuote.esignStatus}" to "${raw.esignStatus}"`, auth?.userId, user?.name, auth?.email, currentQuote.esignStatus, raw.esignStatus);
             }
             if (raw.esignStatus !== 'Signed' && raw.signedAt === null) {
                 update.signedAt = null;
@@ -116,18 +179,25 @@ quotesRouter.put('/:id', async (req, res) => {
         }
         if (raw.signedAt)
             update.signedAt = new Date(raw.signedAt);
+        // Track version changes (when items/total change)
         if (Array.isArray(raw.items)) {
+            const oldTotal = currentQuote.total || 0;
+            const newTotal = Number(raw.total) || 0;
+            const oldVersion = currentQuote.version || 1;
             update.items = raw.items;
             update.subtotal = Number(raw.subtotal) || 0;
             update.tax = Number(raw.tax) || 0;
-            update.total = Number(raw.total) || 0;
-            // bump version
-            const q = await db.collection('quotes').findOne({ _id }, { projection: { version: 1 } });
-            update.version = q?.version ? q.version + 1 : 2;
+            update.total = newTotal;
+            update.version = oldVersion + 1;
+            await addQuoteHistory(db, _id, 'version_changed', `Quote updated to version ${oldVersion + 1}. Total changed from $${oldTotal.toFixed(2)} to $${newTotal.toFixed(2)}`, auth?.userId, user?.name, auth?.email, { version: oldVersion, total: oldTotal }, { version: oldVersion + 1, total: newTotal });
         }
         if (raw.accountId && ObjectId.isValid(raw.accountId))
             update.accountId = new ObjectId(raw.accountId);
         await db.collection('quotes').updateOne({ _id }, { $set: update });
+        // Add general update entry if no specific changes were tracked
+        if (Object.keys(update).length === 1) { // Only updatedAt
+            await addQuoteHistory(db, _id, 'updated', 'Quote updated', auth?.userId, user?.name, auth?.email);
+        }
         res.json({ data: { ok: true }, error: null });
     }
     catch {
@@ -144,9 +214,53 @@ quotesRouter.get('/:id/history', async (req, res) => {
         const q = await db.collection('quotes').findOne({ _id });
         if (!q)
             return res.status(404).json({ data: null, error: 'not_found' });
-        const createdAt = q.createdAt || _id.getTimestamp();
-        // Any events by account (if denormalized) could be added here
-        res.json({ data: { createdAt, quote: { title: q.title, status: q.status, total: q.total, quoteNumber: q.quoteNumber, updatedAt: q.updatedAt } }, error: null });
+        // Get all history entries for this quote, sorted by date (newest first)
+        const historyEntries = await db.collection('quote_history')
+            .find({ quoteId: _id })
+            .sort({ createdAt: -1 })
+            .toArray();
+        // Get approval requests for this quote
+        const approvalRequests = await db.collection('quote_approval_requests')
+            .find({ quoteId: _id })
+            .sort({ createdAt: -1 })
+            .toArray();
+        // Add approval request events to history
+        for (const req of approvalRequests) {
+            if (req.status === 'pending') {
+                // Check if this is already in history
+                const exists = historyEntries.some(h => h.eventType === 'approval_requested' &&
+                    h.metadata?.approvalRequestId?.toString() === req._id.toString());
+                if (!exists) {
+                    historyEntries.push({
+                        _id: new ObjectId(),
+                        quoteId: _id,
+                        eventType: 'approval_requested',
+                        description: `Approval requested from ${req.approverEmail}`,
+                        userId: req.requesterId,
+                        userEmail: req.requesterEmail,
+                        userName: req.requesterName,
+                        createdAt: req.requestedAt,
+                        metadata: { approvalRequestId: req._id },
+                    });
+                }
+            }
+        }
+        // Sort all entries by date (newest first)
+        historyEntries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        res.json({
+            data: {
+                history: historyEntries,
+                quote: {
+                    title: q.title,
+                    status: q.status,
+                    total: q.total,
+                    quoteNumber: q.quoteNumber,
+                    createdAt: q.createdAt || _id.getTimestamp(),
+                    updatedAt: q.updatedAt
+                }
+            },
+            error: null
+        });
     }
     catch {
         res.status(400).json({ data: null, error: 'invalid_id' });
@@ -164,5 +278,431 @@ quotesRouter.delete('/:id', async (req, res) => {
     }
     catch {
         res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+});
+// POST /api/crm/quotes/:id/request-approval - Request approval for a quote
+quotesRouter.post('/:id/request-approval', requireAuth, async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const auth = req.auth;
+        const quoteId = new ObjectId(req.params.id);
+        // Get quote
+        const quote = await db.collection('quotes').findOne({ _id: quoteId });
+        if (!quote) {
+            return res.status(404).json({ data: null, error: 'quote_not_found' });
+        }
+        const quoteData = quote;
+        const approverEmail = quoteData.approver;
+        if (!approverEmail || typeof approverEmail !== 'string') {
+            return res.status(400).json({ data: null, error: 'approver_email_required' });
+        }
+        // Get requester info
+        const requester = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        if (!requester) {
+            return res.status(404).json({ data: null, error: 'requester_not_found' });
+        }
+        const requesterData = requester;
+        // Get approver info
+        const approver = await db.collection('users').findOne({ email: approverEmail.toLowerCase() });
+        if (!approver) {
+            return res.status(404).json({ data: null, error: 'approver_not_found' });
+        }
+        const approverData = approver;
+        // Check if approver has manager role
+        const managerRole = await db.collection('roles').findOne({ name: 'manager' });
+        if (!managerRole) {
+            return res.status(500).json({ data: null, error: 'manager_role_not_found' });
+        }
+        const hasManagerRole = await db.collection('user_roles').findOne({
+            userId: approverData._id.toString(),
+            roleId: managerRole._id
+        });
+        if (!hasManagerRole) {
+            return res.status(403).json({ data: null, error: 'approver_not_manager' });
+        }
+        // Check if there's already a pending request
+        const existingRequest = await db.collection('quote_approval_requests').findOne({
+            quoteId,
+            approverEmail: approverEmail.toLowerCase(),
+            status: 'pending'
+        });
+        if (existingRequest) {
+            return res.status(400).json({ data: null, error: 'approval_request_already_exists' });
+        }
+        // Create approval request
+        const now = new Date();
+        const approvalRequest = {
+            _id: new ObjectId(),
+            quoteId,
+            quoteNumber: quoteData.quoteNumber,
+            quoteTitle: quoteData.title,
+            requesterId: auth.userId,
+            requesterEmail: requesterData.email,
+            requesterName: requesterData.name,
+            approverEmail: approverEmail.toLowerCase(),
+            approverId: approverData._id.toString(),
+            status: 'pending',
+            requestedAt: now,
+            createdAt: now,
+            updatedAt: now,
+        };
+        await db.collection('quote_approval_requests').insertOne(approvalRequest);
+        // Update quote status
+        await db.collection('quotes').updateOne({ _id: quoteId }, { $set: { status: 'Submitted for Review', updatedAt: now } });
+        // Add history entry
+        await addQuoteHistory(db, quoteId, 'approval_requested', `Approval requested from ${approverEmail}`, auth.userId, requesterData.name, requesterData.email, quoteData.status, 'Submitted for Review', { approvalRequestId: approvalRequest._id, approverEmail });
+        // Send email to approver
+        const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
+        const approvalQueueUrl = `${baseUrl}/apps/crm/quotes/approval-queue`;
+        try {
+            await sendAuthEmail({
+                to: approverEmail,
+                subject: `Quote Approval Request: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData.title}`,
+                checkPreferences: true,
+                html: `
+          <h2>Quote Approval Request</h2>
+          <p>A new quote requires your approval:</p>
+          <ul>
+            <li><strong>Quote:</strong> ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}</li>
+            <li><strong>Requested by:</strong> ${requesterData.name || requesterData.email}</li>
+            <li><strong>Total:</strong> $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
+            <li><strong>Requested:</strong> ${now.toLocaleString()}</li>
+          </ul>
+          <p><a href="${approvalQueueUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Approval Queue</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${approvalQueueUrl}</code></p>
+        `,
+                text: `
+Quote Approval Request
+
+A new quote requires your approval:
+
+Quote: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}
+Requested by: ${requesterData.name || requesterData.email}
+Total: $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Requested: ${now.toLocaleString()}
+
+View Approval Queue: ${approvalQueueUrl}
+        `,
+            });
+        }
+        catch (emailErr) {
+            console.error('Failed to send approval request email:', emailErr);
+            // Don't fail the request if email fails
+        }
+        res.json({ data: { approvalRequestId: approvalRequest._id, message: 'Approval request sent' }, error: null });
+    }
+    catch (err) {
+        console.error('Request approval error:', err);
+        if (err.message?.includes('invalid_id')) {
+            return res.status(400).json({ data: null, error: 'invalid_id' });
+        }
+        res.status(500).json({ data: null, error: err.message || 'failed_to_request_approval' });
+    }
+});
+// GET /api/crm/quotes/approval-queue - Get approval queue for managers
+quotesRouter.get('/approval-queue', requireAuth, async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const auth = req.auth;
+        // Check if user has manager role
+        const managerRole = await db.collection('roles').findOne({ name: 'manager' });
+        if (!managerRole) {
+            return res.status(500).json({ data: null, error: 'manager_role_not_found' });
+        }
+        // Get all user roles (same approach as requirePermission)
+        const userRoles = await db.collection('user_roles').find({ userId: auth.userId }).toArray();
+        const roleIds = userRoles.map((ur) => ur.roleId);
+        if (roleIds.length === 0) {
+            console.log('No roles found for user:', { userId: auth.userId, email: auth.email });
+            return res.status(403).json({ data: null, error: 'manager_access_required' });
+        }
+        // Get role details
+        const roles = await db.collection('roles').find({ _id: { $in: roleIds } }).toArray();
+        const roleNames = roles.map((r) => r.name);
+        // Check if user has manager or admin role
+        const hasManagerRole = roleNames.includes('manager');
+        const hasAdminRole = roleNames.includes('admin');
+        if (!hasManagerRole && !hasAdminRole) {
+            console.log('User does not have manager or admin role:', {
+                userId: auth.userId,
+                email: auth.email,
+                roles: roleNames,
+            });
+            return res.status(403).json({ data: null, error: 'manager_access_required' });
+        }
+        // Get user email for filtering
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        if (!user) {
+            return res.status(404).json({ data: null, error: 'user_not_found' });
+        }
+        const userData = user;
+        // Get status filter
+        const status = req.query.status || 'all';
+        // Build query
+        const query = { approverEmail: userData.email.toLowerCase() };
+        if (status !== 'all') {
+            query.status = status;
+        }
+        // Get approval requests
+        const requests = await db.collection('quote_approval_requests')
+            .find(query)
+            .sort({ requestedAt: -1 })
+            .limit(100)
+            .toArray();
+        // Get quote details for each request
+        const quoteIds = requests.map(r => r.quoteId);
+        const quotes = await quoteIds.length > 0
+            ? await db.collection('quotes').find({ _id: { $in: quoteIds } }).toArray()
+            : [];
+        const quoteMap = new Map(quotes.map((q) => [q._id.toString(), q]));
+        // Combine requests with quote data
+        const requestsWithQuotes = requests.map(req => {
+            const quote = quoteMap.get(req.quoteId.toString());
+            return {
+                _id: req._id,
+                quoteId: req.quoteId,
+                quote: quote ? {
+                    _id: quote._id,
+                    quoteNumber: quote.quoteNumber,
+                    title: quote.title,
+                    total: quote.total,
+                    status: quote.status,
+                    accountId: quote.accountId,
+                } : null,
+                requesterId: req.requesterId,
+                requesterEmail: req.requesterEmail,
+                requesterName: req.requesterName,
+                approverEmail: req.approverEmail,
+                status: req.status,
+                requestedAt: req.requestedAt,
+                reviewedAt: req.reviewedAt,
+                reviewedBy: req.reviewedBy,
+                reviewNotes: req.reviewNotes,
+            };
+        });
+        res.json({ data: { items: requestsWithQuotes }, error: null });
+    }
+    catch (err) {
+        console.error('Get approval queue error:', err);
+        res.status(500).json({ data: null, error: err.message || 'failed_to_get_approval_queue' });
+    }
+});
+// POST /api/crm/quotes/:id/approve - Approve a quote
+quotesRouter.post('/:id/approve', requireAuth, async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const auth = req.auth;
+        const quoteId = new ObjectId(req.params.id);
+        const { reviewNotes } = req.body || {};
+        // Get all user roles (same approach as requirePermission)
+        const userRoles = await db.collection('user_roles').find({ userId: auth.userId }).toArray();
+        const roleIds = userRoles.map((ur) => ur.roleId);
+        if (roleIds.length === 0) {
+            return res.status(403).json({ data: null, error: 'manager_access_required' });
+        }
+        // Get role details
+        const roles = await db.collection('roles').find({ _id: { $in: roleIds } }).toArray();
+        const roleNames = roles.map((r) => r.name);
+        // Check if user has manager or admin role
+        const hasManagerRole = roleNames.includes('manager');
+        const hasAdminRole = roleNames.includes('admin');
+        if (!hasManagerRole && !hasAdminRole) {
+            return res.status(403).json({ data: null, error: 'manager_access_required' });
+        }
+        // Get user email
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        if (!user) {
+            return res.status(404).json({ data: null, error: 'user_not_found' });
+        }
+        const userData = user;
+        // Get approval request
+        const approvalRequest = await db.collection('quote_approval_requests').findOne({
+            quoteId,
+            approverEmail: userData.email.toLowerCase(),
+            status: 'pending'
+        });
+        if (!approvalRequest) {
+            return res.status(404).json({ data: null, error: 'approval_request_not_found' });
+        }
+        // Update approval request
+        const now = new Date();
+        await db.collection('quote_approval_requests').updateOne({ _id: approvalRequest._id }, {
+            $set: {
+                status: 'approved',
+                reviewedAt: now,
+                reviewedBy: auth.userId,
+                reviewNotes: typeof reviewNotes === 'string' ? reviewNotes : undefined,
+                updatedAt: now,
+            }
+        });
+        // Update quote - ensure status is set to Approved and approver info is saved
+        const quoteUpdate = {
+            status: 'Approved',
+            approvedAt: now,
+            updatedAt: now,
+        };
+        // Ensure approver field is set if not already set
+        const currentQuote = await db.collection('quotes').findOne({ _id: quoteId });
+        if (currentQuote && !currentQuote.approver) {
+            quoteUpdate.approver = userData.email;
+        }
+        const updateResult = await db.collection('quotes').updateOne({ _id: quoteId }, { $set: quoteUpdate });
+        if (updateResult.matchedCount === 0) {
+            return res.status(404).json({ data: null, error: 'quote_not_found' });
+        }
+        // Add history entry for approval
+        await addQuoteHistory(db, quoteId, 'approved', `Quote approved by ${userData.name || userData.email}${typeof reviewNotes === 'string' && reviewNotes ? `: ${reviewNotes}` : ''}`, auth.userId, userData.name, userData.email, currentQuote?.status, 'Approved', { approvalRequestId: approvalRequest._id, reviewNotes });
+        // Send email to requester
+        try {
+            const quote = await db.collection('quotes').findOne({ _id: quoteId });
+            const quoteData = quote;
+            await sendAuthEmail({
+                to: approvalRequest.requesterEmail,
+                subject: `Quote Approved: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData?.title || 'Untitled'}`,
+                checkPreferences: true,
+                html: `
+          <h2>Quote Approved</h2>
+          <p>Your quote has been approved:</p>
+          <ul>
+            <li><strong>Quote:</strong> ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}</li>
+            <li><strong>Approved by:</strong> ${userData.name || userData.email}</li>
+            <li><strong>Approved at:</strong> ${now.toLocaleString()}</li>
+            ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
+          </ul>
+        `,
+                text: `
+Quote Approved
+
+Your quote has been approved:
+
+Quote: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}
+Approved by: ${userData.name || userData.email}
+Approved at: ${now.toLocaleString()}
+${reviewNotes ? `Notes: ${reviewNotes}` : ''}
+        `,
+            });
+        }
+        catch (emailErr) {
+            console.error('Failed to send approval email:', emailErr);
+        }
+        res.json({ data: { message: 'Quote approved' }, error: null });
+    }
+    catch (err) {
+        console.error('Approve quote error:', err);
+        if (err.message?.includes('invalid_id')) {
+            return res.status(400).json({ data: null, error: 'invalid_id' });
+        }
+        res.status(500).json({ data: null, error: err.message || 'failed_to_approve_quote' });
+    }
+});
+// POST /api/crm/quotes/:id/reject - Reject a quote
+quotesRouter.post('/:id/reject', requireAuth, async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const auth = req.auth;
+        const quoteId = new ObjectId(req.params.id);
+        const { reviewNotes } = req.body || {};
+        // Get all user roles (same approach as requirePermission)
+        const userRoles = await db.collection('user_roles').find({ userId: auth.userId }).toArray();
+        const roleIds = userRoles.map((ur) => ur.roleId);
+        if (roleIds.length === 0) {
+            return res.status(403).json({ data: null, error: 'manager_access_required' });
+        }
+        // Get role details
+        const roles = await db.collection('roles').find({ _id: { $in: roleIds } }).toArray();
+        const roleNames = roles.map((r) => r.name);
+        // Check if user has manager or admin role
+        const hasManagerRole = roleNames.includes('manager');
+        const hasAdminRole = roleNames.includes('admin');
+        if (!hasManagerRole && !hasAdminRole) {
+            return res.status(403).json({ data: null, error: 'manager_access_required' });
+        }
+        // Get user email
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        if (!user) {
+            return res.status(404).json({ data: null, error: 'user_not_found' });
+        }
+        const userData = user;
+        // Get approval request
+        const approvalRequest = await db.collection('quote_approval_requests').findOne({
+            quoteId,
+            approverEmail: userData.email.toLowerCase(),
+            status: 'pending'
+        });
+        if (!approvalRequest) {
+            return res.status(404).json({ data: null, error: 'approval_request_not_found' });
+        }
+        // Update approval request
+        const now = new Date();
+        await db.collection('quote_approval_requests').updateOne({ _id: approvalRequest._id }, {
+            $set: {
+                status: 'rejected',
+                reviewedAt: now,
+                reviewedBy: auth.userId,
+                reviewNotes: typeof reviewNotes === 'string' ? reviewNotes : undefined,
+                updatedAt: now,
+            }
+        });
+        // Get current quote for history
+        const currentQuote = await db.collection('quotes').findOne({ _id: quoteId });
+        // Update quote
+        await db.collection('quotes').updateOne({ _id: quoteId }, {
+            $set: {
+                status: 'Rejected',
+                updatedAt: now,
+            }
+        });
+        // Add history entry for rejection
+        await addQuoteHistory(db, quoteId, 'rejected', `Quote rejected by ${userData.name || userData.email}${typeof reviewNotes === 'string' && reviewNotes ? `: ${reviewNotes}` : ''}`, auth.userId, userData.name, userData.email, currentQuote?.status, 'Rejected', { approvalRequestId: approvalRequest._id, reviewNotes });
+        // Send email to requester
+        try {
+            const quote = await db.collection('quotes').findOne({ _id: quoteId });
+            const quoteData = quote;
+            await sendAuthEmail({
+                to: approvalRequest.requesterEmail,
+                subject: `Quote Rejected: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData?.title || 'Untitled'}`,
+                checkPreferences: true,
+                html: `
+          <h2>Quote Rejected</h2>
+          <p>Your quote has been rejected:</p>
+          <ul>
+            <li><strong>Quote:</strong> ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}</li>
+            <li><strong>Rejected by:</strong> ${userData.name || userData.email}</li>
+            <li><strong>Rejected at:</strong> ${now.toLocaleString()}</li>
+            ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
+          </ul>
+        `,
+                text: `
+Quote Rejected
+
+Your quote has been rejected:
+
+Quote: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}
+Rejected by: ${userData.name || userData.email}
+Rejected at: ${now.toLocaleString()}
+${reviewNotes ? `Notes: ${reviewNotes}` : ''}
+        `,
+            });
+        }
+        catch (emailErr) {
+            console.error('Failed to send rejection email:', emailErr);
+        }
+        res.json({ data: { message: 'Quote rejected' }, error: null });
+    }
+    catch (err) {
+        console.error('Reject quote error:', err);
+        if (err.message?.includes('invalid_id')) {
+            return res.status(400).json({ data: null, error: 'invalid_id' });
+        }
+        res.status(500).json({ data: null, error: err.message || 'failed_to_reject_quote' });
     }
 });

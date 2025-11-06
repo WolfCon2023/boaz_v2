@@ -60,12 +60,32 @@ rolesRouter.post('/roles/:id/assign/:userId', requireAuth, requirePermission('ro
     catch {
         return res.status(400).json({ data: null, error: 'invalid_id' });
     }
+    // Validate that user exists
+    let userIdObj;
+    try {
+        userIdObj = new ObjectId(userId);
+    }
+    catch {
+        return res.status(400).json({ data: null, error: 'invalid_user_id' });
+    }
+    const user = await db.collection('users').findOne({ _id: userIdObj });
+    if (!user) {
+        return res.status(404).json({ data: null, error: 'user_not_found' });
+    }
+    // Validate that role exists
     const role = await db.collection('roles').findOne({ _id: roleId });
     if (!role)
         return res.status(404).json({ data: null, error: 'role_not_found' });
+    // Check if assignment already exists (unique index will also prevent duplicates)
     const exists = await db.collection('user_roles').findOne({ userId, roleId });
     if (exists)
-        return res.json({ data: { ok: true }, error: null });
-    await db.collection('user_roles').insertOne({ userId, roleId });
+        return res.json({ data: { ok: true, message: 'Role already assigned' }, error: null });
+    // Assign role with timestamp
+    await db.collection('user_roles').insertOne({
+        _id: new ObjectId(),
+        userId,
+        roleId,
+        createdAt: new Date()
+    });
     res.json({ data: { ok: true }, error: null });
 });
