@@ -391,33 +391,48 @@ dealsRouter.delete('/:id', async (req, res) => {
 
 // PUT /api/crm/deals/:id
 dealsRouter.put('/:id', async (req, res) => {
-  const schema = z.object({
-    title: z.string().min(1).optional(),
-    accountId: z.string().min(1).optional(),
-    amount: z.number().optional(),
-    stage: z.string().optional(),
-    closeDate: z.string().optional(),
-    marketingCampaignId: z.string().optional().or(z.literal('')),
-    attributionToken: z.string().optional(),
-  })
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload' })
-  const db = await getDb()
-  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  
-  // Trim and validate the ID
-  const idParam = String(req.params.id || '').trim()
-  if (!idParam) {
-    return res.status(400).json({ data: null, error: 'invalid_id', details: 'ID parameter is empty' })
-  }
-  if (!ObjectId.isValid(idParam)) {
-    return res.status(400).json({ 
-      data: null, 
-      error: 'invalid_id', 
-      details: `ID "${idParam}" (length: ${idParam.length}) is not a valid ObjectId. Must be exactly 24 hex characters.` 
-    })
-  }
   try {
+    // Log the incoming request for debugging
+    console.log('PUT /api/crm/deals/:id', { 
+      id: req.params.id, 
+      body: req.body,
+      bodyKeys: Object.keys(req.body || {}),
+      params: req.params
+    })
+    
+    // Trim and validate the ID FIRST, before any other processing
+    const idParam = String(req.params.id || '').trim()
+    console.log('Validating ID:', { idParam, length: idParam.length, isValid: ObjectId.isValid(idParam) })
+    
+    if (!idParam) {
+      return res.status(400).json({ data: null, error: 'invalid_id', details: 'ID parameter is empty' })
+    }
+    if (!ObjectId.isValid(idParam)) {
+      return res.status(400).json({ 
+        data: null, 
+        error: 'invalid_id', 
+        details: `ID "${idParam}" (length: ${idParam.length}) is not a valid ObjectId. Must be exactly 24 hex characters.` 
+      })
+    }
+    
+    const schema = z.object({
+      title: z.string().min(1).optional(),
+      accountId: z.string().min(1).optional(),
+      amount: z.number().optional(),
+      stage: z.string().optional(),
+      closeDate: z.string().optional(),
+      marketingCampaignId: z.string().optional().or(z.literal('')),
+      attributionToken: z.string().optional(),
+    })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) {
+      console.error('Schema validation failed:', parsed.error)
+      return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.errors })
+    }
+    const db = await getDb()
+    if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+    
+    try {
     const _id = new ObjectId(idParam)
     
     // Get current deal for comparison
@@ -556,18 +571,49 @@ dealsRouter.put('/:id', async (req, res) => {
       )
     }
     
-    res.json({ data: { ok: true }, error: null })
+      res.json({ data: { ok: true }, error: null })
+    } catch (innerErr: any) {
+      // Log the full error for debugging
+      console.error('Deal update inner error:', { 
+        id: idParam, 
+        error: innerErr,
+        message: innerErr?.message,
+        stack: innerErr?.stack,
+        name: innerErr?.name
+      })
+      
+      // Check if it's an ObjectId construction error
+      if (innerErr?.name === 'BSONTypeError' || innerErr?.message?.includes('ObjectId')) {
+        return res.status(400).json({ 
+          data: null, 
+          error: 'invalid_id',
+          details: `Invalid ObjectId format: "${idParam}". ${innerErr?.message || 'Unknown error'}`
+        })
+      }
+      
+      // Re-throw to outer catch
+      throw innerErr
+    }
   } catch (err: any) {
+    // Log the full error for debugging
+    console.error('Deal update error (outer):', { 
+      error: err,
+      message: err?.message,
+      stack: err?.stack,
+      name: err?.name,
+      params: req.params
+    })
+    
     // If it's already a validation error, return it
     if (err?.response) {
       throw err
     }
-    // Otherwise, it's likely an ObjectId construction error
-    console.error('Deal update error:', { id: idParam, error: err })
+    
+    // Generic error response
     res.status(400).json({ 
       data: null, 
-      error: 'invalid_id',
-      details: `Failed to process ID "${idParam}": ${err?.message || 'Unknown error'}`
+      error: 'update_failed',
+      details: `Failed to update deal: ${err?.message || 'Unknown error'}`
     })
   }
 })

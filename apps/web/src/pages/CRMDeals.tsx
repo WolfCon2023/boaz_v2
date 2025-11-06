@@ -214,11 +214,20 @@ export default function CRMDeals() {
       qc.invalidateQueries({ queryKey: ['deal-history'] })
     },
     onError: (err: any) => {
-      const errorMsg = err?.response?.data?.error || err?.message || 'Failed to update deal'
-      const details = err?.response?.data?.details
+      console.error('Deal update error (full):', err)
+      const errorData = err?.response?.data || {}
+      const errorMsg = errorData.error || err?.message || 'Failed to update deal'
+      const details = errorData.details || errorData.message
       const fullMessage = details ? `${errorMsg}: ${details}` : errorMsg
       toast.showToast(`Error: ${fullMessage}`, 'error')
-      console.error('Deal update error:', { error: errorMsg, details, err })
+      console.error('Deal update error (parsed):', { 
+        error: errorMsg, 
+        details, 
+        status: err?.response?.status,
+        statusText: err?.response?.statusText,
+        data: errorData,
+        url: err?.config?.url
+      })
     },
   })
   async function applyBulkStage() {
