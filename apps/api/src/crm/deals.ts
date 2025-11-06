@@ -116,9 +116,16 @@ dealsRouter.get('/', async (req, res) => {
     const dealsToFix = [...dealsWithoutNumber, ...(duplicateDealIds.length > 0 ? await coll.find({ _id: { $in: duplicateDealIds.map(id => new ObjectId(id)) } }).limit(100).toArray() : [])]
     
     if (dealsToFix.length > 0) {
-      // Get current max deal number
-      const maxDoc = await coll.find({ dealNumber: { $type: 'number' } }).project({ dealNumber: 1 }).sort({ dealNumber: -1 }).limit(1).next()
-      let nextNumber = typeof maxDoc?.dealNumber === 'number' ? maxDoc.dealNumber : 100000
+      // Get current max deal number from deals that are NOT in the fixes list
+      // This ensures we don't count duplicates when determining the next number
+      const fixedDealIds = new Set(dealsToFix.map(d => String(d._id)))
+      const allValidDeals = await coll.find({ dealNumber: { $type: 'number' } }).project({ _id: 1, dealNumber: 1 }).toArray()
+      const validDealNumbers = allValidDeals
+        .filter(d => !fixedDealIds.has(String(d._id)))
+        .map(d => (d as any).dealNumber)
+        .filter((n): n is number => typeof n === 'number')
+      
+      let nextNumber = validDealNumbers.length > 0 ? Math.max(...validDealNumbers) : 100000
       
       // Try to get from sequence counter
       try {
@@ -596,6 +603,98 @@ dealsRouter.get('/:id/history', async (req, res) => {
     })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// POST /api/crm/deals/fix-duplicate-numbers (Admin only)
+// This endpoint immediately fixes duplicate deal numbers
+dealsRouter.post('/fix-duplicate-numbers', requireAuth, requirePermission('*'), async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const coll = db.collection('deals')
+    
+    // Find deals with duplicate dealNumbers
+    const allDeals = await coll.find({ dealNumber: { $type: 'number' } }).project({ _id: 1, dealNumber: 1 }).toArray()
+    const dealNumberCounts = new Map<number, string[]>()
+    for (const deal of allDeals) {
+      const num = (deal as any).dealNumber
+      if (typeof num === 'number') {
+        if (!dealNumberCounts.has(num)) {
+          dealNumberCounts.set(num, [])
+        }
+        dealNumberCounts.get(num)!.push(String((deal as any)._id))
+      }
+    }
+    
+    // Get IDs of deals with duplicate numbers (keep first, fix the rest)
+    const duplicateDealIds: string[] = []
+    for (const [num, ids] of dealNumberCounts.entries()) {
+      if (ids.length > 1) {
+        // Keep the first one, mark the rest for renumbering
+        duplicateDealIds.push(...ids.slice(1))
+      }
+    }
+    
+    if (duplicateDealIds.length === 0) {
+      return res.json({
+        data: {
+          message: 'No duplicate deal numbers found.',
+          results: { fixed: 0, total: allDeals.length }
+        },
+        error: null
+      })
+    }
+    
+    const dealsToFix = await coll.find({ _id: { $in: duplicateDealIds.map(id => new ObjectId(id)) } }).toArray()
+    
+    // Get current max deal number from deals that are NOT being fixed
+    const fixedDealIds = new Set(dealsToFix.map(d => String(d._id)))
+    const validDealNumbers = allDeals
+      .filter(d => !fixedDealIds.has(String(d._id)))
+      .map(d => (d as any).dealNumber)
+      .filter((n): n is number => typeof n === 'number')
+    
+    let nextNumber = validDealNumbers.length > 0 ? Math.max(...validDealNumbers) : 100000
+    
+    // Try to get from sequence counter
+    try {
+      const { getNextSequence } = await import('../db.js')
+      const counterValue = await getNextSequence('dealNumber')
+      if (counterValue > nextNumber) nextNumber = counterValue - 1
+    } catch {}
+    
+    // Assign unique numbers to deals
+    for (const deal of dealsToFix) {
+      nextNumber += 1
+      await coll.updateOne({ _id: deal._id }, { $set: { dealNumber: nextNumber } })
+    }
+    
+    // Update counter
+    try {
+      const counters = db.collection('counters')
+      await counters.updateOne(
+        { _id: 'dealNumber' as any },
+        { $set: { seq: nextNumber } },
+        { upsert: true }
+      )
+    } catch {}
+    
+    res.json({
+      data: {
+        message: `Fixed ${dealsToFix.length} deals with duplicate numbers.`,
+        results: {
+          fixed: dealsToFix.length,
+          total: allDeals.length,
+          nextNumber
+        }
+      },
+      error: null
+    })
+  } catch (err: any) {
+    console.error('Fix duplicate deal numbers error:', err)
+    res.status(500).json({ data: null, error: 'fix_failed', details: err.message })
   }
 })
 
