@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { useToast } from '@/components/Toast'
 import { Plus, X, Package } from 'lucide-react'
 
 type Invoice = { 
@@ -87,6 +88,7 @@ type Discount = {
 
 export default function CRMInvoices() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'updatedAt'|'invoiceNumber'|'total'|'status'|'dueDate'>('updatedAt')
@@ -314,7 +316,7 @@ export default function CRMInvoices() {
   async function deleteView(id: string) { try { await http.delete(`/api/views/${id}`) } catch {}; setSavedViews((prev) => prev.filter((v) => v.id !== id)) }
   function copyShareLink() {
     const url = window.location.origin + window.location.pathname + '?' + searchParams.toString()
-    navigator.clipboard?.writeText(url).then(() => alert('Link copied')).catch(() => alert('Failed to copy'))
+    navigator.clipboard?.writeText(url).then(() => toast.showToast('Link copied', 'success')).catch(() => toast.showToast('Failed to copy', 'error'))
   }
   function getColValue(inv: Invoice, key: string) {
     if (key === 'invoiceNumber') return inv.invoiceNumber ?? '-'

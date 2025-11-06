@@ -6,6 +6,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { Package, Layers, Tag, FileText, TrendingUp, Download, TrendingDown, DollarSign, PackageIcon, BarChart3, PieChart, FileDown } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, Legend } from 'recharts'
+import { useToast } from '@/components/Toast'
 
 type Product = {
   _id: string
@@ -80,6 +81,7 @@ type CustomTerms = {
 
 export default function CRMProducts() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [activeTab, setActiveTab] = React.useState<'products' | 'bundles' | 'discounts' | 'terms' | 'profitability' | 'terms-ledger'>('products')
   const [q, setQ] = React.useState('')
   const [editing, setEditing] = React.useState<Product | Bundle | Discount | CustomTerms | null>(null)
@@ -222,7 +224,7 @@ export default function CRMProducts() {
       setSendTermsAccountId('')
       setSendTermsContactId('')
       qc.invalidateQueries({ queryKey: ['terms-review-requests'] })
-      alert('Terms review request sent successfully!')
+      toast.showToast('Terms review request sent successfully!', 'success')
     },
   })
   
@@ -1172,7 +1174,7 @@ export default function CRMProducts() {
                           <button
                             type="button"
                             onClick={() => {
-                              navigator.clipboard?.writeText(reviewUrl).then(() => alert('Review link copied!'))
+                              navigator.clipboard?.writeText(reviewUrl).then(() => toast.showToast('Review link copied!', 'success'))
                             }}
                             className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
                             title="Copy review link"
@@ -1182,7 +1184,7 @@ export default function CRMProducts() {
                           {item.responseNotes && (
                             <button
                               type="button"
-                              onClick={() => alert(`Response Notes:\n\n${item.responseNotes}`)}
+                              onClick={() => toast.showToast(`Response Notes:\n\n${item.responseNotes}`, 'info', 10000)}
                               className="rounded border border-blue-400 px-2 py-1 text-xs text-blue-400 hover:bg-blue-50"
                               title="View response notes"
                             >

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
+import { useToast } from '@/components/Toast'
 
 type Ticket = {
   _id: string
@@ -25,6 +26,7 @@ type Ticket = {
 
 export default function SupportTickets() {
   const qc = useQueryClient()
+  const toast = useToast()
   const location = useLocation()
   const createFormRef = React.useRef<HTMLFormElement | null>(null)
   type ColumnDef = { key: string; visible: boolean; label: string }
@@ -297,7 +299,7 @@ export default function SupportTickets() {
       const text = JSON.stringify(filteredItems, null, 2)
       await navigator.clipboard.writeText(text)
       // Optional: simple visual feedback
-      alert('Copied current filtered tickets to clipboard')
+      toast.showToast('Copied current filtered tickets to clipboard', 'success')
     } catch {
       // Fallback
       const textArea = document.createElement('textarea')
@@ -306,7 +308,7 @@ export default function SupportTickets() {
       textArea.select()
       document.execCommand('copy')
       document.body.removeChild(textArea)
-      alert('Copied current filtered tickets to clipboard')
+      toast.showToast('Copied current filtered tickets to clipboard', 'success')
     }
   }
 

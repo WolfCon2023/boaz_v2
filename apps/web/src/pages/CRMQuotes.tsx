@@ -89,6 +89,7 @@ type Discount = {
 
 export default function CRMQuotes() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'quoteNumber'|'title'|'total'|'status'|'updatedAt'>('updatedAt')
@@ -207,11 +208,11 @@ export default function CRMQuotes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quotes'] })
       qc.invalidateQueries({ queryKey: ['quote-history'] })
-      alert('Approval request sent successfully!')
+      toast.showToast('Approval request sent successfully!', 'success')
     },
     onError: (err: any) => {
       const errorMsg = err.response?.data?.error || 'Failed to send approval request'
-      alert(errorMsg)
+      toast.showToast(errorMsg, 'error')
     },
   })
 
@@ -1093,7 +1094,7 @@ export default function CRMQuotes() {
                       const select = document.getElementById('approver-select') as HTMLSelectElement
                       const approverEmail = select?.value || editing.approver
                       if (!approverEmail) {
-                        alert('Please select an approver first')
+                        toast.showToast('Please select an approver first', 'warning')
                         return
                       }
                       if (confirm(`Send approval request to ${approverEmail}?`)) {

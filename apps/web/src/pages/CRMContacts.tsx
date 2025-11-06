@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { useToast } from '@/components/Toast'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
 
@@ -19,6 +20,7 @@ async function fetchContacts({ pageParam, queryKey }: { pageParam?: string; quer
 
 export default function CRMContacts() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'name'|'email'|'company'>('name')
@@ -266,7 +268,7 @@ export default function CRMContacts() {
   async function deleteView(id: string) { try { await http.delete(`/api/views/${id}`) } catch {}; setSavedViews((prev) => prev.filter((v) => v.id !== id)) }
   function copyShareLink() {
     const url = window.location.origin + window.location.pathname + '?' + searchParams.toString()
-    navigator.clipboard?.writeText(url).then(() => alert('Link copied')).catch(() => alert('Failed to copy'))
+    navigator.clipboard?.writeText(url).then(() => toast.showToast('Link copied', 'success')).catch(() => toast.showToast('Failed to copy', 'error'))
   }
   function getColValue(c: Contact, key: string) {
     if (key === 'name') return c.name ?? '-'
@@ -427,7 +429,7 @@ export default function CRMContacts() {
                 if (!sequenceId) return
                 const ids = Array.from(selectedIds)
                 await Promise.allSettled(ids.map((id) => http.post('/api/crm/outreach/enroll', { contactId: id, sequenceId })))
-                alert('Enrollments queued')
+                toast.showToast('Enrollments queued', 'success')
                 setSelectedIds(new Set())
               }}>Apply</button>
             </div>
@@ -568,7 +570,7 @@ export default function CRMContacts() {
                     <select ref={seqSelectRef} className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                       {(seqs.data?.data.items ?? []).map((s) => (<option key={s._id} value={s._id}>{s.name ?? 'Sequence'}</option>))}
                     </select>
-                    <button type="button" className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => { const sequenceId = seqSelectRef.current?.value || ''; if (sequenceId) { http.post('/api/crm/outreach/enroll', { contactId: editing._id, sequenceId }).then(() => alert('Enrolled')) } }}>
+                    <button type="button" className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => { const sequenceId = seqSelectRef.current?.value || ''; if (sequenceId) { http.post('/api/crm/outreach/enroll', { contactId: editing._id, sequenceId }).then(() => toast.showToast('Enrolled', 'success')) } }}>
                       Enroll
                     </button>
                   </div>
@@ -588,15 +590,15 @@ export default function CRMContacts() {
                       const file = oneOffAttachmentRef.current?.files?.[0]
                       
                       if (!to) {
-                        alert('Contact email is required')
+                        toast.showToast('Contact email is required', 'warning')
                         return
                       }
                       if (!subject) {
-                        alert('Email subject is required')
+                        toast.showToast('Email subject is required', 'warning')
                         return
                       }
                       if (!text) {
-                        alert('Email body is required')
+                        toast.showToast('Email body is required', 'warning')
                         return
                       }
                       
@@ -618,18 +620,18 @@ export default function CRMContacts() {
                         if (data?.queued) {
                           const provider = data.provider || 'email service'
                           const warning = data.warning ? ` (${data.warning})` : ''
-                          alert(`Email sent successfully via ${provider}!${warning}`)
+                          toast.showToast(`Email sent successfully via ${provider}!${warning}`, 'success')
                           if (oneOffSubjectRef.current) oneOffSubjectRef.current.value = ''
                           if (oneOffTextRef.current) oneOffTextRef.current.value = ''
                           if (oneOffAttachmentRef.current) oneOffAttachmentRef.current.value = ''
                         } else {
-                          alert('Email may not have been sent. Please check the server logs.')
+                          toast.showToast('Email may not have been sent. Please check the server logs.', 'warning')
                         }
                       } catch (err: any) {
                         const errorMsg = err?.response?.data?.error || err?.message || 'Failed to send email'
                         const details = err?.response?.data?.details
                         const detailsMsg = details ? ` (${JSON.stringify(details)})` : ''
-                        alert(`Error: ${errorMsg}${detailsMsg}`)
+                        toast.showToast(`Error: ${errorMsg}${detailsMsg}`, 'error')
                         console.error('Email send error:', err)
                       }
                     }}>

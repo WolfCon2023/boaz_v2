@@ -5,12 +5,14 @@ import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { useToast } from '@/components/Toast'
 
 type Deal = { _id: string; dealNumber?: number; title?: string; amount?: number; stage?: string; closeDate?: string; accountId?: string; accountNumber?: number; marketingCampaignId?: string }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
 
 export default function CRMDeals() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'dealNumber'|'title'|'stage'|'amount'|'closeDate'>('closeDate')
@@ -304,7 +306,7 @@ export default function CRMDeals() {
   async function deleteView(id: string) { try { await http.delete(`/api/views/${id}`) } catch {}; setSavedViews((prev) => prev.filter((v) => v.id !== id)) }
   function copyShareLink() {
     const url = window.location.origin + window.location.pathname + '?' + searchParams.toString()
-    navigator.clipboard?.writeText(url).then(() => alert('Link copied')).catch(() => alert('Failed to copy'))
+    navigator.clipboard?.writeText(url).then(() => toast.showToast('Link copied', 'success')).catch(() => toast.showToast('Failed to copy', 'error'))
   }
   function getColValue(d: Deal, key: string) {
     if (key === 'dealNumber') return d.dealNumber ?? ''

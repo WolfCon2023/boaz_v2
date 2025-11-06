@@ -3,6 +3,7 @@ import * as React from 'react'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
+import { useToast } from '@/components/Toast'
 import { CheckCircle, XCircle, Clock, FileText } from 'lucide-react'
 
 type ApprovalRequest = {
@@ -29,6 +30,7 @@ type ApprovalRequest = {
 
 export default function CRMApprovalQueue() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [selectedRequest, setSelectedRequest] = React.useState<ApprovalRequest | null>(null)
   const [reviewNotes, setReviewNotes] = React.useState('')
@@ -57,11 +59,11 @@ export default function CRMApprovalQueue() {
       qc.invalidateQueries({ queryKey: ['quote-history'] })
       setSelectedRequest(null)
       setReviewNotes('')
-      alert('Quote approved successfully!')
+      toast.showToast('Quote approved successfully!', 'success')
     },
     onError: (err: any) => {
       const errorMsg = err.response?.data?.error || 'Failed to approve quote'
-      alert(errorMsg)
+      toast.showToast(errorMsg, 'error')
     },
   })
 
@@ -76,11 +78,11 @@ export default function CRMApprovalQueue() {
       qc.invalidateQueries({ queryKey: ['quote-history'] })
       setSelectedRequest(null)
       setReviewNotes('')
-      alert('Quote rejected.')
+      toast.showToast('Quote rejected.', 'info')
     },
     onError: (err: any) => {
       const errorMsg = err.response?.data?.error || 'Failed to reject quote'
-      alert(errorMsg)
+      toast.showToast(errorMsg, 'error')
     },
   })
 

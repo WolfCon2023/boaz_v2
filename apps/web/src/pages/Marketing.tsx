@@ -4,6 +4,7 @@ import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { Type, Image, MousePointerClick, Minus, Columns } from 'lucide-react'
+import { useToast } from '@/components/Toast'
 
 type Segment = { _id: string; name: string; description?: string }
 type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null; mjml?: string; previewText?: string }
@@ -32,13 +33,14 @@ export default function Marketing() {
 }
 
 function LinkBuilder({ campaignId, campaignName }: { campaignId: string; campaignName: string }) {
+  const toast = useToast()
   const [url, setUrl] = React.useState('')
   const [utmSource, setUtmSource] = React.useState('email')
   const [utmMedium, setUtmMedium] = React.useState('email')
   const [result, setResult] = React.useState<string>('')
   const [isBuilding, setIsBuilding] = React.useState(false)
   async function build() {
-    if (!/^https?:\/\//i.test(url)) { alert('Enter a valid http(s) URL'); return }
+    if (!/^https?:\/\//i.test(url)) { toast.showToast('Enter a valid http(s) URL', 'warning'); return }
     setIsBuilding(true)
     try {
       const utmCampaign = campaignName?.toLowerCase().replace(/\s+/g, '-') || ''
@@ -47,7 +49,7 @@ function LinkBuilder({ campaignId, campaignName }: { campaignId: string; campaig
       const apiBase = (import.meta as any)?.env?.VITE_API_URL || window.location.origin
       setResult(String(apiBase).replace(/\/$/,'') + `/api/marketing/r/${token}`)
     } catch (e) {
-      alert('Failed to generate link')
+      toast.showToast('Failed to generate link', 'error')
     } finally {
       setIsBuilding(false)
     }
@@ -67,9 +69,9 @@ function LinkBuilder({ campaignId, campaignName }: { campaignId: string; campaig
         document.execCommand('copy')
         document.body.removeChild(ta)
       }
-      alert('Copied')
+      toast.showToast('Copied', 'success')
     } catch {
-      alert('Copy failed. Select and copy manually.')
+      toast.showToast('Copy failed. Select and copy manually.', 'error')
     }
   }
   return (
@@ -94,6 +96,7 @@ function LinkBuilder({ campaignId, campaignName }: { campaignId: string; campaig
 
 function SegmentsTab() {
   const qc = useQueryClient()
+  const toast = useToast()
   const { data } = useQuery({ queryKey: ['mkt-segments'], queryFn: async () => (await http.get('/api/marketing/segments')).data })
   const create = useMutation({
     mutationFn: async (payload: { name: string; description?: string }) => http.post('/api/marketing/segments', payload),
@@ -219,7 +222,7 @@ function SegmentsTab() {
           <div className="grid gap-2 sm:grid-cols-3">
             <input value={segName} onChange={(e) => setSegName(e.target.value)} placeholder="Segment name" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
             <input value={segDesc} onChange={(e) => setSegDesc(e.target.value)} placeholder="Description (optional)" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
-            <button className="rounded-lg border px-3 py-2 text-sm" onClick={async () => { if (!editing) return; await save.mutateAsync({ id: editing._id, name: segName || undefined, description: segDesc || undefined }); alert('Details saved') }}>Save details</button>
+            <button className="rounded-lg border px-3 py-2 text-sm" onClick={async () => { if (!editing) return; await save.mutateAsync({ id: editing._id, name: segName || undefined, description: segDesc || undefined }); toast.showToast('Details saved', 'success') }}>Save details</button>
           </div>
           <div className="space-y-2">
             <div className="text-xs text-[color:var(--color-text-muted)]">Rules (AND)</div>
@@ -243,7 +246,7 @@ function SegmentsTab() {
             ))}
             <div className="flex items-center gap-2">
               <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={addRule}>Add rule</button>
-              <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={async () => { if (!editing) return; const emails = emailsText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean); await save.mutateAsync({ id: editing._id, rules, emails }); alert('Saved segment') }}>Save segment</button>
+              <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={async () => { if (!editing) return; const emails = emailsText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean); await save.mutateAsync({ id: editing._id, rules, emails }); toast.showToast('Saved segment', 'success') }}>Save segment</button>
               <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={previewSegment}>Preview matches</button>
               {preview && <span className="text-xs text-[color:var(--color-text-muted)]">Matches: {preview.total}</span>}
             </div>
@@ -300,6 +303,7 @@ function SimpleBuilderUI({
   onSendTest: () => void
   testing: boolean
 }) {
+  const toast = useToast()
   const [editingBlockId, setEditingBlockId] = React.useState<string | null>(null)
   const [editingBlock, setEditingBlock] = React.useState<Partial<SimpleBlock> | null>(null)
   
@@ -497,7 +501,7 @@ function SimpleBuilderUI({
                                 setEditingBlock({ ...editingBlock, imageUrl })
                               }
                             } catch (err: any) {
-                              alert(`Failed to upload image: ${err?.response?.data?.error || err?.message || 'Unknown error'}`)
+                              toast.showToast(`Failed to upload image: ${err?.response?.data?.error || err?.message || 'Unknown error'}`, 'error')
                             }
                             
                             // Reset the input
@@ -623,6 +627,7 @@ function SimpleBuilderUI({
 
 function CampaignsTab() {
   const qc = useQueryClient()
+  const toast = useToast()
   const { data: segments } = useQuery({ queryKey: ['mkt-segments'], queryFn: async () => (await http.get('/api/marketing/segments')).data })
   const { data } = useQuery({ queryKey: ['mkt-campaigns'], queryFn: async () => (await http.get('/api/marketing/campaigns')).data })
   const { data: tplData } = useQuery({ queryKey: ['mkt-templates'], queryFn: async () => (await http.get('/api/marketing/templates')).data })
@@ -847,26 +852,26 @@ ${sections}
   const [sendResult, setSendResult] = React.useState<{ total: number; skipped: number; sent: number; errors: number } | null>(null)
   async function renderPreview() {
     if (!mjml.trim()) {
-      alert('Please paste or insert an MJML template first.')
+      toast.showToast('Please paste or insert an MJML template first.', 'warning')
       return
     }
     try {
       const res = await http.post('/api/marketing/mjml/preview', { mjml })
       setPreviewHtml(String(res.data?.data?.html || ''))
     } catch (e) {
-      alert('Failed to render MJML. Please check your template syntax.')
+      toast.showToast('Failed to render MJML. Please check your template syntax.', 'error')
     }
   }
   async function sendTest() {
     if (!editing) return
-    if (!testTo || !/.+@.+\..+/.test(testTo)) { alert('Enter a valid test email'); return }
+    if (!testTo || !/.+@.+\..+/.test(testTo)) { toast.showToast('Enter a valid test email', 'warning'); return }
     setTesting(true)
     try {
       await http.post(`/api/marketing/campaigns/${editing._id}/test-send`, { to: testTo, mjml, subject: subject || editing.subject || editing.name })
-      alert('Test email sent (if SMTP is configured).')
+      toast.showToast('Test email sent (if SMTP is configured).', 'success')
     } catch (e: any) {
       const msg = e?.response?.data?.error || 'Failed to send test email.'
-      alert(msg)
+      toast.showToast(msg, 'error')
     } finally {
       setTesting(false)
     }
@@ -878,12 +883,12 @@ ${sections}
       try { const r = await http.post('/api/marketing/mjml/preview', { mjml }); html = String(r.data?.data?.html || '') } catch {}
     }
     await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html, segmentId: segmentId || undefined })
-    alert('Saved')
+    toast.showToast('Saved', 'success')
   }
   async function sendCampaign(dryRun: boolean) {
     if (!editing) return
-    if (!segmentId) { alert('Please select a segment and Save before sending.'); return }
-    if (!mjml && !(editing as any).html) { alert('Please add MJML and Save before sending.'); return }
+    if (!segmentId) { toast.showToast('Please select a segment and Save before sending.', 'warning'); return }
+    if (!mjml && !(editing as any).html) { toast.showToast('Please add MJML and Save before sending.', 'warning'); return }
     if (!dryRun && !confirm('Send this campaign to the segment now?')) return
     setSending(true); setSendResult(null)
     try {
@@ -900,7 +905,7 @@ ${sections}
       const msg = err === 'missing_segment' ? 'This campaign has no segment. Select one and Save.'
         : err === 'missing_html' ? 'No HTML found. Add MJML and Save first.'
         : err || 'Send failed. Check SMTP env and try again.'
-      alert(msg)
+      toast.showToast(msg, 'error')
     } finally {
       setSending(false)
     }
@@ -1279,6 +1284,7 @@ function RoiDrilldown({ selectedCampaignId, startDate, endDate, campaigns, onCle
 
 function UnsubscribesTab() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'email' | 'at' | 'campaignId'>('at')
   const [dir, setDir] = React.useState<'asc' | 'desc'>('desc')
@@ -1320,11 +1326,11 @@ function UnsubscribesTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['marketing-unsubscribes'] })
       setRemovingId(null)
-      alert('Subscriber has been removed from the Do Not Contact list and will receive emails again.')
+      toast.showToast('Subscriber has been removed from the Do Not Contact list and will receive emails again.', 'success')
     },
     onError: (err: any) => {
       const errorMsg = err?.response?.data?.error || err?.message || 'Failed to remove from DNC list'
-      alert(`Error: ${errorMsg}`)
+      toast.showToast(`Error: ${errorMsg}`, 'error')
       setRemovingId(null)
     },
   })

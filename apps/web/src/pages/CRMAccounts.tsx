@@ -5,11 +5,13 @@ import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { useToast } from '@/components/Toast'
 
 type Account = { _id: string; accountNumber?: number; name?: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }
 
 export default function CRMAccounts() {
   const qc = useQueryClient()
+  const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = React.useState('')
   const [sort, setSort] = React.useState<'name'|'companyName'|'accountNumber'>('name')
@@ -47,6 +49,9 @@ export default function CRMAccounts() {
         if (!prev?.data?.items) return { data: { items: [created.data] } }
         return { data: { items: [created.data, ...prev.data.items] } }
       })
+      const accountName = created.data.name || 'Account'
+      const accountNumber = created.data.accountNumber ? ` (${created.data.accountNumber})` : ''
+      toast.showToast(`Account "${accountName}${accountNumber}" has been added successfully.`, 'success')
     },
   })
 
@@ -210,7 +215,7 @@ export default function CRMAccounts() {
   async function deleteView(id: string) { try { await http.delete(`/api/views/${id}`) } catch {}; setSavedViews((prev) => prev.filter((v) => v.id !== id)) }
   function copyShareLink() {
     const url = window.location.origin + window.location.pathname + '?' + searchParams.toString()
-    navigator.clipboard?.writeText(url).then(() => alert('Link copied')).catch(() => alert('Failed to copy'))
+    navigator.clipboard?.writeText(url).then(() => toast.showToast('Link copied', 'success')).catch(() => toast.showToast('Failed to copy', 'error'))
   }
   function getColValue(a: Account, key: string) {
     if (key === 'accountNumber') return a.accountNumber ?? '-'
