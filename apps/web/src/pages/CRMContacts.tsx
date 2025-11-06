@@ -585,12 +585,22 @@ export default function CRMContacts() {
                         return
                       }
                       try {
-                        await http.post('/api/crm/outreach/send/email', { to, subject: 'Message', text })
-                        alert('Email sent successfully!')
-                        if (oneOffTextRef.current) oneOffTextRef.current.value = ''
+                        const res = await http.post('/api/crm/outreach/send/email', { to, subject: 'Message', text })
+                        const data = res.data?.data
+                        if (data?.queued) {
+                          const provider = data.provider || 'email service'
+                          const warning = data.warning ? ` (${data.warning})` : ''
+                          alert(`Email sent successfully via ${provider}!${warning}`)
+                          if (oneOffTextRef.current) oneOffTextRef.current.value = ''
+                        } else {
+                          alert('Email may not have been sent. Please check the server logs.')
+                        }
                       } catch (err: any) {
                         const errorMsg = err?.response?.data?.error || err?.message || 'Failed to send email'
-                        alert(`Error: ${errorMsg}`)
+                        const details = err?.response?.data?.details
+                        const detailsMsg = details ? ` (${JSON.stringify(details)})` : ''
+                        alert(`Error: ${errorMsg}${detailsMsg}`)
+                        console.error('Email send error:', err)
                       }
                     }}>
                       Send

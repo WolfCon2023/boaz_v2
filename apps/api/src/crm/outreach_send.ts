@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { getDb } from '../db.js'
-import { env } from '../env.js'
 import { requireAuth } from '../auth/rbac.js'
+import { sendAuthEmail } from '../auth/email.js'
 
 export const outreachSendRouter = Router()
 
@@ -15,54 +15,25 @@ outreachSendRouter.post('/email', requireAuth, async (req, res) => {
     // Log sent event immediately
     await db.collection('outreach_events').insertOne({ channel: 'email', event: 'sent', recipient: to, variant: variant ?? null, at: new Date() })
   } catch {}
-  // Provider: SendGrid first, else Mailgun, else accept without external send
+  
+  // Use the same email sending function as the rest of the app (supports SendGrid, Mailgun, SMTP)
   try {
-    if (env.SENDGRID_API_KEY && env.OUTBOUND_EMAIL_FROM) {
-      const sgPayload = {
-        personalizations: [{ to: [{ email: to }] }],
-        from: { email: env.OUTBOUND_EMAIL_FROM },
-        subject: subject ?? undefined,
-        content: [
-          html ? { type: 'text/html', value: String(html) } : undefined,
-          text ? { type: 'text/plain', value: String(text) } : undefined,
-        ].filter(Boolean),
-      }
-      const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(sgPayload),
-      })
-      if (!r.ok) {
-        const body = await r.text()
-        return res.status(202).json({ data: { queued: false, provider: 'sendgrid', status: r.status, body }, error: null })
-      }
-      return res.status(202).json({ data: { queued: true, provider: 'sendgrid' }, error: null })
+    const result = await sendAuthEmail({
+      to,
+      subject: subject || 'Message',
+      text: text || undefined,
+      html: html || undefined,
+      checkPreferences: false, // Don't check preferences for one-off emails
+    })
+    
+    if (result.sent) {
+      return res.status(200).json({ data: { queued: true, provider: result.provider || 'unknown' }, error: null })
+    } else {
+      return res.status(500).json({ data: null, error: result.reason || 'email_send_failed', details: { provider: result.provider } })
     }
-    if (env.MAILGUN_API_KEY && env.MAILGUN_DOMAIN && env.OUTBOUND_EMAIL_FROM) {
-      const form = new URLSearchParams({
-        to,
-        from: env.OUTBOUND_EMAIL_FROM,
-        subject: subject || '',
-        text: text || '',
-        html: html || '',
-      })
-      const r = await fetch(`https://api.mailgun.net/v3/${env.MAILGUN_DOMAIN}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: 'Basic ' + Buffer.from('api:' + env.MAILGUN_API_KEY).toString('base64'),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: form.toString(),
-      })
-      const body = await r.text()
-      return res.status(202).json({ data: { queued: r.ok, provider: 'mailgun', status: r.status, body }, error: null })
-    }
-    return res.status(202).json({ data: { queued: true, provider: 'none' }, error: null })
   } catch (e: any) {
-    return res.status(202).json({ data: { queued: false, error: 'provider_error' }, error: null })
+    console.error('Email send error:', e)
+    return res.status(500).json({ data: null, error: 'email_send_error', details: e.message })
   }
 })
 
