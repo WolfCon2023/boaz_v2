@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { getDb } from '../db.js'
+import { env } from '../env.js'
 import { requireAuth } from '../auth/rbac.js'
 import { sendAuthEmail } from '../auth/email.js'
 
