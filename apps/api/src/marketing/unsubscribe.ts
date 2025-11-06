@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { ObjectId, Sort, SortDirection } from 'mongodb'
 import { getDb } from '../db.js'
-import { requireAuth } from '../auth/rbac.js'
+import { requireAuth, requirePermission } from '../auth/rbac.js'
 
 export const marketingUnsubscribeRouter = Router()
 
@@ -85,6 +85,28 @@ marketingUnsubscribeRouter.get('/unsubscribes', requireAuth, async (req, res) =>
   } catch (err: any) {
     console.error('Get unsubscribes error:', err)
     res.status(500).json({ data: null, error: err.message || 'failed_to_get_unsubscribes' })
+  }
+})
+
+// DELETE /api/marketing/unsubscribes/:id (remove from DNC list - admin only)
+marketingUnsubscribeRouter.delete('/unsubscribes/:id', requireAuth, requirePermission('*'), async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const unsubscribeId = new ObjectId(req.params.id)
+    const unsubscribe = await db.collection('marketing_unsubscribes').findOne({ _id: unsubscribeId })
+    
+    if (!unsubscribe) {
+      return res.status(404).json({ data: null, error: 'unsubscribe_not_found' })
+    }
+    
+    await db.collection('marketing_unsubscribes').deleteOne({ _id: unsubscribeId })
+    
+    res.json({ data: { message: 'Subscriber removed from Do Not Contact list', email: (unsubscribe as any).email }, error: null })
+  } catch (err: any) {
+    console.error('Remove unsubscribe error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_remove_unsubscribe' })
   }
 })
 

@@ -718,11 +718,23 @@ function RoiDrilldown({ selectedCampaignId, startDate, endDate, campaigns, onCle
 }
 
 function UnsubscribesTab() {
+  const qc = useQueryClient()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'email' | 'at' | 'campaignId'>('at')
   const [dir, setDir] = React.useState<'asc' | 'desc'>('desc')
+  const [removingId, setRemovingId] = React.useState<string | null>(null)
   
-  const { data, isLoading } = useQuery({
+  // Check if user is admin
+  const { data: userRolesData } = useQuery({
+    queryKey: ['user-roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/roles')
+      return res.data as { roles: Array<{ name: string; permissions: string[] }>; isAdmin: boolean }
+    },
+  })
+  const isAdmin = userRolesData?.isAdmin || false
+  
+  const { data, isLoading, error } = useQuery({
     queryKey: ['marketing-unsubscribes', q, sort, dir],
     queryFn: async () => {
       const res = await http.get('/api/marketing/unsubscribes', { params: { q, sort, dir } })
@@ -735,9 +747,35 @@ function UnsubscribesTab() {
         at: string
       }> } }
     },
+    retry: false,
   })
   
   const items = data?.data.items ?? []
+  
+  const removeFromDNC = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await http.delete(`/api/marketing/unsubscribes/${id}`)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketing-unsubscribes'] })
+      setRemovingId(null)
+      alert('Subscriber has been removed from the Do Not Contact list and will receive emails again.')
+    },
+    onError: (err: any) => {
+      const errorMsg = err?.response?.data?.error || err?.message || 'Failed to remove from DNC list'
+      alert(`Error: ${errorMsg}`)
+      setRemovingId(null)
+    },
+  })
+  
+  const handleRemove = (item: { _id: string; email: string; name?: string | null }) => {
+    const displayName = item.name || item.email
+    if (confirm(`Are you sure you want to remove ${displayName} from the Do Not Contact list? They will begin receiving marketing emails again.`)) {
+      setRemovingId(item._id)
+      removeFromDNC.mutate(item._id)
+    }
+  }
   
   const handleSort = (field: 'email' | 'at' | 'campaignId') => {
     if (sort === field) {
@@ -804,18 +842,27 @@ function UnsubscribesTab() {
               >
                 Unsubscribed {getSortIndicator('at')}
               </th>
+              {isAdmin && <th className="px-4 py-2">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
+                <td colSpan={isAdmin ? 5 : 4} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
                   Loading...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={isAdmin ? 5 : 4} className="px-4 py-8 text-center text-red-600">
+                  {(error as any)?.response?.status === 401 
+                    ? 'Please log in to view the unsubscribe list.'
+                    : 'Failed to load unsubscribes. Please try again.'}
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
+                <td colSpan={isAdmin ? 5 : 4} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
                   No unsubscribes found
                 </td>
               </tr>
@@ -823,7 +870,7 @@ function UnsubscribesTab() {
               items.map((item) => (
                 <tr key={item._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
                   <td className="px-4 py-2 font-medium">{item.email}</td>
-                  <td className="px-4 py-2">{item.name || '—'}</td>
+                  <td className="px-4 py-2">{item.name || item.email || '—'}</td>
                   <td className="px-4 py-2">
                     {item.campaignName ? (
                       <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
@@ -834,6 +881,19 @@ function UnsubscribesTab() {
                     )}
                   </td>
                   <td className="px-4 py-2">{item.at ? formatDateTime(item.at) : '—'}</td>
+                  {isAdmin && (
+                    <td className="px-4 py-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(item)}
+                        disabled={removingId === item._id}
+                        className="rounded border border-green-400 px-2 py-1 text-xs text-green-400 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Remove from Do Not Contact list"
+                      >
+                        {removingId === item._id ? 'Removing...' : 'Remove from DNC'}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
