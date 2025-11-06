@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { http, apiBaseURL, getApiUrl } from '@/lib/http'
+import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { Type, Image, MousePointerClick, Minus, Columns } from 'lucide-react'
