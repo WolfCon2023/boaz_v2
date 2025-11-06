@@ -573,7 +573,26 @@ export default function CRMContacts() {
                   <div>
                     <label className="text-xs">Send one‑off email</label>
                     <input ref={oneOffTextRef} placeholder="Body" className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
-                    <button type="button" className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={() => { const to = editing.email || ''; const text = oneOffTextRef.current?.value || ''; if (to && text) { http.post('/api/crm/outreach/send/email', { to, subject: 'Message', text }).then(() => alert('Sent')) } }}>
+                    <button type="button" className="mt-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={async () => { 
+                      const to = editing.email || ''
+                      const text = oneOffTextRef.current?.value || ''
+                      if (!to) {
+                        alert('Contact email is required')
+                        return
+                      }
+                      if (!text) {
+                        alert('Email body is required')
+                        return
+                      }
+                      try {
+                        await http.post('/api/crm/outreach/send/email', { to, subject: 'Message', text })
+                        alert('Email sent successfully!')
+                        if (oneOffTextRef.current) oneOffTextRef.current.value = ''
+                      } catch (err: any) {
+                        const errorMsg = err?.response?.data?.error || err?.message || 'Failed to send email'
+                        alert(`Error: ${errorMsg}`)
+                      }
+                    }}>
                       Send
                     </button>
                   </div>

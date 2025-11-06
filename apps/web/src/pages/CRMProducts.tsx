@@ -80,7 +80,7 @@ type CustomTerms = {
 
 export default function CRMProducts() {
   const qc = useQueryClient()
-  const [activeTab, setActiveTab] = React.useState<'products' | 'bundles' | 'discounts' | 'terms' | 'profitability'>('products')
+  const [activeTab, setActiveTab] = React.useState<'products' | 'bundles' | 'discounts' | 'terms' | 'profitability' | 'terms-ledger'>('products')
   const [q, setQ] = React.useState('')
   const [editing, setEditing] = React.useState<Product | Bundle | Discount | CustomTerms | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
@@ -99,6 +99,12 @@ export default function CRMProducts() {
   const [sendTermsCustomMessage, setSendTermsCustomMessage] = React.useState('')
   const [sendTermsAccountId, setSendTermsAccountId] = React.useState('')
   const [sendTermsContactId, setSendTermsContactId] = React.useState('')
+  
+  // Terms Ledger state
+  const [ledgerQ, setLedgerQ] = React.useState('')
+  const [ledgerStatus, setLedgerStatus] = React.useState<'pending' | 'viewed' | 'approved' | 'rejected' | ''>('')
+  const [ledgerSort, setLedgerSort] = React.useState<'sentAt' | 'viewedAt' | 'respondedAt' | 'status' | 'recipientEmail' | 'termsName'>('sentAt')
+  const [ledgerDir, setLedgerDir] = React.useState<'asc' | 'desc'>('desc')
   
   // Sort state - separate for each tab
   const [productSort, setProductSort] = React.useState<'name' | 'sku' | 'type' | 'basePrice' | 'cost' | 'category' | 'isActive' | 'updatedAt' | 'createdAt'>('updatedAt')
@@ -215,9 +221,37 @@ export default function CRMProducts() {
       setSendTermsCustomMessage('')
       setSendTermsAccountId('')
       setSendTermsContactId('')
+      qc.invalidateQueries({ queryKey: ['terms-review-requests'] })
       alert('Terms review request sent successfully!')
     },
   })
+  
+  // Terms Ledger query
+  const ledgerQData = useQuery({
+    queryKey: ['terms-review-requests', ledgerQ, ledgerStatus, ledgerSort, ledgerDir],
+    queryFn: async () => {
+      const params: any = { sort: ledgerSort, dir: ledgerDir }
+      if (ledgerQ) params.q = ledgerQ
+      if (ledgerStatus) params.status = ledgerStatus
+      const res = await http.get('/api/crm/products/terms/review-requests', { params })
+      return res.data as { data: { items: Array<{
+        _id: string
+        termsId: string
+        termsName: string
+        recipientEmail: string
+        recipientName?: string
+        senderName?: string
+        senderEmail?: string
+        status: 'pending' | 'viewed' | 'approved' | 'rejected'
+        sentAt: string
+        viewedAt?: string
+        respondedAt?: string
+        responseNotes?: string
+        reviewToken: string
+      }> } }
+    },
+  })
+  const ledgerItems = ledgerQData.data?.data.items ?? []
 
   // Products mutations
   const createProduct = useMutation({
@@ -497,6 +531,18 @@ export default function CRMProducts() {
         >
           <FileText className="h-4 w-4" />
           Custom Terms
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('terms-ledger')}
+          className={`flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'terms-ledger'
+              ? 'border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'border-transparent text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          Terms Ledger
         </button>
         <button
           type="button"
@@ -972,6 +1018,190 @@ export default function CRMProducts() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Terms Ledger Tab */}
+      {activeTab === 'terms-ledger' && (
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+          <div className="flex flex-wrap items-center gap-2 p-4">
+            <input
+              value={ledgerQ}
+              onChange={(e) => setLedgerQ(e.target.value)}
+              placeholder="Search by recipient, terms, sender..."
+              className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+            />
+            <select
+              value={ledgerStatus}
+              onChange={(e) => setLedgerStatus(e.target.value as any)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+            >
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="viewed">Viewed</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            <select
+              value={ledgerSort}
+              onChange={(e) => setLedgerSort(e.target.value as any)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+            >
+              <option value="sentAt">Sent Date</option>
+              <option value="viewedAt">Viewed Date</option>
+              <option value="respondedAt">Responded Date</option>
+              <option value="status">Status</option>
+              <option value="recipientEmail">Recipient</option>
+              <option value="termsName">Terms Name</option>
+            </select>
+            <select
+              value={ledgerDir}
+              onChange={(e) => setLedgerDir(e.target.value as any)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+            >
+              <option value="desc">Desc</option>
+              <option value="asc">Asc</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                const headers = ['Terms', 'Recipient Email', 'Recipient Name', 'Sender', 'Status', 'Sent', 'Viewed', 'Responded', 'Response Notes']
+                const rows = ledgerItems.map((item) => [
+                  item.termsName || '',
+                  item.recipientEmail || '',
+                  item.recipientName || '',
+                  item.senderName || item.senderEmail || '',
+                  item.status || '',
+                  item.sentAt ? new Date(item.sentAt).toISOString() : '',
+                  item.viewedAt ? new Date(item.viewedAt).toISOString() : '',
+                  item.respondedAt ? new Date(item.respondedAt).toISOString() : '',
+                  item.responseNotes || ''
+                ])
+                const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"' + String(x).replaceAll('"', '""') + '"').join(','))].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = 'terms-review-ledger.csv'
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="ml-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            >
+              Export CSV
+            </button>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="text-left text-[color:var(--color-text-muted)]">
+              <tr>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('termsName', ledgerSort, ledgerDir, setLedgerSort, setLedgerDir)}
+                >
+                  Terms {getSortIndicator('termsName', ledgerSort, ledgerDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('recipientEmail', ledgerSort, ledgerDir, setLedgerSort, setLedgerDir)}
+                >
+                  Recipient {getSortIndicator('recipientEmail', ledgerSort, ledgerDir)}
+                </th>
+                <th className="px-4 py-2">Recipient Name</th>
+                <th className="px-4 py-2">Sender</th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('status', ledgerSort, ledgerDir, setLedgerSort, setLedgerDir)}
+                >
+                  Status {getSortIndicator('status', ledgerSort, ledgerDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('sentAt', ledgerSort, ledgerDir, setLedgerSort, setLedgerDir)}
+                >
+                  Sent {getSortIndicator('sentAt', ledgerSort, ledgerDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('viewedAt', ledgerSort, ledgerDir, setLedgerSort, setLedgerDir)}
+                >
+                  Viewed {getSortIndicator('viewedAt', ledgerSort, ledgerDir)}
+                </th>
+                <th 
+                  className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                  onClick={() => handleSort('respondedAt', ledgerSort, ledgerDir, setLedgerSort, setLedgerDir)}
+                >
+                  Responded {getSortIndicator('respondedAt', ledgerSort, ledgerDir)}
+                </th>
+                <th className="px-4 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ledgerItems.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
+                    {ledgerQData.isLoading ? 'Loading...' : 'No review requests found'}
+                  </td>
+                </tr>
+              ) : (
+                ledgerItems.map((item) => {
+                  const statusColors = {
+                    pending: 'bg-yellow-100 text-yellow-800',
+                    viewed: 'bg-blue-100 text-blue-800',
+                    approved: 'bg-green-100 text-green-800',
+                    rejected: 'bg-red-100 text-red-800',
+                  }
+                  const baseUrl = window.location.origin
+                  const reviewUrl = `${baseUrl}/terms/review/${item.reviewToken}`
+                  
+                  return (
+                    <tr key={item._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+                      <td className="px-4 py-2 font-medium">{item.termsName}</td>
+                      <td className="px-4 py-2">{item.recipientEmail}</td>
+                      <td className="px-4 py-2">{item.recipientName || '—'}</td>
+                      <td className="px-4 py-2">{item.senderName || item.senderEmail || '—'}</td>
+                      <td className="px-4 py-2">
+                        <span className={`rounded px-2 py-0.5 text-xs capitalize ${statusColors[item.status] || 'bg-gray-100 text-gray-800'}`}>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">{item.sentAt ? formatDateTime(item.sentAt) : '—'}</td>
+                      <td className="px-4 py-2">{item.viewedAt ? formatDateTime(item.viewedAt) : '—'}</td>
+                      <td className="px-4 py-2">{item.respondedAt ? formatDateTime(item.respondedAt) : '—'}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard?.writeText(reviewUrl).then(() => alert('Review link copied!'))
+                            }}
+                            className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                            title="Copy review link"
+                          >
+                            Copy Link
+                          </button>
+                          {item.responseNotes && (
+                            <button
+                              type="button"
+                              onClick={() => alert(`Response Notes:\n\n${item.responseNotes}`)}
+                              className="rounded border border-blue-400 px-2 py-1 text-xs text-blue-400 hover:bg-blue-50"
+                              title="View response notes"
+                            >
+                              Notes
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+          {ledgerItems.length > 0 && (
+            <div className="p-4 text-sm text-[color:var(--color-text-muted)] border-t border-[color:var(--color-border)]">
+              Showing {ledgerItems.length} review request{ledgerItems.length !== 1 ? 's' : ''}
+            </div>
+          )}
         </div>
       )}
 

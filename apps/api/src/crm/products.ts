@@ -802,29 +802,29 @@ productsRouter.post('/terms/:id/send-for-review', requireAuth, async (req, res) 
         checkPreferences: false,
         html: `
           <h2>Terms & Conditions Review Request</h2>
-          <p>${senderData.name || senderData.email} has requested that you review and approve the following terms and conditions:</p>
+          <p>${senderData.name || senderData.email} has requested that you review and accept the following terms and conditions:</p>
           <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <h3>${terms.name}</h3>
             ${terms.description ? `<p><em>${terms.description}</em></p>` : ''}
             ${customMessage ? `<p><strong>Message from sender:</strong> ${customMessage}</p>` : ''}
           </div>
-          <p><a href="${reviewUrl}" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Review & Approve Terms</a></p>
+          <p><a href="${reviewUrl}" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Review & Accept Terms</a></p>
           <p>Or copy and paste this URL into your browser:</p>
           <p><code style="background: #f5f5f5; padding: 5px; border-radius: 3px;">${reviewUrl}</code></p>
-          <p style="color: #666; font-size: 12px; margin-top: 30px;">This link will allow you to review the full terms and conditions and provide your approval or feedback.</p>
+          <p style="color: #666; font-size: 12px; margin-top: 30px;">This link will allow you to review the full terms and conditions and provide your acceptance or feedback.</p>
         `,
         text: `
 Terms & Conditions Review Request
 
-${senderData.name || senderData.email} has requested that you review and approve the following terms and conditions:
+${senderData.name || senderData.email} has requested that you review and accept the following terms and conditions:
 
 ${terms.name}
 ${terms.description ? `\n${terms.description}` : ''}
 ${customMessage ? `\nMessage from sender: ${customMessage}` : ''}
 
-Review & Approve Terms: ${reviewUrl}
+Review & Accept Terms: ${reviewUrl}
 
-This link will allow you to review the full terms and conditions and provide your approval or feedback.
+This link will allow you to review the full terms and conditions and provide your acceptance or feedback.
         `,
       })
     } catch (emailErr) {
@@ -856,6 +856,46 @@ productsRouter.get('/terms/:id/review-requests', requireAuth, async (req, res) =
   } catch (err: any) {
     console.error('Get review requests error:', err)
     res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests' })
+  }
+})
+
+// GET /api/crm/terms/review-requests (ledger - all review requests)
+productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const q = String((req.query.q as string) ?? '').trim()
+    const status = req.query.status as 'pending' | 'viewed' | 'approved' | 'rejected' | undefined
+    const sortKeyRaw = (req.query.sort as string) ?? 'sentAt'
+    const dirParam = ((req.query.dir as string) ?? 'desc').toLowerCase()
+    const dir: SortDirection = dirParam === 'asc' ? 1 : -1
+    const allowed = new Set(['sentAt', 'viewedAt', 'respondedAt', 'status', 'recipientEmail', 'termsName'])
+    const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'sentAt'
+    const sort: Sort = { [sortField]: dir }
+    
+    const filter: Record<string, unknown> = {}
+    if (q) {
+      filter.$or = [
+        { recipientEmail: { $regex: q, $options: 'i' } },
+        { recipientName: { $regex: q, $options: 'i' } },
+        { termsName: { $regex: q, $options: 'i' } },
+        { senderName: { $regex: q, $options: 'i' } },
+        { senderEmail: { $regex: q, $options: 'i' } },
+      ]
+    }
+    if (status) filter.status = status
+    
+    const requests = await db.collection('terms_review_requests')
+      .find(filter)
+      .sort(sort)
+      .limit(500)
+      .toArray()
+    
+    res.json({ data: { items: requests }, error: null })
+  } catch (err: any) {
+    console.error('Get review requests ledger error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests_ledger' })
   }
 })
 

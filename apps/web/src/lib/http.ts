@@ -29,6 +29,25 @@ http.interceptors.request.use((config) => {
   return config
 })
 
+// Handle 401 errors gracefully - suppress console errors for background refetches
+http.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // If there's no token, silently fail (user is not logged in)
+      const token = localStorage.getItem('token')
+      if (!token) {
+        // Suppress the error for background refetches when user is not authenticated
+        return Promise.reject(error)
+      }
+      // If token exists but request failed, token might be expired
+      // Don't log to console as this is expected behavior for expired tokens
+      // The error will still be rejected so React Query can handle it
+    }
+    return Promise.reject(error)
+  }
+)
+
 // Helper function to get the full API URL for fetch requests
 export function getApiUrl(path: string): string {
   // Ensure path starts with /

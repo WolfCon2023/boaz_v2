@@ -1,11 +1,12 @@
 import { Router } from 'express'
 import { getDb } from '../db.js'
 import { env } from '../env.js'
+import { requireAuth } from '../auth/rbac.js'
 
 export const outreachSendRouter = Router()
 
 // POST /api/crm/outreach/send/email { to, subject, text, html, variant }
-outreachSendRouter.post('/email', async (req, res) => {
+outreachSendRouter.post('/email', requireAuth, async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   const { to, subject, text, html, variant } = req.body ?? {}
@@ -66,7 +67,7 @@ outreachSendRouter.post('/email', async (req, res) => {
 })
 
 // POST /api/crm/outreach/send/sms { to, text }
-outreachSendRouter.post('/sms', async (req, res) => {
+outreachSendRouter.post('/sms', requireAuth, async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   const { to, text } = req.body ?? {}

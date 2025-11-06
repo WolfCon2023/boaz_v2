@@ -166,7 +166,7 @@ export default function TermsReview() {
                   value={signerName}
                   onChange={(e) => setSignerName(e.target.value)}
                   placeholder="Enter your full name"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
@@ -179,7 +179,7 @@ export default function TermsReview() {
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Add any comments or questions..."
                   rows={4}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
