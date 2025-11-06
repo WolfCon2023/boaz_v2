@@ -2,14 +2,14 @@ import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
-import { formatDate } from '@/lib/dateFormat'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 
 type Segment = { _id: string; name: string; description?: string }
 type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null; mjml?: string; previewText?: string }
 type Template = { key: string; name: string; mjml: string }
 
 export default function Marketing() {
-  const [tab, setTab] = React.useState<'campaigns'|'segments'|'analytics'>('campaigns')
+  const [tab, setTab] = React.useState<'campaigns'|'segments'|'analytics'|'unsubscribes'>('campaigns')
   return (
     <div className="space-y-6">
       <CRMNav />
@@ -19,11 +19,13 @@ export default function Marketing() {
           <button onClick={() => setTab('campaigns')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='campaigns'?'bg-[color:var(--color-muted)]':''}`}>Campaigns</button>
           <button onClick={() => setTab('segments')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='segments'?'bg-[color:var(--color-muted)]':''}`}>Segments</button>
           <button onClick={() => setTab('analytics')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='analytics'?'bg-[color:var(--color-muted)]':''}`}>Analytics</button>
+          <button onClick={() => setTab('unsubscribes')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='unsubscribes'?'bg-[color:var(--color-muted)]':''}`}>Do Not Contact</button>
         </div>
       </div>
       {tab === 'campaigns' && <CampaignsTab />}
       {tab === 'segments' && <SegmentsTab />}
       {tab === 'analytics' && <AnalyticsTab />}
+      {tab === 'unsubscribes' && <UnsubscribesTab />}
     </div>
   )
 }
@@ -715,4 +717,141 @@ function RoiDrilldown({ selectedCampaignId, startDate, endDate, campaigns, onCle
   )
 }
 
+function UnsubscribesTab() {
+  const qc = useQueryClient()
+  const [q, setQ] = React.useState('')
+  const [sort, setSort] = React.useState<'email' | 'at' | 'campaignId'>('at')
+  const [dir, setDir] = React.useState<'asc' | 'desc'>('desc')
+  
+  const { data, isLoading } = useQuery({
+    queryKey: ['marketing-unsubscribes', q, sort, dir],
+    queryFn: async () => {
+      const res = await http.get('/api/marketing/unsubscribes', { params: { q, sort, dir } })
+      return res.data as { data: { items: Array<{
+        _id: string
+        email: string
+        name?: string | null
+        campaignId?: string | null
+        campaignName?: string | null
+        at: string
+      }> } }
+    },
+  })
+  
+  const items = data?.data.items ?? []
+  
+  const handleSort = (field: 'email' | 'at' | 'campaignId') => {
+    if (sort === field) {
+      setDir(dir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSort(field)
+      setDir('asc')
+    }
+  }
+  
+  const getSortIndicator = (field: string) => {
+    if (sort !== field) return ''
+    return dir === 'asc' ? ' ↑' : ' ↓'
+  }
+  
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search by email..."
+          className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+        />
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as any)}
+          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+        >
+          <option value="at">Unsubscribed Date</option>
+          <option value="email">Email</option>
+          <option value="campaignId">Campaign</option>
+        </select>
+        <select
+          value={dir}
+          onChange={(e) => setDir(e.target.value as any)}
+          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+        >
+          <option value="desc">Desc</option>
+          <option value="asc">Asc</option>
+        </select>
+      </div>
+      
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="text-left text-[color:var(--color-text-muted)] bg-[color:var(--color-muted)]">
+            <tr>
+              <th 
+                className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                onClick={() => handleSort('email')}
+              >
+                Email {getSortIndicator('email')}
+              </th>
+              <th className="px-4 py-2">Name</th>
+              <th 
+                className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                onClick={() => handleSort('campaignId')}
+              >
+                Campaign {getSortIndicator('campaignId')}
+              </th>
+              <th 
+                className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
+                onClick={() => handleSort('at')}
+              >
+                Unsubscribed {getSortIndicator('at')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
+                  Loading...
+                </td>
+              </tr>
+            ) : items.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
+                  No unsubscribes found
+                </td>
+              </tr>
+            ) : (
+              items.map((item) => (
+                <tr key={item._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+                  <td className="px-4 py-2 font-medium">{item.email}</td>
+                  <td className="px-4 py-2">{item.name || '—'}</td>
+                  <td className="px-4 py-2">
+                    {item.campaignName ? (
+                      <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
+                        {item.campaignName}
+                      </span>
+                    ) : (
+                      <span className="text-[color:var(--color-text-muted)]">All Campaigns</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">{item.at ? formatDateTime(item.at) : '—'}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        {items.length > 0 && (
+          <div className="p-4 text-sm text-[color:var(--color-text-muted)] border-t border-[color:var(--color-border)]">
+            Showing {items.length} unsubscribe{items.length !== 1 ? 's' : ''}
+          </div>
+        )}
+      </div>
+      
+      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+        <p className="font-semibold mb-1">Do Not Contact List</p>
+        <p>This list shows all email addresses that have unsubscribed from marketing campaigns. These recipients will be automatically excluded from future campaign sends.</p>
+      </div>
+    </div>
+  )
+}
 
