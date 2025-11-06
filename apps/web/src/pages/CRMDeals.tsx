@@ -628,17 +628,21 @@ export default function CRMDeals() {
                 onSubmit={(e) => {
                   e.preventDefault()
                   const fd = new FormData(e.currentTarget)
-                  const title = String(fd.get('title')||'') || undefined
-                  const amount = fd.get('amount') ? Number(fd.get('amount')) : undefined
-                  const stage = String(fd.get('stage')||'') || undefined
-                  const closeDateRaw = String(fd.get('closeDate')||'') || undefined
-                  const accSel = String(fd.get('accountId')||'')
-                  const campaignSel = String(fd.get('marketingCampaignId')||'')
-                  const payload: any = { _id: editing._id, title, amount, stage }
+                  const title = String(fd.get('title')||'').trim() || undefined
+                  const amountRaw = fd.get('amount')
+                  const amount = amountRaw && String(amountRaw).trim() ? Number(amountRaw) : undefined
+                  const stage = String(fd.get('stage')||'').trim() || undefined
+                  const closeDateRaw = String(fd.get('closeDate')||'').trim() || undefined
+                  const accSel = String(fd.get('accountId')||'').trim() || undefined
+                  const campaignSel = String(fd.get('marketingCampaignId')||'').trim() || undefined
+                  const payload: any = { _id: editing._id }
+                  if (title) payload.title = title
+                  if (amount !== undefined && !isNaN(amount)) payload.amount = amount
+                  if (stage) payload.stage = stage
                   if (closeDateRaw) payload.closeDate = closeDateRaw
                   if (accSel) payload.accountId = accSel
                   if (campaignSel) payload.marketingCampaignId = campaignSel
-                  else if (campaignSel === '') payload.marketingCampaignId = ''
+                  else if (campaignSel === undefined && editing.marketingCampaignId) payload.marketingCampaignId = ''
                   update.mutate(payload)
                   setEditing(null)
                 }}

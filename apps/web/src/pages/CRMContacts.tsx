@@ -53,9 +53,14 @@ export default function CRMContacts() {
   const create = useMutation({
     mutationFn: async (payload: { name: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }) => {
       const res = await http.post('/api/crm/contacts', payload)
-      return res.data
+      return res.data as { data: Contact }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+    onSuccess: (created) => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      const contactName = created.data?.name || 'Contact'
+      const contactEmail = created.data?.email ? ` (${created.data.email})` : ''
+      toast.showToast(`Contact "${contactName}${contactEmail}" has been added successfully.`, 'success')
+    },
   })
   const { data, refetch, isFetching } = useInfiniteQuery({
     queryKey: ['contacts', q, page],

@@ -86,6 +86,45 @@ dealsRouter.get('/', async (req, res) => {
   const sort: Record<string, 1 | -1> = allowed[sortKey] ? { [sortKey]: allowed[sortKey] } : { closeDate: -1 }
 
   const coll = db.collection('deals')
+  
+  // Backfill deal numbers for deals that don't have them
+  try {
+    const dealsWithoutNumber = await coll.find({ $or: [{ dealNumber: { $exists: false } }, { dealNumber: null }] }).limit(100).toArray()
+    if (dealsWithoutNumber.length > 0) {
+      // Get current max deal number
+      const maxDoc = await coll.find({ dealNumber: { $type: 'number' } }).project({ dealNumber: 1 }).sort({ dealNumber: -1 }).limit(1).next()
+      let nextNumber = typeof maxDoc?.dealNumber === 'number' ? maxDoc.dealNumber : 100000
+      
+      // Try to get from sequence counter
+      try {
+        const { getNextSequence } = await import('../db.js')
+        const counterValue = await getNextSequence('dealNumber')
+        if (counterValue > nextNumber) nextNumber = counterValue - 1
+      } catch {}
+      
+      // Assign numbers to deals without them
+      for (const deal of dealsWithoutNumber) {
+        nextNumber += 1
+        await coll.updateOne({ _id: deal._id }, { $set: { dealNumber: nextNumber } })
+      }
+      
+      // Update counter if we assigned numbers
+      if (dealsWithoutNumber.length > 0) {
+        try {
+          const counters = db.collection('counters')
+          await counters.updateOne(
+            { _id: 'dealNumber' as any },
+            { $set: { seq: nextNumber } },
+            { upsert: true }
+          )
+        } catch {}
+      }
+    }
+  } catch (err) {
+    // Don't fail the request if backfill fails
+    console.error('Failed to backfill deal numbers:', err)
+  }
+  
   const [items, total] = await Promise.all([
     coll.find(filter).sort(sort).skip(skip).limit(limit).toArray(),
     coll.countDocuments(filter),
@@ -276,7 +315,7 @@ dealsRouter.put('/:id', async (req, res) => {
     amount: z.number().optional(),
     stage: z.string().optional(),
     closeDate: z.string().optional(),
-    marketingCampaignId: z.string().optional(),
+    marketingCampaignId: z.string().optional().or(z.literal('')),
     attributionToken: z.string().optional(),
   })
   const parsed = schema.safeParse(req.body)
@@ -300,7 +339,11 @@ dealsRouter.put('/:id', async (req, res) => {
     }
     
     if (update.accountId) update.accountId = new ObjectId(update.accountId)
-    if (update.marketingCampaignId && ObjectId.isValid(update.marketingCampaignId)) update.marketingCampaignId = new ObjectId(update.marketingCampaignId)
+    if (update.marketingCampaignId === '') {
+      update.marketingCampaignId = null
+    } else if (update.marketingCampaignId && ObjectId.isValid(update.marketingCampaignId)) {
+      update.marketingCampaignId = new ObjectId(update.marketingCampaignId)
+    }
     if (update.attributionToken === '') delete update.attributionToken
     const closedWon = 'Contract Signed / Closed Won'
     if (update.closeDate) update.closeDate = new Date(`${update.closeDate}T12:00:00Z`)
