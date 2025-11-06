@@ -17,6 +17,8 @@ export function CRMNav() {
     },
     enabled: !!token,
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid 401 errors
+    retry: false, // Don't retry on 401 errors
   })
 
   const isManager = rolesData?.roles?.some(r => r.name === 'manager') || rolesData?.isAdmin || false

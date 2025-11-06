@@ -18,6 +18,8 @@ export function Sidebar() {
     },
     enabled: !!token,
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid 401 errors
+    retry: false, // Don't retry on 401 errors
   })
 
   const isAdmin = rolesData?.roles?.some(r => r.permissions.includes('*')) || false

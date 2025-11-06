@@ -24,6 +24,8 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     },
     enabled: !!token, // Only fetch if authenticated
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid 401 errors
+    retry: false, // Don't retry on 401 errors
   })
   
   useEffect(() => {

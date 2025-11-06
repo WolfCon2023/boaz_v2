@@ -38,7 +38,18 @@ http.interceptors.response.use(
       const token = localStorage.getItem('token')
       if (!token) {
         // Suppress the error for background refetches when user is not authenticated
-        return Promise.reject(error)
+        // Create a silent error that won't be logged
+        const silentError = new Error('Unauthorized')
+        silentError.name = 'SilentAuthError'
+        ;(silentError as any).response = error.response
+        ;(silentError as any).config = error.config
+        ;(silentError as any).isAxiosError = true
+        // Suppress console logging for this error
+        Object.defineProperty(silentError, 'message', {
+          get: () => '',
+          configurable: true
+        })
+        return Promise.reject(silentError)
       }
       // If token exists but request failed, token might be expired
       // Don't log to console as this is expected behavior for expired tokens

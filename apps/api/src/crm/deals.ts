@@ -180,26 +180,63 @@ dealsRouter.post('/', async (req, res) => {
     // Normalize date-only strings to midday UTC to avoid timezone shifting one day back
     if (closeDateRaw) doc.closeDate = new Date(`${closeDateRaw}T12:00:00Z`)
     if (!doc.closeDate && doc.stage === closedWon) doc.closeDate = new Date()
-    // Assign incremental dealNumber starting at 100001
-    try {
-      const { getNextSequence } = await import('../db.js')
-      doc.dealNumber = await getNextSequence('dealNumber')
-    } catch {}
-    if (doc.dealNumber === undefined) {
+    
+    // Generate dealNumber starting at 100001
+    // Retry logic to handle race conditions and duplicate key errors
+    let dealNumber: number | undefined
+    let result: any
+    let attempts = 0
+    const maxAttempts = 10
+    
+    while (attempts < maxAttempts) {
       try {
-        const last = await db
-          .collection('deals')
-          .find({ dealNumber: { $type: 'number' } })
-          .project({ dealNumber: 1 })
-          .sort({ dealNumber: -1 })
-          .limit(1)
-          .toArray()
-        doc.dealNumber = Number((last[0] as any)?.dealNumber ?? 100000) + 1
-      } catch {
-        doc.dealNumber = 100001
+        // Try to get next sequence (only on first attempt)
+        if (dealNumber === undefined) {
+          try {
+            const { getNextSequence } = await import('../db.js')
+            dealNumber = await getNextSequence('dealNumber')
+          } catch {}
+          // Fallback if counter not initialized
+          if (dealNumber === undefined) {
+            try {
+              const last = await db
+                .collection('deals')
+                .find({ dealNumber: { $type: 'number' } })
+                .project({ dealNumber: 1 })
+                .sort({ dealNumber: -1 })
+                .limit(1)
+                .toArray()
+              dealNumber = Number((last[0] as any)?.dealNumber ?? 100000) + 1
+            } catch {
+              dealNumber = 100001
+            }
+          }
+        } else {
+          // If previous attempt failed, increment and try next number
+          dealNumber++
+        }
+        
+        const docWithNumber = { ...doc, dealNumber }
+        result = await db.collection('deals').insertOne(docWithNumber)
+        break // Success, exit loop
+      } catch (err: any) {
+        // Check if it's a duplicate key error
+        if (err.code === 11000 && err.keyPattern?.dealNumber) {
+          attempts++
+          if (attempts >= maxAttempts) {
+            return res.status(500).json({ data: null, error: 'failed_to_generate_deal_number' })
+          }
+          // Continue loop to retry with incremented number
+          continue
+        }
+        // Other errors, rethrow
+        throw err
       }
     }
-    const result = await db.collection('deals').insertOne(doc)
+    
+    if (!result || dealNumber === undefined) {
+      return res.status(500).json({ data: null, error: 'failed_to_create_deal' })
+    }
     
     // Add history entry for creation
     const auth = (req as any).auth as { userId: string; email: string } | undefined
@@ -223,30 +260,7 @@ dealsRouter.post('/', async (req, res) => {
       )
     }
     
-    if (doc.dealNumber == null) {
-      // Emergency fallback: assign after insert
-      try {
-        const { getNextSequence } = await import('../db.js')
-        const n = await getNextSequence('dealNumber')
-        await db.collection('deals').updateOne({ _id: result.insertedId }, { $set: { dealNumber: n } })
-        doc.dealNumber = n
-      } catch {
-        // Secondary fallback: derive from current max
-        try {
-          const last = await db
-            .collection('deals')
-            .find({ dealNumber: { $type: 'number' } })
-            .project({ dealNumber: 1 })
-            .sort({ dealNumber: -1 })
-            .limit(1)
-            .toArray()
-          const n = Number((last[0] as any)?.dealNumber ?? 100000) + 1
-          await db.collection('deals').updateOne({ _id: result.insertedId }, { $set: { dealNumber: n } })
-          doc.dealNumber = n
-        } catch {}
-      }
-    }
-    return res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
+    return res.status(201).json({ data: { _id: result.insertedId, ...doc, dealNumber }, error: null })
   } catch (e) {
     return res.status(500).json({ data: null, error: 'deals_insert_error' })
   }

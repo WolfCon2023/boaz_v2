@@ -23,6 +23,8 @@ export function Topbar() {
       return res.data
     },
     enabled: !!token, // Only fetch if authenticated
+    refetchOnWindowFocus: false, // Don't refetch on window focus to avoid 401 errors
+    retry: false, // Don't retry on 401 errors
   })
 
   // Close menu when clicking outside

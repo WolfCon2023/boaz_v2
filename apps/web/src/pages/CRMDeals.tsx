@@ -184,7 +184,11 @@ export default function CRMDeals() {
     mutationFn: async (payload: Partial<Deal> & { _id: string } & { accountId?: string; accountNumber?: number }) => {
       const { _id, ...rest } = payload as any
       if (!_id || typeof _id !== 'string') {
-        throw new Error('Invalid deal ID')
+        throw new Error('Invalid deal ID: ID is missing or not a string')
+      }
+      // Validate ObjectId format (24 hex characters)
+      if (!/^[0-9a-fA-F]{24}$/.test(_id)) {
+        throw new Error(`Invalid deal ID format: "${_id}" is not a valid ObjectId (must be 24 hex characters)`)
       }
       const res = await http.put(`/api/crm/deals/${_id}`, rest)
       return res.data
@@ -327,11 +331,9 @@ export default function CRMDeals() {
     if (key === 'account') {
       const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
       if (a) {
-        const accNum = a.accountNumber ?? '—'
-        const accName = a.name ?? 'Account'
-        return `${accNum} — ${accName}`
+        return a.name ?? 'Account'
       }
-      return d.accountNumber ?? '—'
+      return '—'
     }
     if (key === 'title') return d.title ?? ''
     if (key === 'amount') return typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'
@@ -485,11 +487,9 @@ export default function CRMDeals() {
                 if (col.key === 'account') {
                   const a = (d.accountId && acctById.get(d.accountId)) || accounts.find((x) => x.accountNumber === d.accountNumber)
                   if (a) {
-                    const accNum = a.accountNumber ?? '—'
-                    const accName = a.name ?? 'Account'
-                    return `${accNum} — ${accName}`
+                    return a.name ?? 'Account'
                   }
-                  return d.accountNumber ?? '—'
+                  return '—'
                 }
                 if (col.key === 'title') return d.title ?? ''
                 if (col.key === 'amount') return typeof d.amount === 'number' ? d.amount : ''
