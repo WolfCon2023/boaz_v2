@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
-import { http, getApiUrl } from '@/lib/http'
+import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
-import { FileText, Upload, Download, Trash2, Eye, Users, Plus, X, Search } from 'lucide-react'
+import { FileText, Upload, Download, Trash2, Eye, Users, Plus, X, Search, History } from 'lucide-react'
 
 type DocumentVersion = {
   _id: string
@@ -75,6 +75,7 @@ export default function CRMDocuments() {
   const [selectedDoc, setSelectedDoc] = React.useState<DocumentDetail | null>(null)
   const [showPermissions, setShowPermissions] = React.useState(false)
   const [showVersions, setShowVersions] = React.useState(false)
+  const [showHistory, setShowHistory] = React.useState(false)
   const [uploadingVersion, setUploadingVersion] = React.useState(false)
   const [relatedToType, setRelatedToType] = React.useState<'account' | 'contact' | 'deal' | 'quote' | 'invoice' | ''>('')
   const [relatedToId, setRelatedToId] = React.useState('')
@@ -112,55 +113,111 @@ export default function CRMDocuments() {
     },
   })
 
-  // Fetch accounts for linking
+  // Fetch accounts for linking and display
   const { data: accountsData } = useQuery({
     queryKey: ['accounts-pick-docs'],
     queryFn: async () => {
       const res = await http.get('/api/crm/accounts', { params: { limit: 1000, sort: 'name', dir: 'asc' } })
       return res.data as { data: { items: Array<{ _id: string; name?: string; accountNumber?: number }> } }
     },
-    enabled: relatedToType === 'account' || showUpload,
   })
 
-  // Fetch deals for linking
+  // Fetch deals for linking and display
   const { data: dealsData } = useQuery({
     queryKey: ['deals-pick-docs'],
     queryFn: async () => {
       const res = await http.get('/api/crm/deals', { params: { limit: 1000, sort: 'title', dir: 'asc' } })
       return res.data as { data: { items: Array<{ _id: string; title?: string; dealNumber?: number }> } }
     },
-    enabled: relatedToType === 'deal' || showUpload,
   })
 
-  // Fetch contacts for linking
+  // Fetch contacts for linking and display
   const { data: contactsData } = useQuery({
     queryKey: ['contacts-pick-docs'],
     queryFn: async () => {
       const res = await http.get('/api/crm/contacts', { params: { limit: 1000, sort: 'name', dir: 'asc' } })
       return res.data as { data: { items: Array<{ _id: string; name?: string; email?: string }> } }
     },
-    enabled: relatedToType === 'contact' || showUpload,
   })
 
-  // Fetch quotes for linking
+  // Fetch quotes for linking and display
   const { data: quotesData } = useQuery({
     queryKey: ['quotes-pick-docs'],
     queryFn: async () => {
       const res = await http.get('/api/crm/quotes', { params: { limit: 1000, sort: 'title', dir: 'asc' } })
       return res.data as { data: { items: Array<{ _id: string; title?: string; quoteNumber?: number }> } }
     },
-    enabled: relatedToType === 'quote' || showUpload,
   })
 
-  // Fetch invoices for linking
+  // Fetch invoices for linking and display
   const { data: invoicesData } = useQuery({
     queryKey: ['invoices-pick-docs'],
     queryFn: async () => {
       const res = await http.get('/api/crm/invoices', { params: { limit: 1000, sort: 'title', dir: 'asc' } })
       return res.data as { data: { items: Array<{ _id: string; title?: string; invoiceNumber?: number }> } }
     },
-    enabled: relatedToType === 'invoice' || showUpload,
   })
+
+  // Create lookup maps for entity names
+  const accountMap = React.useMemo(() => {
+    const map = new Map<string, string>()
+    accountsData?.data.items.forEach(acc => {
+      map.set(acc._id, acc.name || `Account #${acc.accountNumber || acc._id}`)
+    })
+    return map
+  }, [accountsData])
+
+  const dealMap = React.useMemo(() => {
+    const map = new Map<string, string>()
+    dealsData?.data.items.forEach(deal => {
+      map.set(deal._id, deal.title || `Deal #${deal.dealNumber || deal._id}`)
+    })
+    return map
+  }, [dealsData])
+
+  const contactMap = React.useMemo(() => {
+    const map = new Map<string, string>()
+    contactsData?.data.items.forEach(contact => {
+      map.set(contact._id, contact.name || contact.email || 'Unnamed Contact')
+    })
+    return map
+  }, [contactsData])
+
+  const quoteMap = React.useMemo(() => {
+    const map = new Map<string, string>()
+    quotesData?.data.items.forEach(quote => {
+      map.set(quote._id, quote.title || `Quote #${quote.quoteNumber || quote._id}`)
+    })
+    return map
+  }, [quotesData])
+
+  const invoiceMap = React.useMemo(() => {
+    const map = new Map<string, string>()
+    invoicesData?.data.items.forEach(invoice => {
+      map.set(invoice._id, invoice.title || `Invoice #${invoice.invoiceNumber || invoice._id}`)
+    })
+    return map
+  }, [invoicesData])
+
+  // Helper function to get related entity name
+  const getRelatedEntityName = (doc: Document) => {
+    if (!doc.relatedTo) return null
+    const { type, id } = doc.relatedTo
+    switch (type) {
+      case 'account':
+        return accountMap.get(id) || `Account ${id}`
+      case 'contact':
+        return contactMap.get(id) || `Contact ${id}`
+      case 'deal':
+        return dealMap.get(id) || `Deal ${id}`
+      case 'quote':
+        return quoteMap.get(id) || `Quote ${id}`
+      case 'invoice':
+        return invoiceMap.get(id) || `Invoice ${id}`
+      default:
+        return `${type} ${id}`
+    }
+  }
 
   // Fetch users for permission management
   const { data: usersData } = useQuery({
@@ -183,6 +240,17 @@ export default function CRMDocuments() {
     enabled: !!selectedDoc?._id,
   })
 
+  // Fetch document history
+  const historyQ = useQuery({
+    queryKey: ['document-history', selectedDoc?._id, showHistory],
+    queryFn: async () => {
+      if (!selectedDoc?._id) return null
+      const res = await http.get(`/api/crm/documents/${selectedDoc._id}/history`)
+      return res.data as { data: { history: Array<{ _id: string; eventType: string; description: string; userName?: string; userEmail?: string; createdAt: string; oldValue?: any; newValue?: any; metadata?: any }>; createdAt: string; document: { _id: string; name: string; createdAt: string } } }
+    },
+    enabled: !!selectedDoc?._id && showHistory,
+  })
+
   const items = data?.data.items ?? []
   const total = data?.data.total ?? 0
   const totalPages = Math.ceil(total / pageSize)
@@ -197,6 +265,7 @@ export default function CRMDocuments() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['documents'] })
+      qc.invalidateQueries({ queryKey: ['document-history'] })
       setShowUpload(false)
       toast.showToast('Document uploaded successfully', 'success')
     },
@@ -215,6 +284,7 @@ export default function CRMDocuments() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['documents'] })
+      qc.invalidateQueries({ queryKey: ['document-history'] })
       refetchDetail()
       setUploadingVersion(false)
       toast.showToast('New version uploaded successfully', 'success')
@@ -232,6 +302,7 @@ export default function CRMDocuments() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['documents'] })
+      qc.invalidateQueries({ queryKey: ['document-history'] })
       setSelectedDoc(null)
       toast.showToast('Document deleted successfully', 'success')
     },
@@ -248,6 +319,7 @@ export default function CRMDocuments() {
     },
     onSuccess: () => {
       refetchDetail()
+      qc.invalidateQueries({ queryKey: ['document-history'] })
       toast.showToast('Permission added successfully', 'success')
     },
   })
@@ -260,6 +332,7 @@ export default function CRMDocuments() {
     },
     onSuccess: () => {
       refetchDetail()
+      qc.invalidateQueries({ queryKey: ['document-history'] })
       toast.showToast('Permission removed successfully', 'success')
     },
   })
@@ -270,10 +343,60 @@ export default function CRMDocuments() {
       const url = versionId
         ? `/api/crm/documents/${doc._id}/download/${versionId}`
         : `/api/crm/documents/${doc._id}/download`
-      const fullUrl = getApiUrl(url)
-      window.open(fullUrl, '_blank')
+      
+      // Use http client to include auth headers
+      const response = await http.get(url, {
+        responseType: 'blob',
+      })
+      
+      // Check if response is actually an error (Axios returns error responses as blobs too)
+      if (response.data instanceof Blob && response.data.type === 'application/json') {
+        const text = await response.data.text()
+        try {
+          const errorData = JSON.parse(text)
+          if (errorData.error) {
+            toast.showToast(`Download failed: ${errorData.error}`, 'error')
+            return
+          }
+        } catch {
+          // Not JSON, continue with download
+        }
+      }
+      
+      // Get filename from content-disposition header or use document name
+      const contentDisposition = response.headers['content-disposition'] || response.headers['Content-Disposition']
+      let filename = doc.name
+      if (contentDisposition) {
+        // Match filename="..." or filename=...
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i)
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '')
+        }
+      }
+      
+      // response.data is already a Blob when using responseType: 'blob'
+      const blob = response.data
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
     } catch (err: any) {
-      toast.showToast(`Download failed: ${err?.message || 'Unknown error'}`, 'error')
+      // Handle error responses that might be blobs
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text()
+          const errorData = JSON.parse(text)
+          toast.showToast(`Download failed: ${errorData.error || 'Unknown error'}`, 'error')
+        } catch {
+          toast.showToast(`Download failed: ${err?.response?.status === 401 ? 'Unauthorized' : 'Unknown error'}`, 'error')
+        }
+      } else {
+        toast.showToast(`Download failed: ${err?.response?.data?.error || err?.message || 'Unknown error'}`, 'error')
+      }
     }
   }
 
@@ -437,9 +560,14 @@ export default function CRMDocuments() {
                     </div>
                     <div className="text-xs text-[color:var(--color-text-muted)] mt-1">
                       Submitter: {doc.ownerName || doc.ownerEmail} • Updated: {formatDateTime(doc.updatedAt)}
-                      {doc.relatedTo && (
-                        <span> • Linked to: {doc.relatedTo.type.charAt(0).toUpperCase() + doc.relatedTo.type.slice(1)}</span>
-                      )}
+                      {doc.relatedTo && (() => {
+                        const entityName = getRelatedEntityName(doc)
+                        return entityName ? (
+                          <span> • Linked to: {doc.relatedTo.type.charAt(0).toUpperCase() + doc.relatedTo.type.slice(1)} - {entityName}</span>
+                        ) : (
+                          <span> • Linked to: {doc.relatedTo.type.charAt(0).toUpperCase() + doc.relatedTo.type.slice(1)}</span>
+                        )
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -709,16 +837,28 @@ export default function CRMDocuments() {
       )}
 
       {/* Document Details Modal */}
-      {selectedDoc && showVersions && docDetail && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => { setShowVersions(false); setSelectedDoc(null) }}>
+      {selectedDoc && (showVersions || showHistory || showPermissions) && docDetail && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => { setShowVersions(false); setShowHistory(false); setShowPermissions(false); setSelectedDoc(null) }}>
           <div className="bg-[color:var(--color-panel)] rounded-lg border p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">{docDetail.data.name}</h2>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
+                    setShowHistory(!showHistory)
+                    setShowVersions(false)
+                    setShowPermissions(false)
+                  }}
+                  className="p-2 rounded hover:bg-[color:var(--color-muted)]"
+                  title="History"
+                >
+                  <History size={16} />
+                </button>
+                <button
+                  onClick={() => {
                     setShowPermissions(!showPermissions)
                     setShowVersions(false)
+                    setShowHistory(false)
                   }}
                   className="p-2 rounded hover:bg-[color:var(--color-muted)]"
                   title="Permissions"
@@ -728,6 +868,8 @@ export default function CRMDocuments() {
                 <button
                   onClick={() => {
                     setShowVersions(false)
+                    setShowHistory(false)
+                    setShowPermissions(false)
                     setSelectedDoc(null)
                   }}
                   className="p-2 rounded hover:bg-[color:var(--color-muted)]"
@@ -737,7 +879,70 @@ export default function CRMDocuments() {
               </div>
             </div>
 
-            {showVersions && (
+            {showHistory && historyQ.data && (
+              <div className="space-y-4">
+                <h3 className="font-medium">Document History</h3>
+                {historyQ.data.data.history && historyQ.data.data.history.length > 0 ? (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {historyQ.data.data.history.map((entry) => {
+                      const getEventIcon = (type: string) => {
+                        switch (type) {
+                          case 'created': return '✨'
+                          case 'updated': return '📝'
+                          case 'version_uploaded': return '📤'
+                          case 'version_downloaded': return '📥'
+                          case 'permission_added': return '➕'
+                          case 'permission_updated': return '🔄'
+                          case 'permission_removed': return '➖'
+                          case 'deleted': return '🗑️'
+                          case 'field_changed': return '📋'
+                          default: return '📌'
+                        }
+                      }
+                      const getEventColor = (type: string) => {
+                        switch (type) {
+                          case 'created': return 'text-blue-600'
+                          case 'updated': return 'text-gray-600'
+                          case 'version_uploaded': return 'text-green-600'
+                          case 'version_downloaded': return 'text-blue-500'
+                          case 'permission_added': return 'text-green-500'
+                          case 'permission_updated': return 'text-yellow-600'
+                          case 'permission_removed': return 'text-red-500'
+                          case 'deleted': return 'text-red-600'
+                          case 'field_changed': return 'text-gray-600'
+                          default: return 'text-gray-600'
+                        }
+                      }
+                      return (
+                        <div
+                          key={entry._id}
+                          className="flex items-start gap-3 p-3 rounded-lg border bg-[color:var(--color-panel)]"
+                        >
+                          <span className="text-xl flex-shrink-0">{getEventIcon(entry.eventType)}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className={`font-medium ${getEventColor(entry.eventType)}`}>
+                              {entry.description}
+                            </div>
+                            <div className="text-xs text-[color:var(--color-text-muted)] mt-1">
+                              {entry.userName || entry.userEmail || 'System'} • {formatDateTime(entry.createdAt)}
+                            </div>
+                            {entry.oldValue && entry.newValue && (
+                              <div className="text-xs text-[color:var(--color-text-muted)] mt-1">
+                                Changed from "{String(entry.oldValue)}" to "{String(entry.newValue)}"
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-sm text-[color:var(--color-text-muted)]">No history available</div>
+                )}
+              </div>
+            )}
+
+            {showVersions && !showHistory && (
               <div className="space-y-4">
                 <div>
                   <div className="text-sm text-[color:var(--color-text-muted)] mb-2">
@@ -747,6 +952,14 @@ export default function CRMDocuments() {
                       {docDetail.data.isPublic ? ' Public' : ' Private'} • 
                       Created: {formatDateTime(docDetail.data.createdAt)} • 
                       Updated: {formatDateTime(docDetail.data.updatedAt)}
+                      {docDetail.data.relatedTo && (() => {
+                        const entityName = getRelatedEntityName(docDetail.data as Document)
+                        return entityName ? (
+                          <span> • Linked to: {docDetail.data.relatedTo.type.charAt(0).toUpperCase() + docDetail.data.relatedTo.type.slice(1)} - {entityName}</span>
+                        ) : (
+                          <span> • Linked to: {docDetail.data.relatedTo.type.charAt(0).toUpperCase() + docDetail.data.relatedTo.type.slice(1)}</span>
+                        )
+                      })()}
                     </div>
                   </div>
                 </div>

@@ -109,10 +109,60 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
   const handleDownload = async (doc: Document) => {
     try {
       const url = `/api/crm/documents/${doc._id}/download`
-      const fullUrl = getApiUrl(url)
-      window.open(fullUrl, '_blank')
+      
+      // Use http client to include auth headers
+      const response = await http.get(url, {
+        responseType: 'blob',
+      })
+      
+      // Check if response is actually an error (Axios returns error responses as blobs too)
+      if (response.data instanceof Blob && response.data.type === 'application/json') {
+        const text = await response.data.text()
+        try {
+          const errorData = JSON.parse(text)
+          if (errorData.error) {
+            toast.showToast(`Download failed: ${errorData.error}`, 'error')
+            return
+          }
+        } catch {
+          // Not JSON, continue with download
+        }
+      }
+      
+      // Get filename from content-disposition header or use document name
+      const contentDisposition = response.headers['content-disposition'] || response.headers['Content-Disposition']
+      let filename = doc.name
+      if (contentDisposition) {
+        // Match filename="..." or filename=...
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i)
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '')
+        }
+      }
+      
+      // response.data is already a Blob when using responseType: 'blob'
+      const blob = response.data
+      const blobUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(blobUrl)
     } catch (err: any) {
-      toast.showToast(`Download failed: ${err?.message || 'Unknown error'}`, 'error')
+      // Handle error responses that might be blobs
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text()
+          const errorData = JSON.parse(text)
+          toast.showToast(`Download failed: ${errorData.error || 'Unknown error'}`, 'error')
+        } catch {
+          toast.showToast(`Download failed: ${err?.response?.status === 401 ? 'Unauthorized' : 'Unknown error'}`, 'error')
+        }
+      } else {
+        toast.showToast(`Download failed: ${err?.response?.data?.error || err?.message || 'Unknown error'}`, 'error')
+      }
     }
   }
 
