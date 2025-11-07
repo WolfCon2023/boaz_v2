@@ -458,7 +458,29 @@ documentsRouter.get('/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ data: null, error: 'access_denied' })
     }
 
-    res.json({ data: document, error: null })
+    // Convert ObjectIds to strings for frontend
+    const response = {
+      ...document,
+      _id: String(document._id),
+      ownerId: String(document.ownerId),
+      checkedOutBy: document.checkedOutBy ? String(document.checkedOutBy) : undefined,
+      versions: document.versions.map(v => ({
+        ...v,
+        _id: String(v._id),
+        uploadedBy: String(v.uploadedBy),
+      })),
+      permissions: document.permissions.map(p => ({
+        ...p,
+        userId: String(p.userId),
+        grantedBy: String(p.grantedBy),
+      })),
+      relatedTo: document.relatedTo ? {
+        ...document.relatedTo,
+        id: String(document.relatedTo.id),
+      } : undefined,
+    }
+
+    res.json({ data: response, error: null })
   } catch (e: any) {
     if (e.message?.includes('ObjectId')) {
       return res.status(400).json({ data: null, error: 'invalid_id' })
