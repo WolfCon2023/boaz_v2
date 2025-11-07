@@ -373,15 +373,6 @@ export default function CRMDocuments() {
 
   const currentUserId = currentUser?._id
 
-  // Helper function to check if user can check out a document
-  // Any user who can view the document can check it out
-  // Since the API only returns documents the user can view, we can allow checkout for all visible documents
-  const canCheckoutDocument = (doc: Document | DocumentDetail): boolean => {
-    if (!currentUserId) return false
-    // If we can see the document in the list, we can check it out
-    // The API already filters to only show documents the user can view
-    return true
-  }
 
   // Checkout mutation
   const checkout = useMutation({
@@ -708,7 +699,10 @@ export default function CRMDocuments() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => checkout.mutate(doc._id)}
-                    disabled={!!(doc.checkedOutBy && currentUserId && String(doc.checkedOutBy) !== String(currentUserId) && !isAdmin)}
+                    disabled={!!(doc.checkedOutBy && currentUserId && currentUser?.email && 
+                      String(doc.checkedOutBy) !== String(currentUserId) && 
+                      doc.checkedOutByEmail?.toLowerCase() !== currentUser.email.toLowerCase() && 
+                      !isAdmin)}
                     className="p-2 rounded hover:bg-[color:var(--color-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
                     title={doc.checkedOutBy && currentUserId && String(doc.checkedOutBy) !== String(currentUserId) && !isAdmin 
                       ? `Cannot check out - checked out by ${doc.checkedOutByName || doc.checkedOutByEmail}` 
@@ -720,7 +714,12 @@ export default function CRMDocuments() {
                     // Normalize both IDs to strings for comparison
                     const checkedOutById = doc.checkedOutBy ? String(doc.checkedOutBy) : null
                     const myUserId = currentUserId ? String(currentUserId) : null
-                    const isCheckedOutByMe = checkedOutById && myUserId && checkedOutById === myUserId
+                    const myUserEmail = currentUser?.email
+                    // Check if checked out by current user - compare by ID or email as fallback
+                    const isCheckedOutByMe = checkedOutById && myUserId && (
+                      checkedOutById === myUserId || 
+                      (doc.checkedOutByEmail && myUserEmail && doc.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase())
+                    )
                     const isCheckedOutByOther = checkedOutById && !isCheckedOutByMe
                     
                     if (isCheckedOutByMe) {
@@ -1070,7 +1069,10 @@ export default function CRMDocuments() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => checkout.mutate(docDetail.data._id)}
-                  disabled={!!(docDetail.data.checkedOutBy && currentUserId && String(docDetail.data.checkedOutBy) !== String(currentUserId) && !isAdmin)}
+                  disabled={!!(docDetail.data.checkedOutBy && currentUserId && currentUser?.email && 
+                    String(docDetail.data.checkedOutBy) !== String(currentUserId) && 
+                    docDetail.data.checkedOutByEmail?.toLowerCase() !== currentUser.email.toLowerCase() && 
+                    !isAdmin)}
                   className="p-2 rounded hover:bg-[color:var(--color-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
                   title={docDetail.data.checkedOutBy && currentUserId && String(docDetail.data.checkedOutBy) !== String(currentUserId) && !isAdmin 
                     ? `Cannot check out - checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}` 
@@ -1082,7 +1084,12 @@ export default function CRMDocuments() {
                   // Normalize both IDs to strings for comparison
                   const checkedOutById = docDetail.data.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
                   const myUserId = currentUserId ? String(currentUserId) : null
-                  const isCheckedOutByMe = checkedOutById && myUserId && checkedOutById === myUserId
+                  const myUserEmail = currentUser?.email
+                  // Check if checked out by current user - compare by ID or email as fallback
+                  const isCheckedOutByMe = checkedOutById && myUserId && (
+                    checkedOutById === myUserId || 
+                    (docDetail.data.checkedOutByEmail && myUserEmail && docDetail.data.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase())
+                  )
                   const isCheckedOutByOther = checkedOutById && !isCheckedOutByMe
                   
                   if (isCheckedOutByMe) {
@@ -1309,15 +1316,26 @@ export default function CRMDocuments() {
 
                 {uploadingVersion && (
                   <div className="mt-4 p-4 rounded-lg border bg-[color:var(--color-muted)]">
-                    {docDetail.data.checkedOutBy && docDetail.data.checkedOutBy !== currentUserId && !isAdmin ? (
-                      <div className="text-sm text-red-600 mb-2">
-                        ⚠️ This document is checked out by {docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}. 
-                        You cannot upload a new version until it is checked in.
-                      </div>
-                    ) : (
-                      <>
-                        <h4 className="font-medium mb-2">Upload New Version</h4>
-                        <form onSubmit={handleUploadVersion} className="space-y-3">
+                    {(() => {
+                      const checkedOutById = docDetail.data.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
+                      const myUserId = currentUserId ? String(currentUserId) : null
+                      const myUserEmail = currentUser?.email
+                      const isCheckedOutByMe = checkedOutById && myUserId && (
+                        checkedOutById === myUserId || 
+                        (docDetail.data.checkedOutByEmail && myUserEmail && docDetail.data.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase())
+                      )
+                      if (docDetail.data.checkedOutBy && !isCheckedOutByMe && !isAdmin) {
+                        return (
+                          <div className="text-sm text-red-600 mb-2">
+                            ⚠️ This document is checked out by {docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}. 
+                            You cannot upload a new version until it is checked in.
+                          </div>
+                        )
+                      }
+                      return (
+                        <>
+                          <h4 className="font-medium mb-2">Upload New Version</h4>
+                          <form onSubmit={handleUploadVersion} className="space-y-3">
                       <input type="file" name="file" required className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent" />
                       <textarea
                         name="description"
@@ -1341,8 +1359,9 @@ export default function CRMDocuments() {
                         </button>
                       </div>
                     </form>
-                      </>
-                    )}
+                        </>
+                      )
+                    })()}
                   </div>
                 )}
               </div>
