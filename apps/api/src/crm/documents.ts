@@ -921,9 +921,13 @@ documentsRouter.post('/:id/checkout', requireAuth, async (req, res) => {
       return res.status(404).json({ data: null, error: 'not_found' })
     }
 
-    // Check if already checked out
+    // Check if already checked out by someone else
     if (document.checkedOutBy && !document.checkedOutBy.equals(userId)) {
-      return res.status(400).json({ data: null, error: 'already_checked_out' })
+      return res.status(400).json({ 
+        data: null, 
+        error: 'already_checked_out',
+        details: { checkedOutBy: document.checkedOutByName || document.checkedOutByEmail }
+      })
     }
 
     // Check permission (owner or edit permission)
