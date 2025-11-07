@@ -400,7 +400,7 @@ export default function CRMDocuments() {
       rolesDataUserId: rolesData?.userId,
       rolesDataEmail: rolesData?.email,
       currentUser_Id: currentUser?._id,
-      currentUserEmail: currentUser?.email,
+      currentUserEmailFromUser: currentUser?.email,
       isLoadingRoles,
       isLoadingUser
     })
