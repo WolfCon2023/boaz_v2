@@ -243,7 +243,16 @@ export default function CRMDocuments() {
     queryFn: async () => {
       if (!selectedDoc?._id) return null
       const res = await http.get(`/api/crm/documents/${selectedDoc._id}`)
-      return res.data as { data: DocumentDetail }
+      const result = res.data as { data: DocumentDetail }
+      // Debug: log the response to see what we're getting
+      console.log('Document detail fetched:', {
+        _id: result?.data?._id,
+        checkedOutBy: result?.data?.checkedOutBy,
+        checkedOutByEmail: result?.data?.checkedOutByEmail,
+        checkedOutByName: result?.data?.checkedOutByName,
+        fullData: result?.data
+      })
+      return result
     },
     enabled: !!selectedDoc?._id,
   })
@@ -715,9 +724,11 @@ export default function CRMDocuments() {
                     const checkedOutById = doc.checkedOutBy ? String(doc.checkedOutBy) : null
                     const myUserId = currentUserId ? String(currentUserId) : null
                     const myUserEmail = currentUser?.email
+                    
                     // Check if checked out by current user - compare by ID or email as fallback
-                    const isCheckedOutByMe = checkedOutById && myUserId && (
-                      checkedOutById === myUserId || 
+                    // Allow check-in if either ID matches OR email matches
+                    const isCheckedOutByMe = checkedOutById && (
+                      (myUserId && checkedOutById === myUserId) || 
                       (doc.checkedOutByEmail && myUserEmail && doc.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase())
                     )
                     const isCheckedOutByOther = checkedOutById && !isCheckedOutByMe
@@ -1081,66 +1092,81 @@ export default function CRMDocuments() {
                   <Lock size={16} />
                 </button>
                 {(() => {
+                  // Always log for debugging - check what we have
+                  console.log('Check-in button render:', {
+                    hasDocDetail: !!docDetail?.data,
+                    checkedOutBy: docDetail?.data?.checkedOutBy,
+                    checkedOutByEmail: docDetail?.data?.checkedOutByEmail,
+                    checkedOutByName: docDetail?.data?.checkedOutByName,
+                    currentUserId,
+                    currentUser,
+                    isAdmin
+                  })
+                  
                   // Normalize both IDs to strings for comparison
-                  const checkedOutById = docDetail.data.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
+                  const checkedOutById = docDetail?.data?.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
                   const myUserId = currentUserId ? String(currentUserId) : null
                   const myUserEmail = currentUser?.email
+                  
+                  // Debug logging - always log when document is checked out
+                  if (checkedOutById) {
+                    console.log('Check-in button check (document is checked out):', {
+                      checkedOutById,
+                      myUserId,
+                      currentUserId,
+                      checkedOutByEmail: docDetail.data.checkedOutByEmail,
+                      myUserEmail,
+                      currentUser: currentUser,
+                      idMatch: checkedOutById === myUserId,
+                      emailMatch: docDetail.data.checkedOutByEmail && myUserEmail && docDetail.data.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase(),
+                      isAdmin
+                    })
+                  }
+                  
                   // Check if checked out by current user - compare by ID or email as fallback
-                  const isCheckedOutByMe = checkedOutById && myUserId && (
-                    checkedOutById === myUserId || 
+                  // Allow check-in if either ID matches OR email matches
+                  // If currentUser isn't loaded yet, we can still try email match if we have the email from the document
+                  const isCheckedOutByMe = checkedOutById && (
+                    (myUserId && checkedOutById === myUserId) || 
                     (docDetail.data.checkedOutByEmail && myUserEmail && docDetail.data.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase())
                   )
                   const isCheckedOutByOther = checkedOutById && !isCheckedOutByMe
                   
-                  if (isCheckedOutByMe) {
-                    return (
-                      <button
-                        onClick={() => {
+                  // Always show check-in button, but enable/disable based on state
+                  return (
+                    <button
+                      onClick={() => {
+                        if (isCheckedOutByMe) {
                           if (confirm('Check in this document?')) {
                             checkin.mutate(docDetail.data._id)
                           }
-                        }}
-                        className="p-2 rounded hover:bg-[color:var(--color-muted)] text-green-600"
-                        title="Check in (you have this checked out)"
-                      >
-                        <Unlock size={16} />
-                      </button>
-                    )
-                  } else if (isCheckedOutByOther && isAdmin) {
-                    return (
-                      <button
-                        onClick={() => {
+                        } else if (isCheckedOutByOther && isAdmin) {
                           if (confirm(`Force check-in? This document is checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}.`)) {
                             checkin.mutate(docDetail.data._id)
                           }
-                        }}
-                        className="p-2 rounded hover:bg-[color:var(--color-muted)] text-orange-600"
-                        title={`Force check-in (checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail})`}
-                      >
-                        <Unlock size={16} />
-                      </button>
-                    )
-                  } else if (isCheckedOutByOther) {
-                    return (
-                      <button
-                        disabled
-                        className="p-2 rounded opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]"
-                        title={`Cannot check in - checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}. You must wait for them to check it in.`}
-                      >
-                        <Unlock size={16} />
-                      </button>
-                    )
-                  } else {
-                    return (
-                      <button
-                        disabled
-                        className="p-2 rounded opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]"
-                        title="Document is not checked out"
-                      >
-                        <Unlock size={16} />
-                      </button>
-                    )
-                  }
+                        }
+                      }}
+                      disabled={!isCheckedOutByMe && !(isCheckedOutByOther && isAdmin)}
+                      className={`p-2 rounded ${
+                        isCheckedOutByMe 
+                          ? 'hover:bg-[color:var(--color-muted)] text-green-600' 
+                          : isCheckedOutByOther && isAdmin
+                          ? 'hover:bg-[color:var(--color-muted)] text-orange-600'
+                          : 'opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]'
+                      }`}
+                      title={
+                        isCheckedOutByMe 
+                          ? 'Check in (you have this checked out)'
+                          : isCheckedOutByOther && isAdmin
+                          ? `Force check-in (checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail})`
+                          : isCheckedOutByOther
+                          ? `Cannot check in - checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}. You must wait for them to check it in.`
+                          : 'Document is not checked out'
+                      }
+                    >
+                      <Unlock size={16} />
+                    </button>
+                  )
                 })()}
                 <button
                   onClick={() => {
