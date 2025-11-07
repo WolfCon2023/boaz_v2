@@ -541,12 +541,23 @@ authRouter.post('/admin/sessions/bulk-revoke', requireAuth, requirePermission('*
   }
 })
 
-// Admin: Revoke all sessions
+// Admin: Revoke all sessions (excluding current admin session)
 authRouter.post('/admin/sessions/revoke-all', requireAuth, requirePermission('*'), async (req, res) => {
   try {
-    const revokedCount = await adminRevokeAllSessions()
+    // Extract current session JTI from refresh token to exclude it
+    const rt = req.cookies?.refresh_token
+    let currentJti: string | undefined
+    if (rt) {
+      const payload = verifyAny<{ jti?: string }>(rt)
+      currentJti = payload?.jti
+    }
     
-    res.json({ message: `Revoked ${revokedCount} session(s)`, revokedCount })
+    const revokedCount = await adminRevokeAllSessions(currentJti)
+    
+    res.json({ 
+      message: `Revoked ${revokedCount} session(s)${currentJti ? ' (your session was preserved)' : ''}`, 
+      revokedCount 
+    })
   } catch (err: any) {
     console.error('Admin revoke all sessions error:', err)
     res.status(500).json({ error: err.message || 'Failed to revoke all sessions' })

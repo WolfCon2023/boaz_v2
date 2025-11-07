@@ -225,12 +225,18 @@ export async function adminBulkRevokeSessions(jtis: string[]): Promise<number> {
 }
 
 // Revoke all active sessions (admin only)
-export async function adminRevokeAllSessions(): Promise<number> {
+// Optionally exclude a specific JTI (e.g., the current admin's session)
+export async function adminRevokeAllSessions(excludeJti?: string): Promise<number> {
   const db = await getDb()
   if (!db) return 0
 
+  const query: any = { revoked: { $ne: true } }
+  if (excludeJti) {
+    query.jti = { $ne: excludeJti }
+  }
+
   const result = await db.collection<SessionDoc>('sessions').updateMany(
-    { revoked: { $ne: true } },
+    query,
     { $set: { revoked: true } }
   )
 

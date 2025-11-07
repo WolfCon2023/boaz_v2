@@ -1224,14 +1224,14 @@ export default function AdminPortal() {
                 </button>
                 <button
                   onClick={() => {
-                    if (confirm(`Are you sure you want to terminate ALL ${filteredSessions.length} active session(s)? This will log out all users.`)) {
+                    if (confirm(`Are you sure you want to terminate ALL ${filteredSessions.length} active session(s)? Your current session will be preserved.`)) {
                       revokeAllSessions.mutate()
                     }
                   }}
                   disabled={revokeAllSessions.isPending}
                   className="rounded-lg border border-red-500 bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {revokeAllSessions.isPending ? 'Terminating All...' : 'Terminate All'}
+                  {revokeAllSessions.isPending ? 'Terminating All...' : 'Terminate All (Keep My Session)'}
                 </button>
               </>
             )}
