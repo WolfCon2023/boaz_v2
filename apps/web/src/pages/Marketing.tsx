@@ -3,8 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
-import { Type, Image, MousePointerClick, Minus, Columns } from 'lucide-react'
+import { Type, Image, MousePointerClick, Minus, Columns, GripVertical } from 'lucide-react'
 import { useToast } from '@/components/Toast'
+import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 type Segment = { _id: string; name: string; description?: string }
 type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null; mjml?: string; previewText?: string }
@@ -357,6 +360,25 @@ function SimpleBuilderUI({
     ;[newBlocks[index], newBlocks[newIndex]] = [newBlocks[newIndex], newBlocks[index]]
     setBlocks(newBlocks)
   }
+
+  // Drag and drop handlers
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(KeyboardSensor)
+  )
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    
+    const oldIndex = blocks.findIndex(b => b.id === active.id)
+    const newIndex = blocks.findIndex(b => b.id === over.id)
+    
+    if (oldIndex !== -1 && newIndex !== -1) {
+      setBlocks(arrayMove(blocks, oldIndex, newIndex))
+    }
+  }
   
   function startEdit(id: string) {
     const block = blocks.find(b => b.id === id)
@@ -372,6 +394,252 @@ function SimpleBuilderUI({
       setEditingBlockId(null)
       setEditingBlock(null)
     }
+  }
+
+  // Sortable block component
+  function SortableBlock({ block, index }: { block: SimpleBlock; index: number }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id })
+    const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
+
+    return (
+      <div ref={setNodeRef} style={style} className="rounded-lg border p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              {...attributes}
+              {...listeners}
+              className="p-1 cursor-grab active:cursor-grabbing text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
+              title="Drag to reorder"
+            >
+              <GripVertical size={16} />
+            </button>
+            <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+              {block.type === 'heading' && '📝 Heading'}
+              {block.type === 'text' && '📄 Text'}
+              {block.type === 'image' && '🖼️ Image'}
+              {block.type === 'button' && '🔘 Button'}
+              {block.type === 'divider' && '➖ Divider'}
+              {block.type === 'two-columns' && '📊 Two Columns'}
+            </span>
+            <button
+              type="button"
+              onClick={() => moveBlock(block.id, 'up')}
+              disabled={index === 0}
+              className="p-1 disabled:opacity-50 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
+              title="Move up"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onClick={() => moveBlock(block.id, 'down')}
+              disabled={index === blocks.length - 1}
+              className="p-1 disabled:opacity-50 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
+              title="Move down"
+            >
+              ↓
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            {editingBlockId === block.id ? (
+              <>
+                <button type="button" onClick={saveEdit} className="text-xs px-2 py-1 rounded border">Save</button>
+                <button type="button" onClick={() => { setEditingBlockId(null); setEditingBlock(null) }} className="text-xs px-2 py-1 rounded border">Cancel</button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={() => startEdit(block.id)} className="text-xs px-2 py-1 rounded border">Edit</button>
+                <button type="button" onClick={() => removeBlock(block.id)} className="text-xs px-2 py-1 rounded border border-red-400 text-red-400">Remove</button>
+              </>
+            )}
+          </div>
+        </div>
+        
+        {editingBlockId === block.id && editingBlock ? (
+          <div className="space-y-2 pt-2 border-t">
+            {block.type === 'heading' || block.type === 'text' || block.type === 'two-columns' ? (
+              <>
+                <textarea
+                  value={editingBlock.content || ''}
+                  onChange={(e) => setEditingBlock({ ...editingBlock, content: e.target.value })}
+                  placeholder={block.type === 'two-columns' ? 'Left content ||| Right content' : 'Enter content...'}
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent h-24"
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    type="color"
+                    value={editingBlock.backgroundColor || '#ffffff'}
+                    onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                    className="h-8 rounded border"
+                    title="Background color"
+                  />
+                  <input
+                    type="color"
+                    value={editingBlock.textColor || '#000000'}
+                    onChange={(e) => setEditingBlock({ ...editingBlock, textColor: e.target.value })}
+                    className="h-8 rounded border"
+                    title="Text color"
+                  />
+                  <select
+                    value={editingBlock.align || 'left'}
+                    onChange={(e) => setEditingBlock({ ...editingBlock, align: e.target.value as 'left' | 'center' | 'right' })}
+                    className="rounded-lg border px-2 py-1 text-sm bg-[color:var(--color-panel)]"
+                  >
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                  </select>
+                </div>
+              </>
+            ) : block.type === 'image' ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      
+                      try {
+                        const formData = new FormData()
+                        formData.append('image', file)
+                        
+                        const res = await http.post('/api/marketing/images/upload', formData, {
+                          headers: { 'Content-Type': 'multipart/form-data' },
+                        })
+                        
+                        if (res.data?.data?.url) {
+                          // Construct the full image URL using the API base URL
+                          const imageUrl = getApiUrl(res.data.data.url)
+                          setEditingBlock({ ...editingBlock, imageUrl })
+                        }
+                      } catch (err: any) {
+                        toast.showToast(`Failed to upload image: ${err?.response?.data?.error || err?.message || 'Unknown error'}`, 'error')
+                      }
+                      
+                      // Reset the input
+                      e.target.value = ''
+                    }}
+                    className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent text-xs"
+                  />
+                  {editingBlock.imageUrl && (
+                    <img 
+                      src={editingBlock.imageUrl} 
+                      alt="Preview" 
+                      className="h-12 w-12 object-cover rounded border"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={editingBlock.imageUrl || ''}
+                  onChange={(e) => setEditingBlock({ ...editingBlock, imageUrl: e.target.value })}
+                  placeholder="Or enter image URL"
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                />
+                <input
+                  type="text"
+                  value={editingBlock.content || ''}
+                  onChange={(e) => setEditingBlock({ ...editingBlock, content: e.target.value })}
+                  placeholder="Alt text"
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                />
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-[color:var(--color-text-muted)] whitespace-nowrap">Width:</label>
+                  <input
+                    type="text"
+                    value={editingBlock.imageWidth || '600px'}
+                    onChange={(e) => setEditingBlock({ ...editingBlock, imageWidth: e.target.value })}
+                    placeholder="600px or 100%"
+                    className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent"
+                  />
+                </div>
+                <input
+                  type="color"
+                  value={editingBlock.backgroundColor || '#ffffff'}
+                  onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                  className="h-8 rounded border"
+                  title="Background color"
+                />
+              </>
+            ) : block.type === 'button' ? (
+              <>
+                <input
+                  type="text"
+                  value={editingBlock.buttonText || ''}
+                  onChange={(e) => setEditingBlock({ ...editingBlock, buttonText: e.target.value })}
+                  placeholder="Button text"
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                />
+                <input
+                  type="text"
+                  value={editingBlock.buttonUrl || ''}
+                  onChange={(e) => setEditingBlock({ ...editingBlock, buttonUrl: e.target.value })}
+                  placeholder="Button URL"
+                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                />
+                <input
+                  type="color"
+                  value={editingBlock.backgroundColor || '#ffffff'}
+                  onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                  className="h-8 rounded border"
+                  title="Background color"
+                />
+              </>
+            ) : block.type === 'divider' ? (
+              <input
+                type="color"
+                value={editingBlock.backgroundColor || '#ffffff'}
+                onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                className="h-8 rounded border"
+                title="Background color"
+              />
+            ) : null}
+          </div>
+        ) : (
+          <div className="text-sm text-[color:var(--color-text-muted)]">
+            {block.type === 'heading' && <div className="font-bold text-lg">{block.content || '(Empty heading)'}</div>}
+            {block.type === 'text' && <div>{block.content || '(Empty text)'}</div>}
+            {block.type === 'image' && (
+              <div className="space-y-1">
+                {block.imageUrl ? (
+                  <div className="space-y-1">
+                    <img 
+                      src={block.imageUrl} 
+                      alt={block.content || 'Image'} 
+                      className="max-w-full h-24 object-contain rounded border"
+                      style={{ maxWidth: block.imageWidth || '600px' }}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none'
+                        const parent = (e.target as HTMLImageElement).parentElement
+                        if (parent) {
+                          const errorDiv = document.createElement('div')
+                          errorDiv.textContent = `🖼️ ${block.imageUrl}`
+                          errorDiv.className = 'text-xs'
+                          parent.appendChild(errorDiv)
+                        }
+                      }}
+                    />
+                    {block.imageWidth && (
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Width: {block.imageWidth}</div>
+                    )}
+                  </div>
+                ) : (
+                  <div>🖼️ (No image URL)</div>
+                )}
+              </div>
+            )}
+            {block.type === 'button' && <div>🔘 {block.buttonText || '(Empty button)'}</div>}
+            {block.type === 'divider' && <div className="border-t my-2"></div>}
+            {block.type === 'two-columns' && <div className="grid grid-cols-2 gap-2 text-xs">{block.content.split('|||')[0] || '(Left)'} | {block.content.split('|||')[1] || '(Right)'}</div>}
+          </div>
+        )}
+      </div>
+    )
   }
   
   return (
@@ -397,245 +665,21 @@ function SimpleBuilderUI({
         </button>
       </div>
       
-      <div className="space-y-2 max-h-96 overflow-y-auto">
-        {blocks.length === 0 ? (
-          <div className="text-center py-8 text-sm text-[color:var(--color-text-muted)]">
-            No blocks yet. Add a block above to get started.
-          </div>
-        ) : (
-          blocks.map((block, index) => (
-            <div key={block.id} className="rounded-lg border p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
-                    {block.type === 'heading' && '📝 Heading'}
-                    {block.type === 'text' && '📄 Text'}
-                    {block.type === 'image' && '🖼️ Image'}
-                    {block.type === 'button' && '🔘 Button'}
-                    {block.type === 'divider' && '➖ Divider'}
-                    {block.type === 'two-columns' && '📊 Two Columns'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => moveBlock(block.id, 'up')}
-                    disabled={index === 0}
-                    className="p-1 disabled:opacity-50"
-                    title="Move up"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveBlock(block.id, 'down')}
-                    disabled={index === blocks.length - 1}
-                    className="p-1 disabled:opacity-50"
-                    title="Move down"
-                  >
-                    ↓
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  {editingBlockId === block.id ? (
-                    <>
-                      <button type="button" onClick={saveEdit} className="text-xs px-2 py-1 rounded border">Save</button>
-                      <button type="button" onClick={() => { setEditingBlockId(null); setEditingBlock(null) }} className="text-xs px-2 py-1 rounded border">Cancel</button>
-                    </>
-                  ) : (
-                    <>
-                      <button type="button" onClick={() => startEdit(block.id)} className="text-xs px-2 py-1 rounded border">Edit</button>
-                      <button type="button" onClick={() => removeBlock(block.id)} className="text-xs px-2 py-1 rounded border border-red-400 text-red-400">Remove</button>
-                    </>
-                  )}
-                </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={blocks.map(b => b.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {blocks.length === 0 ? (
+              <div className="text-center py-8 text-sm text-[color:var(--color-text-muted)]">
+                No blocks yet. Add a block above to get started.
               </div>
-              
-              {editingBlockId === block.id && editingBlock ? (
-                <div className="space-y-2 pt-2 border-t">
-                  {block.type === 'heading' || block.type === 'text' || block.type === 'two-columns' ? (
-                    <>
-                      <textarea
-                        value={editingBlock.content || ''}
-                        onChange={(e) => setEditingBlock({ ...editingBlock, content: e.target.value })}
-                        placeholder={block.type === 'two-columns' ? 'Left content ||| Right content' : 'Enter content...'}
-                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent h-24"
-                      />
-                      <div className="grid grid-cols-3 gap-2">
-                        <input
-                          type="color"
-                          value={editingBlock.backgroundColor || '#ffffff'}
-                          onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
-                          className="h-8 rounded border"
-                          title="Background color"
-                        />
-                        <input
-                          type="color"
-                          value={editingBlock.textColor || '#000000'}
-                          onChange={(e) => setEditingBlock({ ...editingBlock, textColor: e.target.value })}
-                          className="h-8 rounded border"
-                          title="Text color"
-                        />
-                        <select
-                          value={editingBlock.align || 'left'}
-                          onChange={(e) => setEditingBlock({ ...editingBlock, align: e.target.value as 'left' | 'center' | 'right' })}
-                          className="rounded-lg border px-2 py-1 text-sm bg-[color:var(--color-panel)]"
-                        >
-                          <option value="left">Left</option>
-                          <option value="center">Center</option>
-                          <option value="right">Right</option>
-                        </select>
-                      </div>
-                    </>
-                  ) : block.type === 'image' ? (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            
-                            try {
-                              const formData = new FormData()
-                              formData.append('image', file)
-                              
-                              const res = await http.post('/api/marketing/images/upload', formData, {
-                                headers: { 'Content-Type': 'multipart/form-data' },
-                              })
-                              
-                              if (res.data?.data?.url) {
-                                // Construct the full image URL using the API base URL
-                                const imageUrl = getApiUrl(res.data.data.url)
-                                setEditingBlock({ ...editingBlock, imageUrl })
-                              }
-                            } catch (err: any) {
-                              toast.showToast(`Failed to upload image: ${err?.response?.data?.error || err?.message || 'Unknown error'}`, 'error')
-                            }
-                            
-                            // Reset the input
-                            e.target.value = ''
-                          }}
-                          className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent text-xs"
-                        />
-                        {editingBlock.imageUrl && (
-                          <img 
-                            src={editingBlock.imageUrl} 
-                            alt="Preview" 
-                            className="h-12 w-12 object-cover rounded border"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none'
-                            }}
-                          />
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        value={editingBlock.imageUrl || ''}
-                        onChange={(e) => setEditingBlock({ ...editingBlock, imageUrl: e.target.value })}
-                        placeholder="Or enter image URL"
-                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
-                      />
-                      <input
-                        type="text"
-                        value={editingBlock.content || ''}
-                        onChange={(e) => setEditingBlock({ ...editingBlock, content: e.target.value })}
-                        placeholder="Alt text"
-                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
-                      />
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs text-[color:var(--color-text-muted)] whitespace-nowrap">Width:</label>
-                        <input
-                          type="text"
-                          value={editingBlock.imageWidth || '600px'}
-                          onChange={(e) => setEditingBlock({ ...editingBlock, imageWidth: e.target.value })}
-                          placeholder="600px or 100%"
-                          className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent"
-                        />
-                      </div>
-                      <input
-                        type="color"
-                        value={editingBlock.backgroundColor || '#ffffff'}
-                        onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
-                        className="h-8 rounded border"
-                        title="Background color"
-                      />
-                    </>
-                  ) : block.type === 'button' ? (
-                    <>
-                      <input
-                        type="text"
-                        value={editingBlock.buttonText || ''}
-                        onChange={(e) => setEditingBlock({ ...editingBlock, buttonText: e.target.value })}
-                        placeholder="Button text"
-                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
-                      />
-                      <input
-                        type="text"
-                        value={editingBlock.buttonUrl || ''}
-                        onChange={(e) => setEditingBlock({ ...editingBlock, buttonUrl: e.target.value })}
-                        placeholder="Button URL"
-                        className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
-                      />
-                      <input
-                        type="color"
-                        value={editingBlock.backgroundColor || '#ffffff'}
-                        onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
-                        className="h-8 rounded border"
-                        title="Background color"
-                      />
-                    </>
-                  ) : block.type === 'divider' ? (
-                    <input
-                      type="color"
-                      value={editingBlock.backgroundColor || '#ffffff'}
-                      onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
-                      className="h-8 rounded border"
-                      title="Background color"
-                    />
-                  ) : null}
-                </div>
-              ) : (
-                <div className="text-sm text-[color:var(--color-text-muted)]">
-                  {block.type === 'heading' && <div className="font-bold text-lg">{block.content || '(Empty heading)'}</div>}
-                  {block.type === 'text' && <div>{block.content || '(Empty text)'}</div>}
-                  {block.type === 'image' && (
-                    <div className="space-y-1">
-                      {block.imageUrl ? (
-                        <div className="space-y-1">
-                          <img 
-                            src={block.imageUrl} 
-                            alt={block.content || 'Image'} 
-                            className="max-w-full h-24 object-contain rounded border"
-                            style={{ maxWidth: block.imageWidth || '600px' }}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none'
-                              const parent = (e.target as HTMLImageElement).parentElement
-                              if (parent) {
-                                const errorDiv = document.createElement('div')
-                                errorDiv.textContent = `🖼️ ${block.imageUrl}`
-                                errorDiv.className = 'text-xs'
-                                parent.appendChild(errorDiv)
-                              }
-                            }}
-                          />
-                          {block.imageWidth && (
-                            <div className="text-xs text-[color:var(--color-text-muted)]">Width: {block.imageWidth}</div>
-                          )}
-                        </div>
-                      ) : (
-                        <div>🖼️ (No image URL)</div>
-                      )}
-                    </div>
-                  )}
-                  {block.type === 'button' && <div>🔘 {block.buttonText || '(Empty button)'}</div>}
-                  {block.type === 'divider' && <div className="border-t my-2"></div>}
-                  {block.type === 'two-columns' && <div className="grid grid-cols-2 gap-2 text-xs">{block.content.split('|||')[0] || '(Left)'} | {block.content.split('|||')[1] || '(Right)'}</div>}
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+            ) : (
+              blocks.map((block, index) => (
+                <SortableBlock key={block.id} block={block} index={index} />
+              ))
+            )}
+          </div>
+        </SortableContext>
+      </DndContext>
       
       <div className="space-y-2 pt-2 border-t">
         <div>
