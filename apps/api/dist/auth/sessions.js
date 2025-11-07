@@ -151,6 +151,29 @@ export async function adminRevokeSession(jti) {
     const result = await db.collection('sessions').updateOne({ jti, revoked: { $ne: true } }, { $set: { revoked: true } });
     return result.modifiedCount > 0;
 }
+// Bulk revoke sessions by JTI array (admin only)
+export async function adminBulkRevokeSessions(jtis) {
+    const db = await getDb();
+    if (!db)
+        return 0;
+    if (jtis.length === 0)
+        return 0;
+    const result = await db.collection('sessions').updateMany({ jti: { $in: jtis }, revoked: { $ne: true } }, { $set: { revoked: true } });
+    return result.modifiedCount;
+}
+// Revoke all active sessions (admin only)
+// Optionally exclude a specific JTI (e.g., the current admin's session)
+export async function adminRevokeAllSessions(excludeJti) {
+    const db = await getDb();
+    if (!db)
+        return 0;
+    const query = { revoked: { $ne: true } };
+    if (excludeJti) {
+        query.jti = { $ne: excludeJti };
+    }
+    const result = await db.collection('sessions').updateMany(query, { $set: { revoked: true } });
+    return result.modifiedCount;
+}
 // Clean up old revoked sessions (older than 30 days)
 export async function cleanupOldSessions() {
     const db = await getDb();

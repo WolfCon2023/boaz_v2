@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs';
 import { sendAuthEmail } from './email.js';
 import { env } from '../env.js';
 import { getDb } from '../db.js';
-import { createSession, updateSessionLastUsed, revokeSession, revokeAllUserSessions, getUserSessions, isSessionRevoked, getAllSessions, getSessionsByUserId, adminRevokeSession, } from './sessions.js';
+import { createSession, updateSessionLastUsed, revokeSession, revokeAllUserSessions, getUserSessions, isSessionRevoked, getAllSessions, getSessionsByUserId, adminRevokeSession, adminBulkRevokeSessions, adminRevokeAllSessions, } from './sessions.js';
 const cookieOpts = {
     httpOnly: true,
     sameSite: 'strict',
@@ -419,6 +419,45 @@ authRouter.delete('/admin/sessions/:jti', requireAuth, requirePermission('*'), a
     catch (err) {
         console.error('Admin revoke session error:', err);
         res.status(500).json({ error: err.message || 'Failed to revoke session' });
+    }
+});
+// Admin: Bulk revoke sessions
+authRouter.post('/admin/sessions/bulk-revoke', requireAuth, requirePermission('*'), async (req, res) => {
+    try {
+        const parsed = z.object({
+            jtis: z.array(z.string()).min(1),
+        }).safeParse(req.body);
+        if (!parsed.success) {
+            return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors });
+        }
+        const { jtis } = parsed.data;
+        const revokedCount = await adminBulkRevokeSessions(jtis);
+        res.json({ message: `Revoked ${revokedCount} session(s)`, revokedCount });
+    }
+    catch (err) {
+        console.error('Admin bulk revoke sessions error:', err);
+        res.status(500).json({ error: err.message || 'Failed to revoke sessions' });
+    }
+});
+// Admin: Revoke all sessions (excluding current admin session)
+authRouter.post('/admin/sessions/revoke-all', requireAuth, requirePermission('*'), async (req, res) => {
+    try {
+        // Extract current session JTI from refresh token to exclude it
+        const rt = req.cookies?.refresh_token;
+        let currentJti;
+        if (rt) {
+            const payload = verifyAny(rt);
+            currentJti = payload?.jti;
+        }
+        const revokedCount = await adminRevokeAllSessions(currentJti);
+        res.json({
+            message: `Revoked ${revokedCount} session(s)${currentJti ? ' (your session was preserved)' : ''}`,
+            revokedCount
+        });
+    }
+    catch (err) {
+        console.error('Admin revoke all sessions error:', err);
+        res.status(500).json({ error: err.message || 'Failed to revoke all sessions' });
     }
 });
 // Admin: Create user with temporary password
