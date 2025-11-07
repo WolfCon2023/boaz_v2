@@ -4,7 +4,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
-import { FileText, Upload, Download, Trash2, Eye, Users, Plus, X, Search, History } from 'lucide-react'
+import { FileText, Upload, Download, Trash2, Eye, Users, Plus, X, Search, History, Lock, Unlock, HelpCircle, BookOpen } from 'lucide-react'
 
 type DocumentVersion = {
   _id: string
@@ -46,8 +46,16 @@ type Document = {
     type: 'account' | 'contact' | 'deal' | 'quote' | 'invoice'
     id: string
   }
+  checkedOutBy?: string
+  checkedOutByName?: string
+  checkedOutByEmail?: string
+  checkedOutAt?: string
   createdAt: string
   updatedAt: string
+  userPermission?: {
+    userId: string
+    permission: 'view' | 'edit' | 'delete'
+  }
 }
 
 type DocumentDetail = Document & {
@@ -337,6 +345,104 @@ export default function CRMDocuments() {
     },
   })
 
+  // Check if user is admin
+  const { data: rolesData } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
+    queryKey: ['user', 'roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/roles')
+      return res.data
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+
+  const isAdmin = rolesData?.roles?.some(r => r.permissions.includes('*')) || rolesData?.isAdmin || false
+
+  // Get current user ID
+  const { data: currentUser } = useQuery<{ _id: string; email: string }>({
+    queryKey: ['user', 'me'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me')
+      return res.data
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+
+  const currentUserId = currentUser?._id
+
+  // Helper function to check if user can check out a document
+  // Any user who can view the document can check it out
+  // Since the API only returns documents the user can view, we can allow checkout for all visible documents
+  const canCheckoutDocument = (doc: Document | DocumentDetail): boolean => {
+    if (!currentUserId) return false
+    // If we can see the document in the list, we can check it out
+    // The API already filters to only show documents the user can view
+    return true
+  }
+
+  // Checkout mutation
+  const checkout = useMutation({
+    mutationFn: async (docId: string) => {
+      const res = await http.post(`/api/crm/documents/${docId}/checkout`)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['documents'] })
+      qc.invalidateQueries({ queryKey: ['document'] })
+      qc.invalidateQueries({ queryKey: ['document-history'] })
+      refetchDetail()
+      toast.showToast('Document checked out successfully', 'success')
+    },
+    onError: (err: any) => {
+      const errorMsg = err?.response?.data?.error || 'Failed to check out document'
+      const details = err?.response?.data?.details
+      if (errorMsg === 'already_checked_out') {
+        const checkedOutBy = details?.checkedOutBy || 'another user'
+        toast.showToast(`Document is already checked out by ${checkedOutBy}. Please wait for them to check it in.`, 'error')
+      } else if (errorMsg === 'access_denied' || err?.response?.status === 403) {
+        toast.showToast('You do not have permission to check out this document. You need edit permission.', 'error')
+      } else {
+        toast.showToast(`Failed to check out: ${errorMsg}`, 'error')
+      }
+    },
+  })
+
+  // Check-in mutation
+  const checkin = useMutation({
+    mutationFn: async (docId: string) => {
+      const res = await http.post(`/api/crm/documents/${docId}/checkin`)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['documents'] })
+      qc.invalidateQueries({ queryKey: ['document'] })
+      qc.invalidateQueries({ queryKey: ['document-history'] })
+      refetchDetail()
+      toast.showToast('Document checked in successfully', 'success')
+    },
+    onError: (err: any) => {
+      const errorMsg = err?.response?.data?.error || 'Failed to check in document'
+      toast.showToast(errorMsg, 'error')
+    },
+  })
+
+  // Deletion request mutation
+  const requestDeletion = useMutation({
+    mutationFn: async (docId: string) => {
+      const res = await http.post(`/api/crm/documents/${docId}/request-deletion`)
+      return res.data as { data: { ok: boolean; ticketNumber: number } }
+    },
+    onSuccess: (data) => {
+      toast.showToast(`Deletion request submitted. Ticket #${data.data.ticketNumber} created.`, 'success')
+    },
+    onError: (err: any) => {
+      toast.showToast(`Failed to submit deletion request: ${err?.response?.data?.error || 'Unknown error'}`, 'error')
+    },
+  })
+
   // Download handler
   const handleDownload = async (doc: Document, versionId?: string) => {
     try {
@@ -453,6 +559,28 @@ export default function CRMDocuments() {
           </button>
         </div>
 
+        {/* Document Deletion Notice */}
+        <div className="mb-6 p-4 rounded-lg border bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+          <div className="flex items-start gap-3">
+            <BookOpen size={20} className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-medium text-blue-900 dark:text-blue-100 mb-1">Document Deletion Process</div>
+              <div className="text-sm text-blue-800 dark:text-blue-200">
+                Documents can only be deleted by administrators. To request document deletion, click the "Request Deletion" button on any document. 
+                A helpdesk ticket will be automatically created for review. 
+                <a 
+                  href="/apps/crm/support/kb" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="ml-1 underline hover:no-underline font-medium"
+                >
+                  Learn more about the deletion process
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-4 mb-6 p-4 rounded-lg border bg-[color:var(--color-panel)]">
           <div className="flex items-center gap-2 flex-1 min-w-[200px]">
@@ -560,6 +688,12 @@ export default function CRMDocuments() {
                     </div>
                     <div className="text-xs text-[color:var(--color-text-muted)] mt-1">
                       Submitter: {doc.ownerName || doc.ownerEmail} • Updated: {formatDateTime(doc.updatedAt)}
+                      {doc.checkedOutBy && (
+                        <span className="ml-2 px-2 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 text-xs font-medium">
+                          🔒 Checked out by {doc.checkedOutByName || doc.checkedOutByEmail}
+                          {doc.checkedOutAt && ` (${formatDateTime(doc.checkedOutAt)})`}
+                        </span>
+                      )}
                       {doc.relatedTo && (() => {
                         const entityName = getRelatedEntityName(doc)
                         return entityName ? (
@@ -572,6 +706,73 @@ export default function CRMDocuments() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => checkout.mutate(doc._id)}
+                    disabled={!!(doc.checkedOutBy && currentUserId && String(doc.checkedOutBy) !== String(currentUserId) && !isAdmin)}
+                    className="p-2 rounded hover:bg-[color:var(--color-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={doc.checkedOutBy && currentUserId && String(doc.checkedOutBy) !== String(currentUserId) && !isAdmin 
+                      ? `Cannot check out - checked out by ${doc.checkedOutByName || doc.checkedOutByEmail}` 
+                      : "Check out this document"}
+                  >
+                    <Lock size={16} />
+                  </button>
+                  {(() => {
+                    // Normalize both IDs to strings for comparison
+                    const checkedOutById = doc.checkedOutBy ? String(doc.checkedOutBy) : null
+                    const myUserId = currentUserId ? String(currentUserId) : null
+                    const isCheckedOutByMe = checkedOutById && myUserId && checkedOutById === myUserId
+                    const isCheckedOutByOther = checkedOutById && !isCheckedOutByMe
+                    
+                    if (isCheckedOutByMe) {
+                      return (
+                        <button
+                          onClick={() => {
+                            if (confirm('Check in this document?')) {
+                              checkin.mutate(doc._id)
+                            }
+                          }}
+                          className="p-2 rounded hover:bg-[color:var(--color-muted)] text-green-600"
+                          title="Check in (you have this checked out)"
+                        >
+                          <Unlock size={16} />
+                        </button>
+                      )
+                    } else if (isCheckedOutByOther && isAdmin) {
+                      return (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Force check-in? This document is checked out by ${doc.checkedOutByName || doc.checkedOutByEmail}.`)) {
+                              checkin.mutate(doc._id)
+                            }
+                          }}
+                          className="p-2 rounded hover:bg-[color:var(--color-muted)] text-orange-600"
+                          title={`Force check-in (checked out by ${doc.checkedOutByName || doc.checkedOutByEmail})`}
+                        >
+                          <Unlock size={16} />
+                        </button>
+                      )
+                    } else if (isCheckedOutByOther) {
+                      return (
+                        <button
+                          disabled
+                          className="p-2 rounded opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]"
+                          title={`Cannot check in - checked out by ${doc.checkedOutByName || doc.checkedOutByEmail}. You must wait for them to check it in.`}
+                        >
+                          <Unlock size={16} />
+                        </button>
+                      )
+                    } else {
+                      return (
+                        <button
+                          disabled
+                          className="p-2 rounded opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]"
+                          title="Document is not checked out"
+                        >
+                          <Unlock size={16} />
+                        </button>
+                      )
+                    }
+                  })()}
                   <button
                     onClick={() => handleView(doc)}
                     className="p-2 rounded hover:bg-[color:var(--color-muted)]"
@@ -586,17 +787,31 @@ export default function CRMDocuments() {
                   >
                     <Download size={16} />
                   </button>
-                  <button
-                    onClick={() => {
-                      if (confirm('Are you sure you want to delete this document?')) {
-                        remove.mutate(doc._id)
-                      }
-                    }}
-                    className="p-2 rounded hover:bg-[color:var(--color-muted)] text-red-400"
-                    title="Delete"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {isAdmin ? (
+                    <button
+                      onClick={() => {
+                        if (confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                          remove.mutate(doc._id)
+                        }
+                      }}
+                      className="p-2 rounded hover:bg-[color:var(--color-muted)] text-red-400"
+                      title="Delete (Admin only)"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (confirm('Request deletion of this document? A helpdesk ticket will be created for review.')) {
+                          requestDeletion.mutate(doc._id)
+                        }
+                      }}
+                      className="p-2 rounded hover:bg-[color:var(--color-muted)] text-orange-400"
+                      title="Request Deletion"
+                    >
+                      <HelpCircle size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -632,12 +847,14 @@ export default function CRMDocuments() {
       {/* Upload Modal */}
       {showUpload && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowUpload(false)}>
-          <div className="bg-[color:var(--color-panel)] rounded-lg border p-6 max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">Upload Document</h2>
-              <button onClick={() => setShowUpload(false)} className="p-1 rounded hover:bg-[color:var(--color-muted)]">
-                <X size={20} />
-              </button>
+          <div className="bg-[color:var(--color-panel)] rounded-lg border p-6 w-[min(90vw,40rem)] max-h-[90vh] overflow-y-auto mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-[color:var(--color-panel)] pb-2 border-b mb-4 -mx-6 px-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">Upload Document</h2>
+                <button onClick={() => setShowUpload(false)} className="p-1 rounded hover:bg-[color:var(--color-muted)]">
+                  <X size={20} />
+                </button>
+              </div>
             </div>
             <form onSubmit={handleUpload} className="space-y-4">
               <div>
@@ -841,8 +1058,83 @@ export default function CRMDocuments() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => { setShowVersions(false); setShowHistory(false); setShowPermissions(false); setSelectedDoc(null) }}>
           <div className="bg-[color:var(--color-panel)] rounded-lg border p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">{docDetail.data.name}</h2>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold">{docDetail.data.name}</h2>
+                {docDetail.data.checkedOutBy && (
+                  <div className="text-sm text-yellow-600 mt-1">
+                    🔒 Checked out by {docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}
+                    {docDetail.data.checkedOutAt && ` (${formatDateTime(docDetail.data.checkedOutAt)})`}
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => checkout.mutate(docDetail.data._id)}
+                  disabled={!!(docDetail.data.checkedOutBy && currentUserId && String(docDetail.data.checkedOutBy) !== String(currentUserId) && !isAdmin)}
+                  className="p-2 rounded hover:bg-[color:var(--color-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={docDetail.data.checkedOutBy && currentUserId && String(docDetail.data.checkedOutBy) !== String(currentUserId) && !isAdmin 
+                    ? `Cannot check out - checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}` 
+                    : "Check out this document"}
+                >
+                  <Lock size={16} />
+                </button>
+                {(() => {
+                  // Normalize both IDs to strings for comparison
+                  const checkedOutById = docDetail.data.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
+                  const myUserId = currentUserId ? String(currentUserId) : null
+                  const isCheckedOutByMe = checkedOutById && myUserId && checkedOutById === myUserId
+                  const isCheckedOutByOther = checkedOutById && !isCheckedOutByMe
+                  
+                  if (isCheckedOutByMe) {
+                    return (
+                      <button
+                        onClick={() => {
+                          if (confirm('Check in this document?')) {
+                            checkin.mutate(docDetail.data._id)
+                          }
+                        }}
+                        className="p-2 rounded hover:bg-[color:var(--color-muted)] text-green-600"
+                        title="Check in (you have this checked out)"
+                      >
+                        <Unlock size={16} />
+                      </button>
+                    )
+                  } else if (isCheckedOutByOther && isAdmin) {
+                    return (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Force check-in? This document is checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}.`)) {
+                            checkin.mutate(docDetail.data._id)
+                          }
+                        }}
+                        className="p-2 rounded hover:bg-[color:var(--color-muted)] text-orange-600"
+                        title={`Force check-in (checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail})`}
+                      >
+                        <Unlock size={16} />
+                      </button>
+                    )
+                  } else if (isCheckedOutByOther) {
+                    return (
+                      <button
+                        disabled
+                        className="p-2 rounded opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]"
+                        title={`Cannot check in - checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}. You must wait for them to check it in.`}
+                      >
+                        <Unlock size={16} />
+                      </button>
+                    )
+                  } else {
+                    return (
+                      <button
+                        disabled
+                        className="p-2 rounded opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]"
+                        title="Document is not checked out"
+                      >
+                        <Unlock size={16} />
+                      </button>
+                    )
+                  }
+                })()}
                 <button
                   onClick={() => {
                     setShowHistory(!showHistory)
@@ -896,6 +1188,8 @@ export default function CRMDocuments() {
                           case 'permission_removed': return '➖'
                           case 'deleted': return '🗑️'
                           case 'field_changed': return '📋'
+                          case 'checked_out': return '🔒'
+                          case 'checked_in': return '🔓'
                           default: return '📌'
                         }
                       }
@@ -910,6 +1204,8 @@ export default function CRMDocuments() {
                           case 'permission_removed': return 'text-red-500'
                           case 'deleted': return 'text-red-600'
                           case 'field_changed': return 'text-gray-600'
+                          case 'checked_out': return 'text-yellow-600'
+                          case 'checked_in': return 'text-green-600'
                           default: return 'text-gray-600'
                         }
                       }
@@ -967,8 +1263,15 @@ export default function CRMDocuments() {
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium">Versions ({docDetail.data.versions.length})</h3>
                   <button
-                    onClick={() => setUploadingVersion(true)}
+                    onClick={() => {
+                      if (docDetail.data.checkedOutBy && docDetail.data.checkedOutBy !== currentUserId && !isAdmin) {
+                        toast.showToast(`Document is checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}. Please check it in first.`, 'error')
+                        return
+                      }
+                      setUploadingVersion(true)
+                    }}
                     className="flex items-center gap-2 px-3 py-1 rounded border text-sm hover:bg-[color:var(--color-muted)]"
+                    disabled={!!(docDetail.data.checkedOutBy && docDetail.data.checkedOutBy !== currentUserId && !isAdmin)}
                   >
                     <Plus size={14} /> Upload New Version
                   </button>
@@ -1006,8 +1309,15 @@ export default function CRMDocuments() {
 
                 {uploadingVersion && (
                   <div className="mt-4 p-4 rounded-lg border bg-[color:var(--color-muted)]">
-                    <h4 className="font-medium mb-2">Upload New Version</h4>
-                    <form onSubmit={handleUploadVersion} className="space-y-3">
+                    {docDetail.data.checkedOutBy && docDetail.data.checkedOutBy !== currentUserId && !isAdmin ? (
+                      <div className="text-sm text-red-600 mb-2">
+                        ⚠️ This document is checked out by {docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}. 
+                        You cannot upload a new version until it is checked in.
+                      </div>
+                    ) : (
+                      <>
+                        <h4 className="font-medium mb-2">Upload New Version</h4>
+                        <form onSubmit={handleUploadVersion} className="space-y-3">
                       <input type="file" name="file" required className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent" />
                       <textarea
                         name="description"
@@ -1031,6 +1341,8 @@ export default function CRMDocuments() {
                         </button>
                       </div>
                     </form>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
