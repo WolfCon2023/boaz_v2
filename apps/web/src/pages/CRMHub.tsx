@@ -12,6 +12,7 @@ export default function CRMHub() {
              { label: 'Marketing', desc: 'Campaigns, segments, analytics', href: '/apps/crm/marketing' },
     { label: 'Tickets', desc: 'Support tickets and SLAs', href: '/apps/crm/support/tickets' },
     { label: 'Knowledge Base', desc: 'Articles and self‑service help', href: '/apps/crm/support/kb' },
+    { label: 'Documents', desc: 'File attachments, version control, and permissions', href: '/apps/crm/documents' },
   ]
 
   return (

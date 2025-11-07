@@ -6,6 +6,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { DocumentsList } from '@/components/DocumentsList'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
 
@@ -700,6 +701,14 @@ export default function CRMContacts() {
                   )}
                 </div>
               )}
+              <div className="col-span-full mt-4 pt-4 border-t">
+                <DocumentsList
+                  relatedToType="contact"
+                  relatedToId={editing._id}
+                  relatedToName={editing.name || editing.email}
+                  compact={true}
+                />
+              </div>
             </form>
             </div>
           </div>

@@ -7,6 +7,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { Plus, X, Package, Send } from 'lucide-react'
+import { DocumentsList } from '@/components/DocumentsList'
 
 type Quote = {
   _id: string
@@ -1195,6 +1196,14 @@ export default function CRMQuotes() {
                     )}
                   </div>
                 )}
+                <div className="col-span-full mt-4 pt-4 border-t">
+                  <DocumentsList
+                    relatedToType="quote"
+                    relatedToId={editing._id}
+                    relatedToName={editing.title}
+                    compact={true}
+                  />
+                </div>
               </form>
             </div>
           </div>

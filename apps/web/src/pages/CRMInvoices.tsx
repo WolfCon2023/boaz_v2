@@ -6,6 +6,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { DocumentsList } from '@/components/DocumentsList'
 import { Plus, X, Package } from 'lucide-react'
 
 type Invoice = { 
@@ -1109,6 +1110,14 @@ export default function CRMInvoices() {
                     <ul className="list-disc pl-5">{historyQ.data.data.refunds.map((r, i) => (<li key={i}>${r.amount ?? ''} • {r.reason ?? ''} • {r.refundedAt ? formatDateTime(r.refundedAt) : ''}</li>))}{historyQ.data.data.refunds.length===0 && <li>None</li>}</ul>
                   </div>
                 )}
+                <div className="col-span-full mt-4 pt-4 border-t">
+                  <DocumentsList
+                    relatedToType="invoice"
+                    relatedToId={editing._id}
+                    relatedToName={editing.title}
+                    compact={true}
+                  />
+                </div>
               </form>
             </div>
           </div>

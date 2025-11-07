@@ -6,6 +6,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { DocumentsList } from '@/components/DocumentsList'
 
 type Deal = { _id: string; dealNumber?: number; title?: string; amount?: number; stage?: string; closeDate?: string; accountId?: string; accountNumber?: number; marketingCampaignId?: string }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
@@ -845,6 +846,14 @@ export default function CRMDeals() {
                     )}
                   </div>
                 )}
+                <div className="col-span-full mt-4 pt-4 border-t">
+                  <DocumentsList
+                    relatedToType="deal"
+                    relatedToId={editing._id}
+                    relatedToName={editing.title}
+                    compact={true}
+                  />
+                </div>
               </form>
             </div>
           </div>
