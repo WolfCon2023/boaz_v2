@@ -359,11 +359,12 @@ export default function CRMDocuments() {
     },
   })
 
-  // Check if user is admin
-  const { data: rolesData } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
+  // Check if user is admin and get user ID - this endpoint returns userId and email
+  const { data: rolesData, isLoading: isLoadingRoles } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean; userId?: string; email?: string }>({
     queryKey: ['user', 'roles'],
     queryFn: async () => {
       const res = await http.get('/api/auth/me/roles')
+      console.log('Roles data loaded:', res.data)
       return res.data
     },
     staleTime: 5 * 60 * 1000,
@@ -374,10 +375,11 @@ export default function CRMDocuments() {
   const isAdmin = rolesData?.roles?.some(r => r.permissions.includes('*')) || rolesData?.isAdmin || false
 
   // Get current user ID - use the same query key as Topbar to share cache
-  const { data: currentUser } = useQuery<{ _id: string; email: string }>({
+  const { data: currentUser, isLoading: isLoadingUser } = useQuery<{ _id: string; email: string }>({
     queryKey: ['user', 'me'],
     queryFn: async () => {
       const res = await http.get('/api/auth/me')
+      console.log('Current user loaded:', res.data)
       return res.data
     },
     staleTime: 5 * 60 * 1000,
@@ -385,7 +387,24 @@ export default function CRMDocuments() {
     retry: false,
   })
 
-  const currentUserId = currentUser?._id
+  // Use rolesData as primary source since it's more reliable and includes userId/email
+  // Fallback to currentUser if rolesData isn't available yet
+  const currentUserId = rolesData?.userId || currentUser?._id
+  const currentUserEmail = rolesData?.email || currentUser?.email
+  
+  // Debug: Log user info to see what we have
+  React.useEffect(() => {
+    console.log('User info for checkout/checkin:', {
+      currentUserId,
+      currentUserEmail,
+      rolesDataUserId: rolesData?.userId,
+      rolesDataEmail: rolesData?.email,
+      currentUser_Id: currentUser?._id,
+      currentUserEmail: currentUser?.email,
+      isLoadingRoles,
+      isLoadingUser
+    })
+  }, [currentUserId, currentUserEmail, rolesData, currentUser, isLoadingRoles, isLoadingUser])
 
 
   // Checkout mutation
@@ -728,10 +747,10 @@ export default function CRMDocuments() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => checkout.mutate(doc._id)}
-                    disabled={!!(doc.checkedOutBy && currentUserId && currentUser?.email && 
-                      String(doc.checkedOutBy) !== String(currentUserId) && 
-                      doc.checkedOutByEmail?.toLowerCase() !== currentUser.email.toLowerCase() && 
-                      !isAdmin)}
+                  disabled={!!(doc.checkedOutBy && currentUserId && currentUserEmail && 
+                    String(doc.checkedOutBy) !== String(currentUserId) && 
+                    doc.checkedOutByEmail?.toLowerCase() !== currentUserEmail.toLowerCase() && 
+                    !isAdmin)}
                     className="p-2 rounded hover:bg-[color:var(--color-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
                     title={doc.checkedOutBy && currentUserId && String(doc.checkedOutBy) !== String(currentUserId) && !isAdmin 
                       ? `Cannot check out - checked out by ${doc.checkedOutByName || doc.checkedOutByEmail}` 
@@ -743,7 +762,7 @@ export default function CRMDocuments() {
                     // Normalize both IDs to strings for comparison
                     const checkedOutById = doc.checkedOutBy ? String(doc.checkedOutBy) : null
                     const myUserId = currentUserId ? String(currentUserId) : null
-                    const myUserEmail = currentUser?.email
+                    const myUserEmail = currentUserEmail
                     
                     // Check if checked out by current user - compare by ID or email as fallback
                     // Allow check-in if either ID matches OR email matches
@@ -1100,9 +1119,9 @@ export default function CRMDocuments() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => checkout.mutate(docDetail.data._id)}
-                  disabled={!!(docDetail.data.checkedOutBy && currentUserId && currentUser?.email && 
+                  disabled={!!(docDetail.data.checkedOutBy && currentUserId && currentUserEmail && 
                     String(docDetail.data.checkedOutBy) !== String(currentUserId) && 
-                    docDetail.data.checkedOutByEmail?.toLowerCase() !== currentUser.email.toLowerCase() && 
+                    docDetail.data.checkedOutByEmail?.toLowerCase() !== currentUserEmail.toLowerCase() && 
                     !isAdmin)}
                   className="p-2 rounded hover:bg-[color:var(--color-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
                   title={docDetail.data.checkedOutBy && currentUserId && String(docDetail.data.checkedOutBy) !== String(currentUserId) && !isAdmin 
@@ -1121,7 +1140,7 @@ export default function CRMDocuments() {
                   // Normalize both IDs to strings for comparison
                   const checkedOutById = docDetail.data.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
                   const myUserId = currentUserId ? String(currentUserId) : null
-                  const myUserEmail = currentUser?.email
+                  const myUserEmail = currentUserEmail
                   
                   // Check if checked out by current user - compare by ID or email as fallback
                   // Allow check-in if either ID matches OR email matches
@@ -1344,9 +1363,9 @@ export default function CRMDocuments() {
                     {(() => {
                       const checkedOutById = docDetail.data.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
                       const myUserId = currentUserId ? String(currentUserId) : null
-                      const myUserEmail = currentUser?.email
-                      const isCheckedOutByMe = checkedOutById && myUserId && (
-                        checkedOutById === myUserId || 
+                      const myUserEmail = currentUserEmail
+                      const isCheckedOutByMe = checkedOutById && (
+                        (myUserId && checkedOutById === myUserId) || 
                         (docDetail.data.checkedOutByEmail && myUserEmail && docDetail.data.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase())
                       )
                       if (docDetail.data.checkedOutBy && !isCheckedOutByMe && !isAdmin) {
