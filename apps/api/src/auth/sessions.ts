@@ -209,6 +209,34 @@ export async function adminRevokeSession(jti: string): Promise<boolean> {
   return result.modifiedCount > 0
 }
 
+// Bulk revoke sessions by JTI array (admin only)
+export async function adminBulkRevokeSessions(jtis: string[]): Promise<number> {
+  const db = await getDb()
+  if (!db) return 0
+
+  if (jtis.length === 0) return 0
+
+  const result = await db.collection<SessionDoc>('sessions').updateMany(
+    { jti: { $in: jtis }, revoked: { $ne: true } },
+    { $set: { revoked: true } }
+  )
+
+  return result.modifiedCount
+}
+
+// Revoke all active sessions (admin only)
+export async function adminRevokeAllSessions(): Promise<number> {
+  const db = await getDb()
+  if (!db) return 0
+
+  const result = await db.collection<SessionDoc>('sessions').updateMany(
+    { revoked: { $ne: true } },
+    { $set: { revoked: true } }
+  )
+
+  return result.modifiedCount
+}
+
 // Clean up old revoked sessions (older than 30 days)
 export async function cleanupOldSessions(): Promise<void> {
   const db = await getDb()

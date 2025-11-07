@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download } from 'lucide-react'
 import { http } from '@/lib/http'
@@ -25,6 +25,7 @@ export default function AdminPortal() {
   const [emailFilter, setEmailFilter] = useState<string>('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set())
 
   // Check if user has admin role
   const { data: currentUserRoles, isLoading: isLoadingRoles } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean; userId?: string }>({
@@ -115,6 +116,44 @@ export default function AdminPortal() {
     },
     onError: (err: any) => {
       setError(err.response?.data?.error || 'Failed to revoke session')
+      setMessage('')
+    },
+  })
+
+  // Bulk revoke sessions mutation
+  const bulkRevokeSessions = useMutation({
+    mutationFn: async (jtis: string[]) => {
+      const res = await http.post('/api/auth/admin/sessions/bulk-revoke', { jtis })
+      return res.data
+    },
+    onSuccess: (data: any) => {
+      setMessage(`Successfully revoked ${data.revokedCount || 0} session(s)`)
+      setError('')
+      setSelectedSessions(new Set())
+      queryClient.invalidateQueries({ queryKey: ['admin', 'sessions'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to revoke sessions')
+      setMessage('')
+    },
+  })
+
+  // Revoke all sessions mutation
+  const revokeAllSessions = useMutation({
+    mutationFn: async () => {
+      const res = await http.post('/api/auth/admin/sessions/revoke-all')
+      return res.data
+    },
+    onSuccess: (data: any) => {
+      setMessage(`Successfully revoked ${data.revokedCount || 0} session(s)`)
+      setError('')
+      setSelectedSessions(new Set())
+      queryClient.invalidateQueries({ queryKey: ['admin', 'sessions'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.error || 'Failed to revoke all sessions')
       setMessage('')
     },
   })
@@ -557,6 +596,11 @@ export default function AdminPortal() {
     }
     return !session.revoked
   }) || []
+
+  // Clear selected sessions when filters change
+  useEffect(() => {
+    setSelectedSessions(new Set())
+  }, [userIdFilter, emailFilter])
 
   // Show access denied message if user doesn't have admin permissions (but only after roles have loaded)
   const showAccessDenied = !isLoadingRoles && !isAdmin
@@ -1157,8 +1201,40 @@ export default function AdminPortal() {
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Active Sessions</h2>
-          <div className="text-sm text-[color:var(--color-text-muted)]">
-            {isLoading ? 'Loading...' : `${filteredSessions.length} active session(s)`}
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-[color:var(--color-text-muted)]">
+              {isLoading ? 'Loading...' : `${filteredSessions.length} active session(s)`}
+            </div>
+            {filteredSessions.length > 0 && (
+              <>
+                <button
+                  onClick={() => {
+                    if (selectedSessions.size === 0) {
+                      setError('Please select at least one session to terminate')
+                      return
+                    }
+                    if (confirm(`Are you sure you want to terminate ${selectedSessions.size} selected session(s)?`)) {
+                      bulkRevokeSessions.mutate(Array.from(selectedSessions))
+                    }
+                  }}
+                  disabled={bulkRevokeSessions.isPending || selectedSessions.size === 0}
+                  className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bulkRevokeSessions.isPending ? 'Terminating...' : `Terminate Selected (${selectedSessions.size})`}
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to terminate ALL ${filteredSessions.length} active session(s)? This will log out all users.`)) {
+                      revokeAllSessions.mutate()
+                    }
+                  }}
+                  disabled={revokeAllSessions.isPending}
+                  className="rounded-lg border border-red-500 bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {revokeAllSessions.isPending ? 'Terminating All...' : 'Terminate All'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1172,22 +1248,61 @@ export default function AdminPortal() {
           </div>
         ) : (
           <div className="space-y-3">
+            {filteredSessions.length > 0 && (
+              <div className="mb-3 flex items-center gap-2 border-b border-[color:var(--color-border)] pb-2">
+                <input
+                  type="checkbox"
+                  checked={filteredSessions.length > 0 && filteredSessions.every(s => selectedSessions.has(s.jti))}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedSessions(new Set(filteredSessions.map(s => s.jti)))
+                    } else {
+                      setSelectedSessions(new Set())
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-[color:var(--color-border)] text-[color:var(--color-primary-600)] focus:ring-[color:var(--color-primary-600)]"
+                />
+                <label className="text-sm font-medium text-[color:var(--color-text-muted)]">
+                  Select All ({selectedSessions.size} selected)
+                </label>
+              </div>
+            )}
             {filteredSessions.map((session) => {
               const { device, browser } = parseUserAgent(session.userAgent)
+              const isSelected = selectedSessions.has(session.jti)
 
               return (
                 <div
                   key={session.jti}
-                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4"
+                  className={`rounded-lg border p-4 ${
+                    isSelected
+                      ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-primary-50)]'
+                      : 'border-[color:var(--color-border)] bg-[color:var(--color-panel)]'
+                  }`}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="mb-2 flex items-center gap-2">
-                        <Monitor className="h-4 w-4 text-[color:var(--color-text-muted)]" />
-                        <span className="font-semibold">
-                          {device} • {browser}
-                        </span>
-                      </div>
+                    <div className="flex items-start gap-3 flex-1">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedSessions)
+                          if (e.target.checked) {
+                            newSelected.add(session.jti)
+                          } else {
+                            newSelected.delete(session.jti)
+                          }
+                          setSelectedSessions(newSelected)
+                        }}
+                        className="mt-1 h-4 w-4 rounded border-[color:var(--color-border)] text-[color:var(--color-primary-600)] focus:ring-[color:var(--color-primary-600)]"
+                      />
+                      <div className="flex-1">
+                        <div className="mb-2 flex items-center gap-2">
+                          <Monitor className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+                          <span className="font-semibold">
+                            {device} • {browser}
+                          </span>
+                        </div>
 
                       <div className="space-y-1 text-sm">
                         <div className="flex items-center gap-4">
@@ -1213,6 +1328,7 @@ export default function AdminPortal() {
                           <span className="font-medium text-[color:var(--color-text-muted)]">Last Used:</span>{' '}
                           <span className="text-[color:var(--color-text)]">{formatDateTime(session.lastUsedAt)}</span>
                         </div>
+                      </div>
                       </div>
                     </div>
 

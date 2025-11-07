@@ -57,6 +57,8 @@ import {
   getAllSessions,
   getSessionsByUserId,
   adminRevokeSession,
+  adminBulkRevokeSessions,
+  adminRevokeAllSessions,
   type SessionInfo,
 } from './sessions.js'
 
@@ -515,6 +517,39 @@ authRouter.delete('/admin/sessions/:jti', requireAuth, requirePermission('*'), a
   } catch (err: any) {
     console.error('Admin revoke session error:', err)
     res.status(500).json({ error: err.message || 'Failed to revoke session' })
+  }
+})
+
+// Admin: Bulk revoke sessions
+authRouter.post('/admin/sessions/bulk-revoke', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const parsed = z.object({
+      jtis: z.array(z.string()).min(1),
+    }).safeParse(req.body)
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
+    }
+
+    const { jtis } = parsed.data
+    const revokedCount = await adminBulkRevokeSessions(jtis)
+    
+    res.json({ message: `Revoked ${revokedCount} session(s)`, revokedCount })
+  } catch (err: any) {
+    console.error('Admin bulk revoke sessions error:', err)
+    res.status(500).json({ error: err.message || 'Failed to revoke sessions' })
+  }
+})
+
+// Admin: Revoke all sessions
+authRouter.post('/admin/sessions/revoke-all', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const revokedCount = await adminRevokeAllSessions()
+    
+    res.json({ message: `Revoked ${revokedCount} session(s)`, revokedCount })
+  } catch (err: any) {
+    console.error('Admin revoke all sessions error:', err)
+    res.status(500).json({ error: err.message || 'Failed to revoke all sessions' })
   }
 })
 
