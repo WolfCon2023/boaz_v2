@@ -90,6 +90,7 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
 
   const handleUpload = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    e.stopPropagation() // Prevent event from bubbling up to parent modals
     const formData = new FormData(e.currentTarget)
     const tagsStr = formData.get('tags') as string
     if (tagsStr) {
@@ -126,7 +127,8 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">Documents ({documents.length})</h3>
           <button
-            onClick={() => setShowUpload(true)}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowUpload(true) }}
             className="flex items-center gap-1 px-2 py-1 text-xs rounded border hover:bg-[color:var(--color-muted)]"
           >
             <Plus size={12} /> Upload
@@ -175,7 +177,7 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
 
         {/* Compact Upload Modal */}
         {showUpload && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowUpload(false)}>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onClick={(e) => { e.stopPropagation(); setShowUpload(false) }}>
             <div className="bg-[color:var(--color-panel)] rounded-lg border p-4 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-medium">Upload Document{relatedToName && ` for ${relatedToName}`}</h3>
@@ -226,7 +228,8 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
       <div className="flex items-center justify-between">
         <h3 className="font-medium">Documents ({documents.length})</h3>
         <button
-          onClick={() => setShowUpload(true)}
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowUpload(true) }}
           className="flex items-center gap-2 px-3 py-1 text-sm rounded border hover:bg-[color:var(--color-muted)]"
         >
           <Upload size={14} /> Upload Document
@@ -288,7 +291,7 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
 
       {/* Full Upload Modal */}
       {showUpload && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowUpload(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onClick={(e) => { e.stopPropagation(); setShowUpload(false) }}>
           <div className="bg-[color:var(--color-panel)] rounded-lg border p-6 max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">Upload Document{relatedToName && ` for ${relatedToName}`}</h2>
