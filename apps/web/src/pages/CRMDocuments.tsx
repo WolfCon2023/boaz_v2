@@ -1,11 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
-import { createPortal } from 'react-dom'
 import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
-import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
-import { FileText, Upload, Download, Trash2, Eye, Edit, Users, History, Plus, X, Search, Filter } from 'lucide-react'
+import { FileText, Upload, Download, Trash2, Eye, Users, Plus, X, Search } from 'lucide-react'
 
 type DocumentVersion = {
   _id: string
@@ -69,7 +68,7 @@ export default function CRMDocuments() {
   const [category, setCategory] = React.useState('')
   const [tag, setTag] = React.useState('')
   const [page, setPage] = React.useState(0)
-  const [pageSize, setPageSize] = React.useState(25)
+  const [pageSize] = React.useState(25)
   const [sort, setSort] = React.useState<'name' | 'updatedAt' | 'createdAt'>('updatedAt')
   const [dir, setDir] = React.useState<'asc' | 'desc'>('desc')
   const [showUpload, setShowUpload] = React.useState(false)
@@ -97,7 +96,7 @@ export default function CRMDocuments() {
   }, [])
 
   // Fetch documents
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['documents', q, category, tag, page, pageSize, sort, dir, relatedToType, relatedToId],
     queryFn: async () => {
       const params: any = { page, limit: pageSize, sort, dir }
@@ -238,19 +237,6 @@ export default function CRMDocuments() {
     },
     onError: (err: any) => {
       toast.showToast(`Delete failed: ${err?.response?.data?.error || 'Unknown error'}`, 'error')
-    },
-  })
-
-  // Update document mutation
-  const update = useMutation({
-    mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
-      const res = await http.put(`/api/crm/documents/${id}`, payload)
-      return res.data
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['documents'] })
-      refetchDetail()
-      toast.showToast('Document updated successfully', 'success')
     },
   })
 

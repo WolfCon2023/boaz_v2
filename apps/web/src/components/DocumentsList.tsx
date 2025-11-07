@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { http, getApiUrl } from '@/lib/http'
-import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { formatDate } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { FileText, Upload, Download, Trash2, Eye, X, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -46,7 +46,7 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
   const [showUpload, setShowUpload] = React.useState(false)
 
   // Fetch documents for this entity
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['documents', relatedToType, relatedToId],
     queryFn: async () => {
       const res = await http.get('/api/crm/documents', {
