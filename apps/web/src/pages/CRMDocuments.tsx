@@ -243,16 +243,7 @@ export default function CRMDocuments() {
     queryFn: async () => {
       if (!selectedDoc?._id) return null
       const res = await http.get(`/api/crm/documents/${selectedDoc._id}`)
-      const result = res.data as { data: DocumentDetail }
-      // Debug: log the response to see what we're getting
-      console.log('Document detail fetched:', {
-        _id: result?.data?._id,
-        checkedOutBy: result?.data?.checkedOutBy,
-        checkedOutByEmail: result?.data?.checkedOutByEmail,
-        checkedOutByName: result?.data?.checkedOutByName,
-        fullData: result?.data
-      })
-      return result
+      return res.data as { data: DocumentDetail }
     },
     enabled: !!selectedDoc?._id,
     // Force refetch when selectedDoc changes
@@ -260,7 +251,16 @@ export default function CRMDocuments() {
     refetchOnWindowFocus: false,
     // Don't use stale data - always fetch fresh when document ID changes
     staleTime: 0,
+    // Don't cache - always fetch fresh
+    gcTime: 0,
   })
+
+  // Force refetch when selectedDoc._id changes
+  React.useEffect(() => {
+    if (selectedDoc?._id) {
+      refetchDetail()
+    }
+  }, [selectedDoc?._id, refetchDetail])
 
   // Fetch document history
   const historyQ = useQuery({
@@ -373,7 +373,7 @@ export default function CRMDocuments() {
 
   const isAdmin = rolesData?.roles?.some(r => r.permissions.includes('*')) || rolesData?.isAdmin || false
 
-  // Get current user ID
+  // Get current user ID - use the same query key as Topbar to share cache
   const { data: currentUser } = useQuery<{ _id: string; email: string }>({
     queryKey: ['user', 'me'],
     queryFn: async () => {
@@ -521,10 +521,15 @@ export default function CRMDocuments() {
 
   // View document details
   const handleView = async (doc: Document) => {
+    // First, invalidate any existing document queries to clear stale data
+    qc.invalidateQueries({ queryKey: ['document'] })
+    // Set the selected doc - this will trigger the query to fetch fresh data
     setSelectedDoc(doc as any)
     setShowVersions(true)
-    // Invalidate and refetch the document detail to ensure fresh data
-    qc.invalidateQueries({ queryKey: ['document', doc._id] })
+    // Force refetch after a brief delay to ensure state is updated
+    setTimeout(() => {
+      qc.invalidateQueries({ queryKey: ['document', doc._id] })
+    }, 100)
   }
 
   const handleUpload = (e: React.FormEvent<HTMLFormElement>) => {
@@ -1079,7 +1084,7 @@ export default function CRMDocuments() {
       )}
 
       {/* Document Details Modal */}
-      {selectedDoc && (showVersions || showHistory || showPermissions) && docDetail && (
+      {selectedDoc && (showVersions || showHistory || showPermissions) && docDetail && docDetail.data && docDetail.data._id === selectedDoc._id && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => { setShowVersions(false); setShowHistory(false); setShowPermissions(false); setSelectedDoc(null) }}>
           <div className="bg-[color:var(--color-panel)] rounded-lg border p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
@@ -1107,40 +1112,19 @@ export default function CRMDocuments() {
                   <Lock size={16} />
                 </button>
                 {(() => {
-                  // Always log for debugging - check what we have
-                  console.log('Check-in button render:', {
-                    hasDocDetail: !!docDetail?.data,
-                    checkedOutBy: docDetail?.data?.checkedOutBy,
-                    checkedOutByEmail: docDetail?.data?.checkedOutByEmail,
-                    checkedOutByName: docDetail?.data?.checkedOutByName,
-                    currentUserId,
-                    currentUser,
-                    isAdmin
-                  })
+                  // CRITICAL: Ensure we're comparing against the correct document
+                  // Only proceed if docDetail matches the currently selected document
+                  if (!docDetail?.data || docDetail.data._id !== selectedDoc._id) {
+                    return null
+                  }
                   
                   // Normalize both IDs to strings for comparison
-                  const checkedOutById = docDetail?.data?.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
+                  const checkedOutById = docDetail.data.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
                   const myUserId = currentUserId ? String(currentUserId) : null
                   const myUserEmail = currentUser?.email
                   
-                  // Debug logging - always log when document is checked out
-                  if (checkedOutById) {
-                    console.log('Check-in button check (document is checked out):', {
-                      checkedOutById,
-                      myUserId,
-                      currentUserId,
-                      checkedOutByEmail: docDetail.data.checkedOutByEmail,
-                      myUserEmail,
-                      currentUser: currentUser,
-                      idMatch: checkedOutById === myUserId,
-                      emailMatch: docDetail.data.checkedOutByEmail && myUserEmail && docDetail.data.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase(),
-                      isAdmin
-                    })
-                  }
-                  
                   // Check if checked out by current user - compare by ID or email as fallback
                   // Allow check-in if either ID matches OR email matches
-                  // If currentUser isn't loaded yet, we can still try email match if we have the email from the document
                   const isCheckedOutByMe = checkedOutById && (
                     (myUserId && checkedOutById === myUserId) || 
                     (docDetail.data.checkedOutByEmail && myUserEmail && docDetail.data.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase())
