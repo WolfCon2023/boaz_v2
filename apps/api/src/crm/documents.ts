@@ -88,6 +88,59 @@ type Document = {
     type: 'account' | 'contact' | 'deal' | 'quote' | 'invoice'
     id: ObjectId
   }
+  // Checkout/check-in fields
+  checkedOutBy?: ObjectId
+  checkedOutByName?: string
+  checkedOutByEmail?: string
+  checkedOutAt?: Date
+}
+
+// Types for document history
+type DocumentHistoryEntry = {
+  _id: ObjectId
+  documentId: ObjectId
+  eventType: 'created' | 'updated' | 'version_uploaded' | 'version_downloaded' | 'permission_added' | 'permission_updated' | 'permission_removed' | 'deleted' | 'field_changed' | 'checked_out' | 'checked_in'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add history entry
+async function addDocumentHistory(
+  db: any,
+  documentId: ObjectId,
+  eventType: DocumentHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('document_history').insertOne({
+      _id: new ObjectId(),
+      documentId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as DocumentHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add document history:', err)
+    // Don't fail the main operation if history fails
+  }
 }
 
 // Helper function to check if user has permission
@@ -326,6 +379,20 @@ documentsRouter.post('/', requireAuth, upload.single('file'), async (req, res) =
 
     await db.collection<Document>('documents').insertOne(document)
 
+    // Add history entry for document creation
+    await addDocumentHistory(
+      db,
+      document._id,
+      'created',
+      `Document "${name}" created`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email,
+      undefined,
+      undefined,
+      { version: 1, filename: file.originalname }
+    )
+
     res.status(201).json({
       data: {
         _id: document._id,
@@ -415,6 +482,20 @@ documentsRouter.get('/:id/download/:versionId', requireAuth, async (req, res) =>
       return res.status(404).json({ data: null, error: 'file_not_found' })
     }
 
+    // Add history entry for version download
+    await addDocumentHistory(
+      db,
+      _id,
+      'version_downloaded',
+      `Version ${version.version} downloaded: ${version.originalFilename}`,
+      auth.userId,
+      undefined,
+      auth.email,
+      undefined,
+      undefined,
+      { version: version.version, filename: version.originalFilename }
+    )
+
     res.setHeader('Content-Type', version.contentType)
     res.setHeader('Content-Disposition', `attachment; filename="${version.originalFilename}"`)
     res.sendFile(path.resolve(version.path))
@@ -453,6 +534,20 @@ documentsRouter.get('/:id/download', requireAuth, async (req, res) => {
     if (!fs.existsSync(latestVersion.path)) {
       return res.status(404).json({ data: null, error: 'file_not_found' })
     }
+
+    // Add history entry for download
+    await addDocumentHistory(
+      db,
+      _id,
+      'version_downloaded',
+      `Latest version (v${latestVersion.version}) downloaded: ${latestVersion.originalFilename}`,
+      auth.userId,
+      undefined,
+      auth.email,
+      undefined,
+      undefined,
+      { version: latestVersion.version, filename: latestVersion.originalFilename }
+    )
 
     res.setHeader('Content-Type', latestVersion.contentType)
     res.setHeader('Content-Disposition', `attachment; filename="${latestVersion.originalFilename}"`)
@@ -499,6 +594,14 @@ documentsRouter.post('/:id/versions', requireAuth, upload.single('file'), async 
       return res.status(404).json({ data: null, error: 'not_found' })
     }
 
+    // Check if document is checked out by someone else
+    if (document.checkedOutBy && !document.checkedOutBy.equals(userId)) {
+      try {
+        if (file.path) fs.unlinkSync(file.path)
+      } catch {}
+      return res.status(400).json({ data: null, error: 'document_checked_out', details: { checkedOutBy: document.checkedOutByName || document.checkedOutByEmail } })
+    }
+
     // Check permission
     if (!(await hasPermission(db, document, auth.userId, 'edit'))) {
       try {
@@ -534,6 +637,20 @@ documentsRouter.post('/:id/versions', requireAuth, upload.single('file'), async 
           updatedAt: new Date(),
         },
       }
+    )
+
+    // Add history entry for version upload
+    await addDocumentHistory(
+      db,
+      _id,
+      'version_uploaded',
+      `Version ${newVersion.version} uploaded: ${newVersion.originalFilename}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email,
+      undefined,
+      undefined,
+      { version: newVersion.version, filename: newVersion.originalFilename, size: newVersion.size }
     )
 
     res.status(201).json({ data: { version: newVersion }, error: null })
@@ -578,13 +695,67 @@ documentsRouter.put('/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ data: null, error: 'not_found' })
     }
 
+    // Check if document is checked out by someone else
+    if (document.checkedOutBy && !document.checkedOutBy.equals(new ObjectId(auth.userId))) {
+      return res.status(400).json({ data: null, error: 'document_checked_out', details: { checkedOutBy: document.checkedOutByName || document.checkedOutByEmail } })
+    }
+
     // Check permission (owner or edit permission)
     if (String(document.ownerId) !== auth.userId && !(await hasPermission(db, document, auth.userId, 'edit'))) {
       return res.status(403).json({ data: null, error: 'access_denied' })
     }
 
+    // Track field changes for history
+    const changes: string[] = []
+    const oldValues: Record<string, any> = {}
+    const newValues: Record<string, any> = {}
+
+    if (parsed.data.name !== undefined && parsed.data.name !== document.name) {
+      changes.push('name')
+      oldValues.name = document.name
+      newValues.name = parsed.data.name
+    }
+    if (parsed.data.description !== undefined && parsed.data.description !== document.description) {
+      changes.push('description')
+      oldValues.description = document.description
+      newValues.description = parsed.data.description
+    }
+    if (parsed.data.category !== undefined && parsed.data.category !== document.category) {
+      changes.push('category')
+      oldValues.category = document.category
+      newValues.category = parsed.data.category
+    }
+    if (parsed.data.tags !== undefined && JSON.stringify(parsed.data.tags) !== JSON.stringify(document.tags)) {
+      changes.push('tags')
+      oldValues.tags = document.tags
+      newValues.tags = parsed.data.tags
+    }
+    if (parsed.data.isPublic !== undefined && parsed.data.isPublic !== document.isPublic) {
+      changes.push('isPublic')
+      oldValues.isPublic = document.isPublic
+      newValues.isPublic = parsed.data.isPublic
+    }
+
     const update: any = { ...parsed.data, updatedAt: new Date() }
     await db.collection<Document>('documents').updateOne({ _id }, { $set: update })
+
+    // Add history entry for update
+    if (changes.length > 0) {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+      await addDocumentHistory(
+        db,
+        _id,
+        changes.length === 1 ? 'field_changed' : 'updated',
+        changes.length === 1
+          ? `${changes[0]} changed from "${oldValues[changes[0]]}" to "${newValues[changes[0]]}"`
+          : `Document updated: ${changes.join(', ')}`,
+        auth.userId,
+        (user as any)?.name,
+        auth.email,
+        oldValues,
+        newValues
+      )
+    }
 
     res.json({ data: { ok: true }, error: null })
   } catch (e: any) {
@@ -646,9 +817,30 @@ documentsRouter.post('/:id/permissions', requireAuth, async (req, res) => {
       grantedAt: new Date(),
     }
 
+    // Check if permission already exists
+    const existingPermission = document.permissions.find(p => String(p.userId) === String(targetUserId))
+    const isUpdate = !!existingPermission
+
     await db.collection<Document>('documents').updateOne(
       { _id },
       { $push: { permissions: permission } }
+    )
+
+    // Add history entry
+    const user = await db.collection('users').findOne({ _id: userId })
+    await addDocumentHistory(
+      db,
+      _id,
+      isUpdate ? 'permission_updated' : 'permission_added',
+      isUpdate
+        ? `Permission updated for ${(targetUser as any)?.name || (targetUser as any)?.email}: ${existingPermission?.permission} → ${parsed.data.permission}`
+        : `Permission granted to ${(targetUser as any)?.name || (targetUser as any)?.email}: ${parsed.data.permission}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email,
+      isUpdate ? existingPermission?.permission : undefined,
+      parsed.data.permission,
+      { targetUserId: String(targetUserId), targetUserName: (targetUser as any)?.name, targetUserEmail: (targetUser as any)?.email }
     )
 
     res.json({ data: { permission }, error: null })
@@ -680,10 +872,30 @@ documentsRouter.delete('/:id/permissions/:userId', requireAuth, async (req, res)
       return res.status(403).json({ data: null, error: 'access_denied' })
     }
 
+    const removedPermission = document.permissions.find(p => String(p.userId) === String(targetUserId))
+    
     await db.collection<Document>('documents').updateOne(
       { _id },
       { $pull: { permissions: { userId: targetUserId } } }
     )
+
+    // Add history entry
+    if (removedPermission) {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+      const targetUser = await db.collection('users').findOne({ _id: targetUserId })
+      await addDocumentHistory(
+        db,
+        _id,
+        'permission_removed',
+        `Permission removed from ${(targetUser as any)?.name || (targetUser as any)?.email}: ${removedPermission.permission}`,
+        auth.userId,
+        (user as any)?.name,
+        auth.email,
+        removedPermission.permission,
+        undefined,
+        { targetUserId: String(targetUserId), targetUserName: (targetUser as any)?.name, targetUserEmail: (targetUser as any)?.email }
+      )
+    }
 
     res.json({ data: { ok: true }, error: null })
   } catch (e: any) {
@@ -694,8 +906,146 @@ documentsRouter.delete('/:id/permissions/:userId', requireAuth, async (req, res)
   }
 })
 
-// DELETE /api/crm/documents/:id - Delete document
-documentsRouter.delete('/:id', requireAuth, async (req, res) => {
+// POST /api/crm/documents/:id/checkout - Check out document
+documentsRouter.post('/:id/checkout', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+    const auth = (req as any).auth as { userId: string; email: string }
+    const userId = new ObjectId(auth.userId)
+    const _id = new ObjectId(req.params.id)
+
+    const document = await db.collection<Document>('documents').findOne({ _id })
+    if (!document) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+
+    // Check if already checked out
+    if (document.checkedOutBy && !document.checkedOutBy.equals(userId)) {
+      return res.status(400).json({ data: null, error: 'already_checked_out' })
+    }
+
+    // Check permission (owner or edit permission)
+    if (String(document.ownerId) !== auth.userId && !(await hasPermission(db, document, auth.userId, 'edit'))) {
+      return res.status(403).json({ data: null, error: 'access_denied' })
+    }
+
+    const user = await db.collection('users').findOne({ _id: userId })
+
+    await db.collection<Document>('documents').updateOne(
+      { _id },
+      {
+        $set: {
+          checkedOutBy: userId,
+          checkedOutByName: (user as any)?.name,
+          checkedOutByEmail: auth.email,
+          checkedOutAt: new Date(),
+          updatedAt: new Date(),
+        },
+      }
+    )
+
+    // Add history entry
+    await addDocumentHistory(
+      db,
+      _id,
+      'checked_out',
+      `Document checked out by ${(user as any)?.name || auth.email}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email
+    )
+
+    res.json({ data: { ok: true }, error: null })
+  } catch (e: any) {
+    if (e.message?.includes('ObjectId')) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    res.status(500).json({ data: null, error: 'checkout_failed' })
+  }
+})
+
+// POST /api/crm/documents/:id/checkin - Check in document
+documentsRouter.post('/:id/checkin', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+    const auth = (req as any).auth as { userId: string; email: string }
+    const userId = new ObjectId(auth.userId)
+    const _id = new ObjectId(req.params.id)
+
+    const document = await db.collection<Document>('documents').findOne({ _id })
+    if (!document) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+
+    // Check if checked out by this user (or allow owner/admin to force check-in)
+    const isOwner = String(document.ownerId) === auth.userId
+    const isAdmin = await (async () => {
+      const { requirePermission } = await import('../auth/rbac.js')
+      try {
+        // Check if user has admin permission
+        const joins = await db.collection('user_roles').find({ userId: auth.userId } as any).toArray()
+        const roleIds = joins.map((j: any) => j.roleId)
+        if (roleIds.length === 0) return false
+        const roles = await db.collection('roles').find({ _id: { $in: roleIds } } as any).toArray()
+        const allPerms = new Set<string>(roles.flatMap((r: any) => r.permissions || []))
+        return allPerms.has('*')
+      } catch {
+        return false
+      }
+    })()
+
+    if (!document.checkedOutBy) {
+      return res.status(400).json({ data: null, error: 'not_checked_out' })
+    }
+
+    if (!document.checkedOutBy.equals(userId) && !isOwner && !isAdmin) {
+      return res.status(403).json({ data: null, error: 'not_checked_out_by_you' })
+    }
+
+    const checkedOutByName = document.checkedOutByName || document.checkedOutByEmail
+    const user = await db.collection('users').findOne({ _id: userId })
+
+    await db.collection<Document>('documents').updateOne(
+      { _id },
+      {
+        $unset: {
+          checkedOutBy: '',
+          checkedOutByName: '',
+          checkedOutByEmail: '',
+          checkedOutAt: '',
+        },
+        $set: {
+          updatedAt: new Date(),
+        },
+      }
+    )
+
+    // Add history entry
+    await addDocumentHistory(
+      db,
+      _id,
+      'checked_in',
+      `Document checked in by ${(user as any)?.name || auth.email}${!document.checkedOutBy.equals(userId) ? ` (was checked out by ${checkedOutByName})` : ''}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email
+    )
+
+    res.json({ data: { ok: true }, error: null })
+  } catch (e: any) {
+    if (e.message?.includes('ObjectId')) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    res.status(500).json({ data: null, error: 'checkin_failed' })
+  }
+})
+
+// POST /api/crm/documents/:id/request-deletion - Request document deletion via helpdesk ticket
+documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
   try {
     const db = await getDb()
     if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
@@ -708,9 +1058,63 @@ documentsRouter.delete('/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ data: null, error: 'not_found' })
     }
 
-    // Check permission (owner or delete permission)
-    if (String(document.ownerId) !== auth.userId && !(await hasPermission(db, document, auth.userId, 'delete'))) {
+    // Check if user has view permission
+    if (!(await hasPermission(db, document, auth.userId, 'view'))) {
       return res.status(403).json({ data: null, error: 'access_denied' })
+    }
+
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    const userName = (user as any)?.name || auth.email
+
+    // Create helpdesk ticket
+    const { getNextSequence } = await import('../db.js')
+    let ticketNumber: number
+    try {
+      ticketNumber = await getNextSequence('ticketNumber')
+    } catch {
+      ticketNumber = 200001
+    }
+
+    const ticketDoc = {
+      shortDescription: `Document Deletion Request: ${document.name}`,
+      description: `Request to delete document "${document.name}" (ID: ${document._id})\n\nDocument Details:\n- Name: ${document.name}\n- Category: ${document.category || 'N/A'}\n- Owner: ${document.ownerName || document.ownerEmail}\n- Created: ${document.createdAt}\n- Versions: ${document.versions.length}\n\nRequested by: ${userName} (${auth.email})`,
+      status: 'open',
+      priority: 'normal',
+      accountId: null,
+      contactId: null,
+      assignee: null,
+      slaDueAt: null,
+      comments: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      requesterName: userName,
+      requesterEmail: auth.email,
+      ticketNumber,
+    }
+
+    await db.collection('support_tickets').insertOne(ticketDoc)
+
+    res.json({ data: { ok: true, ticketNumber }, error: null })
+  } catch (e: any) {
+    if (e.message?.includes('ObjectId')) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    res.status(500).json({ data: null, error: 'deletion_request_failed' })
+  }
+})
+
+// DELETE /api/crm/documents/:id - Delete document (admin only)
+documentsRouter.delete('/:id', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+    const auth = (req as any).auth as { userId: string; email: string }
+    const _id = new ObjectId(req.params.id)
+
+    const document = await db.collection<Document>('documents').findOne({ _id })
+    if (!document) {
+      return res.status(404).json({ data: null, error: 'not_found' })
     }
 
     // Delete all version files
@@ -724,6 +1128,18 @@ documentsRouter.delete('/:id', requireAuth, async (req, res) => {
       }
     }
 
+    // Add history entry before deletion
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    await addDocumentHistory(
+      db,
+      _id,
+      'deleted',
+      `Document "${document.name}" deleted`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email
+    )
+
     // Delete document record
     await db.collection<Document>('documents').deleteOne({ _id })
 
@@ -733,6 +1149,51 @@ documentsRouter.delete('/:id', requireAuth, async (req, res) => {
       return res.status(400).json({ data: null, error: 'invalid_id' })
     }
     res.status(500).json({ data: null, error: 'delete_failed' })
+  }
+})
+
+// GET /api/crm/documents/:id/history - Get document history
+documentsRouter.get('/:id/history', requireAuth, async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+    const auth = (req as any).auth as { userId: string; email: string }
+    const _id = new ObjectId(req.params.id)
+
+    const document = await db.collection<Document>('documents').findOne({ _id })
+    if (!document) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+
+    // Check permission
+    if (!(await hasPermission(db, document, auth.userId, 'view'))) {
+      return res.status(403).json({ data: null, error: 'access_denied' })
+    }
+
+    // Get all history entries for this document, sorted by date (newest first)
+    const historyEntries = await db.collection('document_history')
+      .find({ documentId: _id })
+      .sort({ createdAt: -1 })
+      .toArray() as DocumentHistoryEntry[]
+
+    res.json({
+      data: {
+        history: historyEntries,
+        createdAt: document.createdAt,
+        document: {
+          _id: document._id,
+          name: document.name,
+          createdAt: document.createdAt,
+        },
+      },
+      error: null,
+    })
+  } catch (e: any) {
+    if (e.message?.includes('ObjectId')) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    res.status(500).json({ data: null, error: 'history_fetch_failed' })
   }
 })
 
