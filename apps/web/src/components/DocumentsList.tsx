@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { http, getApiUrl } from '@/lib/http'
+import { http } from '@/lib/http'
 import { formatDate } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { FileText, Upload, Download, Trash2, Eye, X, Plus } from 'lucide-react'
