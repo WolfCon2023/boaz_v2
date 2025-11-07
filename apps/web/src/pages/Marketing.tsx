@@ -964,7 +964,6 @@ ${sections}
         toast.showToast(`Dry run completed: ${result?.sent || 0} email(s) would be sent`, 'success')
       } else {
         const sent = result?.sent || 0
-        const total = result?.total || 0
         const skipped = result?.skipped || 0
         const errors = result?.errors || 0
         let message = `Campaign sent successfully! ${sent} email(s) sent`
