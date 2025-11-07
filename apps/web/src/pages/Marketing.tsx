@@ -277,6 +277,7 @@ type SimpleBlock = {
   type: 'text' | 'heading' | 'image' | 'button' | 'divider' | 'two-columns'
   content: string
   imageUrl?: string
+  imageWidth?: string
   buttonUrl?: string
   buttonText?: string
   backgroundColor?: string
@@ -293,6 +294,8 @@ function SimpleBuilderUI({
   setTestTo,
   onSendTest,
   testing,
+  footerText,
+  setFooterText,
 }: {
   blocks: SimpleBlock[]
   setBlocks: React.Dispatch<React.SetStateAction<SimpleBlock[]>>
@@ -302,6 +305,8 @@ function SimpleBuilderUI({
   setTestTo: (v: string) => void
   onSendTest: () => void
   testing: boolean
+  footerText: string
+  setFooterText: (v: string) => void
 }) {
   const toast = useToast()
   const [editingBlockId, setEditingBlockId] = React.useState<string | null>(null)
@@ -319,6 +324,9 @@ function SimpleBuilderUI({
     if (type === 'button') {
       newBlock.buttonText = 'Click here'
       newBlock.buttonUrl = 'https://example.com'
+    }
+    if (type === 'image') {
+      newBlock.imageWidth = '600px'
     }
     setBlocks([...blocks, newBlock])
     setEditingBlockId(newBlock.id)
@@ -534,6 +542,16 @@ function SimpleBuilderUI({
                         placeholder="Alt text"
                         className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
                       />
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-[color:var(--color-text-muted)] whitespace-nowrap">Width:</label>
+                        <input
+                          type="text"
+                          value={editingBlock.imageWidth || '600px'}
+                          onChange={(e) => setEditingBlock({ ...editingBlock, imageWidth: e.target.value })}
+                          placeholder="600px or 100%"
+                          className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent"
+                        />
+                      </div>
                       <input
                         type="color"
                         value={editingBlock.backgroundColor || '#ffffff'}
@@ -583,21 +601,27 @@ function SimpleBuilderUI({
                   {block.type === 'image' && (
                     <div className="space-y-1">
                       {block.imageUrl ? (
-                        <img 
-                          src={block.imageUrl} 
-                          alt={block.content || 'Image'} 
-                          className="max-w-full h-24 object-contain rounded border"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none'
-                            const parent = (e.target as HTMLImageElement).parentElement
-                            if (parent) {
-                              const errorDiv = document.createElement('div')
-                              errorDiv.textContent = `🖼️ ${block.imageUrl}`
-                              errorDiv.className = 'text-xs'
-                              parent.appendChild(errorDiv)
-                            }
-                          }}
-                        />
+                        <div className="space-y-1">
+                          <img 
+                            src={block.imageUrl} 
+                            alt={block.content || 'Image'} 
+                            className="max-w-full h-24 object-contain rounded border"
+                            style={{ maxWidth: block.imageWidth || '600px' }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none'
+                              const parent = (e.target as HTMLImageElement).parentElement
+                              if (parent) {
+                                const errorDiv = document.createElement('div')
+                                errorDiv.textContent = `🖼️ ${block.imageUrl}`
+                                errorDiv.className = 'text-xs'
+                                parent.appendChild(errorDiv)
+                              }
+                            }}
+                          />
+                          {block.imageWidth && (
+                            <div className="text-xs text-[color:var(--color-text-muted)]">Width: {block.imageWidth}</div>
+                          )}
+                        </div>
                       ) : (
                         <div>🖼️ (No image URL)</div>
                       )}
@@ -613,13 +637,30 @@ function SimpleBuilderUI({
         )}
       </div>
       
-      <div className="flex items-center gap-2 pt-2 border-t">
-        <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={onRender}>Render preview</button>
-        <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={onSave}>Save campaign</button>
-        <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Test email" className="rounded-lg border px-3 py-2 text-sm bg-transparent flex-1" />
-        <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={onSendTest} disabled={!testTo || testing}>
-          {testing ? 'Sending…' : 'Send test'}
-        </button>
+      <div className="space-y-2 pt-2 border-t">
+        <div>
+          <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">
+            Footer Text (appears after © {new Date().getFullYear()})
+          </label>
+          <input
+            type="text"
+            value={footerText}
+            onChange={(e) => setFooterText(e.target.value)}
+            placeholder="e.g., Your Company Name"
+            className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+          />
+          <p className="text-xs text-[color:var(--color-text-muted)] mt-1">
+            Footer will display as: © {new Date().getFullYear()} {footerText || '(your text here)'} — Unsubscribe
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={onRender}>Render preview</button>
+          <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={onSave}>Save campaign</button>
+          <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Test email" className="rounded-lg border px-3 py-2 text-sm bg-transparent flex-1" />
+          <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={onSendTest} disabled={!testTo || testing}>
+            {testing ? 'Sending…' : 'Send test'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -670,6 +711,7 @@ function CampaignsTab() {
     type: 'text' | 'heading' | 'image' | 'button' | 'divider' | 'two-columns'
     content: string
     imageUrl?: string
+    imageWidth?: string
     buttonUrl?: string
     buttonText?: string
     backgroundColor?: string
@@ -689,8 +731,9 @@ function CampaignsTab() {
       if (editing.mjml && builderMode === 'simple') {
         try {
           const parsed = parseMjmlToBlocks(editing.mjml)
-          if (parsed.length > 0) {
-            setSimpleBlocks(parsed)
+          if (parsed.blocks.length > 0) {
+            setSimpleBlocks(parsed.blocks)
+            setFooterText(parsed.footerText || '')
           }
         } catch {
           // If parsing fails, start with empty blocks
@@ -702,8 +745,11 @@ function CampaignsTab() {
     }
   }, [editing, builderMode])
   
+  // Footer text state
+  const [footerText, setFooterText] = React.useState<string>('')
+  
   // Convert simple blocks to MJML
-  function blocksToMjml(blocks: SimpleBlock[]): string {
+  function blocksToMjml(blocks: SimpleBlock[], footer: string = ''): string {
     if (blocks.length === 0) {
       return '<mjml>\n  <mj-body>\n  </mj-body>\n</mjml>'
     }
@@ -729,9 +775,10 @@ function CampaignsTab() {
     </mj-section>`
         
         case 'image':
+          const imageWidth = block.imageWidth || '600px'
           return `    <mj-section background-color="${bgColor}">
       <mj-column>
-        <mj-image src="${escapeHtml(block.imageUrl || '')}" alt="${escapeHtml(block.content)}" />
+        <mj-image src="${escapeHtml(block.imageUrl || '')}" alt="${escapeHtml(block.content)}" width="${escapeHtml(imageWidth)}" />
       </mj-column>
     </mj-section>`
         
@@ -765,12 +812,13 @@ function CampaignsTab() {
       }
     }).filter(Boolean).join('\n')
     
+    const footerDisplay = footer.trim() ? ` ${footer.trim()}` : ''
     return `<mjml>
   <mj-body>
 ${sections}
     <mj-section>
       <mj-column>
-        <mj-text align="center" font-size="12px" color="#64748b">© ${new Date().getFullYear()} — <a href="{{unsubscribeUrl}}" style="color:#60a5fa">Unsubscribe</a></mj-text>
+        <mj-text align="center" font-size="12px" color="#64748b">© ${new Date().getFullYear()}${footerDisplay} — <a href="{{unsubscribeUrl}}" style="color:#60a5fa">Unsubscribe</a></mj-text>
       </mj-column>
     </mj-section>
   </mj-body>
@@ -783,9 +831,17 @@ ${sections}
     return div.innerHTML
   }
   
-  function parseMjmlToBlocks(mjml: string): SimpleBlock[] {
+  function parseMjmlToBlocks(mjml: string): { blocks: SimpleBlock[]; footerText: string } {
     // Simple parser - try to extract common patterns
     const blocks: SimpleBlock[] = []
+    let footerText = ''
+    
+    // Extract footer text from the footer section
+    const footerMatch = mjml.match(/<mj-text[^>]*>©\s*\d{4}\s*([^—<]*)\s*—/i)
+    if (footerMatch && footerMatch[1]) {
+      footerText = footerMatch[1].trim()
+    }
+    
     const sectionRegex = /<mj-section[^>]*background-color="([^"]*)"[^>]*>([\s\S]*?)<\/mj-section>/gi
     let match
     let id = 0
@@ -812,7 +868,9 @@ ${sections}
       else if (/<mj-image/i.test(sectionContent)) {
         const imageMatch = sectionContent.match(/<mj-image[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*>/i)
         if (imageMatch) {
-          blocks.push({ id: String(id++), type: 'image', content: imageMatch[2], imageUrl: imageMatch[1], backgroundColor: bgColor })
+          const widthMatch = sectionContent.match(/width="([^"]*)"/i)
+          const imageWidth = widthMatch ? widthMatch[1] : '600px'
+          blocks.push({ id: String(id++), type: 'image', content: imageMatch[2], imageUrl: imageMatch[1], imageWidth, backgroundColor: bgColor })
         }
       }
       // Check for divider
@@ -836,16 +894,16 @@ ${sections}
       }
     }
     
-    return blocks
+    return { blocks, footerText }
   }
   
-  // Update MJML when simple blocks change
+  // Update MJML when simple blocks or footer text change
   React.useEffect(() => {
-    if (builderMode === 'simple') {
-      const generatedMjml = blocksToMjml(simpleBlocks)
+    if (builderMode === 'simple' && simpleBlocks.length > 0) {
+      const generatedMjml = blocksToMjml(simpleBlocks, footerText)
       setMjml(generatedMjml)
     }
-  }, [simpleBlocks, builderMode])
+  }, [simpleBlocks, builderMode, footerText])
   const [testTo, setTestTo] = React.useState<string>('')
   const [testing, setTesting] = React.useState<boolean>(false)
   const [sending, setSending] = React.useState<boolean>(false)
@@ -899,7 +957,21 @@ ${sections}
       }
       await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html, segmentId: segmentId || undefined })
       const res = await http.post(`/api/marketing/campaigns/${editing._id}/send`, { dryRun })
-      setSendResult(res.data?.data || null)
+      const result = res.data?.data || null
+      setSendResult(result)
+      
+      if (dryRun) {
+        toast.showToast(`Dry run completed: ${result?.sent || 0} email(s) would be sent`, 'success')
+      } else {
+        const sent = result?.sent || 0
+        const total = result?.total || 0
+        const skipped = result?.skipped || 0
+        const errors = result?.errors || 0
+        let message = `Campaign sent successfully! ${sent} email(s) sent`
+        if (skipped > 0) message += `, ${skipped} skipped`
+        if (errors > 0) message += `, ${errors} error(s)`
+        toast.showToast(message, 'success')
+      }
     } catch (e: any) {
       const err = e?.response?.data?.error
       const msg = err === 'missing_segment' ? 'This campaign has no segment. Select one and Save.'
@@ -1016,7 +1088,7 @@ ${sections}
                   MJML Builder
                 </button>
               </div>
-              <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setPreviewHtml(''); setMjml(''); setSimpleBlocks([]) }}>Close</button>
+              <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setPreviewHtml(''); setMjml(''); setSimpleBlocks([]); setFooterText('') }}>Close</button>
               <button className="rounded-lg border border-red-400 text-red-400 px-2 py-1 text-sm" onClick={async () => {
                 if (!editing) return
                 if (!confirm('Delete this campaign? This cannot be undone.')) return
@@ -1044,6 +1116,8 @@ ${sections}
                   setTestTo={setTestTo}
                   onSendTest={sendTest}
                   testing={testing}
+                  footerText={footerText}
+                  setFooterText={setFooterText}
                 />
               ) : (
                 <>
