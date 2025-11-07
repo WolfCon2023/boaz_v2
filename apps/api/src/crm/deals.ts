@@ -433,7 +433,7 @@ dealsRouter.put('/:id', async (req, res) => {
     if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
     
     try {
-    const _id = new ObjectId(idParam)
+      const _id = new ObjectId(idParam)
     
     // Get current deal for comparison
     const currentDeal = await db.collection('deals').findOne({ _id })
