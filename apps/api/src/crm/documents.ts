@@ -944,8 +944,8 @@ documentsRouter.post('/:id/checkout', requireAuth, async (req, res) => {
       })
     }
 
-    // Check permission (owner or edit permission)
-    if (String(document.ownerId) !== auth.userId && !(await hasPermission(db, document, auth.userId, 'edit'))) {
+    // Check permission - any user who can view the document can check it out
+    if (!(await hasPermission(db, document, auth.userId, 'view'))) {
       return res.status(403).json({ data: null, error: 'access_denied' })
     }
 
