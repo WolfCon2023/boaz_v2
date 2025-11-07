@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { http, getApiUrl } from '@/lib/http'
 import { formatDate } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
@@ -128,7 +129,13 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
           <h3 className="text-sm font-medium">Documents ({documents.length})</h3>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setShowUpload(true) }}
+            onClick={(e) => { 
+              e.preventDefault()
+              e.stopPropagation()
+              console.log('Upload button clicked, setting showUpload to true')
+              setShowUpload(true)
+              console.log('showUpload set to:', true)
+            }}
             className="flex items-center gap-1 px-2 py-1 text-xs rounded border hover:bg-[color:var(--color-muted)]"
           >
             <Plus size={12} /> Upload
@@ -176,48 +183,112 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
         )}
 
         {/* Compact Upload Modal */}
-        {showUpload && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onClick={(e) => { e.stopPropagation(); setShowUpload(false) }}>
-            <div className="bg-[color:var(--color-panel)] rounded-lg border p-4 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-medium">Upload Document{relatedToName && ` for ${relatedToName}`}</h3>
-                <button onClick={() => setShowUpload(false)} className="p-1 rounded hover:bg-[color:var(--color-muted)]">
-                  <X size={16} />
+        {showUpload && createPortal(
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center" style={{ zIndex: 2147483647, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }} onClick={(e) => { e.stopPropagation(); setShowUpload(false) }}>
+            <div className="bg-[color:var(--color-panel)] rounded-lg border shadow-2xl p-4 w-[min(90vw,28rem)] max-h-[85vh] overflow-y-auto mx-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4 sticky top-0 bg-[color:var(--color-panel)] pb-2 border-b">
+                <h3 className="font-semibold text-base">Upload Document{relatedToName && ` for ${relatedToName}`}</h3>
+                <button 
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setShowUpload(false) }} 
+                  className="p-1 rounded hover:bg-[color:var(--color-muted)]"
+                >
+                  <X size={18} />
                 </button>
               </div>
-              <form onSubmit={handleUpload} className="space-y-3">
-                <input type="file" name="file" required className="w-full rounded-lg border px-2 py-1 text-sm bg-transparent" />
-                <input
-                  type="text"
-                  name="name"
-                  required
-                  placeholder="Document name"
-                  className="w-full rounded-lg border px-2 py-1 text-sm bg-transparent"
-                />
-                <textarea
-                  name="description"
-                  placeholder="Description (optional)"
-                  className="w-full rounded-lg border px-2 py-1 text-sm bg-transparent h-16"
-                />
-                <div className="flex items-center justify-end gap-2">
+              <form onSubmit={handleUpload} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">File *</label>
+                  <input 
+                    type="file" 
+                    name="file" 
+                    required 
+                    className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Document Name *</label>
+                  <input
+                    type="text"
+                    name="name"
+                    required
+                    placeholder="Enter document name"
+                    className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Description</label>
+                  <textarea
+                    name="description"
+                    placeholder="Optional description"
+                    rows={3}
+                    className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Category</label>
+                  <select
+                    name="category"
+                    className="w-full rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                  >
+                    <option value="">Select a category...</option>
+                    <option value="Contracts & Agreements">Contracts & Agreements</option>
+                    <option value="Proposals">Proposals</option>
+                    <option value="Quotes">Quotes</option>
+                    <option value="Invoices & Receipts">Invoices & Receipts</option>
+                    <option value="Product Documentation">Product Documentation</option>
+                    <option value="Marketing Materials">Marketing Materials</option>
+                    <option value="Support Documentation">Support Documentation</option>
+                    <option value="Legal Documents">Legal Documents</option>
+                    <option value="Financial Documents">Financial Documents</option>
+                    <option value="NDAs & Confidentiality">NDAs & Confidentiality</option>
+                    <option value="Reports & Analytics">Reports & Analytics</option>
+                    <option value="Templates">Templates</option>
+                    <option value="Certificates & Licenses">Certificates & Licenses</option>
+                    <option value="Compliance">Compliance</option>
+                    <option value="Training Materials">Training Materials</option>
+                    <option value="Policies & Procedures">Policies & Procedures</option>
+                    <option value="Forms">Forms</option>
+                    <option value="Account Documents">Account Documents</option>
+                    <option value="Contact Information">Contact Information</option>
+                    <option value="Deal Documents">Deal Documents</option>
+                    <option value="Knowledge Base">Knowledge Base</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Tags (comma-separated)</label>
+                  <input
+                    type="text"
+                    name="tags"
+                    placeholder="tag1, tag2, tag3"
+                    className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <input type="checkbox" name="isPublic" id="isPublicCompact" className="rounded" />
+                  <label htmlFor="isPublicCompact" className="text-sm">Make this document public</label>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2 border-t">
                   <button
                     type="button"
-                    onClick={() => setShowUpload(false)}
-                    className="px-3 py-1 text-xs rounded border hover:bg-[color:var(--color-muted)]"
+                    onClick={(e) => { e.stopPropagation(); setShowUpload(false) }}
+                    className="px-4 py-2 text-sm rounded-lg border hover:bg-[color:var(--color-muted)]"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={upload.isPending}
-                    className="px-3 py-1 text-xs rounded border bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                    className="px-4 py-2 text-sm rounded-lg border bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     {upload.isPending ? 'Uploading...' : 'Upload'}
                   </button>
                 </div>
               </form>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     )
@@ -290,12 +361,16 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
       )}
 
       {/* Full Upload Modal */}
-      {showUpload && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onClick={(e) => { e.stopPropagation(); setShowUpload(false) }}>
-          <div className="bg-[color:var(--color-panel)] rounded-lg border p-6 max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
+      {showUpload && createPortal(
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center" style={{ zIndex: 2147483647, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }} onClick={(e) => { e.stopPropagation(); setShowUpload(false) }}>
+          <div className="bg-[color:var(--color-panel)] rounded-lg border shadow-2xl p-6 w-[min(90vw,32rem)] max-h-[90vh] overflow-y-auto mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-[color:var(--color-panel)] pb-2 border-b">
               <h2 className="text-xl font-bold">Upload Document{relatedToName && ` for ${relatedToName}`}</h2>
-              <button onClick={() => setShowUpload(false)} className="p-1 rounded hover:bg-[color:var(--color-muted)]">
+              <button 
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowUpload(false) }} 
+                className="p-1 rounded hover:bg-[color:var(--color-muted)]"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -386,7 +461,8 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
