@@ -246,26 +246,40 @@ documentsRouter.get('/', requireAuth, async (req, res) => {
 
     res.json({
       data: {
-        items: accessibleItems.map(d => ({
-          _id: d._id,
-          name: d.name,
-          description: d.description,
-          category: d.category,
-          tags: d.tags,
-          currentVersion: d.currentVersion,
-          versionCount: d.versions.length,
-          latestVersion: d.versions[d.versions.length - 1],
-          ownerId: d.ownerId,
-          ownerName: d.ownerName,
-          ownerEmail: d.ownerEmail,
-          isPublic: d.isPublic,
-          relatedTo: d.relatedTo ? {
-            type: d.relatedTo.type,
-            id: String(d.relatedTo.id),
-          } : undefined,
-          createdAt: d.createdAt,
-          updatedAt: d.updatedAt,
-        })),
+        items: accessibleItems.map(d => {
+          // Find user's permission for this document
+          const userPerm = d.permissions.find(p => String(p.userId) === auth.userId)
+          
+          return {
+            _id: d._id,
+            name: d.name,
+            description: d.description,
+            category: d.category,
+            tags: d.tags,
+            currentVersion: d.currentVersion,
+            versionCount: d.versions.length,
+            latestVersion: d.versions[d.versions.length - 1],
+            ownerId: d.ownerId,
+            ownerName: d.ownerName,
+            ownerEmail: d.ownerEmail,
+            isPublic: d.isPublic,
+            relatedTo: d.relatedTo ? {
+              type: d.relatedTo.type,
+              id: String(d.relatedTo.id),
+            } : undefined,
+            checkedOutBy: d.checkedOutBy ? String(d.checkedOutBy) : undefined,
+            checkedOutByName: d.checkedOutByName,
+            checkedOutByEmail: d.checkedOutByEmail,
+            checkedOutAt: d.checkedOutAt,
+            createdAt: d.createdAt,
+            updatedAt: d.updatedAt,
+            // Include user's permission if they have one
+            userPermission: userPerm ? {
+              userId: String(userPerm.userId),
+              permission: userPerm.permission,
+            } : undefined,
+          }
+        }),
         page,
         pageSize: limit,
         total,
