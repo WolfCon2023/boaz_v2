@@ -255,6 +255,11 @@ export default function CRMDocuments() {
       return result
     },
     enabled: !!selectedDoc?._id,
+    // Force refetch when selectedDoc changes
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    // Don't use stale data - always fetch fresh when document ID changes
+    staleTime: 0,
   })
 
   // Fetch document history
@@ -389,11 +394,15 @@ export default function CRMDocuments() {
       const res = await http.post(`/api/crm/documents/${docId}/checkout`)
       return res.data
     },
-    onSuccess: () => {
+    onSuccess: (_, docId) => {
       qc.invalidateQueries({ queryKey: ['documents'] })
+      qc.invalidateQueries({ queryKey: ['document', docId] })
       qc.invalidateQueries({ queryKey: ['document'] })
       qc.invalidateQueries({ queryKey: ['document-history'] })
-      refetchDetail()
+      // If this is the currently selected document, refetch its details
+      if (selectedDoc?._id === docId) {
+        refetchDetail()
+      }
       toast.showToast('Document checked out successfully', 'success')
     },
     onError: (err: any) => {
@@ -416,11 +425,15 @@ export default function CRMDocuments() {
       const res = await http.post(`/api/crm/documents/${docId}/checkin`)
       return res.data
     },
-    onSuccess: () => {
+    onSuccess: (_, docId) => {
       qc.invalidateQueries({ queryKey: ['documents'] })
+      qc.invalidateQueries({ queryKey: ['document', docId] })
       qc.invalidateQueries({ queryKey: ['document'] })
       qc.invalidateQueries({ queryKey: ['document-history'] })
-      refetchDetail()
+      // If this is the currently selected document, refetch its details
+      if (selectedDoc?._id === docId) {
+        refetchDetail()
+      }
       toast.showToast('Document checked in successfully', 'success')
     },
     onError: (err: any) => {
@@ -510,6 +523,8 @@ export default function CRMDocuments() {
   const handleView = async (doc: Document) => {
     setSelectedDoc(doc as any)
     setShowVersions(true)
+    // Invalidate and refetch the document detail to ensure fresh data
+    qc.invalidateQueries({ queryKey: ['document', doc._id] })
   }
 
   const handleUpload = (e: React.FormEvent<HTMLFormElement>) => {
