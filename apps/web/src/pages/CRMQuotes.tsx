@@ -1143,13 +1143,24 @@ export default function CRMQuotes() {
                   <button
                     type="button"
                     onClick={async () => {
-                      const form = document.querySelector('form') as HTMLFormElement
-                      const formData = new FormData(form)
-                      const signerName = formData.get('signerName') as string
-                      const signerEmail = formData.get('signerEmail') as string
+                      // Get values directly from input elements
+                      const signerNameInput = document.querySelector('input[name="signerName"]') as HTMLInputElement
+                      const signerEmailInput = document.querySelector('input[name="signerEmail"]') as HTMLInputElement
                       
-                      if (!signerEmail || !signerEmail.trim()) {
+                      const signerName = signerNameInput?.value?.trim() || ''
+                      const signerEmail = signerEmailInput?.value?.trim() || ''
+                      
+                      if (!signerEmail) {
                         toast.showToast('Please enter a signer email address', 'warning')
+                        signerEmailInput?.focus()
+                        return
+                      }
+                      
+                      // Validate email format
+                      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                      if (!emailRegex.test(signerEmail)) {
+                        toast.showToast('Please enter a valid email address', 'warning')
+                        signerEmailInput?.focus()
                         return
                       }
                       

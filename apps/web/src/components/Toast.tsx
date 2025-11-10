@@ -25,7 +25,7 @@ export function useToast() {
       showToast: (message: string, _type?: ToastType) => {
         console.warn('Toast used outside provider:', message)
         // Fallback to alert for backwards compatibility
-        alert(`Message from BOAZ: ${message}`)
+        alert(`BOAZ says: ${message}`)
       }
     }
   }
@@ -146,7 +146,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
         </div>
         <div className="flex-1 min-w-0">
           <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${textColors[toast.type]}`}>
-            Message from BOAZ
+            BOAZ says
           </div>
           <div className={`text-sm font-medium ${textColors[toast.type]}`}>
             {toast.message}
