@@ -226,7 +226,7 @@ export default function CRMQuotes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quotes'] })
       qc.invalidateQueries({ queryKey: ['quote-history'] })
-      toast.showToast('Quote sent to signer successfully!', 'success')
+      // Toast message will be shown in the button's onClick handler with signer email
     },
     onError: (err: any) => {
       const errorMsg = err.response?.data?.error || 'Failed to send quote to signer'
@@ -1168,10 +1168,14 @@ export default function CRMQuotes() {
                       }
                       
                       if (confirm(`Send quote to ${signerEmail} for signing?`)) {
-                        sendToSigner.mutate(editing._id)
+                        sendToSigner.mutate(editing._id, {
+                          onSuccess: () => {
+                            toast.showToast(`Quote has been sent to ${signerEmail}`, 'success')
+                          }
+                        })
                       }
                     }}
-                    disabled={sendToSigner.isPending || update.isPending || !editing.signerEmail}
+                    disabled={sendToSigner.isPending || update.isPending}
                     className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
                     title={!editing.signerEmail ? 'Please enter a signer email address' : 'Send quote to signer for review and signing'}
                   >
