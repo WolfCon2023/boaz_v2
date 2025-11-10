@@ -69,6 +69,8 @@ app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 app.use('/api/auth', authRouter)
 app.use('/api/crm', crmRouter)
+// Public quote routes (no auth required) - must be before /api/crm/quotes
+app.use('/api/quotes', quotesRouter)
 app.use('/api/crm/accounts', accountsRouter)
 app.use('/api/crm/deals', dealsRouter)
 app.use('/api/crm/quotes', quotesRouter)

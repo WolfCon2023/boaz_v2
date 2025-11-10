@@ -36,6 +36,8 @@ import Support from '@/pages/Support'
 import Marketing from '@/pages/Marketing'
 import RequestStatus from '@/pages/RequestStatus'
 import TermsReview from '@/pages/TermsReview'
+import QuoteView from '@/pages/QuoteView'
+import QuoteAcceptanceQueue from '@/pages/QuoteAcceptanceQueue'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
 
 export const router = createBrowserRouter([
@@ -57,6 +59,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/accounts', element: <RequireAuth><RequireApplication appKey="crm"><CRMAccounts /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/quotes', element: <RequireAuth><RequireApplication appKey="crm"><CRMQuotes /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/quotes/approval-queue', element: <RequireAuth><RequireApplication appKey="crm"><CRMApprovalQueue /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/quotes/acceptance-queue', element: <RequireAuth><RequireApplication appKey="crm"><QuoteAcceptanceQueue /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoices /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices/:id/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoicePrint /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/deals', element: <RequireAuth><RequireApplication appKey="crm"><CRMDeals /></RequireApplication></RequireAuth> },
@@ -100,6 +103,10 @@ export const router = createBrowserRouter([
   {
     path: '/terms/review/:token',
     element: <PublicShell><TermsReview /></PublicShell>,
+  },
+  {
+    path: '/quotes/view/:token',
+    element: <PublicShell><QuoteView /></PublicShell>,
   },
   {
     path: '/change-password',
