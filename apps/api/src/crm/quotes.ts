@@ -954,4 +954,115 @@ ${reviewNotes ? `Notes: ${reviewNotes}` : ''}
   }
 })
 
+// POST /api/crm/quotes/:id/send-to-signer - Send quote to signer for review and signing
+quotesRouter.post('/:id/send-to-signer', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const quoteId = new ObjectId(req.params.id)
+    
+    // Get quote
+    const quote = await db.collection('quotes').findOne({ _id: quoteId })
+    if (!quote) {
+      return res.status(404).json({ data: null, error: 'quote_not_found' })
+    }
+    
+    const quoteData = quote as any
+    const signerEmail = quoteData.signerEmail
+    const signerName = quoteData.signerName
+    
+    if (!signerEmail || typeof signerEmail !== 'string') {
+      return res.status(400).json({ data: null, error: 'signer_email_required' })
+    }
+    
+    // Get sender info
+    const sender = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    if (!sender) {
+      return res.status(404).json({ data: null, error: 'sender_not_found' })
+    }
+    const senderData = sender as any
+    
+    // Generate unique token for quote viewing/signing
+    const signToken = Buffer.from(`${quoteId.toString()}-${Date.now()}-${Math.random()}`).toString('base64url')
+    
+    // Update quote with sign token and status
+    const now = new Date()
+    await db.collection('quotes').updateOne(
+      { _id: quoteId },
+      {
+        $set: {
+          signToken,
+          esignStatus: 'Sent',
+          updatedAt: now,
+        }
+      }
+    )
+    
+    // Add history entry
+    await addQuoteHistory(
+      db,
+      quoteId,
+      'sent_to_signer',
+      `Quote sent to signer: ${signerName || signerEmail}`,
+      auth.userId,
+      senderData.name,
+      senderData.email,
+      quoteData.status,
+      quoteData.status,
+      { signerEmail, signerName, signToken }
+    )
+    
+    // Send email to signer
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+    const quoteViewUrl = `${baseUrl}/apps/crm/quotes/view/${quoteId.toString()}?token=${signToken}`
+    
+    try {
+      await sendAuthEmail({
+        to: signerEmail,
+        subject: `Quote for Review: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData.title || 'Untitled'}`,
+        checkPreferences: false, // Don't check preferences for external signers
+        html: `
+          <h2>Quote for Review</h2>
+          <p>${signerName ? `Hello ${signerName},` : 'Hello,'}</p>
+          <p>You have been sent a quote for review and signing:</p>
+          <ul>
+            <li><strong>Quote:</strong> ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}</li>
+            <li><strong>Total:</strong> $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
+            <li><strong>Sent by:</strong> ${senderData.name || senderData.email}</li>
+            <li><strong>Sent at:</strong> ${now.toLocaleString()}</li>
+          </ul>
+          <p><a href="${quoteViewUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Review Quote</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${quoteViewUrl}</code></p>
+        `,
+        text: `
+Quote for Review
 
+${signerName ? `Hello ${signerName},` : 'Hello,'}
+
+You have been sent a quote for review and signing:
+
+Quote: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}
+Total: $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Sent by: ${senderData.name || senderData.email}
+Sent at: ${now.toLocaleString()}
+
+Review Quote: ${quoteViewUrl}
+        `,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send quote to signer email:', emailErr)
+      // Don't fail the request if email fails, but log it
+    }
+    
+    res.json({ data: { message: 'Quote sent to signer', signToken }, error: null })
+  } catch (err: any) {
+    console.error('Send quote to signer error:', err)
+    if (err.message?.includes('ObjectId')) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    res.status(500).json({ data: null, error: err.message || 'failed_to_send_quote_to_signer' })
+  }
+})

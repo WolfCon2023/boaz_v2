@@ -218,6 +218,22 @@ export default function CRMQuotes() {
     },
   })
 
+  const sendToSigner = useMutation({
+    mutationFn: async (quoteId: string) => {
+      const res = await http.post(`/api/crm/quotes/${quoteId}/send-to-signer`)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['quotes'] })
+      qc.invalidateQueries({ queryKey: ['quote-history'] })
+      toast.showToast('Quote sent to signer successfully!', 'success')
+    },
+    onError: (err: any) => {
+      const errorMsg = err.response?.data?.error || 'Failed to send quote to signer'
+      toast.showToast(errorMsg, 'error')
+    },
+  })
+
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
   React.useEffect(() => { setPage(0) }, [q, sort, dir, pageSize])
@@ -1121,8 +1137,48 @@ export default function CRMQuotes() {
                     Request Approval
                   </button>
                 </div>
-                <input name="signerName" defaultValue={editing.signerName ?? ''} placeholder="Signer name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <input name="signerEmail" defaultValue={editing.signerEmail ?? ''} placeholder="Signer email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="col-span-full flex items-center gap-2">
+                  <input name="signerName" defaultValue={editing.signerName ?? ''} placeholder="Signer name" className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                  <input name="signerEmail" defaultValue={editing.signerEmail ?? ''} placeholder="Signer email" className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const form = document.querySelector('form') as HTMLFormElement
+                      const formData = new FormData(form)
+                      const signerName = formData.get('signerName') as string
+                      const signerEmail = formData.get('signerEmail') as string
+                      
+                      if (!signerEmail || !signerEmail.trim()) {
+                        toast.showToast('Please enter a signer email address', 'warning')
+                        return
+                      }
+                      
+                      // First, save the signer info if it's different
+                      if (editing.signerName !== signerName || editing.signerEmail !== signerEmail) {
+                        try {
+                          await update.mutateAsync({ 
+                            _id: editing._id, 
+                            signerName: signerName || null,
+                            signerEmail: signerEmail || null
+                          })
+                        } catch (err: any) {
+                          toast.showToast('Failed to save signer info. Please try again.', 'error')
+                          return
+                        }
+                      }
+                      
+                      if (confirm(`Send quote to ${signerEmail} for signing?`)) {
+                        sendToSigner.mutate(editing._id)
+                      }
+                    }}
+                    disabled={sendToSigner.isPending || update.isPending || !editing.signerEmail}
+                    className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                    title={!editing.signerEmail ? 'Please enter a signer email address' : 'Send quote to signer for review and signing'}
+                  >
+                    <Send className="h-3 w-3" />
+                    Send to Signer
+                  </button>
+                </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) http.delete(`/api/crm/quotes/${editing._id}`).then(() => { qc.invalidateQueries({ queryKey: ['quotes'] }); setEditing(null) }) }}>Delete</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
