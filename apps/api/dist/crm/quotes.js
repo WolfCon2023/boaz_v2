@@ -706,3 +706,251 @@ ${reviewNotes ? `Notes: ${reviewNotes}` : ''}
         res.status(500).json({ data: null, error: err.message || 'failed_to_reject_quote' });
     }
 });
+// POST /api/crm/quotes/:id/send-to-signer - Send quote to signer for review and signing
+// IMPORTANT: This route must be defined before the public routes section
+quotesRouter.post('/:id/send-to-signer', requireAuth, async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const auth = req.auth;
+        const quoteId = new ObjectId(req.params.id);
+        // Get quote
+        const quote = await db.collection('quotes').findOne({ _id: quoteId });
+        if (!quote) {
+            return res.status(404).json({ data: null, error: 'quote_not_found' });
+        }
+        const quoteData = quote;
+        const signerEmail = quoteData.signerEmail;
+        const signerName = quoteData.signerName;
+        if (!signerEmail || typeof signerEmail !== 'string') {
+            return res.status(400).json({ data: null, error: 'signer_email_required' });
+        }
+        // Get sender info
+        const sender = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        if (!sender) {
+            return res.status(404).json({ data: null, error: 'sender_not_found' });
+        }
+        const senderData = sender;
+        // Generate unique token for quote viewing/signing
+        const signToken = Buffer.from(`${quoteId.toString()}-${Date.now()}-${Math.random()}`).toString('base64url');
+        // Update quote with sign token and status
+        const now = new Date();
+        await db.collection('quotes').updateOne({ _id: quoteId }, {
+            $set: {
+                signToken,
+                esignStatus: 'Sent',
+                updatedAt: now,
+            }
+        });
+        // Add history entry
+        await addQuoteHistory(db, quoteId, 'sent_to_signer', `Quote sent to signer: ${signerName || signerEmail}`, auth.userId, senderData.name, senderData.email, quoteData.status, quoteData.status, { signerEmail, signerName, signToken });
+        // Send email to signer
+        const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
+        const quoteViewUrl = `${baseUrl}/quotes/view/${signToken}`;
+        try {
+            await sendAuthEmail({
+                to: signerEmail,
+                subject: `Quote for Review: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData.title || 'Untitled'}`,
+                checkPreferences: false, // Don't check preferences for external signers
+                html: `
+          <h2>Quote for Review</h2>
+          <p>${signerName ? `Hello ${signerName},` : 'Hello,'}</p>
+          <p>You have been sent a quote for review and signing:</p>
+          <ul>
+            <li><strong>Quote:</strong> ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}</li>
+            <li><strong>Total:</strong> $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
+            <li><strong>Sent by:</strong> ${senderData.name || senderData.email}</li>
+            <li><strong>Sent at:</strong> ${now.toLocaleString()}</li>
+          </ul>
+          <p><a href="${quoteViewUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Review Quote</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${quoteViewUrl}</code></p>
+        `,
+                text: `
+Quote for Review
+
+${signerName ? `Hello ${signerName},` : 'Hello,'}
+
+You have been sent a quote for review and signing:
+
+Quote: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}
+Total: $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+Sent by: ${senderData.name || senderData.email}
+Sent at: ${now.toLocaleString()}
+
+Review Quote: ${quoteViewUrl}
+        `,
+            });
+        }
+        catch (emailErr) {
+            console.error('Failed to send quote to signer email:', emailErr);
+            // Don't fail the request if email fails, but log it
+        }
+        res.json({ data: { message: 'Quote sent to signer', signToken }, error: null });
+    }
+    catch (err) {
+        console.error('Send quote to signer error:', err);
+        if (err.message?.includes('ObjectId')) {
+            return res.status(400).json({ data: null, error: 'invalid_id' });
+        }
+        res.status(500).json({ data: null, error: err.message || 'failed_to_send_quote_to_signer' });
+    }
+});
+// ===== PUBLIC QUOTE VIEW ENDPOINTS (No auth required) =====
+// GET /api/quotes/view/:token - Get quote by token (public endpoint)
+quotesRouter.get('/view/:token', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const { token } = req.params;
+        const quote = await db.collection('quotes').findOne({ signToken: token });
+        if (!quote) {
+            return res.status(404).json({ data: null, error: 'quote_not_found' });
+        }
+        // Get account info if available
+        let accountInfo = null;
+        if (quote.accountId) {
+            const account = await db.collection('accounts').findOne({ _id: quote.accountId });
+            if (account) {
+                accountInfo = {
+                    accountNumber: account.accountNumber,
+                    name: account.name,
+                };
+            }
+        }
+        res.json({
+            data: {
+                quote: {
+                    _id: String(quote._id),
+                    quoteNumber: quote.quoteNumber,
+                    title: quote.title,
+                    items: quote.items || [],
+                    subtotal: quote.subtotal || 0,
+                    tax: quote.tax || 0,
+                    total: quote.total || 0,
+                    status: quote.status,
+                    signerName: quote.signerName,
+                    signerEmail: quote.signerEmail,
+                    esignStatus: quote.esignStatus,
+                    signedAt: quote.signedAt,
+                    createdAt: quote.createdAt,
+                    accountInfo,
+                }
+            },
+            error: null
+        });
+    }
+    catch (err) {
+        console.error('Get quote by token error:', err);
+        res.status(500).json({ data: null, error: err.message || 'failed_to_get_quote' });
+    }
+});
+// POST /api/quotes/view/:token/accept - Accept quote (public endpoint)
+quotesRouter.post('/view/:token/accept', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const { token } = req.params;
+        const { signerName, notes } = req.body || {};
+        const quote = await db.collection('quotes').findOne({ signToken: token });
+        if (!quote) {
+            return res.status(404).json({ data: null, error: 'quote_not_found' });
+        }
+        // Check if already accepted
+        if (quote.esignStatus === 'Accepted' || quote.esignStatus === 'Signed') {
+            return res.status(400).json({ data: null, error: 'quote_already_accepted' });
+        }
+        const now = new Date();
+        // Update quote
+        await db.collection('quotes').updateOne({ _id: quote._id }, {
+            $set: {
+                esignStatus: 'Accepted',
+                signedAt: now,
+                signerName: signerName || quote.signerName,
+                updatedAt: now,
+            }
+        });
+        // Add history entry
+        await addQuoteHistory(db, quote._id, 'accepted', `Quote accepted by ${signerName || quote.signerName || quote.signerEmail}${notes ? `: ${notes}` : ''}`, undefined, // No user ID for external signers
+        signerName || quote.signerName || 'External Signer', quote.signerEmail, quote.status, quote.status, { signerName, notes, acceptedAt: now });
+        // Create acceptance record for queue
+        const acceptanceRecord = {
+            _id: new ObjectId(),
+            quoteId: quote._id,
+            quoteNumber: quote.quoteNumber,
+            quoteTitle: quote.title,
+            signerName: signerName || quote.signerName,
+            signerEmail: quote.signerEmail,
+            acceptedAt: now,
+            notes: notes || null,
+            status: 'accepted',
+            createdAt: now,
+            updatedAt: now,
+        };
+        await db.collection('quote_acceptances').insertOne(acceptanceRecord);
+        // Send notification email to internal team (optional - could be enhanced)
+        // For now, just return success
+        res.json({ data: { message: 'Quote accepted successfully', acceptanceId: acceptanceRecord._id }, error: null });
+    }
+    catch (err) {
+        console.error('Accept quote error:', err);
+        res.status(500).json({ data: null, error: err.message || 'failed_to_accept_quote' });
+    }
+});
+// ===== INTERNAL ACCEPTANCE QUEUE ENDPOINTS (Auth required) =====
+// GET /api/crm/quotes/acceptance-queue - Get quote acceptance queue
+quotesRouter.get('/acceptance-queue', requireAuth, async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const { status, q } = req.query;
+        const filter = {};
+        if (status && typeof status === 'string' && status !== 'all') {
+            filter.status = status;
+        }
+        if (q && typeof q === 'string') {
+            filter.$or = [
+                { quoteNumber: { $regex: q, $options: 'i' } },
+                { quoteTitle: { $regex: q, $options: 'i' } },
+                { signerName: { $regex: q, $options: 'i' } },
+                { signerEmail: { $regex: q, $options: 'i' } },
+            ];
+        }
+        const acceptances = await db.collection('quote_acceptances')
+            .find(filter)
+            .sort({ acceptedAt: -1 })
+            .limit(200)
+            .toArray();
+        // Get quote details for each acceptance
+        const items = await Promise.all(acceptances.map(async (acc) => {
+            const quote = await db.collection('quotes').findOne({ _id: acc.quoteId });
+            return {
+                _id: String(acc._id),
+                quoteId: String(acc.quoteId),
+                quote: quote ? {
+                    _id: String(quote._id),
+                    quoteNumber: quote.quoteNumber,
+                    title: quote.title,
+                    total: quote.total,
+                    status: quote.status,
+                } : null,
+                quoteNumber: acc.quoteNumber,
+                quoteTitle: acc.quoteTitle,
+                signerName: acc.signerName,
+                signerEmail: acc.signerEmail,
+                acceptedAt: acc.acceptedAt,
+                notes: acc.notes,
+                status: acc.status,
+            };
+        }));
+        res.json({ data: { items }, error: null });
+    }
+    catch (err) {
+        console.error('Get acceptance queue error:', err);
+        res.status(500).json({ data: null, error: err.message || 'failed_to_get_acceptance_queue' });
+    }
+});

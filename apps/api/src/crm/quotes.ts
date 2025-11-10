@@ -955,6 +955,7 @@ ${reviewNotes ? `Notes: ${reviewNotes}` : ''}
 })
 
 // POST /api/crm/quotes/:id/send-to-signer - Send quote to signer for review and signing
+// IMPORTANT: This route must be defined before the public routes section
 quotesRouter.post('/:id/send-to-signer', requireAuth, async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
@@ -1162,7 +1163,7 @@ quotesRouter.post('/view/:token/accept', async (req, res) => {
       quote._id,
       'accepted',
       `Quote accepted by ${signerName || quote.signerName || quote.signerEmail}${notes ? `: ${notes}` : ''}`,
-      null, // No user ID for external signers
+      undefined, // No user ID for external signers
       signerName || quote.signerName || 'External Signer',
       quote.signerEmail,
       quote.status,
