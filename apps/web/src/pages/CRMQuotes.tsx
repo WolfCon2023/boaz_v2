@@ -1092,7 +1092,7 @@ export default function CRMQuotes() {
                   </select>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       const select = document.getElementById('approver-select') as HTMLSelectElement
                       const approverEmail = select?.value || editing.approver
                       if (!approverEmail) {
@@ -1100,10 +1100,20 @@ export default function CRMQuotes() {
                         return
                       }
                       if (confirm(`Send approval request to ${approverEmail}?`)) {
+                        // First, update the quote with the approver email if it's different
+                        if (editing.approver !== approverEmail) {
+                          try {
+                            await update.mutateAsync({ _id: editing._id, approver: approverEmail })
+                          } catch (err: any) {
+                            toast.showToast('Failed to save approver. Please try again.', 'error')
+                            return
+                          }
+                        }
+                        // Then request approval
                         requestApproval.mutate(editing._id)
                       }
                     }}
-                    disabled={requestApproval.isPending || managers.length === 0}
+                    disabled={requestApproval.isPending || update.isPending || managers.length === 0}
                     className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
                     title={managers.length === 0 ? 'No managers available' : 'Send approval request to manager'}
                   >
