@@ -1200,12 +1200,46 @@ quotesRouter.post('/view/:token/accept', async (req, res) => {
 
 // ===== INTERNAL ACCEPTANCE QUEUE ENDPOINTS (Auth required) =====
 
-// GET /api/crm/quotes/acceptance-queue - Get quote acceptance queue
+// GET /api/crm/quotes/acceptance-queue - Get quote acceptance queue (managers only)
 quotesRouter.get('/acceptance-queue', requireAuth, async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   
   try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    
+    // Check if user has manager role
+    const managerRole = await db.collection('roles').findOne({ name: 'manager' })
+    if (!managerRole) {
+      return res.status(500).json({ data: null, error: 'manager_role_not_found' })
+    }
+    
+    // Get all user roles (same approach as requirePermission)
+    const userRoles = await db.collection('user_roles').find({ userId: auth.userId } as any).toArray()
+    const roleIds = userRoles.map((ur: any) => ur.roleId)
+    
+    if (roleIds.length === 0) {
+      console.log('No roles found for user:', { userId: auth.userId, email: auth.email })
+      return res.status(403).json({ data: null, error: 'manager_access_required' })
+    }
+    
+    // Get role details
+    const roles = await db.collection('roles').find({ _id: { $in: roleIds } } as any).toArray()
+    const roleNames = roles.map((r: any) => r.name)
+    
+    // Check if user has manager or admin role
+    const hasManagerRole = roleNames.includes('manager')
+    const hasAdminRole = roleNames.includes('admin')
+    
+    if (!hasManagerRole && !hasAdminRole) {
+      console.log('User does not have manager or admin role:', {
+        userId: auth.userId,
+        email: auth.email,
+        roles: roleNames,
+      })
+      return res.status(403).json({ data: null, error: 'manager_access_required' })
+    }
+    
     const { status, q } = req.query
     const filter: any = {}
     
