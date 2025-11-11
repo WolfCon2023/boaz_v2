@@ -35,6 +35,8 @@ export default function AdminPortal() {
       return res.data
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
   })
 
   const isAdmin = currentUserRoles?.isAdmin || currentUserRoles?.roles?.some(r => r.permissions.includes('*')) || false
@@ -61,6 +63,7 @@ export default function AdminPortal() {
     },
     enabled: activeTab === 'users' && isAdmin && !isLoadingRoles,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
     retry: false, // Don't retry on 403
   })
 

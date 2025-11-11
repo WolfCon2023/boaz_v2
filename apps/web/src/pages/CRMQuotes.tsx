@@ -6,6 +6,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { useConfirm } from '@/components/ConfirmDialog'
 import { Plus, X, Package, Send } from 'lucide-react'
 import { DocumentsList } from '@/components/DocumentsList'
 
@@ -92,6 +93,7 @@ type Discount = {
 export default function CRMQuotes() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { confirm, ConfirmDialog } = useConfirm()
   const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'quoteNumber'|'title'|'total'|'status'|'updatedAt'>('updatedAt')
@@ -143,6 +145,8 @@ export default function CRMQuotes() {
       const res = await http.get('/api/auth/managers')
       return res.data as { managers: Array<{ id: string; email: string; name?: string }> }
     },
+    refetchOnWindowFocus: false,
+    retry: false,
   })
   const managers = managersData?.managers ?? []
 
@@ -541,12 +545,16 @@ export default function CRMQuotes() {
       return res.data
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
   })
 
   const isManager = rolesData?.roles?.some(r => r.name === 'manager') || rolesData?.isAdmin || false
 
   return (
-    <div className="space-y-4">
+    <>
+      {ConfirmDialog}
+      <div className="space-y-4">
       <CRMNav />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Quotes</h1>
@@ -1115,7 +1123,8 @@ export default function CRMQuotes() {
                         toast.showToast('Please select an approver first', 'warning')
                         return
                       }
-                      if (confirm(`Send approval request to ${approverEmail}?`)) {
+                      const approved = await confirm(`Send approval request to ${approverEmail}?`)
+                      if (approved) {
                         // First, update the quote with the approver email if it's different
                         if (editing.approver !== approverEmail) {
                           try {
@@ -1178,7 +1187,8 @@ export default function CRMQuotes() {
                         }
                       }
                       
-                      if (confirm(`Send quote to ${signerEmail} for signing?`)) {
+                      const confirmed = await confirm(`Send quote to ${signerEmail} for signing?`)
+                      if (confirmed) {
                         sendToSigner.mutate(editing._id, {
                           onSuccess: () => {
                             toast.showToast(`Quote has been sent to ${signerEmail}`, 'success')
@@ -1317,7 +1327,7 @@ export default function CRMQuotes() {
                   {savedViews.map((v) => (
                     <div key={v.id} className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] p-2 text-sm">
                       <button type="button" className="flex-1 text-left hover:underline" onClick={() => { loadView(v); setShowSaveViewDialog(false) }}>{v.name}</button>
-                      <button type="button" className="ml-2 rounded-lg border border-red-400 text-red-400 px-2 py-1 text-xs hover:bg-red-50" onClick={() => { if (confirm(`Delete \"${v.name}\"?`)) deleteView(v.id) }}>Delete</button>
+                      <button type="button" className="ml-2 rounded-lg border border-red-400 text-red-400 px-2 py-1 text-xs hover:bg-red-50" onClick={async () => { const confirmed = await confirm(`Delete \"${v.name}\"?`, { confirmColor: 'danger' }); if (confirmed) deleteView(v.id) }}>Delete</button>
                     </div>
                   ))}
                 </div>
@@ -1327,6 +1337,7 @@ export default function CRMQuotes() {
         </div>
       )}
     </div>
+    </>
   )
 }
 

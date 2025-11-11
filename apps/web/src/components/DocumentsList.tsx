@@ -55,6 +55,8 @@ export function DocumentsList({ relatedToType, relatedToId, relatedToName, compa
       })
       return res.data as { data: { items: Document[] } }
     },
+    refetchOnWindowFocus: false,
+    retry: false,
   })
 
   const documents = data?.data.items ?? []

@@ -73,6 +73,8 @@ export default function Settings() {
       return res.data
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
   })
 
   const isAdmin = rolesData?.roles?.some(r => r.permissions.includes('*')) || false

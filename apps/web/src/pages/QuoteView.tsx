@@ -4,11 +4,13 @@ import { http } from '@/lib/http'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { formatDateTime } from '@/lib/dateFormat'
 import { CheckCircle, FileText, AlertCircle, DollarSign } from 'lucide-react'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 export default function QuoteView() {
   const { token } = useParams<{ token: string }>()
   const [signerName, setSignerName] = React.useState('')
   const [notes, setNotes] = React.useState('')
+  const { confirm, ConfirmDialog } = useConfirm()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['quote-view', token],
@@ -87,7 +89,9 @@ export default function QuoteView() {
   const isAccepted = quote.esignStatus === 'Accepted' || quote.esignStatus === 'Signed'
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <>
+      {ConfirmDialog}
+      <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
@@ -237,12 +241,21 @@ export default function QuoteView() {
 
               <div className="flex gap-3 pt-4">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!signerName.trim() && !quote.signerName) {
-                      alert('Please enter your name')
+                      await confirm('Please enter your name', {
+                        confirmText: 'OK',
+                        cancelText: '',
+                        confirmColor: 'primary',
+                      })
                       return
                     }
-                    if (confirm('Are you sure you want to accept this quote?')) {
+                    const confirmed = await confirm('Are you sure you want to accept this quote?', {
+                      confirmText: 'Accept',
+                      cancelText: 'Cancel',
+                      confirmColor: 'success',
+                    })
+                    if (confirmed) {
                       acceptMutation.mutate({
                         signerName: signerName.trim() || quote.signerName,
                         notes: notes.trim() || undefined,
@@ -261,6 +274,7 @@ export default function QuoteView() {
         )}
       </div>
     </div>
+    </>
   )
 }
 
