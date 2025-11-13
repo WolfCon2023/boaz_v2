@@ -642,11 +642,9 @@ productsRouter.get('/terms', async (req, res) => {
   res.json({ data: { items }, error: null })
 })
 
-// GET /api/crm/terms/review-requests (ledger - all review requests)
-// CRITICAL: This route MUST be defined BEFORE /terms/:id to avoid route conflicts
-// Express matches routes in registration order, so this specific route must come first
-productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
-  console.log('✓✓✓✓✓ HIT /terms/review-requests route handler - PATH:', req.path, 'URL:', req.url, 'Query:', req.query) // Debug log
+// GET /api/crm/terms/ledger (ledger - all review requests for custom terms)
+// NOTE: Using a distinct path (/terms/ledger) to avoid any route ambiguity with /terms/:id
+productsRouter.get('/terms/ledger', requireAuth, async (req, res) => {
   const db = await getDb()
   if (!db) {
     console.error('Database unavailable')
@@ -661,7 +659,6 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
     const dir: SortDirection = dirParam === 'asc' ? 1 : -1
     const allowed = new Set(['sentAt', 'viewedAt', 'respondedAt', 'status', 'recipientEmail', 'termsName'])
     const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'sentAt'
-    console.log('Sort field:', sortField, 'Allowed:', Array.from(allowed), 'Raw:', sortKeyRaw)
     const sort: Sort = { [sortField]: dir }
     
     const filter: Record<string, unknown> = {}
@@ -676,15 +673,12 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
     }
     if (status) filter.status = status
     
-    console.log('Query filter:', JSON.stringify(filter), 'Sort:', JSON.stringify(sort))
-    
     const requests = await db.collection('terms_review_requests')
       .find(filter)
       .sort(sort)
       .limit(500)
       .toArray()
     
-    console.log('Found', requests.length, 'review requests')
     res.json({ data: { items: requests }, error: null })
   } catch (err: any) {
     console.error('Get review requests ledger error:', err)

@@ -235,7 +235,8 @@ export default function CRMProducts() {
       const params: any = { sort: ledgerSort, dir: ledgerDir }
       if (ledgerQ) params.q = ledgerQ
       if (ledgerStatus) params.status = ledgerStatus
-      const res = await http.get('/api/crm/products/terms/review-requests', { params })
+      // Use the new ledger endpoint to avoid any ambiguity with /terms/:id routes
+      const res = await http.get('/api/crm/products/terms/ledger', { params })
       return res.data as { data: { items: Array<{
         _id: string
         termsId: string
