@@ -7,7 +7,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
-import { Plus, X, Package } from 'lucide-react'
+import { Plus, X, Package, Send } from 'lucide-react'
 
 type Invoice = { 
   _id: string
@@ -175,6 +175,20 @@ export default function CRMInvoices() {
   const update = useMutation({
     mutationFn: async (payload: any) => { const { _id, ...rest } = payload; const res = await http.put(`/api/crm/invoices/${_id}`, rest); return res.data },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+  })
+  const sendEmail = useMutation({
+    mutationFn: async ({ id, recipientEmail }: { id: string; recipientEmail?: string }) => {
+      const res = await http.post(`/api/crm/invoices/${id}/send-email`, { recipientEmail })
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['invoices'] })
+      toast.showToast('Invoice sent via email', 'success')
+    },
+    onError: (err: any) => {
+      const errorMsg = err?.response?.data?.error || 'Failed to send invoice email'
+      toast.showToast(errorMsg === 'recipient_email_required' ? 'Please enter a recipient email address' : errorMsg, 'error')
+    },
   })
 
   function startInlineEdit(inv: Invoice) {
@@ -1096,6 +1110,30 @@ export default function CRMInvoices() {
                 </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) http.delete(`/api/crm/invoices/${editing._id}`).then(() => { qc.invalidateQueries({ queryKey: ['invoices'] }); setEditing(null) }) }}>Delete</button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      // Get recipient email from account if available
+                      const account = editing.accountId ? accounts.find(a => a._id === editing.accountId) : null
+                      const recipientEmail = account?.primaryContactEmail || ''
+                      
+                      if (!recipientEmail) {
+                        toast.showToast('Please set a primary contact email for the account', 'warning')
+                        return
+                      }
+                      
+                      const confirmed = window.confirm(`Send invoice to ${recipientEmail}?`)
+                      if (confirmed) {
+                        sendEmail.mutate({ id: editing._id, recipientEmail })
+                      }
+                    }}
+                    disabled={sendEmail.isPending || !editing.accountId}
+                    className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                    title={!editing.accountId ? 'Please select an account first' : 'Send invoice via email'}
+                  >
+                    <Send className="h-3 w-3" />
+                    Send Invoice
+                  </button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>

@@ -135,19 +135,64 @@ quotesRouter.post('/', async (req, res) => {
     updatedAt: now,
   }
 
-  // Quote number
+  // Quote number with duplicate handling (like deals)
+  // Always check the actual highest quote number first to ensure we don't create duplicates
+  let quoteNumber: number | undefined
+  let result: any
+  let attempts = 0
+  const maxAttempts = 10
+  
+  // Get the actual highest quote number from the database
+  let highestQuoteNumber = 500000
   try {
-    const { getNextSequence } = await import('../db.js')
-    doc.quoteNumber = await getNextSequence('quoteNumber')
+    const last = await db.collection('quotes').find({ quoteNumber: { $type: 'number' } }).project({ quoteNumber: 1 }).sort({ quoteNumber: -1 }).limit(1).toArray()
+    if (last.length > 0 && (last[0] as any)?.quoteNumber) {
+      highestQuoteNumber = Number((last[0] as any).quoteNumber)
+    }
   } catch {}
-  if (doc.quoteNumber == null) {
+  
+  while (attempts < maxAttempts) {
     try {
-      const last = await db.collection('quotes').find({ quoteNumber: { $type: 'number' } }).project({ quoteNumber: 1 }).sort({ quoteNumber: -1 }).limit(1).toArray()
-      doc.quoteNumber = Number((last[0] as any)?.quoteNumber ?? 500000) + 1
-    } catch { doc.quoteNumber = 500001 }
+      // Try to get next sequence (only on first attempt)
+      if (quoteNumber === undefined) {
+        try {
+          const { getNextSequence } = await import('../db.js')
+          const seqNumber = await getNextSequence('quoteNumber')
+          // Use the higher of: sequence number or highest existing quote number + 1
+          quoteNumber = Math.max(seqNumber, highestQuoteNumber + 1)
+        } catch {
+          // Fallback: use highest existing + 1
+          quoteNumber = highestQuoteNumber + 1
+        }
+      } else {
+        // If previous attempt failed, increment and try next number
+        quoteNumber++
+      }
+      
+      const docWithNumber = { ...doc, quoteNumber }
+      result = await db.collection('quotes').insertOne(docWithNumber)
+      break // Success, exit loop
+    } catch (err: any) {
+      // Check if it's a duplicate key error
+      if (err.code === 11000 && err.keyPattern?.quoteNumber) {
+        attempts++
+        if (attempts >= maxAttempts) {
+          return res.status(500).json({ data: null, error: 'failed_to_generate_quote_number' })
+        }
+        // Continue loop to retry with incremented number
+        continue
+      }
+      // Other errors, rethrow
+      throw err
+    }
   }
-
-  const result = await db.collection('quotes').insertOne(doc)
+  
+  if (!result || quoteNumber === undefined) {
+    return res.status(500).json({ data: null, error: 'failed_to_create_quote' })
+  }
+  
+  // Update doc with the final quote number
+  doc.quoteNumber = quoteNumber
   
   // Add history entry for creation
   const auth = (req as any).auth as { userId: string; email: string } | undefined

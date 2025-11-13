@@ -7,6 +7,8 @@ export default function CRMHub() {
     { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
     { label: 'Products', desc: 'Product catalog, bundles, discounts, and terms', href: '/apps/crm/products' },
     { label: 'Quotes', desc: 'Quotes, proposals, and e-sign', href: '/apps/crm/quotes' },
+    { label: 'Approval Queue', desc: 'Review and approve quote requests', href: '/apps/crm/quotes/approval-queue' },
+    { label: 'Acceptance Queue', desc: 'View quotes accepted by signers', href: '/apps/crm/quotes/acceptance-queue' },
     { label: 'Invoices', desc: 'Billing, payments, and refunds', href: '/apps/crm/invoices' },
     { label: 'Outreach', desc: 'Email/SMS templates, sequences, events', href: '/apps/crm/outreach/templates' },
              { label: 'Marketing', desc: 'Campaigns, segments, analytics', href: '/apps/crm/marketing' },

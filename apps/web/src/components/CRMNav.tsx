@@ -38,9 +38,11 @@ export function CRMNav() {
       <NavLink to="/apps/crm/outreach/templates" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Outreach Templates</NavLink>
       <NavLink to="/apps/crm/quotes" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Quotes</NavLink>
       {isManager && (
-        <NavLink to="/apps/crm/quotes/approval-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Approval Queue</NavLink>
+        <>
+          <NavLink to="/apps/crm/quotes/approval-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Approval Queue</NavLink>
+          <NavLink to="/apps/crm/quotes/acceptance-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Acceptance Queue</NavLink>
+        </>
       )}
-      <NavLink to="/apps/crm/quotes/acceptance-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Acceptance Queue</NavLink>
       <NavLink to="/apps/crm/support/tickets" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Tickets</NavLink>
       <NavLink to="/apps/crm/documents" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Documents</NavLink>
     </div>

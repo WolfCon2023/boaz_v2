@@ -1,6 +1,9 @@
 import { Router } from 'express'
 import { ObjectId, Sort, SortDirection } from 'mongodb'
 import { getDb } from '../db.js'
+import { sendAuthEmail } from '../auth/email.js'
+import { env } from '../env.js'
+import { requireAuth } from '../auth/rbac.js'
 
 type Payment = { amount: number; method: string; paidAt: Date }
 type Refund = { amount: number; reason: string; refundedAt: Date }
@@ -243,19 +246,64 @@ invoicesRouter.post('/', async (req, res) => {
     // optional: subscriptionId, dunningState, etc.
   }
 
-  // Auto-increment invoiceNumber with fallback
+  // Auto-increment invoiceNumber with duplicate handling (like deals)
+  // Always check the actual highest invoice number first to ensure we don't create duplicates
+  let invoiceNumber: number | undefined
+  let result: any
+  let attempts = 0
+  const maxAttempts = 10
+  
+  // Get the actual highest invoice number from the database
+  let highestInvoiceNumber = 700000
   try {
-    const { getNextSequence } = await import('../db.js')
-    doc.invoiceNumber = await getNextSequence('invoiceNumber')
+    const last = await db.collection('invoices').find({ invoiceNumber: { $type: 'number' } }).project({ invoiceNumber: 1 }).sort({ invoiceNumber: -1 }).limit(1).toArray()
+    if (last.length > 0 && (last[0] as any)?.invoiceNumber) {
+      highestInvoiceNumber = Number((last[0] as any).invoiceNumber)
+    }
   } catch {}
-  if (doc.invoiceNumber == null) {
+  
+  while (attempts < maxAttempts) {
     try {
-      const last = await db.collection('invoices').find({ invoiceNumber: { $type: 'number' } }).project({ invoiceNumber: 1 }).sort({ invoiceNumber: -1 }).limit(1).toArray()
-      doc.invoiceNumber = Number((last[0] as any)?.invoiceNumber ?? 700000) + 1
-    } catch { doc.invoiceNumber = 700001 }
+      // Try to get next sequence (only on first attempt)
+      if (invoiceNumber === undefined) {
+        try {
+          const { getNextSequence } = await import('../db.js')
+          const seqNumber = await getNextSequence('invoiceNumber')
+          // Use the higher of: sequence number or highest existing invoice number + 1
+          invoiceNumber = Math.max(seqNumber, highestInvoiceNumber + 1)
+        } catch {
+          // Fallback: use highest existing + 1
+          invoiceNumber = highestInvoiceNumber + 1
+        }
+      } else {
+        // If previous attempt failed, increment and try next number
+        invoiceNumber++
+      }
+      
+      const docWithNumber = { ...doc, invoiceNumber }
+      result = await db.collection<InvoiceDoc>('invoices').insertOne(docWithNumber as any)
+      break // Success, exit loop
+    } catch (err: any) {
+      // Check if it's a duplicate key error
+      if (err.code === 11000 && err.keyPattern?.invoiceNumber) {
+        attempts++
+        if (attempts >= maxAttempts) {
+          return res.status(500).json({ data: null, error: 'failed_to_generate_invoice_number' })
+        }
+        // Continue loop to retry with incremented number
+        continue
+      }
+      // Other errors, rethrow
+      throw err
+    }
   }
-
-  const result = await db.collection<InvoiceDoc>('invoices').insertOne(doc as any)
+  
+  if (!result || invoiceNumber === undefined) {
+    return res.status(500).json({ data: null, error: 'failed_to_create_invoice' })
+  }
+  
+  // Update doc with the final invoice number
+  doc.invoiceNumber = invoiceNumber
   
   // Add history entry for creation
   const auth = (req as any).auth as { userId: string; email: string } | undefined
@@ -625,6 +673,131 @@ invoicesRouter.post('/:id/dunning', async (req, res) => {
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// POST /api/crm/invoices/:id/send-email - Send invoice via email
+invoicesRouter.post('/:id/send-email', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const invoiceId = new ObjectId(req.params.id)
+    const { recipientEmail } = req.body
+    
+    // Get invoice
+    const invoice = await db.collection('invoices').findOne({ _id: invoiceId })
+    if (!invoice) {
+      return res.status(404).json({ data: null, error: 'invoice_not_found' })
+    }
+    
+    const invoiceData = invoice as any
+    
+    // Get recipient email - from request body, or from account
+    let emailToSend = recipientEmail
+    if (!emailToSend && invoiceData.accountId) {
+      const account = await db.collection('accounts').findOne({ _id: invoiceData.accountId })
+      if (account) {
+        emailToSend = (account as any).primaryContactEmail
+      }
+    }
+    
+    if (!emailToSend || typeof emailToSend !== 'string') {
+      return res.status(400).json({ data: null, error: 'recipient_email_required' })
+    }
+    
+    // Get sender info
+    const sender = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    if (!sender) {
+      return res.status(404).json({ data: null, error: 'sender_not_found' })
+    }
+    const senderData = sender as any
+    
+    // Get account info
+    let accountInfo: any = null
+    if (invoiceData.accountId) {
+      const account = await db.collection('accounts').findOne({ _id: invoiceData.accountId })
+      if (account) {
+        accountInfo = {
+          accountNumber: (account as any).accountNumber,
+          name: (account as any).name,
+          companyName: (account as any).companyName,
+          primaryContactName: (account as any).primaryContactName,
+        }
+      }
+    }
+    
+    // Send email
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+    const invoiceViewUrl = `${baseUrl}/apps/crm/invoices/${invoiceId.toString()}/print`
+    
+    const now = new Date()
+    try {
+      await sendAuthEmail({
+        to: emailToSend,
+        subject: `Invoice: ${invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : invoiceData.title || 'Untitled'}`,
+        checkPreferences: false, // Don't check preferences for invoice emails
+        html: `
+          <h2>Invoice</h2>
+          <p>${accountInfo?.primaryContactName ? `Hello ${accountInfo.primaryContactName},` : 'Hello,'}</p>
+          <p>Please find your invoice below:</p>
+          <ul>
+            <li><strong>Invoice:</strong> ${invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : 'N/A'} - ${invoiceData.title || 'Untitled'}</li>
+            <li><strong>Account:</strong> ${accountInfo?.name || accountInfo?.companyName || 'N/A'}</li>
+            <li><strong>Total:</strong> $${(invoiceData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
+            ${invoiceData.dueDate ? `<li><strong>Due Date:</strong> ${new Date(invoiceData.dueDate).toLocaleDateString()}</li>` : ''}
+            <li><strong>Status:</strong> ${invoiceData.status || 'draft'}</li>
+            <li><strong>Sent by:</strong> ${senderData.name || senderData.email}</li>
+            <li><strong>Sent at:</strong> ${now.toLocaleString()}</li>
+          </ul>
+          <p><a href="${invoiceViewUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Invoice</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${invoiceViewUrl}</code></p>
+        `,
+        text: `
+Invoice
+
+${accountInfo?.primaryContactName ? `Hello ${accountInfo.primaryContactName},` : 'Hello,'}
+
+Please find your invoice below:
+
+Invoice: ${invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : 'N/A'} - ${invoiceData.title || 'Untitled'}
+Account: ${accountInfo?.name || accountInfo?.companyName || 'N/A'}
+Total: $${(invoiceData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+${invoiceData.dueDate ? `Due Date: ${new Date(invoiceData.dueDate).toLocaleDateString()}\n` : ''}Status: ${invoiceData.status || 'draft'}
+Sent by: ${senderData.name || senderData.email}
+Sent at: ${now.toLocaleString()}
+
+View Invoice: ${invoiceViewUrl}
+        `,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send invoice email:', emailErr)
+      return res.status(500).json({ data: null, error: 'failed_to_send_email' })
+    }
+    
+    // Add history entry
+    await addInvoiceHistory(
+      db,
+      invoiceId,
+      'field_changed',
+      `Invoice sent via email to ${emailToSend}`,
+      auth.userId,
+      senderData.name,
+      auth.email,
+      null,
+      null,
+      { recipientEmail: emailToSend, sentAt: now }
+    )
+    
+    res.json({ data: { message: 'Invoice sent via email', recipientEmail: emailToSend }, error: null })
+  } catch (err: any) {
+    console.error('Send invoice email error:', err)
+    if (err.message?.includes('ObjectId')) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    res.status(500).json({ data: null, error: err.message || 'failed_to_send_invoice_email' })
   }
 })
 

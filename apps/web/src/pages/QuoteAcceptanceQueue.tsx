@@ -46,154 +46,133 @@ export default function QuoteAcceptanceQueue() {
 
   const acceptances = data?.data.items ?? []
 
-  return (
-    <div className="flex h-screen bg-[color:var(--color-bg)]">
-      <CRMNav />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-7xl mx-auto">
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-[color:var(--color-text)] mb-2">
-                Quote Acceptance Queue
-              </h1>
-              <p className="text-sm text-[color:var(--color-text-muted)]">
-                View quotes that have been accepted by external signers
+  // Handle access denied error
+  if (error) {
+    const errorMsg = (error as any)?.response?.data?.error
+    if (errorMsg === 'manager_access_required') {
+      return (
+        <div className="space-y-4">
+          <CRMNav />
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="w-[min(90vw,28rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-center">
+              <h1 className="mb-3 text-xl font-semibold">Access Denied</h1>
+              <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">
+                You must have the manager role to access the acceptance queue.
               </p>
             </div>
-
-            {/* Filters */}
-            <div className="mb-4 flex flex-wrap gap-4 items-center">
-              <div className="flex-1 min-w-[200px]">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[color:var(--color-text-muted)]" />
-                  <input
-                    type="text"
-                    placeholder="Search by quote number, title, signer name or email..."
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] placeholder-[color:var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-primary-500)]"
-                  />
-                </div>
-              </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'accepted')}
-                className="px-4 py-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-primary-500)]"
-              >
-                <option value="all">All Statuses</option>
-                <option value="accepted">Accepted</option>
-              </select>
-            </div>
-
-            {/* Loading State */}
-            {isLoading && (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[color:var(--color-primary-600)] mx-auto mb-4"></div>
-                <p className="text-[color:var(--color-text-muted)]">Loading acceptances...</p>
-              </div>
-            )}
-
-            {/* Error State */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
-                <p className="text-red-800">Failed to load acceptance queue. Please try again.</p>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {!isLoading && !error && acceptances.length === 0 && (
-              <div className="bg-[color:var(--color-panel)] rounded-lg border border-[color:var(--color-border)] p-12 text-center">
-                <FileText className="h-12 w-12 text-[color:var(--color-text-muted)] mx-auto mb-4" />
-                <p className="text-[color:var(--color-text-muted)]">No quote acceptances found.</p>
-              </div>
-            )}
-
-            {/* Acceptance List */}
-            {!isLoading && !error && acceptances.length > 0 && (
-              <div className="bg-[color:var(--color-panel)] rounded-lg border border-[color:var(--color-border)] overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-[color:var(--color-muted)] border-b border-[color:var(--color-border)]">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-[color:var(--color-text-muted)] uppercase tracking-wider">
-                          Quote
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-[color:var(--color-text-muted)] uppercase tracking-wider">
-                          Signer
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-[color:var(--color-text-muted)] uppercase tracking-wider">
-                          Accepted At
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-[color:var(--color-text-muted)] uppercase tracking-wider">
-                          Notes
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-[color:var(--color-text-muted)] uppercase tracking-wider">
-                          Status
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[color:var(--color-border)]">
-                      {acceptances.map((acceptance) => (
-                        <tr key={acceptance._id} className="hover:bg-[color:var(--color-muted)] transition-colors">
-                          <td className="px-4 py-4">
-                            <div>
-                              <div className="font-medium text-[color:var(--color-text)]">
-                                {acceptance.quoteTitle || 'Untitled Quote'}
-                              </div>
-                              {acceptance.quoteNumber && (
-                                <div className="text-sm text-[color:var(--color-text-muted)]">
-                                  #{acceptance.quoteNumber}
-                                </div>
-                              )}
-                              {acceptance.quote?.total !== undefined && (
-                                <div className="text-sm font-semibold text-[color:var(--color-text)] mt-1">
-                                  ${acceptance.quote.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-4">
-                            <div>
-                              {acceptance.signerName && (
-                                <div className="font-medium text-[color:var(--color-text)]">
-                                  {acceptance.signerName}
-                                </div>
-                              )}
-                              {acceptance.signerEmail && (
-                                <div className="text-sm text-[color:var(--color-text-muted)]">
-                                  {acceptance.signerEmail}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 text-sm text-[color:var(--color-text)]">
-                            {formatDateTime(acceptance.acceptedAt)}
-                          </td>
-                          <td className="px-4 py-4">
-                            {acceptance.notes ? (
-                              <div className="text-sm text-[color:var(--color-text)] max-w-xs truncate" title={acceptance.notes}>
-                                {acceptance.notes}
-                              </div>
-                            ) : (
-                              <span className="text-sm text-[color:var(--color-text-muted)]">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-4">
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              <CheckCircle className="h-3 w-3" />
-                              Accepted
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
         </div>
+      )
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <CRMNav />
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Quote Acceptance Queue</h1>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[color:var(--color-text-muted)]" />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="pl-10 pr-4 py-2 rounded-lg border border-[color:var(--color-border)] bg-transparent text-sm"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'accepted')}
+            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+          >
+            <option value="all">All Statuses</option>
+            <option value="accepted">Accepted</option>
+          </select>
+        </div>
       </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-[color:var(--color-primary-600)] border-t-transparent"></div>
+            <p className="text-sm text-[color:var(--color-text-muted)]">Loading acceptance queue...</p>
+          </div>
+        </div>
+      ) : acceptances.length === 0 ? (
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-8 text-center">
+          <FileText className="mx-auto mb-4 h-12 w-12 text-[color:var(--color-text-muted)]" />
+          <p className="text-sm text-[color:var(--color-text-muted)]">
+            {statusFilter === 'all'
+              ? 'No quote acceptances found.'
+              : `No ${statusFilter} acceptances found.`}
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-[color:var(--color-text-muted)] border-b border-[color:var(--color-border)]">
+                <tr>
+                  <th className="px-4 py-3">Quote</th>
+                  <th className="px-4 py-3">Signer</th>
+                  <th className="px-4 py-3">Accepted At</th>
+                  <th className="px-4 py-3">Notes</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {acceptances.map((acceptance) => (
+                  <tr
+                    key={acceptance._id}
+                    className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-medium">
+                        {acceptance.quoteNumber ? `#${acceptance.quoteNumber}` : 'N/A'} - {acceptance.quoteTitle || 'Untitled Quote'}
+                      </div>
+                      {acceptance.quote?.total !== undefined && (
+                        <div className="text-xs text-[color:var(--color-text-muted)]">
+                          ${acceptance.quote.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {acceptance.signerName && (
+                        <div className="font-medium">{acceptance.signerName}</div>
+                      )}
+                      {acceptance.signerEmail && (
+                        <div className="text-xs text-[color:var(--color-text-muted)]">
+                          {acceptance.signerEmail}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {formatDateTime(acceptance.acceptedAt)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {acceptance.notes ? (
+                        <div className="max-w-xs truncate" title={acceptance.notes}>
+                          {acceptance.notes}
+                        </div>
+                      ) : (
+                        <span className="text-[color:var(--color-text-muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                        <CheckCircle className="h-3 w-3" />
+                        Accepted
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
