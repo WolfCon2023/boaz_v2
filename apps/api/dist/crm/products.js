@@ -27,6 +27,14 @@ async function addProductHistory(db, productId, eventType, description, userId, 
     }
 }
 export const productsRouter = Router();
+// Debug middleware to log all requests to products router
+productsRouter.use((req, res, next) => {
+    console.log('🔍 PRODUCTS ROUTER - ALL REQUESTS:', req.method, req.path, 'Full URL:', req.url, 'Original URL:', req.originalUrl);
+    if (req.path.includes('review-requests') || req.originalUrl?.includes('review-requests')) {
+        console.log('🔍🔍🔍 REVIEW-REQUESTS REQUEST DETECTED:', req.method, req.path, req.originalUrl);
+    }
+    next();
+});
 // ===== PRODUCTS =====
 // GET /api/crm/products?q=&type=&category=&isActive=&sort=&dir=
 productsRouter.get('/', async (req, res) => {
@@ -518,11 +526,61 @@ productsRouter.get('/terms', async (req, res) => {
     const items = await db.collection('custom_terms').find(filter).sort(sort).limit(500).toArray();
     res.json({ data: { items }, error: null });
 });
+// GET /api/crm/terms/ledger (ledger - all review requests for custom terms)
+// NOTE: Using a distinct path (/terms/ledger) to avoid any route ambiguity with /terms/:id
+productsRouter.get('/terms/ledger', requireAuth, async (req, res) => {
+    const db = await getDb();
+    if (!db) {
+        console.error('Database unavailable');
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    }
+    try {
+        const q = String(req.query.q ?? '').trim();
+        const status = req.query.status;
+        const sortKeyRaw = req.query.sort ?? 'sentAt';
+        const dirParam = (req.query.dir ?? 'desc').toLowerCase();
+        const dir = dirParam === 'asc' ? 1 : -1;
+        const allowed = new Set(['sentAt', 'viewedAt', 'respondedAt', 'status', 'recipientEmail', 'termsName']);
+        const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'sentAt';
+        const sort = { [sortField]: dir };
+        const filter = {};
+        if (q) {
+            filter.$or = [
+                { recipientEmail: { $regex: q, $options: 'i' } },
+                { recipientName: { $regex: q, $options: 'i' } },
+                { termsName: { $regex: q, $options: 'i' } },
+                { senderName: { $regex: q, $options: 'i' } },
+                { senderEmail: { $regex: q, $options: 'i' } },
+            ];
+        }
+        if (status)
+            filter.status = status;
+        const requests = await db.collection('terms_review_requests')
+            .find(filter)
+            .sort(sort)
+            .limit(500)
+            .toArray();
+        res.json({ data: { items: requests }, error: null });
+    }
+    catch (err) {
+        console.error('Get review requests ledger error:', err);
+        res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests_ledger' });
+    }
+});
 // GET /api/crm/terms/:id
-productsRouter.get('/terms/:id', async (req, res) => {
+// IMPORTANT: This route must be defined AFTER /terms/review-requests to avoid route conflicts
+// Using a regex pattern to only match valid ObjectId hex strings (24 hex characters)
+// This regex ensures "review-requests" will NOT match this route
+productsRouter.get('/terms/:id([0-9a-fA-F]{24})', async (req, res) => {
+    console.log('⚠️⚠️⚠️ HIT /terms/:id route - this should NOT match review-requests! PATH:', req.path, 'ID:', req.params.id, 'URL:', req.url);
     const db = await getDb();
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
+    // Double-check: if id is "review-requests", this is a route matching bug
+    if (req.params.id === 'review-requests') {
+        console.error('🚨🚨🚨 CRITICAL BUG: /terms/:id matched "review-requests" despite regex pattern!');
+        return res.status(404).json({ data: null, error: 'route_not_found' });
+    }
     try {
         const _id = new ObjectId(req.params.id);
         const terms = await db.collection('custom_terms').findOne({ _id });
@@ -530,7 +588,8 @@ productsRouter.get('/terms/:id', async (req, res) => {
             return res.status(404).json({ data: null, error: 'not_found' });
         res.json({ data: terms, error: null });
     }
-    catch {
+    catch (err) {
+        console.error('ObjectId conversion error:', err, 'ID:', req.params.id);
         res.status(400).json({ data: null, error: 'invalid_id' });
     }
 });
@@ -565,7 +624,8 @@ productsRouter.post('/terms', async (req, res) => {
     res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null });
 });
 // PUT /api/crm/terms/:id
-productsRouter.put('/terms/:id', async (req, res) => {
+// Using regex pattern to only match valid ObjectId hex strings
+productsRouter.put('/terms/:id([0-9a-fA-F]{24})', async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
@@ -598,7 +658,8 @@ productsRouter.put('/terms/:id', async (req, res) => {
     }
 });
 // DELETE /api/crm/terms/:id
-productsRouter.delete('/terms/:id', async (req, res) => {
+// Using regex pattern to only match valid ObjectId hex strings
+productsRouter.delete('/terms/:id([0-9a-fA-F]{24})', async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
@@ -614,7 +675,8 @@ productsRouter.delete('/terms/:id', async (req, res) => {
 // ===== TERMS REVIEW REQUESTS =====
 // TermsReviewRequestDoc type defined at end of file for reuse
 // POST /api/crm/terms/:id/send-for-review
-productsRouter.post('/terms/:id/send-for-review', requireAuth, async (req, res) => {
+// Using regex pattern to only match valid ObjectId hex strings
+productsRouter.post('/terms/:id([0-9a-fA-F]{24})/send-for-review', requireAuth, async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
@@ -713,8 +775,9 @@ This link will allow you to review the full terms and conditions and provide you
         res.status(500).json({ data: null, error: err.message || 'failed_to_send_terms_review' });
     }
 });
-// GET /api/crm/terms/:id/review-requests
-productsRouter.get('/terms/:id/review-requests', requireAuth, async (req, res) => {
+// GET /api/crm/terms/:id/review-requests (review requests for a specific terms document)
+// Using regex pattern to only match valid ObjectId hex strings
+productsRouter.get('/terms/:id([0-9a-fA-F]{24})/review-requests', requireAuth, async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
@@ -730,44 +793,6 @@ productsRouter.get('/terms/:id/review-requests', requireAuth, async (req, res) =
     catch (err) {
         console.error('Get review requests error:', err);
         res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests' });
-    }
-});
-// GET /api/crm/terms/review-requests (ledger - all review requests)
-productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
-    const db = await getDb();
-    if (!db)
-        return res.status(500).json({ data: null, error: 'db_unavailable' });
-    try {
-        const q = String(req.query.q ?? '').trim();
-        const status = req.query.status;
-        const sortKeyRaw = req.query.sort ?? 'sentAt';
-        const dirParam = (req.query.dir ?? 'desc').toLowerCase();
-        const dir = dirParam === 'asc' ? 1 : -1;
-        const allowed = new Set(['sentAt', 'viewedAt', 'respondedAt', 'status', 'recipientEmail', 'termsName']);
-        const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'sentAt';
-        const sort = { [sortField]: dir };
-        const filter = {};
-        if (q) {
-            filter.$or = [
-                { recipientEmail: { $regex: q, $options: 'i' } },
-                { recipientName: { $regex: q, $options: 'i' } },
-                { termsName: { $regex: q, $options: 'i' } },
-                { senderName: { $regex: q, $options: 'i' } },
-                { senderEmail: { $regex: q, $options: 'i' } },
-            ];
-        }
-        if (status)
-            filter.status = status;
-        const requests = await db.collection('terms_review_requests')
-            .find(filter)
-            .sort(sort)
-            .limit(500)
-            .toArray();
-        res.json({ data: { items: requests }, error: null });
-    }
-    catch (err) {
-        console.error('Get review requests ledger error:', err);
-        res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests_ledger' });
     }
 });
 // Public review routes are registered in index.ts at /api/terms/review/*

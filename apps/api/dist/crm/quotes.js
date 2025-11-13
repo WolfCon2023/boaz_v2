@@ -90,22 +90,63 @@ quotesRouter.post('/', async (req, res) => {
         createdAt: now,
         updatedAt: now,
     };
-    // Quote number
+    // Quote number with duplicate handling (like deals)
+    // Always check the actual highest quote number first to ensure we don't create duplicates
+    let quoteNumber;
+    let result;
+    let attempts = 0;
+    const maxAttempts = 10;
+    // Get the actual highest quote number from the database
+    let highestQuoteNumber = 500000;
     try {
-        const { getNextSequence } = await import('../db.js');
-        doc.quoteNumber = await getNextSequence('quoteNumber');
+        const last = await db.collection('quotes').find({ quoteNumber: { $type: 'number' } }).project({ quoteNumber: 1 }).sort({ quoteNumber: -1 }).limit(1).toArray();
+        if (last.length > 0 && last[0]?.quoteNumber) {
+            highestQuoteNumber = Number(last[0].quoteNumber);
+        }
     }
     catch { }
-    if (doc.quoteNumber == null) {
+    while (attempts < maxAttempts) {
         try {
-            const last = await db.collection('quotes').find({ quoteNumber: { $type: 'number' } }).project({ quoteNumber: 1 }).sort({ quoteNumber: -1 }).limit(1).toArray();
-            doc.quoteNumber = Number(last[0]?.quoteNumber ?? 500000) + 1;
+            // Try to get next sequence (only on first attempt)
+            if (quoteNumber === undefined) {
+                try {
+                    const { getNextSequence } = await import('../db.js');
+                    const seqNumber = await getNextSequence('quoteNumber');
+                    // Use the higher of: sequence number or highest existing quote number + 1
+                    quoteNumber = Math.max(seqNumber, highestQuoteNumber + 1);
+                }
+                catch {
+                    // Fallback: use highest existing + 1
+                    quoteNumber = highestQuoteNumber + 1;
+                }
+            }
+            else {
+                // If previous attempt failed, increment and try next number
+                quoteNumber++;
+            }
+            const docWithNumber = { ...doc, quoteNumber };
+            result = await db.collection('quotes').insertOne(docWithNumber);
+            break; // Success, exit loop
         }
-        catch {
-            doc.quoteNumber = 500001;
+        catch (err) {
+            // Check if it's a duplicate key error
+            if (err.code === 11000 && err.keyPattern?.quoteNumber) {
+                attempts++;
+                if (attempts >= maxAttempts) {
+                    return res.status(500).json({ data: null, error: 'failed_to_generate_quote_number' });
+                }
+                // Continue loop to retry with incremented number
+                continue;
+            }
+            // Other errors, rethrow
+            throw err;
         }
     }
-    const result = await db.collection('quotes').insertOne(doc);
+    if (!result || quoteNumber === undefined) {
+        return res.status(500).json({ data: null, error: 'failed_to_create_quote' });
+    }
+    // Update doc with the final quote number
+    doc.quoteNumber = quoteNumber;
     // Add history entry for creation
     const auth = req.auth;
     if (auth) {
@@ -901,12 +942,39 @@ quotesRouter.post('/view/:token/accept', async (req, res) => {
     }
 });
 // ===== INTERNAL ACCEPTANCE QUEUE ENDPOINTS (Auth required) =====
-// GET /api/crm/quotes/acceptance-queue - Get quote acceptance queue
+// GET /api/crm/quotes/acceptance-queue - Get quote acceptance queue (managers only)
 quotesRouter.get('/acceptance-queue', requireAuth, async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     try {
+        const auth = req.auth;
+        // Check if user has manager role
+        const managerRole = await db.collection('roles').findOne({ name: 'manager' });
+        if (!managerRole) {
+            return res.status(500).json({ data: null, error: 'manager_role_not_found' });
+        }
+        // Get all user roles (same approach as requirePermission)
+        const userRoles = await db.collection('user_roles').find({ userId: auth.userId }).toArray();
+        const roleIds = userRoles.map((ur) => ur.roleId);
+        if (roleIds.length === 0) {
+            console.log('No roles found for user:', { userId: auth.userId, email: auth.email });
+            return res.status(403).json({ data: null, error: 'manager_access_required' });
+        }
+        // Get role details
+        const roles = await db.collection('roles').find({ _id: { $in: roleIds } }).toArray();
+        const roleNames = roles.map((r) => r.name);
+        // Check if user has manager or admin role
+        const hasManagerRole = roleNames.includes('manager');
+        const hasAdminRole = roleNames.includes('admin');
+        if (!hasManagerRole && !hasAdminRole) {
+            console.log('User does not have manager or admin role:', {
+                userId: auth.userId,
+                email: auth.email,
+                roles: roleNames,
+            });
+            return res.status(403).json({ data: null, error: 'manager_access_required' });
+        }
         const { status, q } = req.query;
         const filter = {};
         if (status && typeof status === 'string' && status !== 'all') {
