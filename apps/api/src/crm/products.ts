@@ -637,10 +637,13 @@ productsRouter.get('/terms', async (req, res) => {
 // IMPORTANT: This route must be defined BEFORE /terms/:id to avoid route conflicts
 // Using a more specific path to ensure it matches before the parameterized route
 productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
+  console.log('✓✓✓ HIT /terms/review-requests route handler') // Debug log
   const db = await getDb()
-  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  if (!db) {
+    console.error('Database unavailable')
+    return res.status(500).json({ data: null, error: 'db_unavailable' })
+  }
   
-  console.log('Hit /terms/review-requests route') // Debug log
   try {
     const q = String((req.query.q as string) ?? '').trim()
     const status = req.query.status as 'pending' | 'viewed' | 'approved' | 'rejected' | undefined
