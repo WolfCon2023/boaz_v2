@@ -678,24 +678,10 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
 
 // GET /api/crm/terms/:id
 // IMPORTANT: This route must be defined AFTER /terms/review-requests to avoid route conflicts
-productsRouter.get('/terms/:id', async (req, res) => {
-  // CRITICAL: Explicitly reject "review-requests" to prevent route conflict
-  // Express may match this route first, so we need to explicitly check and return 404
-  // This will allow the client to understand the route doesn't exist here
-  if (req.params.id === 'review-requests') {
-    console.log('ERROR: /terms/:id matched "review-requests" - route order issue! This should not happen.')
-    // Return 404 to indicate this route doesn't handle "review-requests"
-    // The correct route /terms/review-requests should have been matched first
-    return res.status(404).json({ data: null, error: 'route_not_found' })
-  }
-  
+// Using a regex pattern to only match valid ObjectId hex strings (24 hex characters)
+productsRouter.get('/terms/:id([0-9a-fA-F]{24})', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  
-  // Validate that id is a valid ObjectId format before trying to convert
-  if (!ObjectId.isValid(req.params.id)) {
-    return res.status(400).json({ data: null, error: 'invalid_id' })
-  }
   
   try {
     const _id = new ObjectId(req.params.id)
@@ -742,7 +728,8 @@ productsRouter.post('/terms', async (req, res) => {
 })
 
 // PUT /api/crm/terms/:id
-productsRouter.put('/terms/:id', async (req, res) => {
+// Using regex pattern to only match valid ObjectId hex strings
+productsRouter.put('/terms/:id([0-9a-fA-F]{24})', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
@@ -774,7 +761,8 @@ productsRouter.put('/terms/:id', async (req, res) => {
 })
 
 // DELETE /api/crm/terms/:id
-productsRouter.delete('/terms/:id', async (req, res) => {
+// Using regex pattern to only match valid ObjectId hex strings
+productsRouter.delete('/terms/:id([0-9a-fA-F]{24})', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
@@ -791,7 +779,8 @@ productsRouter.delete('/terms/:id', async (req, res) => {
 // TermsReviewRequestDoc type defined at end of file for reuse
 
 // POST /api/crm/terms/:id/send-for-review
-productsRouter.post('/terms/:id/send-for-review', requireAuth, async (req, res) => {
+// Using regex pattern to only match valid ObjectId hex strings
+productsRouter.post('/terms/:id([0-9a-fA-F]{24})/send-for-review', requireAuth, async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   
@@ -900,7 +889,8 @@ This link will allow you to review the full terms and conditions and provide you
 })
 
 // GET /api/crm/terms/:id/review-requests (review requests for a specific terms document)
-productsRouter.get('/terms/:id/review-requests', requireAuth, async (req, res) => {
+// Using regex pattern to only match valid ObjectId hex strings
+productsRouter.get('/terms/:id([0-9a-fA-F]{24})/review-requests', requireAuth, async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   
