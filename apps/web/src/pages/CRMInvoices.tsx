@@ -42,7 +42,7 @@ type InvoiceLineItem = {
   isBundle?: boolean
 }
 
-type AccountPick = { _id: string; accountNumber?: number; name?: string }
+type AccountPick = { _id: string; accountNumber?: number; name?: string; primaryContactEmail?: string }
 
 type Product = {
   _id: string
@@ -1114,7 +1114,7 @@ export default function CRMInvoices() {
                     type="button"
                     onClick={async () => {
                       // Get recipient email from account if available
-                      const account = editing.accountId ? accounts.find(a => a._id === editing.accountId) : null
+                      const account: AccountPick | undefined = editing.accountId ? accounts.find(a => a._id === editing.accountId) : null
                       const recipientEmail = account?.primaryContactEmail || ''
                       
                       if (!recipientEmail) {
