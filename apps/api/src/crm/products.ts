@@ -133,8 +133,9 @@ export const productsRouter = Router()
 
 // Debug middleware to log all requests to products router
 productsRouter.use((req, res, next) => {
-  if (req.path.includes('review-requests')) {
-    console.log('🔍 PRODUCTS ROUTER - Request:', req.method, req.path, 'Full URL:', req.url)
+  console.log('🔍 PRODUCTS ROUTER - ALL REQUESTS:', req.method, req.path, 'Full URL:', req.url, 'Original URL:', req.originalUrl)
+  if (req.path.includes('review-requests') || req.originalUrl?.includes('review-requests')) {
+    console.log('🔍🔍🔍 REVIEW-REQUESTS REQUEST DETECTED:', req.method, req.path, req.originalUrl)
   }
   next()
 })

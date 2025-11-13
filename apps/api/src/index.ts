@@ -84,6 +84,11 @@ app.use('/api/crm/outreach/scheduler', outreachSchedulerRouter)
 app.use('/api/crm/support', supportTicketsRouter)
 app.use('/api/crm/support', kbRouter)
 app.use('/api/crm/support', supportAlertsRouter)
+// Add logging middleware before products router
+app.use('/api/crm/products', (req, res, next) => {
+  console.log('🚀 REQUEST TO /api/crm/products:', req.method, req.path, req.originalUrl)
+  next()
+})
 app.use('/api/crm/products', productsRouter)
 app.use('/api/crm/documents', documentsRouter)
 app.use('/api/terms', termsReviewRouter)
