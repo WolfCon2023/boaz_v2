@@ -633,6 +633,47 @@ productsRouter.get('/terms', async (req, res) => {
   res.json({ data: { items }, error: null })
 })
 
+// GET /api/crm/terms/review-requests (ledger - all review requests)
+// IMPORTANT: This route must be defined BEFORE /terms/:id to avoid route conflicts
+productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const q = String((req.query.q as string) ?? '').trim()
+    const status = req.query.status as 'pending' | 'viewed' | 'approved' | 'rejected' | undefined
+    const sortKeyRaw = (req.query.sort as string) ?? 'sentAt'
+    const dirParam = ((req.query.dir as string) ?? 'desc').toLowerCase()
+    const dir: SortDirection = dirParam === 'asc' ? 1 : -1
+    const allowed = new Set(['sentAt', 'viewedAt', 'respondedAt', 'status', 'recipientEmail', 'termsName'])
+    const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'sentAt'
+    const sort: Sort = { [sortField]: dir }
+    
+    const filter: Record<string, unknown> = {}
+    if (q) {
+      filter.$or = [
+        { recipientEmail: { $regex: q, $options: 'i' } },
+        { recipientName: { $regex: q, $options: 'i' } },
+        { termsName: { $regex: q, $options: 'i' } },
+        { senderName: { $regex: q, $options: 'i' } },
+        { senderEmail: { $regex: q, $options: 'i' } },
+      ]
+    }
+    if (status) filter.status = status
+    
+    const requests = await db.collection('terms_review_requests')
+      .find(filter)
+      .sort(sort)
+      .limit(500)
+      .toArray()
+    
+    res.json({ data: { items: requests }, error: null })
+  } catch (err: any) {
+    console.error('Get review requests ledger error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests_ledger' })
+  }
+})
+
 // GET /api/crm/terms/:id
 productsRouter.get('/terms/:id', async (req, res) => {
   const db = await getDb()
@@ -836,47 +877,6 @@ This link will allow you to review the full terms and conditions and provide you
   } catch (err: any) {
     console.error('Send terms for review error:', err)
     res.status(500).json({ data: null, error: err.message || 'failed_to_send_terms_review' })
-  }
-})
-
-// GET /api/crm/terms/review-requests (ledger - all review requests)
-// IMPORTANT: This route must be defined BEFORE /terms/:id/review-requests to avoid route conflicts
-productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
-  const db = await getDb()
-  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  
-  try {
-    const q = String((req.query.q as string) ?? '').trim()
-    const status = req.query.status as 'pending' | 'viewed' | 'approved' | 'rejected' | undefined
-    const sortKeyRaw = (req.query.sort as string) ?? 'sentAt'
-    const dirParam = ((req.query.dir as string) ?? 'desc').toLowerCase()
-    const dir: SortDirection = dirParam === 'asc' ? 1 : -1
-    const allowed = new Set(['sentAt', 'viewedAt', 'respondedAt', 'status', 'recipientEmail', 'termsName'])
-    const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'sentAt'
-    const sort: Sort = { [sortField]: dir }
-    
-    const filter: Record<string, unknown> = {}
-    if (q) {
-      filter.$or = [
-        { recipientEmail: { $regex: q, $options: 'i' } },
-        { recipientName: { $regex: q, $options: 'i' } },
-        { termsName: { $regex: q, $options: 'i' } },
-        { senderName: { $regex: q, $options: 'i' } },
-        { senderEmail: { $regex: q, $options: 'i' } },
-      ]
-    }
-    if (status) filter.status = status
-    
-    const requests = await db.collection('terms_review_requests')
-      .find(filter)
-      .sort(sort)
-      .limit(500)
-      .toArray()
-    
-    res.json({ data: { items: requests }, error: null })
-  } catch (err: any) {
-    console.error('Get review requests ledger error:', err)
-    res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests_ledger' })
   }
 })
 
