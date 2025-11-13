@@ -635,10 +635,12 @@ productsRouter.get('/terms', async (req, res) => {
 
 // GET /api/crm/terms/review-requests (ledger - all review requests)
 // IMPORTANT: This route must be defined BEFORE /terms/:id to avoid route conflicts
+// Using a more specific path to ensure it matches before the parameterized route
 productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   
+  console.log('Hit /terms/review-requests route') // Debug log
   try {
     const q = String((req.query.q as string) ?? '').trim()
     const status = req.query.status as 'pending' | 'viewed' | 'approved' | 'rejected' | undefined
@@ -678,6 +680,19 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
 productsRouter.get('/terms/:id', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  // Reject if id is "review-requests" - this should be handled by the route above
+  // This is a safeguard in case Express matches this route first
+  if (req.params.id === 'review-requests') {
+    console.log('WARNING: /terms/:id matched "review-requests" - route order issue!')
+    return res.status(404).json({ data: null, error: 'not_found' })
+  }
+  
+  // Validate that id is a valid ObjectId format before trying to convert
+  if (!ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+  
   try {
     const _id = new ObjectId(req.params.id)
     const terms = await db.collection<CustomTermsDoc>('custom_terms').findOne({ _id })
