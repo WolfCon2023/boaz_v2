@@ -1114,7 +1114,7 @@ export default function CRMInvoices() {
                     type="button"
                     onClick={async () => {
                       // Get recipient email from account if available
-                      const account: AccountPick | undefined = editing.accountId ? accounts.find(a => a._id === editing.accountId) : null
+                      const account: AccountPick | undefined = editing.accountId ? accounts.find(a => a._id === editing.accountId) : undefined
                       const recipientEmail = account?.primaryContactEmail || ''
                       
                       if (!recipientEmail) {
