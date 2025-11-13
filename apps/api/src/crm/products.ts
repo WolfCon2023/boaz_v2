@@ -839,27 +839,8 @@ This link will allow you to review the full terms and conditions and provide you
   }
 })
 
-// GET /api/crm/terms/:id/review-requests
-productsRouter.get('/terms/:id/review-requests', requireAuth, async (req, res) => {
-  const db = await getDb()
-  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  
-  try {
-    const termsId = new ObjectId(req.params.id)
-    const requests = await db.collection('terms_review_requests')
-      .find({ termsId })
-      .sort({ sentAt: -1 })
-      .limit(100)
-      .toArray()
-    
-    res.json({ data: { items: requests }, error: null })
-  } catch (err: any) {
-    console.error('Get review requests error:', err)
-    res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests' })
-  }
-})
-
 // GET /api/crm/terms/review-requests (ledger - all review requests)
+// IMPORTANT: This route must be defined BEFORE /terms/:id/review-requests to avoid route conflicts
 productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
@@ -896,6 +877,26 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
   } catch (err: any) {
     console.error('Get review requests ledger error:', err)
     res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests_ledger' })
+  }
+})
+
+// GET /api/crm/terms/:id/review-requests (review requests for a specific terms document)
+productsRouter.get('/terms/:id/review-requests', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const termsId = new ObjectId(req.params.id)
+    const requests = await db.collection('terms_review_requests')
+      .find({ termsId })
+      .sort({ sentAt: -1 })
+      .limit(100)
+      .toArray()
+    
+    res.json({ data: { items: requests }, error: null })
+  } catch (err: any) {
+    console.error('Get review requests error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_review_requests' })
   }
 })
 
