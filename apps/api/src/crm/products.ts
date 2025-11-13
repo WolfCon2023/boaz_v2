@@ -645,7 +645,7 @@ productsRouter.get('/terms', async (req, res) => {
 // CRITICAL: This route MUST be defined BEFORE /terms/:id to avoid route conflicts
 // Express matches routes in registration order, so this specific route must come first
 productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
-  console.log('✓✓✓✓✓ HIT /terms/review-requests route handler - PATH:', req.path, 'URL:', req.url) // Debug log
+  console.log('✓✓✓✓✓ HIT /terms/review-requests route handler - PATH:', req.path, 'URL:', req.url, 'Query:', req.query) // Debug log
   const db = await getDb()
   if (!db) {
     console.error('Database unavailable')
@@ -660,6 +660,7 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
     const dir: SortDirection = dirParam === 'asc' ? 1 : -1
     const allowed = new Set(['sentAt', 'viewedAt', 'respondedAt', 'status', 'recipientEmail', 'termsName'])
     const sortField = allowed.has(sortKeyRaw) ? sortKeyRaw : 'sentAt'
+    console.log('Sort field:', sortField, 'Allowed:', Array.from(allowed), 'Raw:', sortKeyRaw)
     const sort: Sort = { [sortField]: dir }
     
     const filter: Record<string, unknown> = {}
@@ -692,16 +693,23 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
 // Using a regex pattern to only match valid ObjectId hex strings (24 hex characters)
 // This regex ensures "review-requests" will NOT match this route
 productsRouter.get('/terms/:id([0-9a-fA-F]{24})', async (req, res) => {
-  console.log('⚠️⚠️⚠️ HIT /terms/:id route - this should NOT match review-requests! PATH:', req.path, 'ID:', req.params.id)
+  console.log('⚠️⚠️⚠️ HIT /terms/:id route - this should NOT match review-requests! PATH:', req.path, 'ID:', req.params.id, 'URL:', req.url)
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  // Double-check: if id is "review-requests", this is a route matching bug
+  if (req.params.id === 'review-requests') {
+    console.error('🚨🚨🚨 CRITICAL BUG: /terms/:id matched "review-requests" despite regex pattern!')
+    return res.status(404).json({ data: null, error: 'route_not_found' })
+  }
   
   try {
     const _id = new ObjectId(req.params.id)
     const terms = await db.collection<CustomTermsDoc>('custom_terms').findOne({ _id })
     if (!terms) return res.status(404).json({ data: null, error: 'not_found' })
     res.json({ data: terms, error: null })
-  } catch {
+  } catch (err) {
+    console.error('ObjectId conversion error:', err, 'ID:', req.params.id)
     res.status(400).json({ data: null, error: 'invalid_id' })
   }
 })
