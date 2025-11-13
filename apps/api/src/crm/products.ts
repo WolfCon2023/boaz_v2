@@ -677,16 +677,20 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
 })
 
 // GET /api/crm/terms/:id
+// IMPORTANT: This route must be defined AFTER /terms/review-requests to avoid route conflicts
 productsRouter.get('/terms/:id', async (req, res) => {
+  // CRITICAL: Explicitly reject "review-requests" to prevent route conflict
+  // Express may match this route first, so we need to explicitly check and return 404
+  // This will allow the client to understand the route doesn't exist here
+  if (req.params.id === 'review-requests') {
+    console.log('ERROR: /terms/:id matched "review-requests" - route order issue! This should not happen.')
+    // Return 404 to indicate this route doesn't handle "review-requests"
+    // The correct route /terms/review-requests should have been matched first
+    return res.status(404).json({ data: null, error: 'route_not_found' })
+  }
+  
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  
-  // Reject if id is "review-requests" - this should be handled by the route above
-  // This is a safeguard in case Express matches this route first
-  if (req.params.id === 'review-requests') {
-    console.log('WARNING: /terms/:id matched "review-requests" - route order issue!')
-    return res.status(404).json({ data: null, error: 'not_found' })
-  }
   
   // Validate that id is a valid ObjectId format before trying to convert
   if (!ObjectId.isValid(req.params.id)) {
