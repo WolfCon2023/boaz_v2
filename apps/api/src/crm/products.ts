@@ -131,6 +131,14 @@ export type CustomTermsDoc = {
 
 export const productsRouter = Router()
 
+// Debug middleware to log all requests to products router
+productsRouter.use((req, res, next) => {
+  if (req.path.includes('review-requests')) {
+    console.log('🔍 PRODUCTS ROUTER - Request:', req.method, req.path, 'Full URL:', req.url)
+  }
+  next()
+})
+
 // ===== PRODUCTS =====
 
 // GET /api/crm/products?q=&type=&category=&isActive=&sort=&dir=
