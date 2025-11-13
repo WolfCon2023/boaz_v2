@@ -634,10 +634,10 @@ productsRouter.get('/terms', async (req, res) => {
 })
 
 // GET /api/crm/terms/review-requests (ledger - all review requests)
-// IMPORTANT: This route must be defined BEFORE /terms/:id to avoid route conflicts
-// Using a more specific path to ensure it matches before the parameterized route
+// CRITICAL: This route MUST be defined BEFORE /terms/:id to avoid route conflicts
+// Express matches routes in registration order, so this specific route must come first
 productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
-  console.log('✓✓✓ HIT /terms/review-requests route handler') // Debug log
+  console.log('✓✓✓✓✓ HIT /terms/review-requests route handler - PATH:', req.path, 'URL:', req.url) // Debug log
   const db = await getDb()
   if (!db) {
     console.error('Database unavailable')
@@ -682,7 +682,9 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
 // GET /api/crm/terms/:id
 // IMPORTANT: This route must be defined AFTER /terms/review-requests to avoid route conflicts
 // Using a regex pattern to only match valid ObjectId hex strings (24 hex characters)
+// This regex ensures "review-requests" will NOT match this route
 productsRouter.get('/terms/:id([0-9a-fA-F]{24})', async (req, res) => {
+  console.log('⚠️⚠️⚠️ HIT /terms/:id route - this should NOT match review-requests! PATH:', req.path, 'ID:', req.params.id)
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   
