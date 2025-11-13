@@ -675,12 +675,15 @@ productsRouter.get('/terms/review-requests', requireAuth, async (req, res) => {
     }
     if (status) filter.status = status
     
+    console.log('Query filter:', JSON.stringify(filter), 'Sort:', JSON.stringify(sort))
+    
     const requests = await db.collection('terms_review_requests')
       .find(filter)
       .sort(sort)
       .limit(500)
       .toArray()
     
+    console.log('Found', requests.length, 'review requests')
     res.json({ data: { items: requests }, error: null })
   } catch (err: any) {
     console.error('Get review requests ledger error:', err)
