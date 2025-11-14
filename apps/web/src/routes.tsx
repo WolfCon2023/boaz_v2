@@ -27,6 +27,7 @@ import CRMOutreachTemplates from '@/pages/CRMOutreachTemplates'
 import CRMOutreachSequences from '@/pages/CRMOutreachSequences'
 import CRMOutreachEvents from '@/pages/CRMOutreachEvents'
 import CRMDocuments from '@/pages/CRMDocuments'
+import CRMSurveys from '@/pages/CRMSurveys'
 import SupportTickets from '@/pages/SupportTickets'
 import KnowledgeBase from '@/pages/KnowledgeBase'
 import SupportPortal from '@/pages/SupportPortal'
@@ -71,6 +72,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/support/tickets', element: <RequireAuth><RequireApplication appKey="crm"><SupportTickets /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/support/kb', element: <RequireAuth><RequireApplication appKey="crm"><KnowledgeBase /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/documents', element: <RequireAuth><RequireApplication appKey="crm"><CRMDocuments /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/surveys', element: <RequireAuth><RequireApplication appKey="crm"><CRMSurveys /></RequireApplication></RequireAuth> },
       { path: 'apps/helpdesk', element: <RequireAuth><RequireApplication appKey="helpdesk"><Helpdesk /></RequireApplication></RequireAuth> },
       { path: 'apps/support', element: <RequireAuth><Support /></RequireAuth> },
       { path: 'request-status', element: <RequireAuth><RequestStatus /></RequireAuth> },

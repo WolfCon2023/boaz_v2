@@ -1,7 +1,7 @@
 import { getPortalUrl } from '@/lib/urls'
 
 export default function CRMHub() {
-           const items: { label: string; desc: string; href: string }[] = [
+  const items: { label: string; desc: string; href: string }[] = [
     { label: 'Contacts', desc: 'People and relationships', href: '/apps/crm/contacts' },
     { label: 'Accounts', desc: 'Companies and organizations', href: '/apps/crm/accounts' },
     { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
@@ -12,6 +12,7 @@ export default function CRMHub() {
     { label: 'Invoices', desc: 'Billing, payments, and refunds', href: '/apps/crm/invoices' },
     { label: 'Outreach', desc: 'Email/SMS templates, sequences, events', href: '/apps/crm/outreach/templates' },
              { label: 'Marketing', desc: 'Campaigns, segments, analytics', href: '/apps/crm/marketing' },
+    { label: 'Surveys & Feedback', desc: 'NPS/CSAT and post‑interaction surveys', href: '/apps/crm/surveys' },
     { label: 'Tickets', desc: 'Support tickets and SLAs', href: '/apps/crm/support/tickets' },
     { label: 'Knowledge Base', desc: 'Articles and self‑service help', href: '/apps/crm/support/kb' },
     { label: 'Documents', desc: 'File attachments, version control, and permissions', href: '/apps/crm/documents' },
