@@ -1885,7 +1885,7 @@ function MaintenanceTab({
           <div className="mb-3 flex items-center gap-3 text-sm">
             <span className="text-[color:var(--color-text-muted)]">Filter by status:</span>
             <select
-              className="rounded-md border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+              className="rounded-md border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm text-[color:var(--color-text)]"
               value={statusFilter}
               onChange={(e) =>
                 setStatusFilter(e.target.value as 'all' | 'success' | 'failed' | 'network_error')
