@@ -60,6 +60,7 @@ const EnvSchema = z.object({
     TWILIO_ACCOUNT_SID: z.string().optional(),
     TWILIO_AUTH_TOKEN: z.string().optional(),
     TWILIO_FROM_NUMBER: z.string().optional(),
+    DB_BACKUP_WEBHOOK_URL: z.string().url().optional(),
 });
 const parsed = EnvSchema.safeParse(process.env);
 if (!parsed.success) {

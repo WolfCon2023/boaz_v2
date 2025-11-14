@@ -180,6 +180,86 @@ authRouter.post('/logout', async (req, res) => {
     res.clearCookie('refresh_token', { ...cookieOpts, maxAge: 0 });
     res.json({ ok: true });
 });
+// Admin: Trigger a database backup via external webhook
+// This is intended to complement the scheduled backup job by allowing on-demand backups from the Admin Portal.
+// The actual backup work should be handled by an external service exposed via env.DB_BACKUP_WEBHOOK_URL.
+authRouter.post('/admin/db-backup', requireAuth, requirePermission('*'), async (req, res) => {
+    try {
+        const auth = req.auth;
+        if (!env.DB_BACKUP_WEBHOOK_URL) {
+            console.error('DB_BACKUP_WEBHOOK_URL is not configured');
+            return res.status(500).json({ error: 'backup_webhook_not_configured' });
+        }
+        const startedAt = new Date();
+        // Call external backup webhook
+        let backupResponse;
+        try {
+            backupResponse = await fetch(env.DB_BACKUP_WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    triggeredBy: auth.email,
+                    triggeredAt: startedAt.toISOString(),
+                    source: 'boaz-admin-portal',
+                }),
+            });
+        }
+        catch (err) {
+            console.error('DB backup webhook network error:', err);
+            return res.status(500).json({ error: 'failed_to_trigger_backup', details: err.message || String(err) });
+        }
+        const finishedAt = new Date();
+        if (!backupResponse.ok) {
+            let bodyText;
+            try {
+                bodyText = await backupResponse.text();
+            }
+            catch {
+                bodyText = undefined;
+            }
+            console.error('DB backup webhook error response:', {
+                status: backupResponse.status,
+                body: bodyText,
+            });
+            return res.status(500).json({
+                error: 'failed_to_trigger_backup',
+                details: { status: backupResponse.status, body: bodyText },
+            });
+        }
+        // Attempt to send completion email to support
+        try {
+            await sendAuthEmail({
+                to: 'support@wolfconsultingnc.com',
+                subject: 'BOAZ DB Backup completed',
+                text: `A database backup was triggered from the Admin Portal.
+
+Triggered by: ${auth.email}
+Started at:   ${startedAt.toISOString()}
+Finished at:  ${finishedAt.toISOString()}`,
+                html: `<p>A database backup was triggered from the Admin Portal.</p>
+<p><strong>Triggered by:</strong> ${auth.email}</p>
+<p><strong>Started at:</strong> ${startedAt.toISOString()}</p>
+<p><strong>Finished at:</strong> ${finishedAt.toISOString()}</p>`,
+                checkPreferences: false,
+            });
+        }
+        catch (emailErr) {
+            console.error('Failed to send DB backup completion email:', emailErr);
+            // Do not fail the API call just because email failed
+        }
+        return res.json({
+            message: 'Database backup triggered successfully. An email will be sent to support when it completes.',
+            startedAt,
+            finishedAt,
+        });
+    }
+    catch (err) {
+        console.error('Admin DB backup error:', err);
+        return res.status(500).json({ error: err.message || 'failed_to_trigger_backup' });
+    }
+});
 // Forgot Username: Step 1 - Get random security question
 authRouter.post('/forgot-username/request', async (req, res) => {
     const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
