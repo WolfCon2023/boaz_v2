@@ -1818,6 +1818,8 @@ function MaintenanceTab({
   setMessage: (msg: string) => void
   setError: (msg: string) => void
 }) {
+  const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'failed' | 'network_error'>('all')
+
   const { data: backupLogsData, isLoading: isLoadingLogs } = useQuery<{
     logs: Array<{
       _id: string
@@ -1831,9 +1833,11 @@ function MaintenanceTab({
       error?: any
     }>
   }>({
-    queryKey: ['admin', 'db-backup-logs'],
+    queryKey: ['admin', 'db-backup-logs', statusFilter],
     queryFn: async () => {
-      const res = await http.get('/api/auth/admin/db-backup/logs')
+      const params: any = {}
+      if (statusFilter && statusFilter !== 'all') params.status = statusFilter
+      const res = await http.get('/api/auth/admin/db-backup/logs', { params })
       return res.data
     },
     enabled: isAdmin,
@@ -1877,6 +1881,23 @@ function MaintenanceTab({
 
         <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-4 shadow-sm">
           <h3 className="text-md font-semibold mb-2">Recent Backup Runs</h3>
+
+          <div className="mb-3 flex items-center gap-3 text-sm">
+            <span className="text-[color:var(--color-text-muted)]">Filter by status:</span>
+            <select
+              className="rounded-md border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as 'all' | 'success' | 'failed' | 'network_error')
+              }
+            >
+              <option value="all">All</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+              <option value="network_error">Network Error</option>
+            </select>
+          </div>
+
           {isLoadingLogs ? (
             <p className="text-sm text-[color:var(--color-text-muted)]">Loading backup history…</p>
           ) : logs.length === 0 ? (
@@ -1890,6 +1911,7 @@ function MaintenanceTab({
                     <th className="px-2 py-1">Finished</th>
                     <th className="px-2 py-1">Status</th>
                     <th className="px-2 py-1">Triggered By</th>
+                    <th className="px-2 py-1">Details</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1912,6 +1934,17 @@ function MaintenanceTab({
                       </td>
                       <td className="px-2 py-1">
                         {log.triggeredByEmail || log.triggeredByUserId || '—'}
+                      </td>
+                      <td className="px-2 py-1 max-w-xs">
+                        {log.status === 'success' || !log.error ? (
+                          <span className="text-[color:var(--color-text-muted)]">—</span>
+                        ) : (
+                          <span className="text-xs text-[color:var(--color-text-muted)] break-words">
+                            {typeof log.error === 'string'
+                              ? log.error
+                              : JSON.stringify(log.error).slice(0, 120) + (JSON.stringify(log.error).length > 120 ? '…' : '')}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}

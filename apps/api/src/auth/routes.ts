@@ -399,9 +399,15 @@ authRouter.get('/admin/db-backup/logs', requireAuth, requirePermission('*'), asy
     const limitRaw = (req.query.limit as string) ?? '20'
     const limit = Math.min(parseInt(limitRaw, 10) || 20, 200)
 
+    const status = (req.query.status as string | undefined)?.toLowerCase()
+    const filter: any = {}
+    if (status && status !== 'all') {
+      filter.status = status
+    }
+
     const logs = await db
       .collection('backup_logs')
-      .find({})
+      .find(filter)
       .sort({ startedAt: -1 })
       .limit(limit)
       .toArray()
