@@ -1799,45 +1799,136 @@ export default function AdminPortal() {
       )}
 
       {/* Maintenance / Tools */}
-      {activeTab === 'maintenance' && (
-        <div className="space-y-6">
-          {!isAdmin ? (
-            <div className="text-center py-8 text-[color:var(--color-text-muted)]">
-              You don't have permission to run maintenance tools.
-            </div>
+      {activeTab === 'maintenance' && <MaintenanceTab isAdmin={isAdmin} message={message} error={error} setMessage={setMessage} setError={setError} />}
+    </div>
+  )
+}
+
+// Maintenance tab (Database backup + recent runs)
+function MaintenanceTab({
+  isAdmin,
+  message,
+  error,
+  setMessage,
+  setError,
+}: {
+  isAdmin: boolean
+  message: string
+  error: string
+  setMessage: (msg: string) => void
+  setError: (msg: string) => void
+}) {
+  const { data: backupLogsData, isLoading: isLoadingLogs } = useQuery<{
+    logs: Array<{
+      _id: string
+      triggeredByUserId?: string
+      triggeredByEmail?: string
+      source?: string
+      startedAt?: string
+      finishedAt?: string
+      status?: string
+      createdAt?: string
+      error?: any
+    }>
+  }>({
+    queryKey: ['admin', 'db-backup-logs'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/admin/db-backup/logs')
+      return res.data
+    },
+    enabled: isAdmin,
+    staleTime: 60 * 1000,
+  })
+
+  const logs = backupLogsData?.logs ?? []
+
+  if (!isAdmin) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center py-8 text-[color:var(--color-text-muted)]">
+          You don't have permission to run maintenance tools.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-4 shadow-sm">
+          <h2 className="text-lg font-semibold mb-2">Database Backup</h2>
+          <p className="mb-3 text-sm text-[color:var(--color-text-muted)]">
+            Trigger an on-demand database backup. When the backup completes, an email will be sent to{' '}
+            <span className="font-mono">support@wolfconsultingnc.com</span>.
+          </p>
+
+          <BackupTool setMessage={setMessage} setError={setError} />
+        </div>
+
+        {(message || error) && (
+          <div
+            className={`rounded-md border px-4 py-2 text-sm ${
+              error ? 'border-red-300 bg-red-50 text-red-800' : 'border-green-300 bg-green-50 text-green-800'
+            }`}
+          >
+            {error || message}
+          </div>
+        )}
+
+        <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-4 shadow-sm">
+          <h3 className="text-md font-semibold mb-2">Recent Backup Runs</h3>
+          {isLoadingLogs ? (
+            <p className="text-sm text-[color:var(--color-text-muted)]">Loading backup history…</p>
+          ) : logs.length === 0 ? (
+            <p className="text-sm text-[color:var(--color-text-muted)]">No backup runs have been logged yet.</p>
           ) : (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-4 shadow-sm">
-                <h2 className="text-lg font-semibold mb-2">Database Backup</h2>
-                <p className="mb-3 text-sm text-[color:var(--color-text-muted)]">
-                  Trigger an on-demand database backup. When the backup completes, an email will be sent to{' '}
-                  <span className="font-mono">support@wolfconsultingnc.com</span>.
-                </p>
-
-                <BackupTool setMessage={setMessage} setError={setError} />
-              </div>
-
-              {(message || error) && (
-                <div
-                  className={`rounded-md border px-4 py-2 text-sm ${
-                    error
-                      ? 'border-red-300 bg-red-50 text-red-800'
-                      : 'border-green-300 bg-green-50 text-green-800'
-                  }`}
-                >
-                  {error || message}
-                </div>
-              )}
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-[color:var(--color-border)]">
+                    <th className="px-2 py-1">Started</th>
+                    <th className="px-2 py-1">Finished</th>
+                    <th className="px-2 py-1">Status</th>
+                    <th className="px-2 py-1">Triggered By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log) => (
+                    <tr key={log._id} className="border-b border-[color:var(--color-border)] last:border-b-0">
+                      <td className="px-2 py-1">{log.startedAt ? formatDateTime(log.startedAt) : '—'}</td>
+                      <td className="px-2 py-1">{log.finishedAt ? formatDateTime(log.finishedAt) : '—'}</td>
+                      <td className="px-2 py-1">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            log.status === 'success'
+                              ? 'bg-green-100 text-green-800'
+                              : log.status === 'failed' || log.status === 'network_error'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {log.status ? log.status.toUpperCase() : 'UNKNOWN'}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1">
+                        {log.triggeredByEmail || log.triggeredByUserId || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
 
 // Simple backup tool component for the Maintenance tab
 function BackupTool({ setMessage, setError }: { setMessage: (msg: string) => void; setError: (msg: string) => void }) {
+  const queryClient = useQueryClient()
+
   const backupMutation = useMutation({
     mutationFn: async () => {
       const res = await http.post('/api/auth/admin/db-backup')
@@ -1846,6 +1937,7 @@ function BackupTool({ setMessage, setError }: { setMessage: (msg: string) => voi
     onSuccess: (data) => {
       setError('')
       setMessage(data?.message || 'BOAZ says: Backup was triggered successfully.')
+      queryClient.invalidateQueries({ queryKey: ['admin', 'db-backup-logs'] })
     },
     onError: (err: any) => {
       const msg =
@@ -1854,6 +1946,7 @@ function BackupTool({ setMessage, setError }: { setMessage: (msg: string) => voi
         'BOAZ says: Backup could not be triggered. Please try again or contact support.'
       setMessage('')
       setError(msg)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'db-backup-logs'] })
     },
   })
 

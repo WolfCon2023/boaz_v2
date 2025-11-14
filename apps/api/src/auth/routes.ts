@@ -269,7 +269,20 @@ authRouter.post('/admin/db-backup', requireAuth, requirePermission('*'), async (
       return res.status(500).json({ error: 'backup_webhook_not_configured' })
     }
 
+    const db = await getDb()
+    if (!db) {
+      console.error('Database unavailable when attempting to log backup run')
+      return res.status(500).json({ error: 'db_unavailable' })
+    }
+
     const startedAt = new Date()
+    const logBase: any = {
+      triggeredByUserId: auth.userId,
+      triggeredByEmail: auth.email,
+      source: 'admin_portal',
+      startedAt,
+      createdAt: new Date(),
+    }
 
     // Call external backup webhook
     let backupResponse: Response
@@ -287,6 +300,17 @@ authRouter.post('/admin/db-backup', requireAuth, requirePermission('*'), async (
       } as any)
     } catch (err: any) {
       console.error('DB backup webhook network error:', err)
+
+      try {
+        await db.collection('backup_logs').insertOne({
+          ...logBase,
+          status: 'network_error',
+          error: err?.message || String(err),
+        } as any)
+      } catch (logErr) {
+        console.error('Failed to log backup network error:', logErr)
+      }
+
       return res.status(500).json({ error: 'failed_to_trigger_backup', details: err.message || String(err) })
     }
 
@@ -303,6 +327,18 @@ authRouter.post('/admin/db-backup', requireAuth, requirePermission('*'), async (
         status: backupResponse.status,
         body: bodyText,
       })
+
+      try {
+        await db.collection('backup_logs').insertOne({
+          ...logBase,
+          finishedAt,
+          status: 'failed',
+          error: { status: backupResponse.status, body: bodyText },
+        } as any)
+      } catch (logErr) {
+        console.error('Failed to log failed backup run:', logErr)
+      }
+
       return res.status(500).json({
         error: 'failed_to_trigger_backup',
         details: { status: backupResponse.status, body: bodyText },
@@ -330,6 +366,16 @@ Finished at:  ${finishedAt.toISOString()}`,
       // Do not fail the API call just because email failed
     }
 
+    try {
+      await db.collection('backup_logs').insertOne({
+        ...logBase,
+        finishedAt,
+        status: 'success',
+      } as any)
+    } catch (logErr) {
+      console.error('Failed to log successful backup run:', logErr)
+    }
+
     return res.json({
       message: 'Database backup triggered successfully. An email will be sent to support when it completes.',
       startedAt,
@@ -338,6 +384,32 @@ Finished at:  ${finishedAt.toISOString()}`,
   } catch (err: any) {
     console.error('Admin DB backup error:', err)
     return res.status(500).json({ error: err.message || 'failed_to_trigger_backup' })
+  }
+})
+
+// Admin: Get recent DB backup logs
+authRouter.get('/admin/db-backup/logs', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) {
+      console.error('Database unavailable when fetching backup logs')
+      return res.status(500).json({ error: 'db_unavailable' })
+    }
+
+    const limitRaw = (req.query.limit as string) ?? '20'
+    const limit = Math.min(parseInt(limitRaw, 10) || 20, 200)
+
+    const logs = await db
+      .collection('backup_logs')
+      .find({})
+      .sort({ startedAt: -1 })
+      .limit(limit)
+      .toArray()
+
+    return res.json({ logs })
+  } catch (err: any) {
+    console.error('Admin get DB backup logs error:', err)
+    return res.status(500).json({ error: err.message || 'failed_to_get_backup_logs' })
   }
 })
 
