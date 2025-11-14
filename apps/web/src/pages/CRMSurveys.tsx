@@ -249,16 +249,16 @@ export default function CRMSurveys() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Type
-                    </label>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
+                    Type
+                  </label>
                     <select
                       value={editing.type}
                       onChange={(e) =>
                         handleEditorChange('type', e.target.value as SurveyProgram['type'])
                       }
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"
                     >
                       <option value="NPS">NPS</option>
                       <option value="CSAT">CSAT</option>
@@ -267,15 +267,15 @@ export default function CRMSurveys() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Channel
-                    </label>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
+                    Channel
+                  </label>
                     <select
                       value={editing.channel}
                       onChange={(e) =>
                         handleEditorChange('channel', e.target.value as SurveyProgram['channel'])
                       }
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"
                     >
                       <option value="Email">Email</option>
                       <option value="In‑app">In‑app</option>
@@ -284,15 +284,15 @@ export default function CRMSurveys() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
                       Status
-                    </label>
+                  </label>
                     <select
                       value={editing.status}
                       onChange={(e) =>
                         handleEditorChange('status', e.target.value as SurveyProgram['status'])
                       }
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"
                     >
                       <option value="Draft">Draft</option>
                       <option value="Active">Active</option>
