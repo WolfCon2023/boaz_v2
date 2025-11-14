@@ -113,14 +113,59 @@ export default function CRMSurveysHelp() {
           </p>
         </section>
 
-        <section className="mb-2 space-y-2">
-          <h2 className="text-lg font-semibold">Quick summary</h2>
-          <ul className="list-disc pl-5 text-sm text-[color:var(--color-text)]">
-            <li><strong>NPS</strong> → long‑term loyalty and likelihood to recommend.</li>
-            <li><strong>CSAT</strong> → satisfaction with a specific interaction or experience.</li>
+        <section className="mb-6 space-y-2">
+          <h2 className="text-lg font-semibold">How to create a survey program in BOAZ</h2>
+          <ol className="list-decimal pl-5 text-sm text-[color:var(--color-text)] space-y-1">
             <li>
-              <strong>Post‑interaction surveys</strong> → short, timely feedback after a ticket, call, or appointment.
+              Open the <strong>Surveys &amp; Feedback</strong> app from the CRM Hub.
             </li>
+            <li>
+              Click <strong>New survey program</strong> in the top‑right of the Survey programs panel.
+            </li>
+            <li>
+              In the editor, give your program a clear <strong>Program name</strong> (for example,
+              &nbsp;&quot;Quarterly NPS – All Customers&quot; or &quot;Post‑ticket CSAT – Support&quot;).
+            </li>
+            <li>
+              Choose the <strong>Type</strong>:
+              <ul className="list-disc pl-5 mt-1">
+                <li><strong>NPS</strong> for loyalty and &quot;would you recommend us&quot; questions.</li>
+                <li><strong>CSAT</strong> for satisfaction with a specific interaction or journey.</li>
+                <li><strong>Post‑interaction</strong> for any short follow‑up after a ticket, demo, call, or visit.</li>
+              </ul>
+            </li>
+            <li>
+              Choose the delivery <strong>Channel</strong>:
+              <ul className="list-disc pl-5 mt-1">
+                <li><strong>Email</strong> for surveys delivered via email links.</li>
+                <li><strong>In‑app</strong> for prompts shown inside your application.</li>
+                <li><strong>Link</strong> for a reusable URL you can embed in other tools.</li>
+              </ul>
+            </li>
+            <li>
+              Set the <strong>Status</strong>:
+              <ul className="list-disc pl-5 mt-1">
+                <li><strong>Draft</strong> while you are designing questions and testing.</li>
+                <li><strong>Active</strong> when you are ready for customers to receive the survey.</li>
+                <li><strong>Paused</strong> to temporarily stop sending without deleting the program.</li>
+              </ul>
+            </li>
+            <li>
+              Save the program by clicking <strong>Save program</strong>. It will appear in the Survey programs table,
+              where you can click it later to edit.
+            </li>
+          </ol>
+        </section>
+
+        <section className="mb-2 space-y-2">
+          <h2 className="text-lg font-semibold">Tips for great survey content</h2>
+          <ul className="list-disc pl-5 text-sm text-[color:var(--color-text)] space-y-1">
+            <li>Keep questions short and specific; avoid combining multiple ideas into one question.</li>
+            <li>Use plain language and avoid internal jargon so customers immediately understand what you mean.</li>
+            <li>Limit each survey to a few key questions to protect response rates.</li>
+            <li>For NPS, always include an optional open‑ended follow‑up like &quot;What is the main reason for your score?&quot;</li>
+            <li>For CSAT, tie questions directly to the experience (ticket, demo, onboarding step, etc.).</li>
+            <li>Review results regularly and turn patterns into concrete actions for product, service, and training.</li>
           </ul>
         </section>
       </div>

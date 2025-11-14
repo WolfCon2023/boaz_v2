@@ -1,7 +1,10 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
+import { http } from '@/lib/http'
+import { useToast } from '@/components/Toast'
 
 type SurveyProgram = {
   id: string
@@ -13,41 +16,13 @@ type SurveyProgram = {
   responseRate?: number
 }
 
-const samplePrograms: SurveyProgram[] = [
-  {
-    id: 'nps-main',
-    name: 'Quarterly NPS – All Customers',
-    type: 'NPS',
-    channel: 'Email',
-    status: 'Active',
-    lastSentAt: new Date().toISOString(),
-    responseRate: 42,
-  },
-  {
-    id: 'csat-support',
-    name: 'Post‑ticket CSAT – Support',
-    type: 'CSAT',
-    channel: 'Email',
-    status: 'Active',
-    lastSentAt: new Date().toISOString(),
-    responseRate: 63,
-  },
-  {
-    id: 'post-demo',
-    name: 'Post‑demo feedback – Sales',
-    type: 'Post‑interaction',
-    channel: 'Link',
-    status: 'Paused',
-    responseRate: 31,
-  },
-]
-
 export default function CRMSurveys() {
   const [typeFilter, setTypeFilter] = React.useState<'all' | 'NPS' | 'CSAT' | 'Post‑interaction'>('all')
-  const [programs, setPrograms] = React.useState<SurveyProgram[]>(samplePrograms)
   const [editing, setEditing] = React.useState<SurveyProgram | null>(null)
   const [showEditor, setShowEditor] = React.useState(false)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
+  const toast = useToast()
+  const queryClient = useQueryClient()
 
   React.useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -55,7 +30,54 @@ export default function CRMSurveys() {
     }
   }, [])
 
-  const filteredPrograms = programs.filter((p) => (typeFilter === 'all' ? true : p.type === typeFilter))
+  const { data, isLoading } = useQuery({
+    queryKey: ['surveys-programs', typeFilter],
+    queryFn: async () => {
+      const params: any = {}
+      if (typeFilter !== 'all') params.type = typeFilter
+      const res = await http.get('/api/crm/surveys/programs', { params })
+      const payload = res.data as {
+        data: { items: Array<SurveyProgram & { _id?: string }> }
+      }
+      const items = payload.data.items.map((p) => ({
+        ...p,
+        id: (p as any)._id ?? p.id,
+      }))
+      return { items }
+    },
+  })
+
+  const programs = data?.items ?? []
+  const filteredPrograms = programs
+
+  const saveProgram = useMutation({
+    mutationFn: async (program: SurveyProgram) => {
+      const body = {
+        name: program.name,
+        type: program.type,
+        channel: program.channel,
+        status: program.status,
+      }
+
+      if (program.id) {
+        const res = await http.put(`/api/crm/surveys/programs/${program.id}`, body)
+        return res.data
+      }
+
+      const res = await http.post('/api/crm/surveys/programs', body)
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['surveys-programs'] })
+      toast.showToast('BOAZ says: Survey program saved.', 'success')
+      setShowEditor(false)
+      setEditing(null)
+    },
+    onError: (err: any) => {
+      console.error('Save survey program error:', err)
+      toast.showToast('BOAZ says: Failed to save survey program.', 'error')
+    },
+  })
 
   const openNewProgram = () => {
     setEditing({
@@ -94,17 +116,7 @@ export default function CRMSurveys() {
     }
 
     const withName: SurveyProgram = { ...editing, name: trimmedName }
-
-    if (!withName.id) {
-      // New program
-      const newId = `prog-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-      setPrograms((prev) => [...prev, { ...withName, id: newId }])
-    } else {
-      // Update existing
-      setPrograms((prev) => prev.map((p) => (p.id === withName.id ? withName : p)))
-    }
-
-    closeEditor()
+    saveProgram.mutate(withName)
   }
 
   return (
@@ -154,7 +166,11 @@ export default function CRMSurveys() {
             </button>
           </div>
 
-          {filteredPrograms.length === 0 ? (
+          {isLoading ? (
+            <p className="text-sm text-[color:var(--color-text-muted)]">
+              Loading survey programs…
+            </p>
+          ) : filteredPrograms.length === 0 ? (
             <p className="text-sm text-[color:var(--color-text-muted)]">
               No survey programs match this filter yet.
             </p>
