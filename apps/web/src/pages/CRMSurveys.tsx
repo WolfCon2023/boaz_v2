@@ -214,111 +214,114 @@ export default function CRMSurveys() {
           <div className="absolute inset-0 bg-black/60" onClick={closeEditor} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  {editing.id ? 'Edit survey program' : 'New survey program'}
-                </h2>
-                <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                  Define the survey name, type, channel, and status. This is a UI prototype; data is not yet saved to the server.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeEditor}
-                className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-              >
-                Close
-              </button>
-            </div>
-
-            <form className="space-y-4" onSubmit={handleSaveProgram}>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                  Program name
-                </label>
-                <input
-                  type="text"
-                  value={editing.name}
-                  onChange={(e) => handleEditorChange('name', e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
-                  placeholder="e.g. Quarterly NPS – All Customers"
-                  required
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                    Type
-                  </label>
-                  <select
-                    value={editing.type}
-                    onChange={(e) =>
-                      handleEditorChange('type', e.target.value as SurveyProgram['type'])
-                    }
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                  >
-                    <option value="NPS">NPS</option>
-                    <option value="CSAT">CSAT</option>
-                    <option value="Post‑interaction">Post‑interaction</option>
-                  </select>
+                  <h2 className="text-lg font-semibold">
+                    {editing.id ? 'Edit survey program' : 'New survey program'}
+                  </h2>
+                  <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                    Define the survey name, type, channel, and status. This is a UI prototype; data is not yet
+                    saved to the server.
+                  </p>
                 </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                    Channel
-                  </label>
-                  <select
-                    value={editing.channel}
-                    onChange={(e) =>
-                      handleEditorChange('channel', e.target.value as SurveyProgram['channel'])
-                    }
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                  >
-                    <option value="Email">Email</option>
-                    <option value="In‑app">In‑app</option>
-                    <option value="Link">Link</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                    Status
-                  </label>
-                  <select
-                    value={editing.status}
-                    onChange={(e) =>
-                      handleEditorChange('status', e.target.value as SurveyProgram['status'])
-                    }
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                  >
-                    <option value="Draft">Draft</option>
-                    <option value="Active">Active</option>
-                    <option value="Paused">Paused</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={closeEditor}
-                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+                  className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)]"
-                >
-                  Save program
+                  Close
                 </button>
               </div>
-            </form>
+
+              <form className="space-y-4" onSubmit={handleSaveProgram}>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                    Program name
+                  </label>
+                  <input
+                    type="text"
+                    value={editing.name}
+                    onChange={(e) => handleEditorChange('name', e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                    placeholder="e.g. Quarterly NPS – All Customers"
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                      Type
+                    </label>
+                    <select
+                      value={editing.type}
+                      onChange={(e) =>
+                        handleEditorChange('type', e.target.value as SurveyProgram['type'])
+                      }
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="NPS">NPS</option>
+                      <option value="CSAT">CSAT</option>
+                      <option value="Post‑interaction">Post‑interaction</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                      Channel
+                    </label>
+                    <select
+                      value={editing.channel}
+                      onChange={(e) =>
+                        handleEditorChange('channel', e.target.value as SurveyProgram['channel'])
+                      }
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="Email">Email</option>
+                      <option value="In‑app">In‑app</option>
+                      <option value="Link">Link</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                      Status
+                    </label>
+                    <select
+                      value={editing.status}
+                      onChange={(e) =>
+                        handleEditorChange('status', e.target.value as SurveyProgram['status'])
+                      }
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="Draft">Draft</option>
+                      <option value="Active">Active</option>
+                      <option value="Paused">Paused</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeEditor}
+                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)]"
+                  >
+                    Save program
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      , portalEl)}
+        </div>,
+        portalEl
+      )}
     </div>
   )
 }
