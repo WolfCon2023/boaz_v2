@@ -49,13 +49,19 @@ export default function CRMSurveys() {
     <div className="space-y-4">
       <CRMNav />
       <div className="px-4 pb-4">
-        <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold">Surveys &amp; Feedback</h1>
             <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
               Configure NPS and CSAT programs, and send post‑interaction surveys after tickets, demos, and other touchpoints.
             </p>
           </div>
+          <a
+            href="/apps/crm/surveys/help"
+            className="inline-flex items-center rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+          >
+            Learn about NPS, CSAT &amp; post‑interaction surveys
+          </a>
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
