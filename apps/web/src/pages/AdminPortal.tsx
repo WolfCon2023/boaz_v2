@@ -17,7 +17,7 @@ type Session = {
 
 export default function AdminPortal() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests' | 'access-report'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests' | 'access-report' | 'maintenance'>('sessions')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [registrationRequestStatus, setRegistrationRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
   const [appAccessRequestStatus, setAppAccessRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
@@ -740,6 +740,17 @@ export default function AdminPortal() {
         >
           <FileText className="mr-2 inline h-4 w-4" />
           Access Report
+        </button>
+        <button
+          onClick={() => setActiveTab('maintenance')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'maintenance'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <Download className="mr-2 inline h-4 w-4" />
+          Maintenance
         </button>
       </div>
 
@@ -1786,6 +1797,77 @@ export default function AdminPortal() {
           )}
         </div>
       )}
+
+      {/* Maintenance / Tools */}
+      {activeTab === 'maintenance' && (
+        <div className="space-y-6">
+          {!isAdmin ? (
+            <div className="text-center py-8 text-[color:var(--color-text-muted)]">
+              You don't have permission to run maintenance tools.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-4 shadow-sm">
+                <h2 className="text-lg font-semibold mb-2">Database Backup</h2>
+                <p className="mb-3 text-sm text-[color:var(--color-text-muted)]">
+                  Trigger an on-demand database backup. When the backup completes, an email will be sent to{' '}
+                  <span className="font-mono">support@wolfconsultingnc.com</span>.
+                </p>
+
+                <BackupTool setMessage={setMessage} setError={setError} />
+              </div>
+
+              {(message || error) && (
+                <div
+                  className={`rounded-md border px-4 py-2 text-sm ${
+                    error
+                      ? 'border-red-300 bg-red-50 text-red-800'
+                      : 'border-green-300 bg-green-50 text-green-800'
+                  }`}
+                >
+                  {error || message}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Simple backup tool component for the Maintenance tab
+function BackupTool({ setMessage, setError }: { setMessage: (msg: string) => void; setError: (msg: string) => void }) {
+  const backupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await http.post('/api/auth/admin/db-backup')
+      return res.data as { message?: string; startedAt?: string; finishedAt?: string }
+    },
+    onSuccess: (data) => {
+      setError('')
+      setMessage(data?.message || 'BOAZ says: Backup was triggered successfully.')
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        'BOAZ says: Backup could not be triggered. Please try again or contact support.'
+      setMessage('')
+      setError(msg)
+    },
+  })
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => backupMutation.mutate()}
+        disabled={backupMutation.isPending}
+        className="inline-flex items-center rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+      >
+        <Download className="mr-2 h-4 w-4" />
+        {backupMutation.isPending ? 'Running Backup…' : 'Run Backup Now'}
+      </button>
     </div>
   )
 }
