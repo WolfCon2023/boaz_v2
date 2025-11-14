@@ -121,18 +121,25 @@ surveysRouter.put('/programs/:id', async (req, res) => {
     updatedAt: new Date(),
   }
 
-  const result = await db
-    .collection<SurveyProgramDoc>('survey_programs')
-    .findOneAndUpdate({ _id }, { $set: update }, { returnDocument: 'after' })
+  const coll = db.collection<SurveyProgramDoc>('survey_programs')
 
-  if (!result.value) {
+  const existing = await coll.findOne({ _id })
+  if (!existing) {
     return res.status(404).json({ data: null, error: 'not_found' })
+  }
+
+  await coll.updateOne({ _id }, { $set: update })
+
+  const updated: SurveyProgramDoc = {
+    ...existing,
+    ...update,
+    _id,
   }
 
   res.json({
     data: {
-      ...result.value,
-      _id: String(result.value._id),
+      ...updated,
+      _id: String(updated._id),
     },
     error: null,
   })
