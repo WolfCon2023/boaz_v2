@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -46,6 +47,13 @@ export default function CRMSurveys() {
   const [programs, setPrograms] = React.useState<SurveyProgram[]>(samplePrograms)
   const [editing, setEditing] = React.useState<SurveyProgram | null>(null)
   const [showEditor, setShowEditor] = React.useState(false)
+  const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
+
+  React.useEffect(() => {
+    if (typeof document !== 'undefined') {
+      setPortalEl(document.body)
+    }
+  }, [])
 
   const filteredPrograms = programs.filter((p) => (typeFilter === 'all' ? true : p.type === typeFilter))
 
@@ -201,9 +209,11 @@ export default function CRMSurveys() {
         </div>
       </div>
 
-      {showEditor && editing && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-2xl bg-[color:var(--color-panel)] p-6 shadow-xl">
+      {showEditor && editing && portalEl && createPortal(
+        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
+          <div className="absolute inset-0 bg-black/60" onClick={closeEditor} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">
@@ -308,7 +318,7 @@ export default function CRMSurveys() {
             </form>
           </div>
         </div>
-      )}
+      , portalEl)}
     </div>
   )
 }
