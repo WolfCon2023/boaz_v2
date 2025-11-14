@@ -157,7 +157,7 @@ export default function CRMSurveysHelp() {
           </ol>
         </section>
 
-        <section className="mb-2 space-y-2">
+        <section className="mb-4 space-y-2">
           <h2 className="text-lg font-semibold">Tips for great survey content</h2>
           <ul className="list-disc pl-5 text-sm text-[color:var(--color-text)] space-y-1">
             <li>Keep questions short and specific; avoid combining multiple ideas into one question.</li>
@@ -166,6 +166,28 @@ export default function CRMSurveysHelp() {
             <li>For NPS, always include an optional open‑ended follow‑up like &quot;What is the main reason for your score?&quot;</li>
             <li>For CSAT, tie questions directly to the experience (ticket, demo, onboarding step, etc.).</li>
             <li>Review results regularly and turn patterns into concrete actions for product, service, and training.</li>
+          </ul>
+        </section>
+
+        <section className="mb-2 space-y-2">
+          <h2 className="text-lg font-semibold">Viewing responses and metrics</h2>
+          <p className="text-sm text-[color:var(--color-text)]">
+            When you select a survey program in the <strong>Surveys &amp; Feedback</strong> app, BOAZ shows a
+            metrics panel on the right with live data from stored responses.
+          </p>
+          <ul className="list-disc pl-5 text-sm text-[color:var(--color-text)] space-y-1">
+            <li>
+              For <strong>NPS</strong> programs, you&apos;ll see total responses, NPS, and the split between promoters,
+              passives, and detractors.
+            </li>
+            <li>
+              For <strong>CSAT</strong> and post‑interaction programs, you&apos;ll see average score and a score
+              distribution.
+            </li>
+            <li>
+              You can log a quick sample response from the metrics panel while designing your program; later, support
+              tickets and outreach flows can automatically post real customer responses to the same API.
+            </li>
           </ul>
         </section>
       </div>

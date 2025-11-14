@@ -16,11 +16,31 @@ type SurveyProgram = {
   responseRate?: number
 }
 
+type ProgramSummary =
+  | {
+      totalResponses: number
+      detractors: number
+      passives: number
+      promoters: number
+      detractorsPct: number
+      passivesPct: number
+      promotersPct: number
+      nps: number
+    }
+  | {
+      totalResponses: number
+      averageScore: number
+      distribution: Record<string, number>
+    }
+
 export default function CRMSurveys() {
   const [typeFilter, setTypeFilter] = React.useState<'all' | 'NPS' | 'CSAT' | 'Post‑interaction'>('all')
   const [editing, setEditing] = React.useState<SurveyProgram | null>(null)
   const [showEditor, setShowEditor] = React.useState(false)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
+  const [selectedProgramId, setSelectedProgramId] = React.useState<string | null>(null)
+  const [testScore, setTestScore] = React.useState<string>('')
+  const [testComment, setTestComment] = React.useState<string>('')
   const toast = useToast()
   const queryClient = useQueryClient()
 
@@ -49,6 +69,41 @@ export default function CRMSurveys() {
 
   const programs = data?.items ?? []
   const filteredPrograms = programs
+  const selectedProgram = programs.find((p) => p.id === selectedProgramId) || null
+
+  const summaryQuery = useQuery({
+    queryKey: ['surveys-program-summary', selectedProgramId],
+    enabled: !!selectedProgramId,
+    queryFn: async () => {
+      if (!selectedProgramId) return null
+      const res = await http.get(`/api/crm/surveys/programs/${selectedProgramId}/summary`)
+      const payload = res.data as { data: ProgramSummary }
+      return payload.data
+    },
+  })
+
+  const logResponse = useMutation({
+    mutationFn: async (vars: { programId: string; score: number; comment?: string }) => {
+      const body: any = {
+        score: vars.score,
+      }
+      if (vars.comment && vars.comment.trim()) body.comment = vars.comment.trim()
+      const res = await http.post(`/api/crm/surveys/programs/${vars.programId}/responses`, body)
+      return res.data
+    },
+    onSuccess: () => {
+      if (selectedProgramId) {
+        queryClient.invalidateQueries({ queryKey: ['surveys-program-summary', selectedProgramId] })
+      }
+      setTestScore('')
+      setTestComment('')
+      toast.showToast('BOAZ says: Sample response recorded.', 'success')
+    },
+    onError: (err: any) => {
+      console.error('Log survey response error:', err)
+      toast.showToast('BOAZ says: Failed to record response.', 'error')
+    },
+  })
 
   const saveProgram = useMutation({
     mutationFn: async (program: SurveyProgram) => {
@@ -93,6 +148,7 @@ export default function CRMSurveys() {
   const openEditProgram = (p: SurveyProgram) => {
     setEditing({ ...p })
     setShowEditor(true)
+    setSelectedProgramId(p.id)
   }
 
   const closeEditor = () => {
@@ -154,74 +210,213 @@ export default function CRMSurveys() {
           </select>
         </div>
 
-        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-md font-semibold">Survey programs</h2>
-            <button
-              type="button"
-              className="inline-flex items-center rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)]"
-              onClick={openNewProgram}
-            >
-              New survey program
-            </button>
+        <div className="grid gap-4 lg:grid-cols-[2fr,1.3fr]">
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-md font-semibold">Survey programs</h2>
+              <button
+                type="button"
+                className="inline-flex items-center rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)]"
+                onClick={openNewProgram}
+              >
+                New survey program
+              </button>
+            </div>
+
+            {isLoading ? (
+              <p className="text-sm text-[color:var(--color-text-muted)]">
+                Loading survey programs…
+              </p>
+            ) : filteredPrograms.length === 0 ? (
+              <p className="text-sm text-[color:var(--color-text-muted)]">
+                No survey programs match this filter yet.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-[color:var(--color-border)]">
+                      <th className="px-2 py-1">Name</th>
+                      <th className="px-2 py-1">Type</th>
+                      <th className="px-2 py-1">Channel</th>
+                      <th className="px-2 py-1">Status</th>
+                      <th className="px-2 py-1">Last Sent</th>
+                      <th className="px-2 py-1">Response Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPrograms.map((p) => (
+                      <tr
+                        key={p.id}
+                        className={`cursor-pointer border-b border-[color:var(--color-border)] last:border-b-0 hover:bg-[color:var(--color-muted)] ${
+                          selectedProgramId === p.id ? 'bg-[color:var(--color-muted)]' : ''
+                        }`}
+                        onClick={() => {
+                          setSelectedProgramId(p.id)
+                          openEditProgram(p)
+                        }}
+                      >
+                        <td className="px-2 py-1 font-medium">{p.name}</td>
+                        <td className="px-2 py-1">{p.type}</td>
+                        <td className="px-2 py-1">{p.channel}</td>
+                        <td className="px-2 py-1">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              p.status === 'Active'
+                                ? 'bg-green-100 text-green-800'
+                                : p.status === 'Paused'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1">
+                          {p.lastSentAt ? formatDateTime(p.lastSentAt) : '—'}
+                        </td>
+                        <td className="px-2 py-1">
+                          {typeof p.responseRate === 'number' ? `${p.responseRate}%` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
-          {isLoading ? (
-            <p className="text-sm text-[color:var(--color-text-muted)]">
-              Loading survey programs…
-            </p>
-          ) : filteredPrograms.length === 0 ? (
-            <p className="text-sm text-[color:var(--color-text-muted)]">
-              No survey programs match this filter yet.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-[color:var(--color-border)]">
-                    <th className="px-2 py-1">Name</th>
-                    <th className="px-2 py-1">Type</th>
-                    <th className="px-2 py-1">Channel</th>
-                    <th className="px-2 py-1">Status</th>
-                    <th className="px-2 py-1">Last Sent</th>
-                    <th className="px-2 py-1">Response Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPrograms.map((p) => (
-                    <tr
-                      key={p.id}
-                      className="cursor-pointer border-b border-[color:var(--color-border)] last:border-b-0 hover:bg-[color:var(--color-muted)]"
-                      onClick={() => openEditProgram(p)}
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-sm">
+            <h2 className="mb-2 text-md font-semibold">Program metrics</h2>
+            {!selectedProgram || !selectedProgramId ? (
+              <p className="text-sm text-[color:var(--color-text-muted)]">
+                Select a survey program to see NPS/CSAT metrics and log sample responses.
+              </p>
+            ) : summaryQuery.isLoading ? (
+              <p className="text-sm text-[color:var(--color-text-muted)]">
+                Loading metrics…
+              </p>
+            ) : !summaryQuery.data || summaryQuery.data.totalResponses === 0 ? (
+              <p className="text-sm text-[color:var(--color-text-muted)]">
+                No responses recorded yet for this program.
+              </p>
+            ) : selectedProgram.type === 'NPS' ? (
+              <div className="space-y-2 text-sm">
+                <p className="text-[color:var(--color-text)]">
+                  <strong>Total responses:</strong> {summaryQuery.data.totalResponses}
+                </p>
+                {'nps' in summaryQuery.data && (
+                  <p className="text-[color:var(--color-text)]">
+                    <strong>NPS:</strong> {summaryQuery.data.nps}
+                  </p>
+                )}
+                {'promoters' in summaryQuery.data && (
+                  <ul className="list-disc pl-5 text-[color:var(--color-text)] space-y-1">
+                    <li>
+                      Promoters: {summaryQuery.data.promoters} (
+                      {summaryQuery.data.promotersPct.toFixed(1)}%)
+                    </li>
+                    <li>
+                      Passives: {summaryQuery.data.passives} (
+                      {summaryQuery.data.passivesPct.toFixed(1)}%)
+                    </li>
+                    <li>
+                      Detractors: {summaryQuery.data.detractors} (
+                      {summaryQuery.data.detractorsPct.toFixed(1)}%)
+                    </li>
+                  </ul>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2 text-sm">
+                <p className="text-[color:var(--color-text)]">
+                  <strong>Total responses:</strong> {summaryQuery.data.totalResponses}
+                </p>
+                {'averageScore' in summaryQuery.data && (
+                  <p className="text-[color:var(--color-text)]">
+                    <strong>Average score:</strong> {summaryQuery.data.averageScore.toFixed(2)}
+                  </p>
+                )}
+                {'distribution' in summaryQuery.data && (
+                  <div>
+                    <p className="text-[color:var(--color-text)] font-semibold">Score distribution</p>
+                    <ul className="list-disc pl-5 text-[color:var(--color-text)] space-y-0.5">
+                      {Object.entries(summaryQuery.data.distribution)
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .map(([score, count]) => (
+                          <li key={score}>
+                            Score {score}: {count}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedProgram && (
+              <div className="mt-4 border-t border-[color:var(--color-border)] pt-3">
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                  Quick sample response
+                </h3>
+                <p className="mb-2 text-xs text-[color:var(--color-text-muted)]">
+                  Use this to log a test response while you design your program. Later, support and outreach
+                  flows can call the same API automatically.
+                </p>
+                <div className="flex flex-col gap-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-[color:var(--color-text)]">
+                      Score
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={testScore}
+                      onChange={(e) => setTestScore(e.target.value)}
+                      className="w-20 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-2 py-1 text-xs text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                    />
+                    <span className="text-[color:var(--color-text-muted)] text-xs">
+                      0–10 (use 0–10 for NPS, 1–5 for CSAT)
+                    </span>
+                  </div>
+                  <textarea
+                    value={testComment}
+                    onChange={(e) => setTestComment(e.target.value)}
+                    rows={2}
+                    placeholder="Optional comment or verbatim…"
+                    className="w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-2 py-1 text-xs text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-60"
+                      disabled={!selectedProgramId || !testScore || logResponse.isPending}
+                      onClick={() => {
+                        if (!selectedProgramId || !testScore) return
+                        const n = Number(testScore)
+                        if (Number.isNaN(n)) {
+                          toast.showToast('BOAZ says: Score must be a number.', 'error')
+                          return
+                        }
+                        if (n < 0 || n > 10) {
+                          toast.showToast('BOAZ says: Score must be between 0 and 10.', 'error')
+                          return
+                        }
+                        logResponse.mutate({
+                          programId: selectedProgramId,
+                          score: n,
+                          comment: testComment,
+                        })
+                      }}
                     >
-                      <td className="px-2 py-1 font-medium">{p.name}</td>
-                      <td className="px-2 py-1">{p.type}</td>
-                      <td className="px-2 py-1">{p.channel}</td>
-                      <td className="px-2 py-1">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            p.status === 'Active'
-                              ? 'bg-green-100 text-green-800'
-                              : p.status === 'Paused'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-gray-100 text-gray-800'
-                          }`}
-                        >
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1">
-                        {p.lastSentAt ? formatDateTime(p.lastSentAt) : '—'}
-                      </td>
-                      <td className="px-2 py-1">
-                        {typeof p.responseRate === 'number' ? `${p.responseRate}%` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                      Log sample response
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
