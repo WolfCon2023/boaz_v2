@@ -330,7 +330,7 @@ function SimpleBuilderUI({
     if (type === 'image') {
       newBlock.imageWidth = '600px'
     }
-    setBlocks([...blocks, newBlock])
+    setBlocks((prev) => [...prev, newBlock])
     setEditingBlockId(newBlock.id)
   }
   
@@ -339,10 +339,25 @@ function SimpleBuilderUI({
   }
   
   function removeBlock(id: string) {
-    setBlocks(blocks.filter(b => b.id !== id))
+    setBlocks((prev) => prev.filter((b) => b.id !== id))
     if (editingBlockId === id) {
       setEditingBlockId(null)
     }
+  }
+
+  function duplicateBlock(id: string) {
+    setBlocks((prev) => {
+      const index = prev.findIndex((b) => b.id === id)
+      if (index === -1) return prev
+      const original = prev[index]
+      const clone: SimpleBlock = {
+        ...original,
+        id: `${original.id}-${Date.now()}`,
+      }
+      const next = [...prev]
+      next.splice(index + 1, 0, clone)
+      return next
+    })
   }
   
   function moveBlock(id: string, direction: 'up' | 'down') {
@@ -442,6 +457,14 @@ function SimpleBuilderUI({
             </button>
             <button
               type="button"
+              onClick={() => duplicateBlock(block.id)}
+              className="text-xs px-2 py-1 rounded border"
+              title="Duplicate block"
+            >
+              Duplicate
+            </button>
+            <button
+              type="button"
               onClick={() => removeBlock(block.id)}
               className="text-xs px-2 py-1 rounded border border-red-400 text-red-400"
             >
@@ -492,25 +515,92 @@ function SimpleBuilderUI({
   
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => addBlock('heading')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-          <Type size={14} /> Heading
-        </button>
-        <button type="button" onClick={() => addBlock('text')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-          <Type size={14} /> Text
-        </button>
-        <button type="button" onClick={() => addBlock('image')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-          <Image size={14} /> Image
-        </button>
-        <button type="button" onClick={() => addBlock('button')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-          <MousePointerClick size={14} /> Button
-        </button>
-        <button type="button" onClick={() => addBlock('divider')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-          <Minus size={14} /> Divider
-        </button>
-        <button type="button" onClick={() => addBlock('two-columns')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
-          <Columns size={14} /> Two Columns
-        </button>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => addBlock('heading')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+            <Type size={14} /> Heading
+          </button>
+          <button type="button" onClick={() => addBlock('text')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+            <Type size={14} /> Text
+          </button>
+          <button type="button" onClick={() => addBlock('image')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+            <Image size={14} /> Image
+          </button>
+          <button type="button" onClick={() => addBlock('button')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+            <MousePointerClick size={14} /> Button
+          </button>
+          <button type="button" onClick={() => addBlock('divider')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+            <Minus size={14} /> Divider
+          </button>
+          <button type="button" onClick={() => addBlock('two-columns')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
+            <Columns size={14} /> Two Columns
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
+          <span className="font-semibold mr-1">Presets:</span>
+          <button
+            type="button"
+            className="rounded-lg border px-2 py-1"
+            onClick={() => {
+              const id1 = `${Date.now()}-hero-h`
+              const id2 = `${Date.now()}-hero-t`
+              const id3 = `${Date.now()}-hero-b`
+              setBlocks((prev) => [
+                ...prev,
+                {
+                  id: id1,
+                  type: 'heading',
+                  content: 'Your Big Headline',
+                  backgroundColor: '#ffffff',
+                  textColor: '#000000',
+                  align: 'center',
+                },
+                {
+                  id: id2,
+                  type: 'text',
+                  content: 'Use this space to explain your offer in a couple of short sentences.',
+                  backgroundColor: '#ffffff',
+                  textColor: '#000000',
+                  align: 'center',
+                },
+                {
+                  id: id3,
+                  type: 'button',
+                  content: '',
+                  buttonText: 'Call to action',
+                  buttonUrl: 'https://example.com',
+                  backgroundColor: '#007bff',
+                  textColor: '#ffffff',
+                  align: 'center',
+                },
+              ])
+              setEditingBlockId(id1)
+            }}
+          >
+            Hero + Text + Button
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border px-2 py-1"
+            onClick={() => {
+              const id1 = `${Date.now()}-two-cols`
+              setBlocks((prev) => [
+                ...prev,
+                {
+                  id: id1,
+                  type: 'two-columns',
+                  content: 'Left column content ||| Right column content',
+                  backgroundColor: '#ffffff',
+                  textColor: '#000000',
+                  align: 'left',
+                },
+              ])
+              setEditingBlockId(id1)
+            }}
+          >
+            Two-column text
+          </button>
+        </div>
       </div>
       
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
