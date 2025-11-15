@@ -134,6 +134,23 @@ export default function CRMSurveys() {
     },
   })
 
+  const deleteProgram = useMutation({
+    mutationFn: async (id: string) => {
+      await http.delete(`/api/crm/surveys/programs/${id}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['surveys-programs'] })
+      toast.showToast('Survey program deleted.', 'success')
+      setShowEditor(false)
+      setEditing(null)
+      setSelectedProgramId(null)
+    },
+    onError: (err: any) => {
+      console.error('Delete survey program error:', err)
+      toast.showToast('Failed to delete survey program.', 'error')
+    },
+  })
+
   const openNewProgram = () => {
     setEditing({
       id: '',
@@ -512,20 +529,40 @@ export default function CRMSurveys() {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={closeEditor}
-                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)]"
-                  >
-                    Save program
-                  </button>
+                <div className="flex justify-between gap-2 pt-2">
+                  {editing.id && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!editing.id) return
+                        if (
+                          !window.confirm(
+                            'Delete this survey program? This will also remove its stored responses.',
+                          )
+                        )
+                          return
+                        deleteProgram.mutate(editing.id)
+                      }}
+                      className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <div className="ml-auto flex gap-2">
+                    <button
+                      type="button"
+                      onClick={closeEditor}
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)]"
+                    >
+                      Save program
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>
