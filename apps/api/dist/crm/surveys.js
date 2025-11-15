@@ -3,12 +3,21 @@ import { getDb } from '../db.js';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 export const surveysRouter = Router();
+const surveyQuestionSchema = z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    required: z.boolean().optional(),
+    order: z.number().int().nonnegative().optional(),
+});
 const surveyProgramSchema = z.object({
     name: z.string().min(1),
     type: z.enum(['NPS', 'CSAT', 'Post‑interaction']),
     channel: z.enum(['Email', 'In‑app', 'Link']),
     status: z.enum(['Draft', 'Active', 'Paused']),
     description: z.string().max(2000).optional(),
+    questionText: z.string().max(500).optional(),
+    scaleHelpText: z.string().max(500).optional(),
+    questions: z.array(surveyQuestionSchema).optional(),
 });
 const surveyResponseSchema = z.object({
     score: z.number().min(0).max(10),
@@ -50,10 +59,25 @@ surveysRouter.get('/programs', async (req, res) => {
         .toArray();
     res.json({
         data: {
-            items: items.map((p) => ({
-                ...p,
-                _id: String(p._id),
-            })),
+            items: items.map((p) => {
+                // Ensure questions are always present in the payload so the UI can re‑hydrate
+                let questions = p.questions ?? [];
+                if ((!questions || questions.length === 0) && p.questionText) {
+                    questions = [
+                        {
+                            id: 'q1',
+                            label: p.questionText,
+                            required: true,
+                            order: 0,
+                        },
+                    ];
+                }
+                return {
+                    ...p,
+                    questions,
+                    _id: String(p._id),
+                };
+            }),
         },
         error: null,
     });
