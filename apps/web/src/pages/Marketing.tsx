@@ -5,7 +5,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { Type, Image, MousePointerClick, Minus, Columns, GripVertical } from 'lucide-react'
 import { useToast } from '@/components/Toast'
-import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
+import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
