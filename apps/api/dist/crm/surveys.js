@@ -10,6 +10,14 @@ const surveyProgramSchema = z.object({
     status: z.enum(['Draft', 'Active', 'Paused']),
     description: z.string().max(2000).optional(),
 });
+const surveyResponseSchema = z.object({
+    score: z.number().min(0).max(10),
+    comment: z.string().max(4000).optional(),
+    contactId: z.string().optional(),
+    accountId: z.string().optional(),
+    ticketId: z.string().optional(),
+    outreachEnrollmentId: z.string().optional(),
+});
 // GET /api/crm/surveys/programs?type=&status=&q=&sort=&dir=
 surveysRouter.get('/programs', async (req, res) => {
     const db = await getDb();
@@ -49,6 +57,122 @@ surveysRouter.get('/programs', async (req, res) => {
         },
         error: null,
     });
+});
+// POST /api/crm/surveys/programs/:id/responses
+surveysRouter.post('/programs/:id/responses', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    let programId;
+    try {
+        programId = new ObjectId(req.params.id);
+    }
+    catch {
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+    const parsed = surveyResponseSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ data: null, error: 'invalid_payload' });
+    }
+    const program = await db.collection('survey_programs').findOne({ _id: programId });
+    if (!program) {
+        return res.status(404).json({ data: null, error: 'program_not_found' });
+    }
+    const now = new Date();
+    const toObjectId = (v) => {
+        if (!v)
+            return null;
+        try {
+            return new ObjectId(v);
+        }
+        catch {
+            return null;
+        }
+    };
+    const doc = {
+        programId,
+        type: program.type,
+        channel: program.channel,
+        score: parsed.data.score,
+        comment: parsed.data.comment,
+        contactId: toObjectId(parsed.data.contactId),
+        accountId: toObjectId(parsed.data.accountId),
+        ticketId: toObjectId(parsed.data.ticketId),
+        outreachEnrollmentId: toObjectId(parsed.data.outreachEnrollmentId),
+        createdAt: now,
+    };
+    await db.collection('survey_responses').insertOne(doc);
+    res.status(201).json({ data: { ok: true }, error: null });
+});
+// GET /api/crm/surveys/programs/:id/summary
+surveysRouter.get('/programs/:id/summary', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    let programId;
+    try {
+        programId = new ObjectId(req.params.id);
+    }
+    catch {
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+    const program = await db.collection('survey_programs').findOne({ _id: programId });
+    if (!program) {
+        return res.status(404).json({ data: null, error: 'program_not_found' });
+    }
+    const responses = await db
+        .collection('survey_responses')
+        .find({ programId })
+        .sort({ createdAt: -1 })
+        .limit(1000)
+        .toArray();
+    const total = responses.length;
+    let summary = {
+        totalResponses: total,
+    };
+    if (total === 0) {
+        return res.json({ data: summary, error: null });
+    }
+    if (program.type === 'NPS') {
+        let detractors = 0;
+        let passives = 0;
+        let promoters = 0;
+        for (const r of responses) {
+            if (r.score <= 6)
+                detractors++;
+            else if (r.score <= 8)
+                passives++;
+            else
+                promoters++;
+        }
+        const detPct = (detractors / total) * 100;
+        const promPct = (promoters / total) * 100;
+        summary = {
+            ...summary,
+            detractors,
+            passives,
+            promoters,
+            detractorsPct: detPct,
+            passivesPct: (passives / total) * 100,
+            promotersPct: promPct,
+            nps: Math.round(promPct - detPct),
+        };
+    }
+    else {
+        const sum = responses.reduce((acc, r) => acc + r.score, 0);
+        const avg = sum / total;
+        const buckets = {};
+        for (const r of responses) {
+            const key = String(r.score);
+            buckets[key] = (buckets[key] ?? 0) + 1;
+        }
+        summary = {
+            ...summary,
+            averageScore: avg,
+            distribution: buckets,
+        };
+    }
+    res.json({ data: summary, error: null });
 });
 // POST /api/crm/surveys/programs
 surveysRouter.post('/programs', async (req, res) => {

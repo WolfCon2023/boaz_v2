@@ -168,35 +168,71 @@ supportTicketsRouter.post('/portal/tickets', async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
-    const raw = req.body ?? {};
-    const shortDescription = typeof raw.shortDescription === 'string' ? raw.shortDescription.trim() : '';
-    const requesterEmail = typeof raw.requesterEmail === 'string' ? raw.requesterEmail.trim() : '';
-    if (!shortDescription || !requesterEmail)
-        return res.status(400).json({ data: null, error: 'invalid_payload' });
-    const description = typeof raw.description === 'string' ? raw.description.slice(0, 2500) : '';
-    const doc = {
-        shortDescription,
-        description,
-        status: 'open',
-        priority: 'normal',
-        accountId: null,
-        contactId: null,
-        assignee: null,
-        slaDueAt: null,
-        comments: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
-        requesterEmail,
-    };
     try {
-        doc.ticketNumber = await getNextSequence('ticketNumber');
+        const raw = req.body ?? {};
+        const shortDescription = typeof raw.shortDescription === 'string' ? raw.shortDescription.trim() : '';
+        const requesterEmail = typeof raw.requesterEmail === 'string' ? raw.requesterEmail.trim() : '';
+        if (!shortDescription || !requesterEmail) {
+            return res.status(400).json({ data: null, error: 'invalid_payload' });
+        }
+        const description = typeof raw.description === 'string' ? raw.description.slice(0, 2500) : '';
+        const doc = {
+            shortDescription,
+            description,
+            status: 'open',
+            priority: 'normal',
+            accountId: null,
+            contactId: null,
+            assignee: null,
+            slaDueAt: null,
+            comments: [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
+            requesterEmail,
+        };
+        try {
+            doc.ticketNumber = await getNextSequence('ticketNumber');
+        }
+        catch { }
+        if (doc.ticketNumber == null)
+            doc.ticketNumber = 200001;
+        const coll = db.collection('support_tickets');
+        // Use the same robust retry logic as the internal ticket creation route
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const result = await coll.insertOne(doc);
+                return res
+                    .status(201)
+                    .json({ data: { _id: result.insertedId, ticketNumber: doc.ticketNumber }, error: null });
+            }
+            catch (errInsert) {
+                if (errInsert && typeof errInsert === 'object' && 'code' in errInsert && errInsert.code === 11000) {
+                    // Duplicate ticketNumber – align counter with current max and try the next number
+                    const maxDocs = await coll
+                        .find({}, { projection: { ticketNumber: 1 } })
+                        .sort({ ticketNumber: -1 })
+                        .limit(1)
+                        .toArray();
+                    const maxNum = maxDocs[0]?.ticketNumber ?? 200000;
+                    await db
+                        .collection('counters')
+                        .updateOne({ _id: 'ticketNumber' }, [{ $set: { seq: { $max: ['$seq', maxNum] } } }], { upsert: true });
+                    doc.ticketNumber = (maxNum ?? 200000) + 1;
+                    continue;
+                }
+                throw errInsert;
+            }
+        }
+        return res.status(409).json({ data: null, error: 'duplicate_ticketNumber' });
     }
-    catch { }
-    if (doc.ticketNumber == null)
-        doc.ticketNumber = 200001;
-    const result = await db.collection('support_tickets').insertOne(doc);
-    res.status(201).json({ data: { _id: result.insertedId, ticketNumber: doc.ticketNumber }, error: null });
+    catch (err) {
+        console.error('portal_create_ticket_error', err);
+        if (err && typeof err === 'object' && 'code' in err && err.code === 11000) {
+            return res.status(409).json({ data: null, error: 'duplicate_ticketNumber' });
+        }
+        return res.status(500).json({ data: null, error: 'insert_failed' });
+    }
 });
 // GET /api/crm/support/portal/tickets/:ticketNumber
 supportTicketsRouter.get('/portal/tickets/:ticketNumber', async (req, res) => {
