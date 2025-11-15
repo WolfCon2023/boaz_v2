@@ -393,6 +393,28 @@ export default function SupportTickets() {
     }
   }, [editing])
 
+  const { data: ticketSurveyData } = useQuery({
+    queryKey: ['ticket-surveys', editing?._id],
+    enabled: !!editing?._id,
+    queryFn: async () => {
+      if (!editing?._id) return { data: { items: [] as any[] } }
+      const res = await http.get(`/api/crm/surveys/tickets/${editing._id}/responses`)
+      return res.data as {
+        data: {
+          items: Array<{
+            _id: string
+            programId: string
+            programName: string
+            programType: string
+            score: number
+            comment: string | null
+            createdAt: string
+          }>
+        }
+      }
+    },
+  })
+
   // Inline SLA due date/time picker
   const [slaEditing, setSlaEditing] = React.useState<Ticket | null>(null)
   const [slaPortal, setSlaPortal] = React.useState<HTMLElement | null>(null)
@@ -601,13 +623,41 @@ export default function SupportTickets() {
                 </div>
 
                 {surveyPrograms.length > 0 && (
-                  <div className="sm:col-span-2 mt-2 rounded-lg border border-[color:var(--color-border)] p-3 space-y-2">
+                  <div className="sm:col-span-2 mt-2 rounded-lg border border-[color:var(--color-border)] p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="text-sm font-semibold">Surveys &amp; Feedback</div>
                       <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                        Log a CSAT/post‑interaction survey response for this ticket.
+                        Log and review CSAT/post‑interaction survey responses for this ticket.
                       </div>
                     </div>
+
+                    {ticketSurveyData?.data.items.length ? (
+                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-2 text-xs space-y-1">
+                        <div className="text-[11px] font-semibold text-[color:var(--color-text-muted)]">
+                          Latest responses
+                        </div>
+                        {ticketSurveyData.data.items.map((r) => (
+                          <div key={r._id} className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="font-medium text-[color:var(--color-text)]">
+                                {r.programName}{' '}
+                                <span className="text-[10px] uppercase text-[color:var(--color-text-muted)]">
+                                  ({r.programType})
+                                </span>
+                              </div>
+                              <div className="text-[color:var(--color-text-muted)]">
+                                Score: <span className="font-semibold">{r.score}</span>
+                                {r.comment ? ` — ${r.comment}` : ''}
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-[color:var(--color-text-muted)] whitespace-nowrap ml-2">
+                              {formatDateTime(r.createdAt)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
                     <div className="grid gap-2 sm:grid-cols-4">
                       <div className="sm:col-span-2">
                         <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
