@@ -12,6 +12,9 @@ type SurveyProgram = {
   type: 'NPS' | 'CSAT' | 'Post‑interaction'
   channel: 'Email' | 'In‑app' | 'Link'
   status: 'Draft' | 'Active' | 'Paused'
+  // Optional content fields so each program defines its question and scale guidance
+  questionText?: string
+  scaleHelpText?: string
   lastSentAt?: string
   responseRate?: number
 }
@@ -32,6 +35,16 @@ type ProgramSummary =
       averageScore: number
       distribution: Record<string, number>
     }
+
+const defaultQuestionForType = (type: SurveyProgram['type']): string => {
+  if (type === 'NPS') {
+    return 'On a scale from 0 to 10, how likely are you to recommend us to a friend or colleague?'
+  }
+  if (type === 'CSAT') {
+    return 'How satisfied are you with your recent experience? (0 = Very dissatisfied, 10 = Very satisfied)'
+  }
+  return 'Thinking about your recent interaction, how would you rate your overall experience from 0 to 10?'
+}
 
 export default function CRMSurveys() {
   const [typeFilter, setTypeFilter] = React.useState<'all' | 'NPS' | 'CSAT' | 'Post‑interaction'>('all')
@@ -152,12 +165,15 @@ export default function CRMSurveys() {
   })
 
   const openNewProgram = () => {
+    const type: SurveyProgram['type'] = 'NPS'
     setEditing({
       id: '',
       name: '',
-      type: 'NPS',
+      type,
       channel: 'Email',
       status: 'Draft',
+      questionText: defaultQuestionForType(type),
+      scaleHelpText: '0 = Not at all likely, 10 = Extremely likely',
     })
     setShowEditor(true)
   }
@@ -175,6 +191,19 @@ export default function CRMSurveys() {
 
   const handleEditorChange = (field: keyof SurveyProgram, value: string) => {
     if (!editing) return
+
+    // When changing type on a brand‑new program and no custom question is set yet,
+    // auto-suggest a reasonable default question.
+    if (field === 'type') {
+      const nextType = value as SurveyProgram['type']
+      const next: SurveyProgram = { ...editing, type: nextType }
+      if (!next.questionText || next.questionText.trim().length === 0) {
+        next.questionText = defaultQuestionForType(nextType)
+      }
+      setEditing(next)
+      return
+    }
+
     setEditing({ ...editing, [field]: value } as SurveyProgram)
   }
 

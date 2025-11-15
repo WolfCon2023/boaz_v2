@@ -12,6 +12,8 @@ type SurveyProgramDoc = {
   channel: 'Email' | 'In‑app' | 'Link'
   status: 'Draft' | 'Active' | 'Paused'
   description?: string
+  questionText?: string
+  scaleHelpText?: string
   createdAt: Date
   updatedAt: Date
   lastSentAt?: Date | null
@@ -38,6 +40,8 @@ const surveyProgramSchema = z.object({
   channel: z.enum(['Email', 'In‑app', 'Link']),
   status: z.enum(['Draft', 'Active', 'Paused']),
   description: z.string().max(2000).optional(),
+  questionText: z.string().max(500).optional(),
+  scaleHelpText: z.string().max(500).optional(),
 })
 
 const surveyResponseSchema = z.object({
