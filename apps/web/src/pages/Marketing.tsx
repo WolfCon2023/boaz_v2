@@ -10,7 +10,16 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities'
 
 type Segment = { _id: string; name: string; description?: string }
-type Campaign = { _id: string; name: string; subject?: string; status?: string; segmentId?: string | null; mjml?: string; previewText?: string }
+type Campaign = {
+  _id: string
+  name: string
+  subject?: string
+  status?: string
+  segmentId?: string | null
+  mjml?: string
+  previewText?: string
+  surveyProgramId?: string | null
+}
 type Template = { key: string; name: string; mjml: string }
 
 export default function Marketing() {
@@ -863,13 +872,44 @@ function CampaignsTab() {
   const toast = useToast()
   const { data: segments } = useQuery({ queryKey: ['mkt-segments'], queryFn: async () => (await http.get('/api/marketing/segments')).data })
   const { data } = useQuery({ queryKey: ['mkt-campaigns'], queryFn: async () => (await http.get('/api/marketing/campaigns')).data })
+  const { data: surveyProgramsData } = useQuery({
+    queryKey: ['surveys-programs-marketing'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/programs', { params: { status: 'Active' } })
+      return res.data as {
+        data: {
+          items: Array<{
+            _id: string
+            name: string
+            type: 'NPS' | 'CSAT' | 'Post‑interaction'
+          }>
+        }
+      }
+    },
+  })
   const { data: tplData } = useQuery({ queryKey: ['mkt-templates'], queryFn: async () => (await http.get('/api/marketing/templates')).data })
   const create = useMutation({
-    mutationFn: async (payload: { name: string; subject?: string; html?: string; mjml?: string; previewText?: string; segmentId?: string }) => http.post('/api/marketing/campaigns', payload),
+    mutationFn: async (payload: {
+      name: string
+      subject?: string
+      html?: string
+      mjml?: string
+      previewText?: string
+      segmentId?: string
+      surveyProgramId?: string | null
+    }) => http.post('/api/marketing/campaigns', payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-campaigns'] }),
   })
   const save = useMutation({
-    mutationFn: async (payload: { id: string; subject?: string; previewText?: string; mjml?: string; html?: string; segmentId?: string }) => http.put(`/api/marketing/campaigns/${payload.id}`, payload),
+    mutationFn: async (payload: {
+      id: string
+      subject?: string
+      previewText?: string
+      mjml?: string
+      html?: string
+      segmentId?: string
+      surveyProgramId?: string | null
+    }) => http.put(`/api/marketing/campaigns/${payload.id}`, payload),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['mkt-campaigns'] })
     },
@@ -896,6 +936,7 @@ function CampaignsTab() {
   const [subject, setSubject] = React.useState<string>('')
   const [previewText, setPreviewText] = React.useState<string>('')
   const [segmentId, setSegmentId] = React.useState<string>('')
+  const [surveyProgramId, setSurveyProgramId] = React.useState<string>('')
   
   // Simple builder state
   type SimpleBlock = {
@@ -918,6 +959,7 @@ function CampaignsTab() {
       setPreviewText(editing.previewText || '')
       setMjml(editing.mjml || '')
       setSegmentId(String(editing.segmentId || ''))
+      setSurveyProgramId(String(editing.surveyProgramId || ''))
       
       // Try to parse existing MJML into simple blocks if possible
       if (editing.mjml && builderMode === 'simple') {
@@ -934,6 +976,7 @@ function CampaignsTab() {
       }
     } else {
       setSimpleBlocks([])
+      setSurveyProgramId('')
     }
   }, [editing, builderMode])
   
@@ -1132,7 +1175,15 @@ ${sections}
     if (mjml) {
       try { const r = await http.post('/api/marketing/mjml/preview', { mjml }); html = String(r.data?.data?.html || '') } catch {}
     }
-    await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html, segmentId: segmentId || undefined })
+    await save.mutateAsync({
+      id: editing._id,
+      subject,
+      previewText,
+      mjml,
+      html,
+      segmentId: segmentId || undefined,
+      surveyProgramId: surveyProgramId || null,
+    })
     toast.showToast('Saved', 'success')
   }
   async function sendCampaign(dryRun: boolean) {
@@ -1147,7 +1198,15 @@ ${sections}
       if (mjml) {
         try { const r = await http.post('/api/marketing/mjml/preview', { mjml }); html = String(r.data?.data?.html || '') } catch {}
       }
-      await save.mutateAsync({ id: editing._id, subject, previewText, mjml, html, segmentId: segmentId || undefined })
+      await save.mutateAsync({
+        id: editing._id,
+        subject,
+        previewText,
+        mjml,
+        html,
+        segmentId: segmentId || undefined,
+        surveyProgramId: surveyProgramId || null,
+      })
       const res = await http.post(`/api/marketing/campaigns/${editing._id}/send`, { dryRun })
       const result = res.data?.data || null
       setSendResult(result)
@@ -1195,11 +1254,20 @@ ${sections}
   }
   return (
     <div className="space-y-4">
-      <form className="rounded-2xl border p-4 grid gap-2 sm:grid-cols-4" onSubmit={async (e) => {
-        e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement)
-        await create.mutateAsync({ name: String(fd.get('name')||''), subject: String(fd.get('subject')||''), html: String(fd.get('html')||''), segmentId: String(fd.get('segmentId')||'') || undefined })
-        ;(e.currentTarget as HTMLFormElement).reset()
-      }}>
+      <form
+        className="rounded-2xl border p-4 grid gap-2 sm:grid-cols-4"
+        onSubmit={async (e) => {
+          e.preventDefault()
+          const fd = new FormData(e.currentTarget as HTMLFormElement)
+          await create.mutateAsync({
+            name: String(fd.get('name') || ''),
+            subject: String(fd.get('subject') || ''),
+            html: String(fd.get('html') || ''),
+            segmentId: String(fd.get('segmentId') || '') || undefined,
+          })
+          ;(e.currentTarget as HTMLFormElement).reset()
+        }}
+      >
         <input name="name" placeholder="Campaign name" required className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
         <input name="subject" placeholder="Subject" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
         <select name="segmentId" className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
@@ -1212,7 +1280,12 @@ ${sections}
       <div className="rounded-2xl border">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b"><th className="p-2 text-left">Name</th><th className="p-2 text-left">Subject</th><th className="p-2 text-left">Status</th></tr>
+            <tr className="border-b">
+              <th className="p-2 text-left">Name</th>
+              <th className="p-2 text-left">Subject</th>
+              <th className="p-2 text-left">Status</th>
+              <th className="p-2 text-left">Linked survey</th>
+            </tr>
           </thead>
           <tbody>
             {(data?.data?.items ?? []).map((c: Campaign) => (
@@ -1252,6 +1325,13 @@ ${sections}
                 </td>
                 <td className="p-2 cursor-pointer" onClick={() => { setEditing(c) }}>{c.subject}</td>
                 <td className="p-2 cursor-pointer" onClick={() => { setEditing(c) }}>{c.status}</td>
+                <td className="p-2 text-xs text-[color:var(--color-text-muted)]">
+                  {c.surveyProgramId
+                    ? (surveyProgramsData?.data.items ?? []).find(
+                        (p) => p._id === c.surveyProgramId,
+                      )?.name ?? 'Linked'
+                    : '—'}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1288,12 +1368,49 @@ ${sections}
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
-            <input value={previewText} onChange={(e) => setPreviewText(e.target.value)} placeholder="Preview text (inbox snippet)" className="rounded-lg border px-3 py-2 text-sm bg-transparent" />
-            <select value={segmentId} onChange={(e) => setSegmentId(e.target.value)} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Subject"
+              className="rounded-lg border px-3 py-2 text-sm bg-transparent"
+            />
+            <input
+              value={previewText}
+              onChange={(e) => setPreviewText(e.target.value)}
+              placeholder="Preview text (inbox snippet)"
+              className="rounded-lg border px-3 py-2 text-sm bg-transparent"
+            />
+            <select
+              value={segmentId}
+              onChange={(e) => setSegmentId(e.target.value)}
+              className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]"
+            >
               <option value="">Select segment…</option>
-              {((segments?.data?.items ?? []) as any[]).map((s) => (<option key={s._id} value={s._id}>{s.name}</option>))}
+              {((segments?.data?.items ?? []) as any[]).map((s) => (
+                <option key={s._id} value={s._id}>
+                  {s.name}
+                </option>
+              ))}
             </select>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="sm:col-span-1">
+              <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                Linked survey program (optional)
+              </label>
+              <select
+                value={surveyProgramId}
+                onChange={(e) => setSurveyProgramId(e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]"
+              >
+                <option value="">None</option>
+                {(surveyProgramsData?.data.items ?? []).map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.name} ({p.type})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">

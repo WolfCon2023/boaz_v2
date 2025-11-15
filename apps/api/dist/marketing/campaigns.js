@@ -29,9 +29,21 @@ marketingCampaignsRouter.post('/campaigns', async (req, res) => {
     const mjml = typeof raw.mjml === 'string' ? raw.mjml : '';
     const previewText = typeof raw.previewText === 'string' ? raw.previewText : '';
     const segmentId = ObjectId.isValid(raw.segmentId) ? new ObjectId(raw.segmentId) : null;
+    const surveyProgramId = ObjectId.isValid(raw.surveyProgramId) ? new ObjectId(raw.surveyProgramId) : null;
     if (!name)
         return res.status(400).json({ data: null, error: 'invalid_payload' });
-    const doc = { name, subject, html, mjml, previewText, segmentId, status: String(raw.status || 'draft'), createdAt: new Date(), updatedAt: new Date() };
+    const doc = {
+        name,
+        subject,
+        html,
+        mjml,
+        previewText,
+        segmentId,
+        surveyProgramId,
+        status: String(raw.status || 'draft'),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    };
     const r = await db.collection('marketing_campaigns').insertOne(doc);
     res.status(201).json({ data: { _id: r.insertedId, ...doc }, error: null });
 });
@@ -48,6 +60,14 @@ marketingCampaignsRouter.put('/campaigns/:id', async (req, res) => {
                 update[k] = req.body[k];
         if (req.body?.segmentId && ObjectId.isValid(req.body.segmentId))
             update.segmentId = new ObjectId(req.body.segmentId);
+        if ('surveyProgramId' in (req.body ?? {})) {
+            if (req.body.surveyProgramId && ObjectId.isValid(req.body.surveyProgramId)) {
+                update.surveyProgramId = new ObjectId(req.body.surveyProgramId);
+            }
+            else {
+                update.surveyProgramId = null;
+            }
+        }
         await db.collection('marketing_campaigns').updateOne({ _id }, { $set: update });
         res.json({ data: { ok: true }, error: null });
     }
