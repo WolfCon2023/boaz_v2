@@ -120,11 +120,18 @@ export default function CRMSurveys() {
 
   const saveProgram = useMutation({
     mutationFn: async (program: SurveyProgram) => {
-      const body = {
+      const body: any = {
         name: program.name,
         type: program.type,
         channel: program.channel,
         status: program.status,
+      }
+
+      if (program.questionText && program.questionText.trim()) {
+        body.questionText = program.questionText.trim()
+      }
+      if (program.scaleHelpText && program.scaleHelpText.trim()) {
+        body.scaleHelpText = program.scaleHelpText.trim()
       }
 
       if (program.id) {
@@ -477,8 +484,8 @@ export default function CRMSurveys() {
                     {editing.id ? 'Edit survey program' : 'New survey program'}
                   </h2>
                   <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                    Define the survey name, type, channel, and status. This is a UI prototype; data is not yet
-                    saved to the server.
+                    Define the survey name, type, channel, and status — plus the exact question text and scale
+                    guidance your customers will see.
                   </p>
                 </div>
                 <button
@@ -506,10 +513,10 @@ export default function CRMSurveys() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
-                    Type
-                  </label>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
+                      Type
+                    </label>
                     <select
                       value={editing.type}
                       onChange={(e) =>
@@ -524,9 +531,9 @@ export default function CRMSurveys() {
                   </div>
 
                   <div>
-                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
-                    Channel
-                  </label>
+                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
+                      Channel
+                    </label>
                     <select
                       value={editing.channel}
                       onChange={(e) =>
@@ -541,9 +548,9 @@ export default function CRMSurveys() {
                   </div>
 
                   <div>
-                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
+                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
                       Status
-                  </label>
+                    </label>
                     <select
                       value={editing.status}
                       onChange={(e) =>
@@ -556,6 +563,62 @@ export default function CRMSurveys() {
                       <option value="Paused">Paused</option>
                     </select>
                   </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
+                    Question text
+                  </label>
+                  <textarea
+                    value={editing.questionText ?? ''}
+                    onChange={(e) => handleEditorChange('questionText', e.target.value)}
+                    rows={3}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                    placeholder="e.g. On a scale from 0–10, how likely are you to recommend us to a friend or colleague?"
+                  />
+                  <p className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                    This is the main question customers will see in the email or portal survey.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
+                    Scale help (optional)
+                  </label>
+                  <textarea
+                    value={editing.scaleHelpText ?? ''}
+                    onChange={(e) => handleEditorChange('scaleHelpText', e.target.value)}
+                    rows={2}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                    placeholder="e.g. 0 = Not at all likely, 10 = Extremely likely"
+                  />
+                  <p className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                    Short guidance shown under the question to explain what the scale values mean.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-3 text-xs">
+                  <p className="mb-1 font-semibold text-[color:var(--color-text)]">Preview</p>
+                  <p className="text-[color:var(--color-text)]">
+                    {editing.questionText && editing.questionText.trim().length > 0
+                      ? editing.questionText
+                      : defaultQuestionForType(editing.type)}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1 text-[10px] text-[color:var(--color-text-muted)]">
+                    {Array.from({ length: 11 }).map((_, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)]"
+                      >
+                        {i}
+                      </span>
+                    ))}
+                  </div>
+                  {editing.scaleHelpText && editing.scaleHelpText.trim().length > 0 && (
+                    <p className="mt-2 text-[10px] text-[color:var(--color-text-muted)]">
+                      {editing.scaleHelpText}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex justify-between gap-2 pt-2">
