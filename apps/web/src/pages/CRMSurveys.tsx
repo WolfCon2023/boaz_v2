@@ -530,7 +530,7 @@ export default function CRMSurveys() {
         <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
           <div className="absolute inset-0 bg-black/60" onClick={closeEditor} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
+            <div className="max-h-[90vh] w-[min(90vw,40rem)] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold">
