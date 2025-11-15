@@ -155,7 +155,10 @@ surveysRouter.post('/programs/:id/responses', async (req, res) => {
         .collection('support_tickets')
         .updateOne(
           { _id: doc.ticketId },
-          { $push: { comments: comment }, $set: { updatedAt: now } },
+          {
+            $push: { comments: comment as any },
+            $set: { updatedAt: now },
+          } as any,
         )
     } catch (e) {
       console.error('Failed to append survey comment to ticket history:', e)

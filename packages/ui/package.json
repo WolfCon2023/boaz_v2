@@ -21,9 +21,10 @@
     "react-dom": "^18 || ^19"
   },
   "devDependencies": {
-    "typescript": "~5.9.3",
-    "rimraf": "^6.0.1"
+    "rimraf": "^6.0.1",
+    "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "boaz_v2": "file:../.."
   }
 }
-
-

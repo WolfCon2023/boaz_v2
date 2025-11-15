@@ -102,6 +102,27 @@ surveysRouter.post('/programs/:id/responses', async (req, res) => {
         createdAt: now,
     };
     await db.collection('survey_responses').insertOne(doc);
+    // If this response is tied to a support ticket, append a system comment so the
+    // ticket history clearly shows that a survey response was logged.
+    if (doc.ticketId) {
+        try {
+            const comment = {
+                author: 'system',
+                body: `Survey response logged for "${program.name}" (type: ${program.type}) with score ${doc.score}${doc.comment ? ` – ${doc.comment}` : ''}`,
+                at: now,
+            };
+            await db
+                .collection('support_tickets')
+                .updateOne({ _id: doc.ticketId }, {
+                $push: { comments: comment },
+                $set: { updatedAt: now },
+            });
+        }
+        catch (e) {
+            console.error('Failed to append survey comment to ticket history:', e);
+            // Do not fail the main response insert just because comment logging failed
+        }
+    }
     res.status(201).json({ data: { ok: true }, error: null });
 });
 // GET /api/crm/surveys/programs/:id/summary
