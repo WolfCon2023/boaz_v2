@@ -194,18 +194,6 @@ export default function CRMInvoices() {
     },
   })
 
-  // Recipient email state for "Send Invoice"
-  const [invoiceRecipientEmail, setInvoiceRecipientEmail] = React.useState('')
-
-  React.useEffect(() => {
-    if (editing && editing.accountId) {
-      const acct = acctById.get(editing.accountId)
-      setInvoiceRecipientEmail(acct?.primaryContactEmail || '')
-    } else {
-      setInvoiceRecipientEmail('')
-    }
-  }, [editing, acctById])
-
   function startInlineEdit(inv: Invoice) {
     setInlineEditId(inv._id)
     setInlineTitle(inv.title ?? '')
@@ -388,6 +376,8 @@ export default function CRMInvoices() {
   const [lineItems, setLineItems] = React.useState<InvoiceLineItem[]>([])
   const [showHistory, setShowHistory] = React.useState(false)
   const editingIdRef = React.useRef<string | null>(null)
+  // Recipient email state for "Send Invoice"
+  const [invoiceRecipientEmail, setInvoiceRecipientEmail] = React.useState('')
 
   // Initialize line items when editing changes
   React.useEffect(() => {
@@ -447,6 +437,16 @@ export default function CRMInvoices() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing?._id])
+
+  // Keep invoiceRecipientEmail in sync with the selected account when editing changes
+  React.useEffect(() => {
+    if (editing && editing.accountId) {
+      const acct = acctById.get(editing.accountId)
+      setInvoiceRecipientEmail(acct?.primaryContactEmail || '')
+    } else {
+      setInvoiceRecipientEmail('')
+    }
+  }, [editing, acctById])
 
   // When discounts load, try to match discount code if editing has one
   React.useEffect(() => {
