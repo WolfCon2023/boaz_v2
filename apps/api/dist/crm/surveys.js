@@ -125,6 +125,64 @@ surveysRouter.post('/programs/:id/responses', async (req, res) => {
     }
     res.status(201).json({ data: { ok: true }, error: null });
 });
+// GET /api/crm/surveys/tickets/:ticketId/responses - latest responses for a ticket
+surveysRouter.get('/tickets/:ticketId/responses', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    let ticketId;
+    try {
+        ticketId = new ObjectId(req.params.ticketId);
+    }
+    catch {
+        return res.status(400).json({ data: null, error: 'invalid_ticket_id' });
+    }
+    try {
+        const responses = await db
+            .collection('survey_responses')
+            .find({ ticketId })
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .toArray();
+        if (responses.length === 0) {
+            return res.json({ data: { items: [] }, error: null });
+        }
+        const programIds = Array.from(new Set(responses.map((r) => String(r.programId)))).map((id) => new ObjectId(id));
+        const programs = await db
+            .collection('survey_programs')
+            .find({ _id: { $in: programIds } })
+            .project({ name: 1, type: 1 })
+            .toArray();
+        const programMap = new Map(programs.map((p) => [String(p._id), { name: p.name, type: p.type }]));
+        // Keep only the latest response per program
+        const latestByProgram = new Map();
+        for (const r of responses) {
+            const key = String(r.programId);
+            if (!latestByProgram.has(key)) {
+                latestByProgram.set(key, r);
+            }
+        }
+        const items = Array.from(latestByProgram.entries()).map(([programIdStr, r]) => {
+            const meta = programMap.get(programIdStr);
+            return {
+                _id: String(r._id),
+                programId: programIdStr,
+                programName: meta?.name ?? programIdStr,
+                programType: meta?.type ?? r.type,
+                score: r.score,
+                comment: r.comment ?? null,
+                createdAt: r.createdAt,
+            };
+        });
+        res.json({ data: { items }, error: null });
+    }
+    catch (err) {
+        console.error('Get ticket survey responses error:', err);
+        res
+            .status(500)
+            .json({ data: null, error: err.message || 'failed_to_get_ticket_responses' });
+    }
+});
 // GET /api/crm/surveys/programs/:id/summary
 surveysRouter.get('/programs/:id/summary', async (req, res) => {
     const db = await getDb();
