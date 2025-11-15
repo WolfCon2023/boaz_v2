@@ -335,7 +335,7 @@ function SimpleBuilderUI({
   }
   
   function updateBlock(id: string, updates: Partial<SimpleBlock>) {
-    setBlocks(blocks.map(b => b.id === id ? { ...b, ...updates } : b))
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)))
   }
   
   function removeBlock(id: string) {
@@ -355,11 +355,10 @@ function SimpleBuilderUI({
     setBlocks(newBlocks)
   }
 
-  // Drag and drop handlers
+  // Drag and drop handlers (mouse + touch only to avoid interfering with typing)
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
-    useSensor(KeyboardSensor)
   )
 
   function handleDragEnd(event: DragEndEvent) {
