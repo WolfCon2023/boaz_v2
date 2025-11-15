@@ -183,8 +183,32 @@ export default function SupportTickets() {
       const res = await http.post(`/api/crm/surveys/programs/${programId}/responses`, rest)
       return res.data
     },
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       toast.showToast('Survey response recorded', 'success')
+      // Refresh ticket list so metrics stay in sync
+      qc.invalidateQueries({ queryKey: ['support-tickets'] })
+
+      // Optimistically append a system comment to the currently open ticket
+      const programName =
+        surveyPrograms.find((p) => p._id === vars.programId)?.name ?? 'Survey program'
+      const commentBody = `Survey response logged for "${programName}" with score ${vars.score}${
+        vars.comment ? ` – ${vars.comment}` : ''
+      }`
+      setEditing((prev) =>
+        prev && prev._id === vars.ticketId
+          ? {
+              ...prev,
+              comments: [
+                ...(prev.comments ?? []),
+                {
+                  author: 'system',
+                  body: commentBody,
+                  at: new Date().toISOString(),
+                },
+              ],
+            }
+          : prev,
+      )
     },
     onError: () => {
       toast.showToast('Failed to record survey response', 'error')
