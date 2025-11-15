@@ -24,6 +24,12 @@ type Ticket = {
   comments?: { author?: string; body?: string; at?: string }[]
 }
 
+type SurveyProgramPick = {
+  _id: string
+  name: string
+  type: 'NPS' | 'CSAT' | 'Post‑interaction'
+}
+
 export default function SupportTickets() {
   const qc = useQueryClient()
   const toast = useToast()
@@ -66,6 +72,21 @@ export default function SupportTickets() {
     },
   })
   const items = data?.data.items ?? []
+
+  const { data: surveyProgramsData } = useQuery({
+    queryKey: ['surveys-programs-support'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/programs', {})
+      return res.data as { data: { items: SurveyProgramPick[] } }
+    },
+  })
+  const surveyPrograms = React.useMemo(
+    () =>
+      (surveyProgramsData?.data.items ?? []).filter(
+        (p) => p.type === 'CSAT' || p.type === 'Post‑interaction',
+      ),
+    [surveyProgramsData?.data.items],
+  )
   // Sync filters from URL query params
   React.useEffect(() => {
     if (!initializedFromUrl.current) {
@@ -147,6 +168,27 @@ export default function SupportTickets() {
   const addComment = useMutation({
     mutationFn: async (payload: { _id: string, body: string }) => { const res = await http.post(`/api/crm/support/tickets/${payload._id}/comments`, { body: payload.body }); return res.data },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['support-tickets'] }),
+  })
+
+  const logSurvey = useMutation({
+    mutationFn: async (payload: {
+      programId: string
+      score: number
+      comment?: string
+      ticketId: string
+      accountId?: string | null
+      contactId?: string | null
+    }) => {
+      const { programId, ...rest } = payload
+      const res = await http.post(`/api/crm/surveys/programs/${programId}/responses`, rest)
+      return res.data
+    },
+    onSuccess: () => {
+      toast.showToast('Survey response recorded', 'success')
+    },
+    onError: () => {
+      toast.showToast('Failed to record survey response', 'error')
+    },
   })
 
   const [page, setPage] = React.useState(0)
@@ -315,6 +357,17 @@ export default function SupportTickets() {
   const [editing, setEditing] = React.useState<Ticket | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   React.useEffect(() => { if (!editing) return; const el = document.createElement('div'); el.setAttribute('data-overlay', 'ticket-editor'); Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' }); document.body.appendChild(el); setPortalEl(el); return () => { try { document.body.removeChild(el) } catch {}; setPortalEl(null) } }, [editing])
+
+  const [surveyProgramId, setSurveyProgramId] = React.useState('')
+  const [surveyScore, setSurveyScore] = React.useState('')
+  const [surveyComment, setSurveyComment] = React.useState('')
+  React.useEffect(() => {
+    if (!editing) {
+      setSurveyProgramId('')
+      setSurveyScore('')
+      setSurveyComment('')
+    }
+  }, [editing])
 
   // Inline SLA due date/time picker
   const [slaEditing, setSlaEditing] = React.useState<Ticket | null>(null)
@@ -522,6 +575,93 @@ export default function SupportTickets() {
                   <label className="mb-1 block text-sm font-semibold">Add comment</label>
                   <AddComment editing={editing} onAdded={(comment) => { setEditing((prev) => prev ? { ...prev, comments: [...(prev.comments ?? []), comment] } : prev) }} addComment={addComment} />
                 </div>
+
+                {surveyPrograms.length > 0 && (
+                  <div className="sm:col-span-2 mt-2 rounded-lg border border-[color:var(--color-border)] p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold">Surveys &amp; Feedback</div>
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Log a CSAT/post‑interaction survey response for this ticket.
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-4">
+                      <div className="sm:col-span-2">
+                        <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                          Survey program
+                        </label>
+                        <select
+                          value={surveyProgramId}
+                          onChange={(e) => setSurveyProgramId(e.target.value)}
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                        >
+                          <option value="">Select a program…</option>
+                          {surveyPrograms.map((p) => (
+                            <option key={p._id} value={p._id}>
+                              {p.name} ({p.type})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                          Score
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={10}
+                          value={surveyScore}
+                          onChange={(e) => setSurveyScore(e.target.value)}
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                          placeholder="0–10"
+                        />
+                      </div>
+                      <div className="sm:col-span-4">
+                        <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                          Comment (optional)
+                        </label>
+                        <textarea
+                          value={surveyComment}
+                          onChange={(e) => setSurveyComment(e.target.value)}
+                          rows={2}
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                          placeholder="Customer feedback, notes, etc."
+                        />
+                      </div>
+                      <div className="sm:col-span-4 flex justify-end">
+                        <button
+                          type="button"
+                          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-60"
+                          disabled={!surveyProgramId || !surveyScore || logSurvey.isPending}
+                          onClick={() => {
+                            if (!editing) return
+                            const n = Number(surveyScore)
+                            if (Number.isNaN(n)) {
+                              toast.showToast('Score must be a number.', 'error')
+                              return
+                            }
+                            if (n < 0 || n > 10) {
+                              toast.showToast('Score must be between 0 and 10.', 'error')
+                              return
+                            }
+                            logSurvey.mutate({
+                              programId: surveyProgramId,
+                              score: n,
+                              comment: surveyComment || undefined,
+                              ticketId: editing._id,
+                              accountId: editing.accountId ?? undefined,
+                              contactId: editing.contactId ?? undefined,
+                            })
+                            setSurveyScore('')
+                            setSurveyComment('')
+                          }}
+                        >
+                          Log survey response
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
