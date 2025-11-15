@@ -105,10 +105,26 @@ surveysRouter.get('/programs', async (req, res) => {
 
   res.json({
     data: {
-      items: items.map((p) => ({
-        ...p,
-        _id: String(p._id),
-      })),
+      items: items.map((p) => {
+        // Ensure questions are always present in the payload so the UI can re‑hydrate
+        let questions = p.questions ?? []
+        if ((!questions || questions.length === 0) && p.questionText) {
+          questions = [
+            {
+              id: 'q1',
+              label: p.questionText,
+              required: true,
+              order: 0,
+            },
+          ]
+        }
+
+        return {
+          ...p,
+          questions,
+          _id: String(p._id),
+        }
+      }),
     },
     error: null,
   })
