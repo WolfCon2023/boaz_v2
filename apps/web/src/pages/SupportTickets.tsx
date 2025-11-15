@@ -76,15 +76,12 @@ export default function SupportTickets() {
   const { data: surveyProgramsData } = useQuery({
     queryKey: ['surveys-programs-support'],
     queryFn: async () => {
-      const res = await http.get('/api/crm/surveys/programs', {})
+      const res = await http.get('/api/crm/surveys/programs')
       return res.data as { data: { items: SurveyProgramPick[] } }
     },
   })
   const surveyPrograms = React.useMemo(
-    () =>
-      (surveyProgramsData?.data.items ?? []).filter(
-        (p) => p.type === 'CSAT' || p.type === 'Post‑interaction',
-      ),
+    () => surveyProgramsData?.data.items ?? [],
     [surveyProgramsData?.data.items],
   )
   // Sync filters from URL query params

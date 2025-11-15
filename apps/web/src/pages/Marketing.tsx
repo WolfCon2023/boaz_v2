@@ -875,7 +875,7 @@ function CampaignsTab() {
   const { data: surveyProgramsData } = useQuery({
     queryKey: ['surveys-programs-marketing'],
     queryFn: async () => {
-      const res = await http.get('/api/crm/surveys/programs', { params: { status: 'Active' } })
+      const res = await http.get('/api/crm/surveys/programs')
       return res.data as {
         data: {
           items: Array<{
