@@ -124,7 +124,10 @@ export async function sendAuthEmail({ to, subject, text, html, attachments, chec
             return { sent: true, provider: 'smtp' };
         }
         catch (e) {
-            throw new Error('All email providers failed');
+            // Log the underlying SMTP error for easier troubleshooting
+            console.error('SMTP send error:', e);
+            const msg = e && e.message ? e.message : String(e);
+            throw new Error(`All email providers failed: ${msg}`);
         }
     }
     // No email providers configured

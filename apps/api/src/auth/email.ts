@@ -126,24 +126,28 @@ export async function sendAuthEmail({
         auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
       })
       const fromAddr = env.ALERT_FROM || env.SMTP_USER || 'no-reply@example.com'
-      
+
       const mailOptions: any = { from: fromAddr, to, subject, text, html }
-      
+
       // Add attachments if provided
       if (attachments && attachments.length > 0) {
         mailOptions.attachments = attachments.map((att) => ({
           filename: att.filename,
-          content: typeof att.content === 'string' 
-            ? Buffer.from(att.content, 'base64')
-            : att.content,
+          content:
+            typeof att.content === 'string'
+              ? Buffer.from(att.content, 'base64')
+              : att.content,
           contentType: att.contentType,
         }))
       }
-      
+
       await transporter.sendMail(mailOptions)
       return { sent: true, provider: 'smtp' }
-    } catch (e) {
-      throw new Error('All email providers failed')
+    } catch (e: any) {
+      // Log the underlying SMTP error for easier troubleshooting
+      console.error('SMTP send error:', e)
+      const msg = e && e.message ? e.message : String(e)
+      throw new Error(`All email providers failed: ${msg}`)
     }
   }
 
