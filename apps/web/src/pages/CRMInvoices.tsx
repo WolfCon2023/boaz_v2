@@ -7,7 +7,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
-import { Plus, X, Package, Send } from 'lucide-react'
+import { Plus, X, Package, Send, Printer } from 'lucide-react'
 
 type Invoice = { 
   _id: string
@@ -1178,6 +1178,19 @@ export default function CRMInvoices() {
                   >
                     <Send className="h-3 w-3" />
                     Send Invoice
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!editing?._id) return
+                      const url = `/apps/crm/invoices/${editing._id}/print`
+                      window.open(url, '_blank', 'noopener,noreferrer')
+                    }}
+                    className="flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+                    title="Open printable invoice view"
+                  >
+                    <Printer className="h-3 w-3" />
+                    Print Invoice
                   </button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
