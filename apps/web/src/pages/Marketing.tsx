@@ -313,7 +313,6 @@ function SimpleBuilderUI({
 }) {
   const toast = useToast()
   const [editingBlockId, setEditingBlockId] = React.useState<string | null>(null)
-  const [editingBlock, setEditingBlock] = React.useState<Partial<SimpleBlock> | null>(null)
   
   function addBlock(type: SimpleBlock['type']) {
     const newBlock: SimpleBlock = {
@@ -333,21 +332,16 @@ function SimpleBuilderUI({
     }
     setBlocks([...blocks, newBlock])
     setEditingBlockId(newBlock.id)
-    setEditingBlock(newBlock)
   }
   
   function updateBlock(id: string, updates: Partial<SimpleBlock>) {
     setBlocks(blocks.map(b => b.id === id ? { ...b, ...updates } : b))
-    if (editingBlockId === id) {
-      setEditingBlock({ ...editingBlock, ...updates })
-    }
   }
   
   function removeBlock(id: string) {
     setBlocks(blocks.filter(b => b.id !== id))
     if (editingBlockId === id) {
       setEditingBlockId(null)
-      setEditingBlock(null)
     }
   }
   
@@ -384,17 +378,16 @@ function SimpleBuilderUI({
     const block = blocks.find(b => b.id === id)
     if (block) {
       setEditingBlockId(id)
-      setEditingBlock({ ...block })
     }
   }
   
   function saveEdit() {
-    if (editingBlockId && editingBlock) {
-      updateBlock(editingBlockId, editingBlock)
-      setEditingBlockId(null)
-      setEditingBlock(null)
-    }
+    // Edits are applied live; this just closes the editor
+    setEditingBlockId(null)
   }
+
+  const currentEditingBlock: SimpleBlock | null =
+    editingBlockId ? blocks.find((b) => b.id === editingBlockId) || null : null
 
   // Sortable block component
   function SortableBlock({ block, index }: { block: SimpleBlock; index: number }) {
@@ -444,7 +437,7 @@ function SimpleBuilderUI({
             {editingBlockId === block.id ? (
               <>
                 <button type="button" onClick={saveEdit} className="text-xs px-2 py-1 rounded border">Save</button>
-                <button type="button" onClick={() => { setEditingBlockId(null); setEditingBlock(null) }} className="text-xs px-2 py-1 rounded border">Cancel</button>
+                <button type="button" onClick={() => { setEditingBlockId(null) }} className="text-xs px-2 py-1 rounded border">Cancel</button>
               </>
             ) : (
               <>
@@ -455,34 +448,34 @@ function SimpleBuilderUI({
           </div>
         </div>
         
-        {editingBlockId === block.id && editingBlock ? (
+        {editingBlockId === block.id && currentEditingBlock ? (
           <div className="space-y-2 pt-2 border-t">
             {block.type === 'heading' || block.type === 'text' || block.type === 'two-columns' ? (
               <>
                 <textarea
-                  value={editingBlock.content || ''}
-                  onChange={(e) => setEditingBlock({ ...editingBlock, content: e.target.value })}
+                  value={currentEditingBlock.content || ''}
+                  onChange={(e) => updateBlock(block.id, { content: e.target.value })}
                   placeholder={block.type === 'two-columns' ? 'Left content ||| Right content' : 'Enter content...'}
                   className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent h-24"
                 />
                 <div className="grid grid-cols-3 gap-2">
                   <input
                     type="color"
-                    value={editingBlock.backgroundColor || '#ffffff'}
-                    onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                    value={currentEditingBlock.backgroundColor || '#ffffff'}
+                    onChange={(e) => updateBlock(block.id, { backgroundColor: e.target.value })}
                     className="h-8 rounded border"
                     title="Background color"
                   />
                   <input
                     type="color"
-                    value={editingBlock.textColor || '#000000'}
-                    onChange={(e) => setEditingBlock({ ...editingBlock, textColor: e.target.value })}
+                    value={currentEditingBlock.textColor || '#000000'}
+                    onChange={(e) => updateBlock(block.id, { textColor: e.target.value })}
                     className="h-8 rounded border"
                     title="Text color"
                   />
                   <select
-                    value={editingBlock.align || 'left'}
-                    onChange={(e) => setEditingBlock({ ...editingBlock, align: e.target.value as 'left' | 'center' | 'right' })}
+                    value={currentEditingBlock.align || 'left'}
+                    onChange={(e) => updateBlock(block.id, { align: e.target.value as 'left' | 'center' | 'right' })}
                     className="rounded-lg border px-2 py-1 text-sm bg-[color:var(--color-panel)]"
                   >
                     <option value="left">Left</option>
@@ -512,7 +505,7 @@ function SimpleBuilderUI({
                         if (res.data?.data?.url) {
                           // Construct the full image URL using the API base URL
                           const imageUrl = getApiUrl(res.data.data.url)
-                          setEditingBlock({ ...editingBlock, imageUrl })
+                          updateBlock(block.id, { imageUrl })
                         }
                       } catch (err: any) {
                         toast.showToast(`Failed to upload image: ${err?.response?.data?.error || err?.message || 'Unknown error'}`, 'error')
@@ -523,9 +516,9 @@ function SimpleBuilderUI({
                     }}
                     className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent text-xs"
                   />
-                  {editingBlock.imageUrl && (
+                  {currentEditingBlock.imageUrl && (
                     <img 
-                      src={editingBlock.imageUrl} 
+                      src={currentEditingBlock.imageUrl} 
                       alt="Preview" 
                       className="h-12 w-12 object-cover rounded border"
                       onError={(e) => {
@@ -536,15 +529,15 @@ function SimpleBuilderUI({
                 </div>
                 <input
                   type="text"
-                  value={editingBlock.imageUrl || ''}
-                  onChange={(e) => setEditingBlock({ ...editingBlock, imageUrl: e.target.value })}
+                  value={currentEditingBlock.imageUrl || ''}
+                  onChange={(e) => updateBlock(block.id, { imageUrl: e.target.value })}
                   placeholder="Or enter image URL"
                   className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
                 />
                 <input
                   type="text"
-                  value={editingBlock.content || ''}
-                  onChange={(e) => setEditingBlock({ ...editingBlock, content: e.target.value })}
+                  value={currentEditingBlock.content || ''}
+                  onChange={(e) => updateBlock(block.id, { content: e.target.value })}
                   placeholder="Alt text"
                   className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
                 />
@@ -552,16 +545,16 @@ function SimpleBuilderUI({
                   <label className="text-xs text-[color:var(--color-text-muted)] whitespace-nowrap">Width:</label>
                   <input
                     type="text"
-                    value={editingBlock.imageWidth || '600px'}
-                    onChange={(e) => setEditingBlock({ ...editingBlock, imageWidth: e.target.value })}
+                    value={currentEditingBlock.imageWidth || '600px'}
+                    onChange={(e) => updateBlock(block.id, { imageWidth: e.target.value })}
                     placeholder="600px or 100%"
                     className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent"
                   />
                 </div>
                 <input
                   type="color"
-                  value={editingBlock.backgroundColor || '#ffffff'}
-                  onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                  value={currentEditingBlock.backgroundColor || '#ffffff'}
+                  onChange={(e) => updateBlock(block.id, { backgroundColor: e.target.value })}
                   className="h-8 rounded border"
                   title="Background color"
                 />
@@ -570,22 +563,22 @@ function SimpleBuilderUI({
               <>
                 <input
                   type="text"
-                  value={editingBlock.buttonText || ''}
-                  onChange={(e) => setEditingBlock({ ...editingBlock, buttonText: e.target.value })}
+                  value={currentEditingBlock.buttonText || ''}
+                  onChange={(e) => updateBlock(block.id, { buttonText: e.target.value })}
                   placeholder="Button text"
                   className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
                 />
                 <input
                   type="text"
-                  value={editingBlock.buttonUrl || ''}
-                  onChange={(e) => setEditingBlock({ ...editingBlock, buttonUrl: e.target.value })}
+                  value={currentEditingBlock.buttonUrl || ''}
+                  onChange={(e) => updateBlock(block.id, { buttonUrl: e.target.value })}
                   placeholder="Button URL"
                   className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
                 />
                 <input
                   type="color"
-                  value={editingBlock.backgroundColor || '#ffffff'}
-                  onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                  value={currentEditingBlock.backgroundColor || '#ffffff'}
+                  onChange={(e) => updateBlock(block.id, { backgroundColor: e.target.value })}
                   className="h-8 rounded border"
                   title="Background color"
                 />
@@ -593,8 +586,8 @@ function SimpleBuilderUI({
             ) : block.type === 'divider' ? (
               <input
                 type="color"
-                value={editingBlock.backgroundColor || '#ffffff'}
-                onChange={(e) => setEditingBlock({ ...editingBlock, backgroundColor: e.target.value })}
+                value={currentEditingBlock.backgroundColor || '#ffffff'}
+                onChange={(e) => updateBlock(block.id, { backgroundColor: e.target.value })}
                 className="h-8 rounded border"
                 title="Background color"
               />
