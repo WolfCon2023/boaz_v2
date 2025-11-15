@@ -538,7 +538,7 @@ export default function SupportTickets() {
         <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
           <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
               <div className="mb-3 text-base font-semibold">Edit ticket</div>
               <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, shortDescription: String(fd.get('shortDescription')||'')||undefined, status: String(fd.get('status')||'')||undefined, priority: String(fd.get('priority')||'')||undefined, assignee: String(fd.get('assignee')||'')||undefined, description: String(fd.get('description')||'')||undefined }; const sla = String(fd.get('slaDueAt')||''); if (sla) payload.slaDueAt = new Date(sla).toISOString(); update.mutate(payload); setEditing(null) }}>
                 <label className="text-xs text-[color:var(--color-text-muted)]">Short description</label>
