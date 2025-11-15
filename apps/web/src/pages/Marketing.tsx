@@ -433,167 +433,24 @@ function SimpleBuilderUI({
             </button>
           </div>
           <div className="flex items-center gap-2">
-            {editingBlockId === block.id ? (
-              <>
-                <button type="button" onClick={saveEdit} className="text-xs px-2 py-1 rounded border">Save</button>
-                <button type="button" onClick={() => { setEditingBlockId(null) }} className="text-xs px-2 py-1 rounded border">Cancel</button>
-              </>
-            ) : (
-              <>
-                <button type="button" onClick={() => startEdit(block.id)} className="text-xs px-2 py-1 rounded border">Edit</button>
-                <button type="button" onClick={() => removeBlock(block.id)} className="text-xs px-2 py-1 rounded border border-red-400 text-red-400">Remove</button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() => startEdit(block.id)}
+              className="text-xs px-2 py-1 rounded border"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => removeBlock(block.id)}
+              className="text-xs px-2 py-1 rounded border border-red-400 text-red-400"
+            >
+              Remove
+            </button>
           </div>
         </div>
-        
-        {editingBlockId === block.id && currentEditingBlock ? (
-          <div className="space-y-2 pt-2 border-t">
-            {block.type === 'heading' || block.type === 'text' || block.type === 'two-columns' ? (
-              <>
-                <textarea
-                  value={currentEditingBlock.content || ''}
-                  onChange={(e) => updateBlock(block.id, { content: e.target.value })}
-                  placeholder={block.type === 'two-columns' ? 'Left content ||| Right content' : 'Enter content...'}
-                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent h-24"
-                />
-                <div className="grid grid-cols-3 gap-2">
-                  <input
-                    type="color"
-                    value={currentEditingBlock.backgroundColor || '#ffffff'}
-                    onChange={(e) => updateBlock(block.id, { backgroundColor: e.target.value })}
-                    className="h-8 rounded border"
-                    title="Background color"
-                  />
-                  <input
-                    type="color"
-                    value={currentEditingBlock.textColor || '#000000'}
-                    onChange={(e) => updateBlock(block.id, { textColor: e.target.value })}
-                    className="h-8 rounded border"
-                    title="Text color"
-                  />
-                  <select
-                    value={currentEditingBlock.align || 'left'}
-                    onChange={(e) => updateBlock(block.id, { align: e.target.value as 'left' | 'center' | 'right' })}
-                    className="rounded-lg border px-2 py-1 text-sm bg-[color:var(--color-panel)]"
-                  >
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
-                  </select>
-                </div>
-              </>
-            ) : block.type === 'image' ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      
-                      try {
-                        const formData = new FormData()
-                        formData.append('image', file)
-                        
-                        const res = await http.post('/api/marketing/images/upload', formData, {
-                          headers: { 'Content-Type': 'multipart/form-data' },
-                        })
-                        
-                        if (res.data?.data?.url) {
-                          // Construct the full image URL using the API base URL
-                          const imageUrl = getApiUrl(res.data.data.url)
-                          updateBlock(block.id, { imageUrl })
-                        }
-                      } catch (err: any) {
-                        toast.showToast(`Failed to upload image: ${err?.response?.data?.error || err?.message || 'Unknown error'}`, 'error')
-                      }
-                      
-                      // Reset the input
-                      e.target.value = ''
-                    }}
-                    className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent text-xs"
-                  />
-                  {currentEditingBlock.imageUrl && (
-                    <img 
-                      src={currentEditingBlock.imageUrl} 
-                      alt="Preview" 
-                      className="h-12 w-12 object-cover rounded border"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none'
-                      }}
-                    />
-                  )}
-                </div>
-                <input
-                  type="text"
-                  value={currentEditingBlock.imageUrl || ''}
-                  onChange={(e) => updateBlock(block.id, { imageUrl: e.target.value })}
-                  placeholder="Or enter image URL"
-                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
-                />
-                <input
-                  type="text"
-                  value={currentEditingBlock.content || ''}
-                  onChange={(e) => updateBlock(block.id, { content: e.target.value })}
-                  placeholder="Alt text"
-                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
-                />
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-[color:var(--color-text-muted)] whitespace-nowrap">Width:</label>
-                  <input
-                    type="text"
-                    value={currentEditingBlock.imageWidth || '600px'}
-                    onChange={(e) => updateBlock(block.id, { imageWidth: e.target.value })}
-                    placeholder="600px or 100%"
-                    className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent"
-                  />
-                </div>
-                <input
-                  type="color"
-                  value={currentEditingBlock.backgroundColor || '#ffffff'}
-                  onChange={(e) => updateBlock(block.id, { backgroundColor: e.target.value })}
-                  className="h-8 rounded border"
-                  title="Background color"
-                />
-              </>
-            ) : block.type === 'button' ? (
-              <>
-                <input
-                  type="text"
-                  value={currentEditingBlock.buttonText || ''}
-                  onChange={(e) => updateBlock(block.id, { buttonText: e.target.value })}
-                  placeholder="Button text"
-                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
-                />
-                <input
-                  type="text"
-                  value={currentEditingBlock.buttonUrl || ''}
-                  onChange={(e) => updateBlock(block.id, { buttonUrl: e.target.value })}
-                  placeholder="Button URL"
-                  className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
-                />
-                <input
-                  type="color"
-                  value={currentEditingBlock.backgroundColor || '#ffffff'}
-                  onChange={(e) => updateBlock(block.id, { backgroundColor: e.target.value })}
-                  className="h-8 rounded border"
-                  title="Background color"
-                />
-              </>
-            ) : block.type === 'divider' ? (
-              <input
-                type="color"
-                value={currentEditingBlock.backgroundColor || '#ffffff'}
-                onChange={(e) => updateBlock(block.id, { backgroundColor: e.target.value })}
-                className="h-8 rounded border"
-                title="Background color"
-              />
-            ) : null}
-          </div>
-        ) : (
-          <div className="text-sm text-[color:var(--color-text-muted)]">
+
+        <div className="text-sm text-[color:var(--color-text-muted)]">
             {block.type === 'heading' && <div className="font-bold text-lg">{block.content || '(Empty heading)'}</div>}
             {block.type === 'text' && <div>{block.content || '(Empty text)'}</div>}
             {block.type === 'image' && (
@@ -629,7 +486,6 @@ function SimpleBuilderUI({
             {block.type === 'divider' && <div className="border-t my-2"></div>}
             {block.type === 'two-columns' && <div className="grid grid-cols-2 gap-2 text-xs">{block.content.split('|||')[0] || '(Left)'} | {block.content.split('|||')[1] || '(Right)'}</div>}
           </div>
-        )}
       </div>
     )
   }
@@ -672,6 +528,216 @@ function SimpleBuilderUI({
           </div>
         </SortableContext>
       </DndContext>
+
+      {currentEditingBlock && (
+        <div className="space-y-2 pt-2 border-t rounded-lg border px-3 py-2 bg-[color:var(--color-panel)]">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold text-[color:var(--color-text-muted)]">
+              Editing block —{' '}
+              {currentEditingBlock.type === 'heading' && 'Heading'}
+              {currentEditingBlock.type === 'text' && 'Text'}
+              {currentEditingBlock.type === 'image' && 'Image'}
+              {currentEditingBlock.type === 'button' && 'Button'}
+              {currentEditingBlock.type === 'divider' && 'Divider'}
+              {currentEditingBlock.type === 'two-columns' && 'Two Columns'}
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={saveEdit} className="text-xs px-2 py-1 rounded border">
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingBlockId(null)}
+                className="text-xs px-2 py-1 rounded border"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          {currentEditingBlock.type === 'heading' ||
+          currentEditingBlock.type === 'text' ||
+          currentEditingBlock.type === 'two-columns' ? (
+            <>
+              <textarea
+                value={currentEditingBlock.content || ''}
+                onChange={(e) =>
+                  updateBlock(currentEditingBlock.id, { content: e.target.value })
+                }
+                placeholder={
+                  currentEditingBlock.type === 'two-columns'
+                    ? 'Left content ||| Right content'
+                    : 'Enter content...'
+                }
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent h-24"
+              />
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  type="color"
+                  value={currentEditingBlock.backgroundColor || '#ffffff'}
+                  onChange={(e) =>
+                    updateBlock(currentEditingBlock.id, {
+                      backgroundColor: e.target.value,
+                    })
+                  }
+                  className="h-8 rounded border"
+                  title="Background color"
+                />
+                <input
+                  type="color"
+                  value={currentEditingBlock.textColor || '#000000'}
+                  onChange={(e) =>
+                    updateBlock(currentEditingBlock.id, { textColor: e.target.value })
+                  }
+                  className="h-8 rounded border"
+                  title="Text color"
+                />
+                <select
+                  value={currentEditingBlock.align || 'left'}
+                  onChange={(e) =>
+                    updateBlock(currentEditingBlock.id, {
+                      align: e.target.value as 'left' | 'center' | 'right',
+                    })
+                  }
+                  className="rounded-lg border px-2 py-1 text-sm bg-[color:var(--color-panel)]"
+                >
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+            </>
+          ) : currentEditingBlock.type === 'image' ? (
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+
+                    try {
+                      const formData = new FormData()
+                      formData.append('image', file)
+
+                      const res = await http.post('/api/marketing/images/upload', formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                      })
+
+                      if (res.data?.data?.url) {
+                        const imageUrl = getApiUrl(res.data.data.url)
+                        updateBlock(currentEditingBlock.id, { imageUrl })
+                      }
+                    } catch (err: any) {
+                      toast.showToast(
+                        `Failed to upload image: ${
+                          err?.response?.data?.error || err?.message || 'Unknown error'
+                        }`,
+                        'error',
+                      )
+                    }
+
+                    e.target.value = ''
+                  }}
+                  className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent text-xs"
+                />
+                {currentEditingBlock.imageUrl && (
+                  <img
+                    src={currentEditingBlock.imageUrl}
+                    alt="Preview"
+                    className="h-12 w-12 object-cover rounded border"
+                    onError={(e) => {
+                      ;(e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                  />
+                )}
+              </div>
+              <input
+                type="text"
+                value={currentEditingBlock.imageUrl || ''}
+                onChange={(e) =>
+                  updateBlock(currentEditingBlock.id, { imageUrl: e.target.value })
+                }
+                placeholder="Or enter image URL"
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+              />
+              <input
+                type="text"
+                value={currentEditingBlock.content || ''}
+                onChange={(e) =>
+                  updateBlock(currentEditingBlock.id, { content: e.target.value })
+                }
+                placeholder="Alt text"
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+              />
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-[color:var(--color-text-muted)] whitespace-nowrap">
+                  Width:
+                </label>
+                <input
+                  type="text"
+                  value={currentEditingBlock.imageWidth || '600px'}
+                  onChange={(e) =>
+                    updateBlock(currentEditingBlock.id, { imageWidth: e.target.value })
+                  }
+                  placeholder="600px or 100%"
+                  className="flex-1 rounded-lg border px-3 py-2 text-sm bg-transparent"
+                />
+              </div>
+              <input
+                type="color"
+                value={currentEditingBlock.backgroundColor || '#ffffff'}
+                onChange={(e) =>
+                  updateBlock(currentEditingBlock.id, { backgroundColor: e.target.value })
+                }
+                className="h-8 rounded border"
+                title="Background color"
+              />
+            </>
+          ) : currentEditingBlock.type === 'button' ? (
+            <>
+              <input
+                type="text"
+                value={currentEditingBlock.buttonText || ''}
+                onChange={(e) =>
+                  updateBlock(currentEditingBlock.id, { buttonText: e.target.value })
+                }
+                placeholder="Button text"
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+              />
+              <input
+                type="text"
+                value={currentEditingBlock.buttonUrl || ''}
+                onChange={(e) =>
+                  updateBlock(currentEditingBlock.id, { buttonUrl: e.target.value })
+                }
+                placeholder="Button URL"
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
+              />
+              <input
+                type="color"
+                value={currentEditingBlock.backgroundColor || '#ffffff'}
+                onChange={(e) =>
+                  updateBlock(currentEditingBlock.id, { backgroundColor: e.target.value })
+                }
+                className="h-8 rounded border"
+                title="Background color"
+              />
+            </>
+          ) : currentEditingBlock.type === 'divider' ? (
+            <input
+              type="color"
+              value={currentEditingBlock.backgroundColor || '#ffffff'}
+              onChange={(e) =>
+                updateBlock(currentEditingBlock.id, { backgroundColor: e.target.value })
+              }
+              className="h-8 rounded border"
+              title="Background color"
+            />
+          ) : null}
+        </div>
+      )}
       
       <div className="space-y-2 pt-2 border-t">
         <div>
