@@ -318,3 +318,29 @@ surveysRouter.put('/programs/:id', async (req, res) => {
         error: null,
     });
 });
+// DELETE /api/crm/surveys/programs/:id
+surveysRouter.delete('/programs/:id', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    let _id;
+    try {
+        _id = new ObjectId(req.params.id);
+    }
+    catch {
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+    try {
+        const result = await db.collection('survey_programs').deleteOne({ _id });
+        // Also remove any responses tied to this program to avoid orphaned data
+        await db.collection('survey_responses').deleteMany({ programId: _id });
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ data: null, error: 'not_found' });
+        }
+        return res.json({ data: { ok: true }, error: null });
+    }
+    catch (err) {
+        console.error('Delete survey program error:', err);
+        return res.status(500).json({ data: null, error: err.message || 'failed_to_delete_program' });
+    }
+});
