@@ -187,9 +187,24 @@ export default function CRMInvoices() {
     },
     onError: (err: any) => {
       const errorMsg = err?.response?.data?.error || 'Failed to send invoice email'
-      toast.showToast(errorMsg === 'recipient_email_required' ? 'Please enter a recipient email address' : errorMsg, 'error')
+      toast.showToast(
+        errorMsg === 'recipient_email_required' ? 'Please enter a recipient email address' : errorMsg,
+        'error',
+      )
     },
   })
+
+  // Recipient email state for "Send Invoice"
+  const [invoiceRecipientEmail, setInvoiceRecipientEmail] = React.useState('')
+
+  React.useEffect(() => {
+    if (editing && editing.accountId) {
+      const acct = acctById.get(editing.accountId)
+      setInvoiceRecipientEmail(acct?.primaryContactEmail || '')
+    } else {
+      setInvoiceRecipientEmail('')
+    }
+  }, [editing, acctById])
 
   function startInlineEdit(inv: Invoice) {
     setInlineEditId(inv._id)
@@ -1109,19 +1124,49 @@ export default function CRMInvoices() {
                   }}>Issue refund</button>
                 </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
-                  <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) http.delete(`/api/crm/invoices/${editing._id}`).then(() => { qc.invalidateQueries({ queryKey: ['invoices'] }); setEditing(null) }) }}>Delete</button>
+                  <button
+                    type="button"
+                    className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]"
+                    onClick={() => {
+                      if (editing?._id)
+                        http.delete(`/api/crm/invoices/${editing._id}`).then(() => {
+                          qc.invalidateQueries({ queryKey: ['invoices'] })
+                          setEditing(null)
+                        })
+                    }}
+                  >
+                    Delete
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                      Recipient email
+                    </label>
+                    <input
+                      type="email"
+                      value={invoiceRecipientEmail}
+                      onChange={(e) => setInvoiceRecipientEmail(e.target.value)}
+                      placeholder="customer@example.com"
+                      className="w-64 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={async () => {
-                      // Get recipient email from account if available
-                      const account: AccountPick | undefined = editing.accountId ? accounts.find(a => a._id === editing.accountId) : undefined
-                      const recipientEmail = account?.primaryContactEmail || ''
-                      
+                      const trimmed = invoiceRecipientEmail.trim()
+                      const account: AccountPick | undefined = editing.accountId
+                        ? accounts.find((a) => a._id === editing.accountId)
+                        : undefined
+                      const fallbackEmail = account?.primaryContactEmail || ''
+                      const recipientEmail = trimmed || fallbackEmail
+
                       if (!recipientEmail) {
-                        toast.showToast('Please set a primary contact email for the account', 'warning')
+                        toast.showToast(
+                          'Please enter a recipient email address or set a primary contact email for the account',
+                          'warning',
+                        )
                         return
                       }
-                      
+
                       const confirmed = window.confirm(`Send invoice to ${recipientEmail}?`)
                       if (confirmed) {
                         sendEmail.mutate({ id: editing._id, recipientEmail })
