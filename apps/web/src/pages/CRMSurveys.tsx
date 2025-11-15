@@ -6,6 +6,12 @@ import { formatDateTime } from '@/lib/dateFormat'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 
+type SurveyQuestion = {
+  id: string
+  label: string
+  required?: boolean
+}
+
 type SurveyProgram = {
   id: string
   name: string
@@ -15,6 +21,7 @@ type SurveyProgram = {
   // Optional content fields so each program defines its question and scale guidance
   questionText?: string
   scaleHelpText?: string
+  questions?: SurveyQuestion[]
   lastSentAt?: string
   responseRate?: number
 }
@@ -127,9 +134,24 @@ export default function CRMSurveys() {
         status: program.status,
       }
 
-      if (program.questionText && program.questionText.trim()) {
+      // Normalise questions list
+      const questions = (program.questions ?? [])
+        .map((q, idx) => ({
+          id: q.id || `q${idx + 1}`,
+          label: (q.label ?? '').trim(),
+          required: !!q.required,
+          order: idx,
+        }))
+        .filter((q) => q.label.length > 0)
+
+      if (questions.length > 0) {
+        body.questions = questions
+        // Keep legacy single-question fields in sync with the first question
+        body.questionText = questions[0].label
+      } else if (program.questionText && program.questionText.trim()) {
         body.questionText = program.questionText.trim()
       }
+
       if (program.scaleHelpText && program.scaleHelpText.trim()) {
         body.scaleHelpText = program.scaleHelpText.trim()
       }
@@ -173,20 +195,43 @@ export default function CRMSurveys() {
 
   const openNewProgram = () => {
     const type: SurveyProgram['type'] = 'NPS'
+    const defaultLabel = defaultQuestionForType(type)
     setEditing({
       id: '',
       name: '',
       type,
       channel: 'Email',
       status: 'Draft',
-      questionText: defaultQuestionForType(type),
+      questionText: defaultLabel,
       scaleHelpText: '0 = Not at all likely, 10 = Extremely likely',
+      questions: [
+        {
+          id: 'q1',
+          label: defaultLabel,
+          required: true,
+        },
+      ],
     })
     setShowEditor(true)
   }
 
   const openEditProgram = (p: SurveyProgram) => {
-    setEditing({ ...p })
+    let questions = p.questions
+    // Backwards compatibility: older programs may only have a single questionText
+    if (!questions || questions.length === 0) {
+      const label = p.questionText && p.questionText.trim().length > 0
+        ? p.questionText
+        : defaultQuestionForType(p.type)
+      questions = [
+        {
+          id: 'q1',
+          label,
+          required: true,
+        },
+      ]
+    }
+
+    setEditing({ ...p, questions })
     setShowEditor(true)
     setSelectedProgramId(p.id)
   }
@@ -199,13 +244,21 @@ export default function CRMSurveys() {
   const handleEditorChange = (field: keyof SurveyProgram, value: string) => {
     if (!editing) return
 
-    // When changing type on a brand‑new program and no custom question is set yet,
+    // When changing type on a brand‑new program and no questions exist yet,
     // auto-suggest a reasonable default question.
     if (field === 'type') {
       const nextType = value as SurveyProgram['type']
+      const defaultLabel = defaultQuestionForType(nextType)
       const next: SurveyProgram = { ...editing, type: nextType }
-      if (!next.questionText || next.questionText.trim().length === 0) {
-        next.questionText = defaultQuestionForType(nextType)
+      if (!next.questions || next.questions.length === 0) {
+        next.questions = [
+          {
+            id: 'q1',
+            label: defaultLabel,
+            required: true,
+          },
+        ]
+        next.questionText = defaultLabel
       }
       setEditing(next)
       return
@@ -567,22 +620,6 @@ export default function CRMSurveys() {
 
                 <div>
                   <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
-                    Question text
-                  </label>
-                  <textarea
-                    value={editing.questionText ?? ''}
-                    onChange={(e) => handleEditorChange('questionText', e.target.value)}
-                    rows={3}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
-                    placeholder="e.g. On a scale from 0–10, how likely are you to recommend us to a friend or colleague?"
-                  />
-                  <p className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
-                    This is the main question customers will see in the email or portal survey.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text)]">
                     Scale help (optional)
                   </label>
                   <textarea
@@ -597,22 +634,153 @@ export default function CRMSurveys() {
                   </p>
                 </div>
 
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <label className="block text-xs font-semibold text-[color:var(--color-text)]">
+                      Questions
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!editing) return
+                        const nextQuestions = [...(editing.questions ?? [])]
+                        const idx = nextQuestions.length + 1
+                        nextQuestions.push({
+                          id: `q${idx}`,
+                          label: `Question ${idx}`,
+                          required: true,
+                        })
+                        setEditing({
+                          ...editing,
+                          questions: nextQuestions,
+                        })
+                      }}
+                      className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-2 py-1 text-[10px] font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+                    >
+                      Add question
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {(editing.questions ?? []).map((q, idx) => (
+                      <div
+                        key={q.id}
+                        className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-2"
+                      >
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-semibold text-[color:var(--color-text-muted)]">
+                            Question {idx + 1}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => {
+                                if (!editing || idx === 0) return
+                                const next = [...(editing.questions ?? [])]
+                                const tmp = next[idx - 1]
+                                next[idx - 1] = next[idx]
+                                next[idx] = tmp
+                                setEditing({ ...editing, questions: next })
+                              }}
+                              className="rounded border border-[color:var(--color-border)] px-1 text-[10px] disabled:opacity-40"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === (editing.questions ?? []).length - 1}
+                              onClick={() => {
+                                if (!editing) return
+                                const next = [...(editing.questions ?? [])]
+                                if (idx === next.length - 1) return
+                                const tmp = next[idx + 1]
+                                next[idx + 1] = next[idx]
+                                next[idx] = tmp
+                                setEditing({ ...editing, questions: next })
+                              }}
+                              className="rounded border border-[color:var(--color-border)] px-1 text-[10px] disabled:opacity-40"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              disabled={(editing.questions ?? []).length <= 1}
+                              onClick={() => {
+                                if (!editing) return
+                                const next = (editing.questions ?? []).filter((_, i) => i !== idx)
+                                setEditing({ ...editing, questions: next })
+                              }}
+                              className="rounded border border-red-300 px-1 text-[10px] text-red-600 disabled:opacity-40"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                        <input
+                          type="text"
+                          value={q.label}
+                          onChange={(e) => {
+                            if (!editing) return
+                            const next = [...(editing.questions ?? [])]
+                            next[idx] = { ...next[idx], label: e.target.value }
+                            setEditing({ ...editing, questions: next })
+                          }}
+                          className="w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-xs text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                          placeholder={`Question ${idx + 1}`}
+                        />
+                        <label className="mt-1 inline-flex items-center gap-1 text-[10px] text-[color:var(--color-text-muted)]">
+                          <input
+                            type="checkbox"
+                            checked={q.required ?? true}
+                            onChange={(e) => {
+                              if (!editing) return
+                              const next = [...(editing.questions ?? [])]
+                              next[idx] = { ...next[idx], required: e.target.checked }
+                              setEditing({ ...editing, questions: next })
+                            }}
+                            className="h-3 w-3 rounded border-[color:var(--color-border)]"
+                          />
+                          Required
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="rounded-lg border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-3 text-xs">
                   <p className="mb-1 font-semibold text-[color:var(--color-text)]">Preview</p>
-                  <p className="text-[color:var(--color-text)]">
-                    {editing.questionText && editing.questionText.trim().length > 0
-                      ? editing.questionText
-                      : defaultQuestionForType(editing.type)}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1 text-[10px] text-[color:var(--color-text-muted)]">
-                    {Array.from({ length: 11 }).map((_, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)]"
-                      >
-                        {i}
-                      </span>
-                    ))}
+                  <div className="space-y-3">
+                    {(() => {
+                      const questions = (editing.questions && editing.questions.length > 0
+                        ? editing.questions
+                        : [
+                            {
+                              id: 'q1',
+                              label:
+                                (editing.questionText && editing.questionText.trim().length > 0
+                                  ? editing.questionText
+                                  : defaultQuestionForType(editing.type)) ??
+                                defaultQuestionForType(editing.type),
+                            },
+                          ]) as SurveyQuestion[]
+
+                      return questions.map((q) => (
+                        <div key={q.id}>
+                          <p className="text-[color:var(--color-text)]">{q.label}</p>
+                          <div className="mt-2 flex flex-wrap gap-1 text-[10px] text-[color:var(--color-text-muted)]">
+                            {Array.from({ length: 11 }).map((_, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)]"
+                              >
+                                {i}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    })()}
                   </div>
                   {editing.scaleHelpText && editing.scaleHelpText.trim().length > 0 && (
                     <p className="mt-2 text-[10px] text-[color:var(--color-text-muted)]">

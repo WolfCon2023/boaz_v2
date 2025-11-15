@@ -5,6 +5,13 @@ import { z } from 'zod'
 
 export const surveysRouter = Router()
 
+type SurveyQuestionDoc = {
+  id: string
+  label: string
+  required?: boolean
+  order?: number
+}
+
 type SurveyProgramDoc = {
   _id?: ObjectId
   name: string
@@ -12,8 +19,11 @@ type SurveyProgramDoc = {
   channel: 'Email' | 'In‑app' | 'Link'
   status: 'Draft' | 'Active' | 'Paused'
   description?: string
+  // Legacy single-question fields (still populated from the first question for compatibility)
   questionText?: string
   scaleHelpText?: string
+  // New multi-question support
+  questions?: SurveyQuestionDoc[]
   createdAt: Date
   updatedAt: Date
   lastSentAt?: Date | null
@@ -34,6 +44,13 @@ type SurveyResponseDoc = {
   createdAt: Date
 }
 
+const surveyQuestionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  required: z.boolean().optional(),
+  order: z.number().int().nonnegative().optional(),
+})
+
 const surveyProgramSchema = z.object({
   name: z.string().min(1),
   type: z.enum(['NPS', 'CSAT', 'Post‑interaction']),
@@ -42,6 +59,7 @@ const surveyProgramSchema = z.object({
   description: z.string().max(2000).optional(),
   questionText: z.string().max(500).optional(),
   scaleHelpText: z.string().max(500).optional(),
+  questions: z.array(surveyQuestionSchema).optional(),
 })
 
 const surveyResponseSchema = z.object({
