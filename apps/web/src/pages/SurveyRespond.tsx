@@ -87,13 +87,15 @@ export default function SurveyRespond() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Thank you for your feedback</h1>
-          <p className="text-gray-600 mb-2">
-            Your responses have been recorded and will help us improve your experience.
-          </p>
+      <div className="min-h-screen bg-gray-50 py-8 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Thank you for your feedback</h1>
+            <p className="text-gray-600 mb-2">
+              Your responses have been recorded and will help us improve your experience.
+            </p>
+          </div>
         </div>
       </div>
     )
