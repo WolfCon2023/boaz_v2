@@ -4,6 +4,8 @@ import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { env } from '../env.js';
+import { requireAuth } from '../auth/rbac.js';
+import { sendAuthEmail } from '../auth/email.js';
 export const surveysRouter = Router();
 const surveyQuestionSchema = z.object({
     id: z.string().min(1),
@@ -386,6 +388,7 @@ surveysRouter.post('/programs/:id/generate-link', async (req, res) => {
     const raw = req.body ?? {};
     const contactId = raw.contactId && ObjectId.isValid(raw.contactId) ? new ObjectId(raw.contactId) : null;
     const campaignId = raw.campaignId && ObjectId.isValid(raw.campaignId) ? new ObjectId(raw.campaignId) : null;
+    const ticketId = raw.ticketId && ObjectId.isValid(raw.ticketId) ? new ObjectId(raw.ticketId) : null;
     const email = typeof raw.email === 'string' ? raw.email.trim() || null : null;
     const token = crypto.randomBytes(24).toString('hex');
     const linkDoc = {
@@ -393,6 +396,7 @@ surveysRouter.post('/programs/:id/generate-link', async (req, res) => {
         programId,
         contactId,
         campaignId,
+        ticketId,
         email,
         createdAt: new Date(),
     };
@@ -461,11 +465,95 @@ surveysRouter.post('/respond/:token', async (req, res) => {
     const doc = buildSurveyResponseDoc(program, parsed.data, {
         contactId: link.contactId ?? null,
         accountId: null,
-        ticketId: null,
+        ticketId: link.ticketId ?? null,
         outreachEnrollmentId: link.campaignId ?? null,
     });
     await db.collection('survey_responses').insertOne(doc);
     res.status(201).json({ data: { ok: true }, error: null });
+});
+// POST /api/crm/surveys/programs/:id/send-email
+// Authenticated: generates a survey link and emails it to a customer
+surveysRouter.post('/programs/:id/send-email', requireAuth, async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    let programId;
+    try {
+        programId = new ObjectId(req.params.id);
+    }
+    catch {
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+    const program = await db.collection('survey_programs').findOne({ _id: programId });
+    if (!program) {
+        return res.status(404).json({ data: null, error: 'program_not_found' });
+    }
+    const raw = req.body ?? {};
+    const recipientEmail = typeof raw.recipientEmail === 'string' ? raw.recipientEmail.trim() : '';
+    const recipientName = typeof raw.recipientName === 'string' ? raw.recipientName.trim() : '';
+    const ticketId = raw.ticketId && ObjectId.isValid(raw.ticketId) ? new ObjectId(raw.ticketId) : null;
+    if (!recipientEmail) {
+        return res.status(400).json({ data: null, error: 'invalid_payload' });
+    }
+    const token = crypto.randomBytes(24).toString('hex');
+    const linkDoc = {
+        token,
+        programId,
+        contactId: null,
+        campaignId: null,
+        ticketId,
+        email: recipientEmail,
+        createdAt: new Date(),
+    };
+    await db.collection('survey_links').insertOne(linkDoc);
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
+    const surveyUrl = `${baseUrl}/surveys/respond/${token}`;
+    const auth = req.auth;
+    const now = new Date();
+    try {
+        await sendAuthEmail({
+            to: recipientEmail,
+            subject: `We'd love your feedback`,
+            checkPreferences: false,
+            html: `
+        <h2>We'd love your feedback</h2>
+        <p>${recipientName ? `Hello ${recipientName},` : 'Hello,'}</p>
+        <p>Please take a moment to rate your recent experience.</p>
+        <p><strong>Survey:</strong> ${program.name}</p>
+        <p>
+          <a href="${surveyUrl}" style="display:inline-block;padding:10px 20px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;">
+            Start survey
+          </a>
+        </p>
+        <p>Or copy and paste this URL into your browser:</p>
+        <p><code>${surveyUrl}</code></p>
+      `,
+            text: `We'd love your feedback.\n\nSurvey: ${program.name}\n\nClick the link below to start the survey:\n${surveyUrl}\n`,
+        });
+    }
+    catch (err) {
+        console.error('Send survey email error:', err);
+        return res
+            .status(500)
+            .json({ data: null, error: 'failed_to_send_email', details: err.message || String(err) });
+    }
+    // Optionally log a system comment on the ticket
+    if (ticketId) {
+        try {
+            const comment = {
+                author: 'system',
+                body: `Survey email sent to ${recipientName || recipientEmail} for program "${program.name}".`,
+                at: now,
+            };
+            await db
+                .collection('support_tickets')
+                .updateOne({ _id: ticketId }, { $push: { comments: comment }, $set: { updatedAt: now } });
+        }
+        catch (err) {
+            console.error('Failed to append survey email comment to ticket history:', err);
+        }
+    }
+    res.json({ data: { ok: true }, error: null });
 });
 // POST /api/crm/surveys/programs
 surveysRouter.post('/programs', async (req, res) => {
