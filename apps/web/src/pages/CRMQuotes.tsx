@@ -126,10 +126,18 @@ export default function CRMQuotes() {
     { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
   function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
-    if (!cols.some((c) => c.key === 'surveyStatus')) {
-      return [...cols, { key: 'surveyStatus', visible: true, label: 'Survey' }]
+    let hasSurvey = false
+    const next = cols.map((c) => {
+      if (c.key === 'surveyStatus') {
+        hasSurvey = true
+        return { ...c, visible: true, label: 'Survey' }
+      }
+      return c
+    })
+    if (!hasSurvey) {
+      next.push({ key: 'surveyStatus', visible: true, label: 'Survey' })
     }
-    return cols
+    return next
   }
   const [cols, setCols] = React.useState<ColumnDef[]>(ensureSurveyCol(defaultCols))
   const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
