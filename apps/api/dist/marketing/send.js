@@ -4,6 +4,7 @@ import { getDb } from '../db.js';
 import mjml2html from 'mjml';
 import { sendEmail } from '../alerts/mail.js';
 import crypto from 'crypto';
+import { env } from '../env.js';
 export const marketingSendRouter = Router();
 function buildFilterFromRules(rules) {
     const ands = [];
@@ -141,7 +142,9 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
                     email,
                     createdAt: new Date(),
                 });
-                surveyUrl = `${base}/surveys/respond/${token}`;
+                const origin = (env.ORIGIN || '').split(',')[0]?.trim() || base;
+                const normalizedOrigin = origin.replace(/\/$/, '');
+                surveyUrl = `${normalizedOrigin}/surveys/respond/${token}`;
             }
             let personalized = html;
             personalized = injectSurveyUrl(personalized, surveyUrl);
