@@ -713,6 +713,7 @@ export default function CRMSurveys() {
                     <th className="px-2 py-1">Total responses</th>
                     <th className="px-2 py-1">Key score</th>
                     <th className="px-2 py-1">Distribution (summary)</th>
+                    <th className="px-2 py-1 text-right">Survey URL</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -761,6 +762,26 @@ export default function CRMSurveys() {
                         <td className="px-2 py-1">{keyScore}</td>
                         <td className="px-2 py-1 text-[color:var(--color-text-muted)]">
                           {distributionSummary}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const res = await http.post('/api/crm/surveys/programs/' + row.programId + '/generate-link', {})
+                                const payload = res.data as { data: { url: string } }
+                                const url = payload.data.url
+                                await navigator.clipboard.writeText(url)
+                                toast.showToast('BOAZ says: Survey URL copied to clipboard.', 'success')
+                              } catch (err) {
+                                console.error('Generate survey URL error:', err)
+                                toast.showToast('BOAZ says: Failed to generate survey URL.', 'error')
+                              }
+                            }}
+                            className="rounded-md border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-primary-600)] hover:bg-[color:var(--color-muted)]"
+                          >
+                            Copy URL
+                          </button>
                         </td>
                       </tr>
                     )

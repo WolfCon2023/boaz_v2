@@ -39,6 +39,7 @@ import Marketing from '@/pages/Marketing'
 import RequestStatus from '@/pages/RequestStatus'
 import TermsReview from '@/pages/TermsReview'
 import QuoteView from '@/pages/QuoteView'
+import SurveyRespond from '@/pages/SurveyRespond'
 import QuoteAcceptanceQueue from '@/pages/QuoteAcceptanceQueue'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
 
@@ -111,6 +112,10 @@ export const router = createBrowserRouter([
   {
     path: '/quotes/view/:token',
     element: <PublicShell><QuoteView /></PublicShell>,
+  },
+  {
+    path: '/surveys/respond/:token',
+    element: <PublicShell><SurveyRespond /></PublicShell>,
   },
   {
     path: '/change-password',

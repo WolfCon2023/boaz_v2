@@ -2,6 +2,8 @@ import { Router } from 'express'
 import { getDb } from '../db.js'
 import { ObjectId, SortDirection } from 'mongodb'
 import { z } from 'zod'
+import crypto from 'crypto'
+import { env } from '../env.js'
 
 export const surveysRouter = Router()
 
@@ -83,6 +85,16 @@ type ProgramSummary = (ProgramSummaryNps | ProgramSummaryScore) & {
   questions?: ProgramQuestionSummary[]
 }
 
+type SurveyLinkDoc = {
+  _id?: ObjectId
+  token: string
+  programId: ObjectId
+  contactId?: ObjectId | null
+  campaignId?: ObjectId | null
+  email?: string | null
+  createdAt: Date
+}
+
 const surveyQuestionSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
@@ -120,6 +132,56 @@ const surveyResponseSchema = z
     (v) => typeof v.score === 'number' || (v.answers && v.answers.length > 0),
     { message: 'score_or_answers_required' },
   )
+
+function buildSurveyResponseDoc(
+  program: SurveyProgramDoc,
+  raw: z.infer<typeof surveyResponseSchema>,
+  extra?: {
+    contactId?: ObjectId | null
+    accountId?: ObjectId | null
+    ticketId?: ObjectId | null
+    outreachEnrollmentId?: ObjectId | null
+  },
+): SurveyResponseDoc {
+  const now = new Date()
+
+  const answers: SurveyAnswerDoc[] | undefined = raw.answers?.map((a) => ({
+    questionId: a.questionId,
+    score: a.score,
+  }))
+
+  let overallScore: number
+  if (answers && answers.length > 0) {
+    const sum = answers.reduce((acc, a) => acc + a.score, 0)
+    overallScore = sum / answers.length
+  } else {
+    overallScore = raw.score as number
+  }
+
+  const toObjectId = (v?: string) => {
+    if (!v) return null
+    try {
+      return new ObjectId(v)
+    } catch {
+      return null
+    }
+  }
+
+  return {
+    programId: program._id as ObjectId,
+    type: program.type,
+    channel: program.channel,
+    score: overallScore,
+    answers,
+    comment: raw.comment,
+    contactId: extra?.contactId ?? toObjectId(raw.contactId),
+    accountId: extra?.accountId ?? toObjectId(raw.accountId),
+    ticketId: extra?.ticketId ?? toObjectId(raw.ticketId),
+    outreachEnrollmentId:
+      extra?.outreachEnrollmentId ?? toObjectId(raw.outreachEnrollmentId),
+    createdAt: now,
+  }
+}
 
 function buildProgramSummary(
   program: SurveyProgramDoc,
@@ -287,45 +349,8 @@ surveysRouter.post('/programs/:id/responses', async (req, res) => {
     return res.status(404).json({ data: null, error: 'program_not_found' })
   }
 
-  const now = new Date()
-
-  const toObjectId = (v?: string) => {
-    if (!v) return null
-    try {
-      return new ObjectId(v)
-    } catch {
-      return null
-    }
-  }
-
-  const body = parsed.data
-  const answers: SurveyAnswerDoc[] | undefined = body.answers?.map((a) => ({
-    questionId: a.questionId,
-    score: a.score,
-  }))
-
-  let overallScore: number
-  if (answers && answers.length > 0) {
-    const sum = answers.reduce((acc, a) => acc + a.score, 0)
-    overallScore = sum / answers.length
-  } else {
-    // Fallback to single score payloads (existing integrations)
-    overallScore = body.score as number
-  }
-
-  const doc: SurveyResponseDoc = {
-    programId,
-    type: program.type,
-    channel: program.channel,
-    score: overallScore,
-    answers,
-    comment: body.comment,
-    contactId: toObjectId(body.contactId),
-    accountId: toObjectId(body.accountId),
-    ticketId: toObjectId(body.ticketId),
-    outreachEnrollmentId: toObjectId(body.outreachEnrollmentId),
-    createdAt: now,
-  }
+  const doc = buildSurveyResponseDoc(program, parsed.data)
+  const now = doc.createdAt
 
   await db.collection<SurveyResponseDoc>('survey_responses').insertOne(doc)
 
@@ -501,6 +526,126 @@ surveysRouter.get('/programs/metrics', async (req, res) => {
   }
 
   res.json({ data: { items }, error: null })
+})
+
+// POST /api/crm/surveys/programs/:id/generate-link
+// Generates a shareable survey URL for a program (optionally linked to a campaign or contact)
+surveysRouter.post('/programs/:id/generate-link', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  let programId: ObjectId
+  try {
+    programId = new ObjectId(req.params.id)
+  } catch {
+    return res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+
+  const program = await db.collection<SurveyProgramDoc>('survey_programs').findOne({ _id: programId })
+  if (!program) {
+    return res.status(404).json({ data: null, error: 'program_not_found' })
+  }
+
+  const raw = req.body ?? {}
+  const contactId =
+    raw.contactId && ObjectId.isValid(raw.contactId) ? new ObjectId(raw.contactId) : null
+  const campaignId =
+    raw.campaignId && ObjectId.isValid(raw.campaignId) ? new ObjectId(raw.campaignId) : null
+  const email = typeof raw.email === 'string' ? raw.email.trim() || null : null
+
+  const token = crypto.randomBytes(24).toString('hex')
+
+  const linkDoc: SurveyLinkDoc = {
+    token,
+    programId,
+    contactId,
+    campaignId,
+    email,
+    createdAt: new Date(),
+  }
+
+  await db.collection<SurveyLinkDoc>('survey_links').insertOne(linkDoc)
+
+  const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+  const surveyUrl = `${baseUrl}/surveys/respond/${token}`
+
+  res.json({ data: { url: surveyUrl }, error: null })
+})
+
+// GET /api/crm/surveys/respond/:token - public survey view
+surveysRouter.get('/respond/:token', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const token = String(req.params.token || '').trim()
+  if (!token) return res.status(400).json({ data: null, error: 'invalid_token' })
+
+  const link = await db.collection<SurveyLinkDoc>('survey_links').findOne({ token })
+  if (!link) {
+    return res.status(404).json({ data: null, error: 'survey_link_not_found' })
+  }
+
+  const program = await db
+    .collection<SurveyProgramDoc>('survey_programs')
+    .findOne({ _id: link.programId })
+  if (!program) {
+    return res.status(404).json({ data: null, error: 'program_not_found' })
+  }
+
+  const questions = (program.questions ?? []).map((q) => ({
+    id: q.id,
+    label: q.label,
+    required: !!q.required,
+  }))
+
+  res.json({
+    data: {
+      program: {
+        name: program.name,
+        type: program.type,
+        scaleHelpText: program.scaleHelpText ?? null,
+        questions,
+      },
+    },
+    error: null,
+  })
+})
+
+// POST /api/crm/surveys/respond/:token - public submit
+surveysRouter.post('/respond/:token', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const token = String(req.params.token || '').trim()
+  if (!token) return res.status(400).json({ data: null, error: 'invalid_token' })
+
+  const link = await db.collection<SurveyLinkDoc>('survey_links').findOne({ token })
+  if (!link) {
+    return res.status(404).json({ data: null, error: 'survey_link_not_found' })
+  }
+
+  const program = await db
+    .collection<SurveyProgramDoc>('survey_programs')
+    .findOne({ _id: link.programId })
+  if (!program) {
+    return res.status(404).json({ data: null, error: 'program_not_found' })
+  }
+
+  const parsed = surveyResponseSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ data: null, error: 'invalid_payload' })
+  }
+
+  const doc = buildSurveyResponseDoc(program, parsed.data, {
+    contactId: link.contactId ?? null,
+    accountId: null,
+    ticketId: null,
+    outreachEnrollmentId: link.campaignId ?? null,
+  })
+
+  await db.collection<SurveyResponseDoc>('survey_responses').insertOne(doc)
+
+  res.status(201).json({ data: { ok: true }, error: null })
 })
 // POST /api/crm/surveys/programs
 surveysRouter.post('/programs', async (req, res) => {
