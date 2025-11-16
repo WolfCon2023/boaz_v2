@@ -10,6 +10,13 @@ import { DocumentsList } from '@/components/DocumentsList'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
 
+type ContactSurveyStatusSummary = {
+  contactId: string
+  responseCount: number
+  lastResponseAt: string | null
+  lastScore: number | null
+}
+
 async function fetchContacts({ pageParam, queryKey }: { pageParam?: string; queryKey: any[] }) {
   const [_key, q, page] = queryKey as [string, string, number]
   const params: any = { q }
@@ -158,6 +165,30 @@ export default function CRMContacts() {
   const anySelected = selectedIds.size > 0
   const allSelected = (visibleItems.length > 0) && visibleItems.every((c) => selectedIds.has(c._id))
 
+  const contactIdsParam = React.useMemo(
+    () => (visibleItems.length ? visibleItems.map((c) => c._id).join(',') : ''),
+    [visibleItems],
+  )
+
+  const { data: contactSurveyStatusData } = useQuery({
+    queryKey: ['contacts-survey-status', contactIdsParam],
+    enabled: !!contactIdsParam,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/contacts/status', {
+        params: { contactIds: contactIdsParam },
+      })
+      return res.data as { data: { items: ContactSurveyStatusSummary[] } }
+    },
+  })
+
+  const contactSurveyStatusMap = React.useMemo(() => {
+    const map = new Map<string, ContactSurveyStatusSummary>()
+    for (const s of contactSurveyStatusData?.data.items ?? []) {
+      map.set(s.contactId, s)
+    }
+    return map
+  }, [contactSurveyStatusData?.data.items])
+
   // Outreach: sequences list for enroll action
   const seqs = useQuery({
     queryKey: ['outreach-sequences-pick'],
@@ -284,6 +315,29 @@ export default function CRMContacts() {
     if (key === 'officePhone') return c.officePhone ?? '-'
     if (key === 'isPrimary') return c.isPrimary ? 'Yes' : 'No'
     if (key === 'primaryPhone') return c.primaryPhone ?? '-'
+    if (key === 'surveyStatus') {
+      const status = contactSurveyStatusMap.get(c._id)
+      if (!status || status.responseCount === 0) {
+        return (
+          <span className="inline-flex rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+            No surveys
+          </span>
+        )
+      }
+      return (
+        <div className="flex flex-col gap-0.5 text-[11px]">
+          <span className="inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200">
+            {status.responseCount} response{status.responseCount === 1 ? '' : 's'}
+          </span>
+          <span className="text-[10px] text-[color:var(--color-text-muted)]">
+            Last score:{' '}
+            <span className="font-semibold text-[color:var(--color-text)]">
+              {status.lastScore != null ? status.lastScore.toFixed(1) : '-'}
+            </span>
+          </span>
+        </div>
+      )
+    }
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }

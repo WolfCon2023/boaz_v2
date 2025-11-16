@@ -562,6 +562,151 @@ surveysRouter.get('/tickets/status', async (req, res) => {
   }
 })
 
+// GET /api/crm/surveys/contacts/status?contactIds=ID1,ID2,...
+// Returns per-contact survey status for CRM Contacts views:
+// - number of responses, latest response timestamp and score
+surveysRouter.get('/contacts/status', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const raw = String((req.query.contactIds as string) ?? '').trim()
+  if (!raw) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  const ids = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => ObjectId.isValid(s))
+    .map((s) => new ObjectId(s))
+
+  if (ids.length === 0) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  try {
+    const respAgg = await db
+      .collection<SurveyResponseDoc>('survey_responses')
+      .aggregate([
+        { $match: { contactId: { $in: ids } } },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
+            _id: '$contactId',
+            responseCount: { $sum: 1 },
+            lastResponseAt: { $first: '$createdAt' },
+            lastScore: { $first: '$score' },
+          },
+        },
+      ])
+      .toArray()
+
+    const respMap = new Map<
+      string,
+      { responseCount: number; lastResponseAt: Date | null; lastScore: number | null }
+    >()
+    for (const r of respAgg) {
+      if (!r._id) continue
+      respMap.set(String(r._id), {
+        responseCount: r.responseCount ?? 0,
+        lastResponseAt: r.lastResponseAt ?? null,
+        lastScore: typeof r.lastScore === 'number' ? (r.lastScore as number) : null,
+      })
+    }
+
+    const items = ids.map((id) => {
+      const key = String(id)
+      const resp = respMap.get(key)
+      return {
+        contactId: key,
+        responseCount: resp?.responseCount ?? 0,
+        lastResponseAt: resp?.lastResponseAt ?? null,
+        lastScore: resp?.lastScore ?? null,
+      }
+    })
+
+    return res.json({ data: { items }, error: null })
+  } catch (err: any) {
+    console.error('Get contact survey status error:', err)
+    return res
+      .status(500)
+      .json({ data: null, error: err.message || 'failed_to_get_contact_status' })
+  }
+})
+
+// GET /api/crm/surveys/accounts/status?accountIds=ID1,ID2,...
+// Returns per-account survey status for CRM Accounts views:
+// - number of responses, latest response timestamp and score
+surveysRouter.get('/accounts/status', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const raw = String((req.query.accountIds as string) ?? '').trim()
+  if (!raw) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  const ids = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => ObjectId.isValid(s))
+    .map((s) => new ObjectId(s))
+
+  if (ids.length === 0) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  try {
+    const respAgg = await db
+      .collection<SurveyResponseDoc>('survey_responses')
+      .aggregate([
+        { $match: { accountId: { $in: ids } } },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
+            _id: '$accountId',
+            responseCount: { $sum: 1 },
+            lastResponseAt: { $first: '$createdAt' },
+            lastScore: { $first: '$score' },
+          },
+        },
+      ])
+      .toArray()
+
+    const respMap = new Map<
+      string,
+      { responseCount: number; lastResponseAt: Date | null; lastScore: number | null }
+    >()
+    for (const r of respAgg) {
+      if (!r._id) continue
+      respMap.set(String(r._id), {
+        responseCount: r.responseCount ?? 0,
+        lastResponseAt: r.lastResponseAt ?? null,
+        lastScore: typeof r.lastScore === 'number' ? (r.lastScore as number) : null,
+      })
+    }
+
+    const items = ids.map((id) => {
+      const key = String(id)
+      const resp = respMap.get(key)
+      return {
+        accountId: key,
+        responseCount: resp?.responseCount ?? 0,
+        lastResponseAt: resp?.lastResponseAt ?? null,
+        lastScore: resp?.lastScore ?? null,
+      }
+    })
+
+    return res.json({ data: { items }, error: null })
+  } catch (err: any) {
+    console.error('Get account survey status error:', err)
+    return res
+      .status(500)
+      .json({ data: null, error: err.message || 'failed_to_get_account_status' })
+  }
+})
+
+
 // GET /api/crm/surveys/programs/:id/summary
 surveysRouter.get('/programs/:id/summary', async (req, res) => {
   const db = await getDb()

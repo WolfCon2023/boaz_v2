@@ -10,6 +10,13 @@ import { DocumentsList } from '@/components/DocumentsList'
 
 type Account = { _id: string; accountNumber?: number; name?: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }
 
+type AccountSurveyStatusSummary = {
+  accountId: string
+  responseCount: number
+  lastResponseAt: string | null
+  lastScore: number | null
+}
+
 export default function CRMAccounts() {
   const qc = useQueryClient()
   const toast = useToast()
@@ -218,6 +225,30 @@ export default function CRMAccounts() {
     const url = window.location.origin + window.location.pathname + '?' + searchParams.toString()
     navigator.clipboard?.writeText(url).then(() => toast.showToast('Link copied', 'success')).catch(() => toast.showToast('Failed to copy', 'error'))
   }
+  const accountIdsParam = React.useMemo(
+    () => (visibleItems.length ? visibleItems.map((a) => a._id).join(',') : ''),
+    [visibleItems],
+  )
+
+  const { data: accountSurveyStatusData } = useQuery({
+    queryKey: ['accounts-survey-status', accountIdsParam],
+    enabled: !!accountIdsParam,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/accounts/status', {
+        params: { accountIds: accountIdsParam },
+      })
+      return res.data as { data: { items: AccountSurveyStatusSummary[] } }
+    },
+  })
+
+  const accountSurveyStatusMap = React.useMemo(() => {
+    const map = new Map<string, AccountSurveyStatusSummary>()
+    for (const s of accountSurveyStatusData?.data.items ?? []) {
+      map.set(s.accountId, s)
+    }
+    return map
+  }, [accountSurveyStatusData?.data.items])
+
   function getColValue(a: Account, key: string) {
     if (key === 'accountNumber') return a.accountNumber ?? '-'
     if (key === 'name') return a.name ?? '-'
@@ -225,6 +256,29 @@ export default function CRMAccounts() {
     if (key === 'primaryContactName') return a.primaryContactName ?? '-'
     if (key === 'primaryContactEmail') return a.primaryContactEmail ?? '-'
     if (key === 'primaryContactPhone') return a.primaryContactPhone ?? '-'
+    if (key === 'surveyStatus') {
+      const status = accountSurveyStatusMap.get(a._id)
+      if (!status || status.responseCount === 0) {
+        return (
+          <span className="inline-flex rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+            No surveys
+          </span>
+        )
+      }
+      return (
+        <div className="flex flex-col gap-0.5 text-[11px]">
+          <span className="inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200">
+            {status.responseCount} response{status.responseCount === 1 ? '' : 's'}
+          </span>
+          <span className="text-[10px] text-[color:var(--color-text-muted)]">
+            Last score:{' '}
+            <span className="font-semibold text-[color:var(--color-text)]">
+              {status.lastScore != null ? status.lastScore.toFixed(1) : '-'}
+            </span>
+          </span>
+        </div>
+      )
+    }
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
