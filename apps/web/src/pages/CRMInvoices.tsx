@@ -358,7 +358,9 @@ export default function CRMInvoices() {
       const stored = localStorage.getItem('INVOICES_COLS')
       if (stored) {
         const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) setCols(parsed)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCols(ensureSurveyCol(parsed))
+        }
       }
     } catch {}
     try {
