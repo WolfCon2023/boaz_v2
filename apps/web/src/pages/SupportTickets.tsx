@@ -24,6 +24,15 @@ type Ticket = {
   comments?: { author?: string; body?: string; at?: string }[]
 }
 
+type TicketSurveyStatusSummary = {
+  ticketId: string
+  sentCount: number
+  lastSentAt: string | null
+  responseCount: number
+  lastResponseAt: string | null
+  lastScore: number | null
+}
+
 type SurveyProgramPick = {
   _id: string
   name: string
@@ -42,6 +51,7 @@ export default function SupportTickets() {
     { key: 'status', visible: true, label: 'Status' },
     { key: 'priority', visible: true, label: 'Priority' },
     { key: 'assignee', visible: true, label: 'Assignee' },
+    { key: 'surveyStatus', visible: true, label: 'Survey' },
     { key: 'slaDueAt', visible: true, label: 'SLA Due' },
     { key: 'updatedAt', visible: true, label: 'Updated' },
   ]
@@ -72,6 +82,32 @@ export default function SupportTickets() {
     },
   })
   const items = data?.data.items ?? []
+
+  const ticketIdsParam = React.useMemo(
+    () => (items.length ? items.map((t) => t._id).join(',') : ''),
+    [items],
+  )
+
+  const { data: ticketSurveyStatusData } = useQuery({
+    queryKey: ['support-ticket-survey-status', ticketIdsParam],
+    enabled: !!ticketIdsParam,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/tickets/status', {
+        params: { ticketIds: ticketIdsParam },
+      })
+      return res.data as {
+        data: { items: TicketSurveyStatusSummary[] }
+      }
+    },
+  })
+
+  const surveyStatusMap = React.useMemo(() => {
+    const map = new Map<string, TicketSurveyStatusSummary>()
+    for (const s of ticketSurveyStatusData?.data.items ?? []) {
+      map.set(s.ticketId, s)
+    }
+    return map
+  }, [ticketSurveyStatusData?.data.items])
 
   const { data: surveyProgramsData } = useQuery({
     queryKey: ['surveys-programs-support'],
@@ -297,7 +333,48 @@ export default function SupportTickets() {
     if (key==='assignee') return t.assignee ?? '-'
     if (key==='slaDueAt') return t.slaDueAt ? formatDateTime(t.slaDueAt) : '-'
     if (key==='updatedAt') return t.updatedAt ? formatDateTime(t.updatedAt) : '-'
+    if (key==='surveyStatus') return renderSurveyStatus(t)
     return ''
+  }
+  function renderSurveyStatus(t: Ticket) {
+    const status = surveyStatusMap.get(t._id)
+    if (!status || (status.sentCount === 0 && status.responseCount === 0)) {
+      return (
+        <span className="inline-flex rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+          No survey
+        </span>
+      )
+    }
+    const hasSent = status.sentCount > 0
+    const hasResponse = status.responseCount > 0
+    return (
+      <div className="flex flex-col gap-1 text-[11px]">
+        <div className="flex flex-wrap items-center gap-1">
+          <span
+            className={`inline-flex rounded-full px-2 py-0.5 ${
+              hasSent
+                ? 'bg-blue-500/15 text-blue-200 border border-blue-500/60'
+                : 'border border-[color:var(--color-border)] text-[color:var(--color-text-muted)]'
+            }`}
+          >
+            {hasSent ? 'Sent' : 'Not sent'}
+          </span>
+          {hasResponse && (
+            <span className="inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200">
+              Completed
+            </span>
+          )}
+        </div>
+        {hasResponse && (
+          <div className="text-[10px] text-[color:var(--color-text-muted)]">
+            Last score:{' '}
+            <span className="font-semibold text-[color:var(--color-text)]">
+              {status.lastScore != null ? status.lastScore.toFixed(1) : '-'}
+            </span>
+          </div>
+        )}
+      </div>
+    )
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
   function handleDrop(targetKey: string) {
@@ -571,11 +648,30 @@ export default function SupportTickets() {
               return (
               <tr key={t._id} className={`border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer ${isBreached ? 'bg-red-500/10' : ''}`} onClick={() => setEditing(t)}>
                 {cols.filter((c)=> c.visible).map((col)=> (
-                  <td key={col.key} className={`px-4 py-2 ${col.key==='slaDueAt' ? 'flex items-center gap-2' : ''}`}>{
-                    col.key==='slaDueAt'
-                      ? (<><span>{getColValue(t, col.key)}</span><button type="button" className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-xs hover:bg-[color:var(--color-muted)]" onClick={(e)=>{ e.stopPropagation(); setSlaEditing(t) }}>Set</button></>)
-                      : getColValue(t, col.key)
-                  }</td>
+                  <td
+                    key={col.key}
+                    className={`px-4 py-2 ${
+                      col.key === 'slaDueAt' ? 'flex items-center gap-2' : ''
+                    }`}
+                  >
+                    {col.key === 'slaDueAt' ? (
+                      <>
+                        <span>{getColValue(t, col.key)}</span>
+                        <button
+                          type="button"
+                          className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-xs hover:bg-[color:var(--color-muted)]"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSlaEditing(t)
+                          }}
+                        >
+                          Set
+                        </button>
+                      </>
+                    ) : (
+                      getColValue(t, col.key)
+                    )}
+                  </td>
                 ))}
               </tr>
               )})}

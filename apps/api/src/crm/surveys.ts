@@ -455,6 +455,113 @@ surveysRouter.get('/tickets/:ticketId/responses', async (req, res) => {
   }
 })
 
+// GET /api/crm/surveys/tickets/status?ticketIds=ID1,ID2,...
+// Returns per-ticket survey status for Support Tickets views:
+// - whether a survey has been sent (via survey_links.ticketId)
+// - whether any responses exist, plus latest score/timestamp
+surveysRouter.get('/tickets/status', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const raw = String((req.query.ticketIds as string) ?? '').trim()
+  if (!raw) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  const ids = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => ObjectId.isValid(s))
+    .map((s) => new ObjectId(s))
+
+  if (ids.length === 0) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  try {
+    // Aggregate "sent" information from survey_links
+    const sentAgg = await db
+      .collection<SurveyLinkDoc>('survey_links')
+      .aggregate([
+        { $match: { ticketId: { $in: ids } } },
+        {
+          $group: {
+            _id: '$ticketId',
+            sentCount: { $sum: 1 },
+            lastSentAt: { $max: '$createdAt' },
+          },
+        },
+      ])
+      .toArray()
+
+    // Aggregate response information from survey_responses
+    const respAgg = await db
+      .collection<SurveyResponseDoc>('survey_responses')
+      .aggregate([
+        { $match: { ticketId: { $in: ids } } },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
+            _id: '$ticketId',
+            responseCount: { $sum: 1 },
+            lastResponseAt: { $first: '$createdAt' },
+            lastScore: { $first: '$score' },
+          },
+        },
+      ])
+      .toArray()
+
+    const sentMap = new Map<
+      string,
+      { sentCount: number; lastSentAt: Date | null }
+    >()
+    for (const s of sentAgg) {
+      if (!s._id) continue
+      sentMap.set(String(s._id), {
+        sentCount: s.sentCount ?? 0,
+        lastSentAt: s.lastSentAt ?? null,
+      })
+    }
+
+    const respMap = new Map<
+      string,
+      { responseCount: number; lastResponseAt: Date | null; lastScore: number | null }
+    >()
+    for (const r of respAgg) {
+      if (!r._id) continue
+      respMap.set(String(r._id), {
+        responseCount: r.responseCount ?? 0,
+        lastResponseAt: r.lastResponseAt ?? null,
+        lastScore:
+          typeof r.lastScore === 'number'
+            ? (r.lastScore as number)
+            : null,
+      })
+    }
+
+    const items = ids.map((id) => {
+      const key = String(id)
+      const sent = sentMap.get(key)
+      const resp = respMap.get(key)
+      return {
+        ticketId: key,
+        sentCount: sent?.sentCount ?? 0,
+        lastSentAt: sent?.lastSentAt ?? null,
+        responseCount: resp?.responseCount ?? 0,
+        lastResponseAt: resp?.lastResponseAt ?? null,
+        lastScore: resp?.lastScore ?? null,
+      }
+    })
+
+    return res.json({ data: { items }, error: null })
+  } catch (err: any) {
+    console.error('Get ticket survey status error:', err)
+    return res
+      .status(500)
+      .json({ data: null, error: err.message || 'failed_to_get_ticket_status' })
+  }
+})
+
 // GET /api/crm/surveys/programs/:id/summary
 surveysRouter.get('/programs/:id/summary', async (req, res) => {
   const db = await getDb()
