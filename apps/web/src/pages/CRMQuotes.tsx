@@ -352,7 +352,13 @@ export default function CRMQuotes() {
     if (q0) setQ(q0)
     setSort(sort0)
     setDir(dir0)
-    try { const stored = localStorage.getItem('QUOTES_COLS'); if (stored) { const parsed = JSON.parse(stored); if (Array.isArray(parsed) && parsed.length>0) setCols(parsed) } } catch {}
+    try {
+      const stored = localStorage.getItem('QUOTES_COLS')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) setCols(ensureSurveyCol(parsed))
+      }
+    } catch {}
     try { const views = localStorage.getItem('QUOTES_SAVED_VIEWS'); if (views) { const parsed = JSON.parse(views); if (Array.isArray(parsed)) setSavedViews(parsed) } } catch {}
     ;(async () => {
       try {
@@ -403,7 +409,7 @@ export default function CRMQuotes() {
     if (c.q !== undefined) setQ(c.q)
     if (c.sort) setSort(c.sort)
     if (c.dir) setDir(c.dir)
-    if (c.cols) setCols(c.cols)
+    if (c.cols) setCols(ensureSurveyCol(c.cols))
     setPage(0)
   }
   async function deleteView(id: string) { try { await http.delete(`/api/views/${id}`) } catch {}; setSavedViews((prev) => prev.filter((v) => v.id !== id)) }

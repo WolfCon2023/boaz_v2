@@ -406,7 +406,7 @@ export default function CRMInvoices() {
     if (c.q !== undefined) setQ(c.q)
     if (c.sort) setSort(c.sort)
     if (c.dir) setDir(c.dir)
-    if (c.cols) setCols(c.cols)
+    if (c.cols) setCols(ensureSurveyCol(c.cols))
     if (c.pageSize) setPageSize(c.pageSize)
     setPage(0)
   }
