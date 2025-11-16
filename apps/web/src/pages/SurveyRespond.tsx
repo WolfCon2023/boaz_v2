@@ -100,23 +100,23 @@ export default function SurveyRespond() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen bg-[color:var(--color-bg)] text-[color:var(--color-text)] py-8 px-4">
       <div className="max-w-3xl mx-auto">
-        <div className="w-full bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">{program.name}</h1>
-          <p className="text-sm text-gray-600 mb-2">
+        <div className="w-full rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-sm">
+          <h1 className="text-2xl font-bold mb-1">{program.name}</h1>
+          <p className="text-sm text-[color:var(--color-text-muted)] mb-2">
             Please rate the following on a scale from 0 to 10.
           </p>
           {program.scaleHelpText && (
-            <p className="text-xs text-gray-500">Scale: {program.scaleHelpText}</p>
+            <p className="text-xs text-[color:var(--color-text-muted)]">
+              Scale: {program.scaleHelpText}
+            </p>
           )}
-        </div>
 
-        <div className="w-full bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="space-y-4">
+          <div className="mt-4 space-y-4">
             {program.questions.map((q) => (
-              <div key={q.id} className="border-b border-gray-100 pb-3">
-                <label className="block text-sm font-medium text-gray-900 mb-1">
+              <div key={q.id} className="border-b border-[color:var(--color-border)] pb-3 last:border-b-0">
+                <label className="block text-sm font-medium mb-1">
                   {q.label}
                   {q.required && <span className="text-red-500 ml-1">*</span>}
                 </label>
@@ -132,23 +132,25 @@ export default function SurveyRespond() {
                         [q.id]: e.target.value,
                       }))
                     }
-                    className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-24 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm placeholder:text-[color:var(--color-text-muted)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-[color:var(--color-primary-600)]"
                     placeholder="0–10"
                   />
-                  <span className="text-xs text-gray-500">0 = low, 10 = high</span>
+                  <span className="text-xs text-[color:var(--color-text-muted)]">
+                    0 = low, 10 = high
+                  </span>
                 </div>
               </div>
             ))}
 
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-1">
+              <label className="block text-sm font-medium mb-1">
                 Comments (optional)
               </label>
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={4}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-3 py-2 text-sm placeholder:text-[color:var(--color-text-muted)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-[color:var(--color-primary-600)]"
                 placeholder="Share any additional feedback..."
               />
             </div>
@@ -164,7 +166,7 @@ export default function SurveyRespond() {
                   }
                 }}
                 disabled={submit.isPending}
-                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center justify-center rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
               >
                 {submit.isPending ? 'Submitting…' : 'Submit feedback'}
               </button>
