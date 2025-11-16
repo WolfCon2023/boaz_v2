@@ -32,8 +32,15 @@ export default function CRMAccounts() {
     { key: 'primaryContactName', visible: true, label: 'Primary contact' },
     { key: 'primaryContactEmail', visible: true, label: 'Email' },
     { key: 'primaryContactPhone', visible: true, label: 'Phone' },
+    { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
-  const [cols, setCols] = React.useState<ColumnDef[]>(defaultCols)
+  function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
+    if (!cols.some((c) => c.key === 'surveyStatus')) {
+      return [...cols, { key: 'surveyStatus', visible: true, label: 'Survey' }]
+    }
+    return cols
+  }
+  const [cols, setCols] = React.useState<ColumnDef[]>(ensureSurveyCol(defaultCols))
   const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
   const [showSaveViewDialog, setShowSaveViewDialog] = React.useState(false)
   const [savingViewName, setSavingViewName] = React.useState('')
@@ -157,7 +164,7 @@ export default function CRMAccounts() {
       const stored = localStorage.getItem('ACCOUNTS_COLS')
       if (stored) {
         const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) setCols(parsed)
+        if (Array.isArray(parsed) && parsed.length > 0) setCols(ensureSurveyCol(parsed))
       }
     } catch {}
     try {
