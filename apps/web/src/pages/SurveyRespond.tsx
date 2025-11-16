@@ -102,7 +102,7 @@ export default function SurveyRespond() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="w-full bg-white rounded-lg shadow-sm p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">{program.name}</h1>
           <p className="text-sm text-gray-600 mb-2">
             Please rate the following on a scale from 0 to 10.
@@ -112,7 +112,7 @@ export default function SurveyRespond() {
           )}
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="w-full bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="space-y-4">
             {program.questions.map((q) => (
               <div key={q.id} className="border-b border-gray-100 pb-3">
