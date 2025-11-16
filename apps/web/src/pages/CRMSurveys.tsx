@@ -74,6 +74,7 @@ export default function CRMSurveys() {
   const [selectedProgramId, setSelectedProgramId] = React.useState<string | null>(null)
   const [testScore, setTestScore] = React.useState<string>('')
   const [testComment, setTestComment] = React.useState<string>('')
+  const [testAnswers, setTestAnswers] = React.useState<Record<string, string>>({})
   const toast = useToast()
   const queryClient = useQueryClient()
 
@@ -116,9 +117,18 @@ export default function CRMSurveys() {
   })
 
   const logResponse = useMutation({
-    mutationFn: async (vars: { programId: string; score: number; comment?: string }) => {
-      const body: any = {
-        score: vars.score,
+    mutationFn: async (vars: {
+      programId: string
+      score?: number
+      answers?: { questionId: string; score: number }[]
+      comment?: string
+    }) => {
+      const body: any = {}
+      if (typeof vars.score === 'number') {
+        body.score = vars.score
+      }
+      if (vars.answers && vars.answers.length > 0) {
+        body.answers = vars.answers
       }
       if (vars.comment && vars.comment.trim()) body.comment = vars.comment.trim()
       const res = await http.post(`/api/crm/surveys/programs/${vars.programId}/responses`, body)
@@ -130,6 +140,7 @@ export default function CRMSurveys() {
       }
       setTestScore('')
       setTestComment('')
+      setTestAnswers({})
       toast.showToast('BOAZ says: Sample response recorded.', 'success')
     },
     onError: (err: any) => {
@@ -506,22 +517,52 @@ export default function CRMSurveys() {
                   flows can call the same API automatically.
                 </p>
                 <div className="flex flex-col gap-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-medium text-[color:var(--color-text)]">
-                      Score
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      value={testScore}
-                      onChange={(e) => setTestScore(e.target.value)}
-                      className="w-20 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-2 py-1 text-xs text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
-                    />
-                    <span className="text-[color:var(--color-text-muted)] text-xs">
-                      0–10 (use 0–10 for NPS, 1–5 for CSAT)
-                    </span>
-                  </div>
+                  {selectedProgram.questions && selectedProgram.questions.length > 0 ? (
+                    <>
+                      <p className="text-[10px] text-[color:var(--color-text-muted)] mb-1">
+                        Enter a 0–10 score for each question below.
+                      </p>
+                      <div className="space-y-2">
+                        {selectedProgram.questions.map((q) => (
+                          <div key={q.id} className="flex items-center gap-2">
+                            <label className="flex-1 text-xs font-medium text-[color:var(--color-text)]">
+                              {q.label}
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={10}
+                              value={testAnswers[q.id] ?? ''}
+                              onChange={(e) =>
+                                setTestAnswers((prev) => ({
+                                  ...prev,
+                                  [q.id]: e.target.value,
+                                }))
+                              }
+                              className="w-20 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-2 py-1 text-xs text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-medium text-[color:var(--color-text)]">
+                        Score
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10}
+                        value={testScore}
+                        onChange={(e) => setTestScore(e.target.value)}
+                        className="w-20 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-2 py-1 text-xs text-[color:var(--color-text)] focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                      />
+                      <span className="text-[color:var(--color-text-muted)] text-xs">
+                        0–10 (use 0–10 for NPS, 1–5 for CSAT)
+                      </span>
+                    </div>
+                  )}
                   <textarea
                     value={testComment}
                     onChange={(e) => setTestComment(e.target.value)}
@@ -533,23 +574,74 @@ export default function CRMSurveys() {
                     <button
                       type="button"
                       className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-60"
-                      disabled={!selectedProgramId || !testScore || logResponse.isPending}
+                      disabled={(() => {
+                        if (!selectedProgramId || logResponse.isPending) return true
+                        if (selectedProgram.questions && selectedProgram.questions.length > 0) {
+                          // Require at least one numeric answer; in future we could enforce per-question required
+                          const anyFilled = selectedProgram.questions.some((q) => {
+                            const v = testAnswers[q.id]
+                            return v !== undefined && v !== ''
+                          })
+                          return !anyFilled
+                        }
+                        return !testScore
+                      })()}
                       onClick={() => {
-                        if (!selectedProgramId || !testScore) return
-                        const n = Number(testScore)
-                        if (Number.isNaN(n)) {
-                          toast.showToast('BOAZ says: Score must be a number.', 'error')
-                          return
+                        if (!selectedProgramId) return
+
+                        if (selectedProgram.questions && selectedProgram.questions.length > 0) {
+                          const answers: { questionId: string; score: number }[] = []
+                          for (const q of selectedProgram.questions) {
+                            const raw = testAnswers[q.id]
+                            if (raw === undefined || raw === '') continue
+                            const n = Number(raw)
+                            if (Number.isNaN(n)) {
+                              toast.showToast(
+                                `BOAZ says: Score for "${q.label}" must be a number.`,
+                                'error',
+                              )
+                              return
+                            }
+                            if (n < 0 || n > 10) {
+                              toast.showToast(
+                                `BOAZ says: Score for "${q.label}" must be between 0 and 10.`,
+                                'error',
+                              )
+                              return
+                            }
+                            answers.push({ questionId: q.id, score: n })
+                          }
+
+                          if (answers.length === 0) {
+                            toast.showToast(
+                              'BOAZ says: Please enter at least one question score.',
+                              'error',
+                            )
+                            return
+                          }
+
+                          logResponse.mutate({
+                            programId: selectedProgramId,
+                            answers,
+                            comment: testComment,
+                          })
+                        } else {
+                          if (!testScore) return
+                          const n = Number(testScore)
+                          if (Number.isNaN(n)) {
+                            toast.showToast('BOAZ says: Score must be a number.', 'error')
+                            return
+                          }
+                          if (n < 0 || n > 10) {
+                            toast.showToast('BOAZ says: Score must be between 0 and 10.', 'error')
+                            return
+                          }
+                          logResponse.mutate({
+                            programId: selectedProgramId,
+                            score: n,
+                            comment: testComment,
+                          })
                         }
-                        if (n < 0 || n > 10) {
-                          toast.showToast('BOAZ says: Score must be between 0 and 10.', 'error')
-                          return
-                        }
-                        logResponse.mutate({
-                          programId: selectedProgramId,
-                          score: n,
-                          comment: testComment,
-                        })
                       }}
                     >
                       Log sample response
