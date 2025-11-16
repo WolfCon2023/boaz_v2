@@ -131,4 +131,72 @@ marketingTrackingRouter.get('/metrics/roi', async (req, res) => {
   res.json({ data: { items }, error: null })
 })
 
+// GET /api/marketing/metrics/surveys?campaignId=&startDate=&endDate=
+// Aggregates survey responses that originated from campaigns (via survey_links)
+marketingTrackingRouter.get('/metrics/surveys', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.json({ data: { items: [] }, error: null })
+
+  const campaignId = String((req.query.campaignId as string) ?? '')
+  const startDateRaw = String((req.query.startDate as string) ?? '')
+  const endDateRaw = String((req.query.endDate as string) ?? '')
+
+  const match: any = {
+    outreachEnrollmentId: { $exists: true, $ne: null },
+  }
+  if (ObjectId.isValid(campaignId)) {
+    match.outreachEnrollmentId = new ObjectId(campaignId)
+  }
+  const createdAt: any = {}
+  if (startDateRaw) {
+    const d = new Date(startDateRaw)
+    if (!isNaN(d.getTime())) createdAt.$gte = d
+  }
+  if (endDateRaw) {
+    const d = new Date(endDateRaw)
+    if (!isNaN(d.getTime())) {
+      d.setHours(23, 59, 59, 999)
+      createdAt.$lte = d
+    }
+  }
+  if (Object.keys(createdAt).length > 0) {
+    match.createdAt = createdAt
+  }
+
+  const items = await db
+    .collection('survey_responses')
+    .aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { campaignId: '$outreachEnrollmentId', programId: '$programId' },
+          responses: { $sum: 1 },
+          averageScore: { $avg: '$score' },
+        },
+      },
+      {
+        $lookup: {
+          from: 'survey_programs',
+          localField: '_id.programId',
+          foreignField: '_id',
+          as: 'program',
+        },
+      },
+      { $unwind: { path: '$program', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 0,
+          campaignId: '$_id.campaignId',
+          programId: '$_id.programId',
+          responses: 1,
+          averageScore: 1,
+          programName: '$program.name',
+          programType: '$program.type',
+        },
+      },
+    ])
+    .toArray()
+
+  res.json({ data: { items }, error: null })
+})
 

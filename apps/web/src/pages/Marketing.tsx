@@ -1538,6 +1538,20 @@ function AnalyticsTab() {
   const { data } = useQuery({ queryKey: ['mkt-metrics', startDate, endDate], queryFn: async () => (await http.get('/api/marketing/metrics', { params: { startDate: startDate || undefined, endDate: endDate || undefined } })).data, refetchInterval: 60000 })
   const { data: campaigns } = useQuery({ queryKey: ['mkt-campaigns'], queryFn: async () => (await http.get('/api/marketing/campaigns')).data })
   const [filterCampaign, setFilterCampaign] = React.useState<string>('')
+  const { data: surveyMetrics } = useQuery({
+    queryKey: ['mkt-survey-metrics', filterCampaign, startDate, endDate],
+    queryFn: async () =>
+      (
+        await http.get('/api/marketing/metrics/surveys', {
+          params: {
+            campaignId: filterCampaign || undefined,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
+          },
+        })
+      ).data,
+    refetchInterval: 60000,
+  })
   const { data: linkMetrics } = useQuery({
     queryKey: ['mkt-link-metrics', filterCampaign, startDate, endDate],
     queryFn: async () => (await http.get('/api/marketing/metrics/links', { params: { campaignId: filterCampaign || undefined, startDate: startDate || undefined, endDate: endDate || undefined } })).data,
@@ -1551,6 +1565,15 @@ function AnalyticsTab() {
   const rows = (data?.data?.byCampaign ?? []) as { campaignId: string; opens: number; clicks: number; visits: number }[]
   const linkRows = (linkMetrics?.data?.items ?? []) as { token: string; url: string; utmSource?: string; utmMedium?: string; utmCampaign?: string; clicks: number; campaignId?: string }[]
   const roiRows = (roiMetrics?.data?.items ?? []) as { campaignId: string; revenue: number; dealsCount: number }[]
+  const surveyRows =
+    (surveyMetrics?.data?.items ?? []) as {
+      campaignId: string
+      programId: string
+      responses: number
+      averageScore: number
+      programName?: string
+      programType?: string
+    }[]
 
   // Build a combined ROI view so the table always shows campaigns with 0s
   const roiByCampaignId = React.useMemo(() => {
@@ -1649,6 +1672,61 @@ function AnalyticsTab() {
             ))}
             {roiDisplayRows.length === 0 && (
               <tr><td className="p-2 text-[color:var(--color-text-muted)]" colSpan={3}>No campaigns found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="text-base font-semibold">Survey performance</div>
+        <select
+          value={filterCampaign}
+          onChange={(e) => setFilterCampaign(e.target.value)}
+          className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)]"
+        >
+          <option value="">All campaigns</option>
+          {allCampaignItems.map((c) => (
+            <option key={c._id} value={c._id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="rounded-2xl border">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b">
+              <th className="p-2 text-left">Campaign</th>
+              <th className="p-2 text-left">Survey program</th>
+              <th className="p-2 text-left">Type</th>
+              <th className="p-2 text-left">Responses</th>
+              <th className="p-2 text-left">Average score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {surveyRows.map((r) => {
+              const list = (allCampaignItems as any[])
+              const campaign = list.find((c) => String(c._id) === String(r.campaignId))
+              const campaignName = campaign?.name || String(r.campaignId)
+              return (
+                <tr key={`${String(r.campaignId)}-${String(r.programId)}`} className="border-b">
+                  <td className="p-2">{campaignName}</td>
+                  <td className="p-2">{r.programName || r.programId}</td>
+                  <td className="p-2 text-[color:var(--color-text-muted)]">{r.programType || '-'}</td>
+                  <td className="p-2">{r.responses}</td>
+                  <td className="p-2">{Number.isFinite(r.averageScore) ? r.averageScore.toFixed(2) : '-'}</td>
+                </tr>
+              )
+            })}
+            {surveyRows.length === 0 && (
+              <tr>
+                <td
+                  className="p-2 text-[color:var(--color-text-muted)]"
+                  colSpan={5}
+                >
+                  No survey responses found for the selected range.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
