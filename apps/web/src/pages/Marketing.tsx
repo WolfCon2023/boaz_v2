@@ -831,7 +831,7 @@ function SimpleBuilderUI({
                     className="rounded-lg border px-2 py-1 text-xs bg-[color:var(--color-panel)] text-[color:var(--color-text)]"
                   >
                     <option value="custom">Custom URL</option>
-                    <option value="survey">Linked survey ({{surveyUrl}})</option>
+                    <option value="survey">{'Linked survey ({{surveyUrl}})'}</option>
                   </select>
                 </div>
               )}
