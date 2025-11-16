@@ -1403,7 +1403,25 @@ export default function CRMQuotes() {
                 </div>
                 {showHistory && historyQ.data && (
                   <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
-                    <h3 className="mb-3 text-sm font-semibold">Quote History</h3>
+                    <h3 className="mb-1 text-sm font-semibold">Quote history</h3>
+                    <div className="text-xs">
+                      Created:{' '}
+                      {historyQ.data.data.quote?.createdAt
+                        ? formatDateTime(historyQ.data.data.quote.createdAt)
+                        : '-'}
+                    </div>
+                    <div className="mt-1 text-xs">
+                      Quote:{' '}
+                      {historyQ.data.data.quote?.quoteNumber
+                        ? `#${historyQ.data.data.quote.quoteNumber}`
+                        : ''}{' '}
+                      {historyQ.data.data.quote?.title ?? ''}{' '}
+                      • Status: {historyQ.data.data.quote?.status ?? ''} • Total:{' '}
+                      {typeof historyQ.data.data.quote?.total === 'number'
+                        ? `$${historyQ.data.data.quote.total.toLocaleString()}`
+                        : '-'}
+                    </div>
+                    <div className="mt-2 mb-1 text-xs font-semibold">Events</div>
                     {historyQ.data.data.history && historyQ.data.data.history.length > 0 ? (
                       <div className="space-y-2 max-h-96 overflow-y-auto">
                         {historyQ.data.data.history.map((entry) => {
