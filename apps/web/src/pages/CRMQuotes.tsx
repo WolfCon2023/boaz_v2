@@ -303,6 +303,7 @@ export default function CRMQuotes() {
       recipientName?: string
       recipientEmail: string
       accountId?: string
+      quoteId?: string
     }) => {
       const { programId, ...rest } = payload
       const res = await http.post(`/api/crm/surveys/programs/${programId}/send-email`, rest)
@@ -310,6 +311,7 @@ export default function CRMQuotes() {
     },
     onSuccess: () => {
       toast.showToast('Survey email sent', 'success')
+      qc.invalidateQueries({ queryKey: ['quotes-survey-status'] })
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.error || err?.message || 'Failed to send survey email'
@@ -946,6 +948,7 @@ export default function CRMQuotes() {
                             recipientName: surveyRecipientName || undefined,
                             recipientEmail: surveyRecipientEmail,
                             accountId: editing.accountId,
+                            quoteId: editing._id,
                           })
                         }}
                       >
