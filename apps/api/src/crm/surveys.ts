@@ -30,12 +30,21 @@ type SurveyProgramDoc = {
   responseRate?: number | null
 }
 
+type SurveyAnswerDoc = {
+  questionId: string
+  label?: string
+  score: number
+}
+
 type SurveyResponseDoc = {
   _id?: ObjectId
   programId: ObjectId
   type: SurveyProgramDoc['type']
   channel: SurveyProgramDoc['channel']
+  // Overall score for this response (average of answers when multi‑question)
   score: number
+  // Optional per‑question answers for multi‑question surveys
+  answers?: SurveyAnswerDoc[]
   comment?: string
   contactId?: ObjectId | null
   accountId?: ObjectId | null
@@ -62,14 +71,25 @@ const surveyProgramSchema = z.object({
   questions: z.array(surveyQuestionSchema).optional(),
 })
 
-const surveyResponseSchema = z.object({
+const surveyAnswerSchema = z.object({
+  questionId: z.string().min(1),
   score: z.number().min(0).max(10),
-  comment: z.string().max(4000).optional(),
-  contactId: z.string().optional(),
-  accountId: z.string().optional(),
-  ticketId: z.string().optional(),
-  outreachEnrollmentId: z.string().optional(),
 })
+
+const surveyResponseSchema = z
+  .object({
+    score: z.number().min(0).max(10).optional(),
+    answers: z.array(surveyAnswerSchema).optional(),
+    comment: z.string().max(4000).optional(),
+    contactId: z.string().optional(),
+    accountId: z.string().optional(),
+    ticketId: z.string().optional(),
+    outreachEnrollmentId: z.string().optional(),
+  })
+  .refine(
+    (v) => typeof v.score === 'number' || (v.answers && v.answers.length > 0),
+    { message: 'score_or_answers_required' },
+  )
 
 // GET /api/crm/surveys/programs?type=&status=&q=&sort=&dir=
 surveysRouter.get('/programs', async (req, res) => {
@@ -163,16 +183,32 @@ surveysRouter.post('/programs/:id/responses', async (req, res) => {
     }
   }
 
+  const body = parsed.data
+  const answers: SurveyAnswerDoc[] | undefined = body.answers?.map((a) => ({
+    questionId: a.questionId,
+    score: a.score,
+  }))
+
+  let overallScore: number
+  if (answers && answers.length > 0) {
+    const sum = answers.reduce((acc, a) => acc + a.score, 0)
+    overallScore = sum / answers.length
+  } else {
+    // Fallback to single score payloads (existing integrations)
+    overallScore = body.score as number
+  }
+
   const doc: SurveyResponseDoc = {
     programId,
     type: program.type,
     channel: program.channel,
-    score: parsed.data.score,
-    comment: parsed.data.comment,
-    contactId: toObjectId(parsed.data.contactId),
-    accountId: toObjectId(parsed.data.accountId),
-    ticketId: toObjectId(parsed.data.ticketId),
-    outreachEnrollmentId: toObjectId(parsed.data.outreachEnrollmentId),
+    score: overallScore,
+    answers,
+    comment: body.comment,
+    contactId: toObjectId(body.contactId),
+    accountId: toObjectId(body.accountId),
+    ticketId: toObjectId(body.ticketId),
+    outreachEnrollmentId: toObjectId(body.outreachEnrollmentId),
     createdAt: now,
   }
 
@@ -349,6 +385,33 @@ surveysRouter.get('/programs/:id/summary', async (req, res) => {
       averageScore: avg,
       distribution: buckets,
     }
+  }
+
+  // Per-question averages for multi-question surveys
+  const questionMeta = new Map<string, string>()
+  for (const q of program.questions ?? []) {
+    questionMeta.set(q.id, q.label)
+  }
+
+  const perQuestion = new Map<string, { total: number; count: number }>()
+  for (const r of responses) {
+    if (!r.answers) continue
+    for (const a of r.answers) {
+      const key = a.questionId
+      const agg = perQuestion.get(key) ?? { total: 0, count: 0 }
+      agg.total += a.score
+      agg.count += 1
+      perQuestion.set(key, agg)
+    }
+  }
+
+  if (perQuestion.size > 0) {
+    summary.questions = Array.from(perQuestion.entries()).map(([questionId, agg]) => ({
+      questionId,
+      label: questionMeta.get(questionId) ?? questionId,
+      averageScore: agg.total / agg.count,
+      responses: agg.count,
+    }))
   }
 
   res.json({ data: summary, error: null })

@@ -26,22 +26,35 @@ type SurveyProgram = {
   responseRate?: number
 }
 
-type ProgramSummary =
-  | {
-      totalResponses: number
-      detractors: number
-      passives: number
-      promoters: number
-      detractorsPct: number
-      passivesPct: number
-      promotersPct: number
-      nps: number
-    }
-  | {
-      totalResponses: number
-      averageScore: number
-      distribution: Record<string, number>
-    }
+type ProgramSummaryBase = {
+  totalResponses: number
+}
+
+type ProgramSummaryNps = ProgramSummaryBase & {
+  detractors: number
+  passives: number
+  promoters: number
+  detractorsPct: number
+  passivesPct: number
+  promotersPct: number
+  nps: number
+}
+
+type ProgramSummaryScore = ProgramSummaryBase & {
+  averageScore: number
+  distribution: Record<string, number>
+}
+
+type ProgramQuestionSummary = {
+  questionId: string
+  label: string
+  averageScore: number
+  responses: number
+}
+
+type ProgramSummary = (ProgramSummaryNps | ProgramSummaryScore) & {
+  questions?: ProgramQuestionSummary[]
+}
 
 const defaultQuestionForType = (type: SurveyProgram['type']): string => {
   if (type === 'NPS') {
@@ -440,7 +453,8 @@ export default function CRMSurveys() {
                 </p>
                 {'averageScore' in summaryQuery.data && (
                   <p className="text-[color:var(--color-text)]">
-                    <strong>Average score:</strong> {summaryQuery.data.averageScore.toFixed(2)}
+                    <strong>Average score (overall):</strong>{' '}
+                    {summaryQuery.data.averageScore.toFixed(2)}
                   </p>
                 )}
                 {'distribution' in summaryQuery.data && (
@@ -459,6 +473,28 @@ export default function CRMSurveys() {
                 )}
               </div>
             )}
+
+            {summaryQuery.data &&
+              Array.isArray((summaryQuery.data as any).questions) &&
+              (summaryQuery.data as any).questions.length > 0 && (
+                <div className="mt-3 border-t border-[color:var(--color-border)] pt-3 text-xs">
+                  <p className="mb-1 font-semibold text-[color:var(--color-text)]">
+                    Per-question averages
+                  </p>
+                  <ul className="space-y-1 text-[color:var(--color-text)]">
+                    {(summaryQuery.data as any).questions.map((q: ProgramQuestionSummary) => (
+                      <li key={q.questionId} className="flex items-center justify-between gap-2">
+                        <span className="flex-1 truncate" title={q.label}>
+                          {q.label}
+                        </span>
+                        <span className="ml-2 whitespace-nowrap text-[color:var(--color-text-muted)]">
+                          {q.averageScore.toFixed(2)} ({q.responses} responses)
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
             {selectedProgram && (
               <div className="mt-4 border-t border-[color:var(--color-border)] pt-3">
