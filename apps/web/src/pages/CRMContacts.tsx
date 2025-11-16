@@ -232,6 +232,51 @@ export default function CRMContacts() {
     },
   })
 
+  const { data: surveyProgramsData } = useQuery({
+    queryKey: ['surveys-programs-contacts'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/programs')
+      return res.data as {
+        data: { items: Array<{ _id: string; name: string; type: 'NPS' | 'CSAT' | 'Post‑interaction' }> }
+      }
+    },
+  })
+  const surveyPrograms = React.useMemo(
+    () => surveyProgramsData?.data.items ?? [],
+    [surveyProgramsData?.data.items],
+  )
+
+  const [surveyProgramId, setSurveyProgramId] = React.useState('')
+  const [surveyRecipientName, setSurveyRecipientName] = React.useState('')
+  const [surveyRecipientEmail, setSurveyRecipientEmail] = React.useState('')
+
+  React.useEffect(() => {
+    if (!editing) return
+    setSurveyRecipientName(editing.name ?? '')
+    setSurveyRecipientEmail(editing.email ?? '')
+  }, [editing])
+
+  const sendSurveyEmail = useMutation({
+    mutationFn: async (payload: {
+      programId: string
+      recipientName?: string
+      recipientEmail: string
+      contactId: string
+      accountId?: string
+    }) => {
+      const { programId, ...rest } = payload
+      const res = await http.post(`/api/crm/surveys/programs/${programId}/send-email`, rest)
+      return res.data
+    },
+    onSuccess: () => {
+      toast.showToast('Survey email sent', 'success')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to send survey email'
+      toast.showToast(msg, 'error')
+    },
+  })
+
   // Initialize from URL and localStorage once
   React.useEffect(() => {
     if (initializedFromUrl.current) return
@@ -726,6 +771,83 @@ export default function CRMContacts() {
                   )}
                 </div>
               </div>
+
+              {surveyPrograms.length > 0 && (
+                <div className="col-span-full mt-4 rounded-xl border border-[color:var(--color-border)] p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold">Surveys &amp; Feedback</div>
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                      Send a CSAT/NPS survey directly to this contact.
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="sm:col-span-1">
+                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                        Survey program
+                      </label>
+                      <select
+                        value={surveyProgramId}
+                        onChange={(e) => setSurveyProgramId(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                      >
+                        <option value="">Select a program…</option>
+                        {surveyPrograms.map((p) => (
+                          <option key={p._id} value={p._id}>
+                            {p.name} ({p.type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                        Customer name (for email)
+                      </label>
+                      <input
+                        type="text"
+                        value={surveyRecipientName}
+                        onChange={(e) => setSurveyRecipientName(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                        placeholder="Customer name"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                        Customer email (for survey link)
+                      </label>
+                      <input
+                        type="email"
+                        value={surveyRecipientEmail}
+                        onChange={(e) => setSurveyRecipientEmail(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                        placeholder="name@example.com"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-60"
+                      disabled={
+                        !editing ||
+                        !surveyProgramId ||
+                        !surveyRecipientEmail ||
+                        sendSurveyEmail.isPending
+                      }
+                      onClick={() => {
+                        if (!editing || !surveyProgramId || !surveyRecipientEmail) return
+                        sendSurveyEmail.mutate({
+                          programId: surveyProgramId,
+                          recipientName: surveyRecipientName || undefined,
+                          recipientEmail: surveyRecipientEmail,
+                          contactId: editing._id,
+                        })
+                      }}
+                    >
+                      {sendSurveyEmail.isPending ? 'Sending…' : 'Send survey email to contact'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                 <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) remove.mutate(editing._id); setEditing(null) }}>Delete</button>

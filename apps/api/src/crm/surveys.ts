@@ -92,6 +92,7 @@ type SurveyLinkDoc = {
   token: string
   programId: ObjectId
   contactId?: ObjectId | null
+  accountId?: ObjectId | null
   campaignId?: ObjectId | null
   ticketId?: ObjectId | null
   email?: string | null
@@ -896,7 +897,7 @@ surveysRouter.post('/respond/:token', async (req, res) => {
 
   const doc = buildSurveyResponseDoc(program, parsed.data, {
     contactId: link.contactId ?? null,
-    accountId: null,
+    accountId: link.accountId ?? null,
     ticketId: link.ticketId ?? null,
     outreachEnrollmentId: link.campaignId ?? null,
   })
@@ -929,6 +930,10 @@ surveysRouter.post('/programs/:id/send-email', requireAuth, async (req, res) => 
     typeof raw.recipientEmail === 'string' ? raw.recipientEmail.trim() : ''
   const recipientName =
     typeof raw.recipientName === 'string' ? raw.recipientName.trim() : ''
+  const contactId =
+    raw.contactId && ObjectId.isValid(raw.contactId) ? new ObjectId(raw.contactId) : null
+  const accountId =
+    raw.accountId && ObjectId.isValid(raw.accountId) ? new ObjectId(raw.accountId) : null
   const ticketId =
     raw.ticketId && ObjectId.isValid(raw.ticketId) ? new ObjectId(raw.ticketId) : null
 
@@ -941,7 +946,8 @@ surveysRouter.post('/programs/:id/send-email', requireAuth, async (req, res) => 
   const linkDoc: SurveyLinkDoc = {
     token,
     programId,
-    contactId: null,
+    contactId,
+    accountId,
     campaignId: null,
     ticketId,
     email: recipientEmail,
