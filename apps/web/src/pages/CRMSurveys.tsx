@@ -56,6 +56,14 @@ type ProgramSummary = (ProgramSummaryNps | ProgramSummaryScore) & {
   questions?: ProgramQuestionSummary[]
 }
 
+type ProgramMetricsRow = {
+  programId: string
+  name: string
+  type: SurveyProgram['type']
+  status: SurveyProgram['status']
+  summary: ProgramSummary
+}
+
 const defaultQuestionForType = (type: SurveyProgram['type']): string => {
   if (type === 'NPS') {
     return 'On a scale from 0 to 10, how likely are you to recommend us to a friend or colleague?'
@@ -104,6 +112,19 @@ export default function CRMSurveys() {
   const programs = data?.items ?? []
   const filteredPrograms = programs
   const selectedProgram = programs.find((p) => p.id === selectedProgramId) || null
+
+  const activeMetricsQuery = useQuery({
+    queryKey: ['surveys-programs-metrics', 'Active'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/programs/metrics', {
+        params: { status: 'Active' },
+      })
+      const payload = res.data as {
+        data: { items: ProgramMetricsRow[] }
+      }
+      return payload.data.items
+    },
+  })
 
   const summaryQuery = useQuery({
     queryKey: ['surveys-program-summary', selectedProgramId],
@@ -651,6 +672,91 @@ export default function CRMSurveys() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="px-4 pb-6">
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-md font-semibold">Active program metrics</h2>
+            <span className="text-[10px] text-[color:var(--color-text-muted)]">
+              Metrics are calculated per program from the last 1000 responses.
+            </span>
+          </div>
+          {activeMetricsQuery.isLoading ? (
+            <p className="text-sm text-[color:var(--color-text-muted)]">
+              Loading active program metrics…
+            </p>
+          ) : !activeMetricsQuery.data || activeMetricsQuery.data.length === 0 ? (
+            <p className="text-sm text-[color:var(--color-text-muted)]">
+              No active survey programs with responses yet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[color:var(--color-border)]">
+                    <th className="px-2 py-1">Program</th>
+                    <th className="px-2 py-1">Type</th>
+                    <th className="px-2 py-1">Total responses</th>
+                    <th className="px-2 py-1">Key score</th>
+                    <th className="px-2 py-1">Distribution (summary)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeMetricsQuery.data.map((row) => {
+                    const s = row.summary
+                    const isNps = 'nps' in s
+                    let keyScore: string = '—'
+                    if (isNps) {
+                      keyScore = `NPS ${s.nps}`
+                    } else if ('averageScore' in s) {
+                      keyScore = `Avg ${s.averageScore.toFixed(2)}`
+                    }
+
+                    let distributionSummary = '—'
+                    if (isNps && 'promotersPct' in s) {
+                      distributionSummary = `Promoters ${s.promotersPct.toFixed(
+                        1,
+                      )}%, Passives ${s.passivesPct.toFixed(
+                        1,
+                      )}%, Detractors ${s.detractorsPct.toFixed(1)}%`
+                    } else if (!isNps && 'distribution' in s) {
+                      const entries = Object.entries(s.distribution)
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .slice(0, 5)
+                      distributionSummary = entries
+                        .map(([score, count]) => `Score ${score}: ${count}`)
+                        .join(' • ')
+                    }
+
+                    return (
+                      <tr
+                        key={row.programId}
+                        className="border-b border-[color:var(--color-border)] last:border-b-0"
+                      >
+                        <td className="px-2 py-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProgramId(row.programId)}
+                            className="text-[color:var(--color-primary-500)] hover:underline"
+                          >
+                            {row.name}
+                          </button>
+                        </td>
+                        <td className="px-2 py-1">{row.type}</td>
+                        <td className="px-2 py-1">{s.totalResponses}</td>
+                        <td className="px-2 py-1">{keyScore}</td>
+                        <td className="px-2 py-1 text-[color:var(--color-text-muted)]">
+                          {distributionSummary}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

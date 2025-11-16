@@ -53,6 +53,36 @@ type SurveyResponseDoc = {
   createdAt: Date
 }
 
+type ProgramSummaryBase = {
+  totalResponses: number
+}
+
+type ProgramSummaryNps = ProgramSummaryBase & {
+  detractors: number
+  passives: number
+  promoters: number
+  detractorsPct: number
+  passivesPct: number
+  promotersPct: number
+  nps: number
+}
+
+type ProgramSummaryScore = ProgramSummaryBase & {
+  averageScore: number
+  distribution: Record<string, number>
+}
+
+type ProgramQuestionSummary = {
+  questionId: string
+  label: string
+  averageScore: number
+  responses: number
+}
+
+type ProgramSummary = (ProgramSummaryNps | ProgramSummaryScore) & {
+  questions?: ProgramQuestionSummary[]
+}
+
 const surveyQuestionSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
@@ -90,6 +120,91 @@ const surveyResponseSchema = z
     (v) => typeof v.score === 'number' || (v.answers && v.answers.length > 0),
     { message: 'score_or_answers_required' },
   )
+
+function buildProgramSummary(
+  program: SurveyProgramDoc,
+  responses: SurveyResponseDoc[],
+): ProgramSummary {
+  const total = responses.length
+
+  let summary: any = {
+    totalResponses: total,
+  }
+
+  if (total === 0) {
+    return summary
+  }
+
+  if (program.type === 'NPS') {
+    let detractors = 0
+    let passives = 0
+    let promoters = 0
+
+    for (const r of responses) {
+      if (r.score <= 6) detractors++
+      else if (r.score <= 8) passives++
+      else promoters++
+    }
+
+    const detPct = (detractors / total) * 100
+    const promPct = (promoters / total) * 100
+
+    summary = {
+      ...summary,
+      detractors,
+      passives,
+      promoters,
+      detractorsPct: detPct,
+      passivesPct: (passives / total) * 100,
+      promotersPct: promPct,
+      nps: Math.round(promPct - detPct),
+    }
+  } else {
+    const sum = responses.reduce((acc, r) => acc + r.score, 0)
+    const avg = sum / total
+
+    const buckets: Record<string, number> = {}
+    for (const r of responses) {
+      const key = String(r.score)
+      buckets[key] = (buckets[key] ?? 0) + 1
+    }
+
+    summary = {
+      ...summary,
+      averageScore: avg,
+      distribution: buckets,
+    }
+  }
+
+  // Per-question averages for multi-question surveys
+  const questionMeta = new Map<string, string>()
+  for (const q of program.questions ?? []) {
+    questionMeta.set(q.id, q.label)
+  }
+
+  const perQuestion = new Map<string, { total: number; count: number }>()
+  for (const r of responses) {
+    if (!r.answers) continue
+    for (const a of r.answers) {
+      const key = a.questionId
+      const agg = perQuestion.get(key) ?? { total: 0, count: 0 }
+      agg.total += a.score
+      agg.count += 1
+      perQuestion.set(key, agg)
+    }
+  }
+
+  if (perQuestion.size > 0) {
+    summary.questions = Array.from(perQuestion.entries()).map(([questionId, agg]) => ({
+      questionId,
+      label: questionMeta.get(questionId) ?? questionId,
+      averageScore: agg.total / agg.count,
+      responses: agg.count,
+    }))
+  }
+
+  return summary as ProgramSummary
+}
 
 // GET /api/crm/surveys/programs?type=&status=&q=&sort=&dir=
 surveysRouter.get('/programs', async (req, res) => {
@@ -336,85 +451,56 @@ surveysRouter.get('/programs/:id/summary', async (req, res) => {
     .limit(1000)
     .toArray()
 
-  const total = responses.length
-
-  let summary: any = {
-    totalResponses: total,
-  }
-
-  if (total === 0) {
-    return res.json({ data: summary, error: null })
-  }
-
-  if (program.type === 'NPS') {
-    let detractors = 0
-    let passives = 0
-    let promoters = 0
-
-    for (const r of responses) {
-      if (r.score <= 6) detractors++
-      else if (r.score <= 8) passives++
-      else promoters++
-    }
-
-    const detPct = (detractors / total) * 100
-    const promPct = (promoters / total) * 100
-
-    summary = {
-      ...summary,
-      detractors,
-      passives,
-      promoters,
-      detractorsPct: detPct,
-      passivesPct: (passives / total) * 100,
-      promotersPct: promPct,
-      nps: Math.round(promPct - detPct),
-    }
-  } else {
-    const sum = responses.reduce((acc, r) => acc + r.score, 0)
-    const avg = sum / total
-
-    const buckets: Record<string, number> = {}
-    for (const r of responses) {
-      const key = String(r.score)
-      buckets[key] = (buckets[key] ?? 0) + 1
-    }
-
-    summary = {
-      ...summary,
-      averageScore: avg,
-      distribution: buckets,
-    }
-  }
-
-  // Per-question averages for multi-question surveys
-  const questionMeta = new Map<string, string>()
-  for (const q of program.questions ?? []) {
-    questionMeta.set(q.id, q.label)
-  }
-
-  const perQuestion = new Map<string, { total: number; count: number }>()
-  for (const r of responses) {
-    if (!r.answers) continue
-    for (const a of r.answers) {
-      const key = a.questionId
-      const agg = perQuestion.get(key) ?? { total: 0, count: 0 }
-      agg.total += a.score
-      agg.count += 1
-      perQuestion.set(key, agg)
-    }
-  }
-
-  if (perQuestion.size > 0) {
-    summary.questions = Array.from(perQuestion.entries()).map(([questionId, agg]) => ({
-      questionId,
-      label: questionMeta.get(questionId) ?? questionId,
-      averageScore: agg.total / agg.count,
-      responses: agg.count,
-    }))
-  }
+  const summary = buildProgramSummary(program, responses)
 
   res.json({ data: summary, error: null })
+})
+
+// GET /api/crm/surveys/programs/metrics?status=Active
+surveysRouter.get('/programs/metrics', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const status = String((req.query.status as string) ?? 'Active').trim()
+
+  const programFilter: Record<string, unknown> = {}
+  if (status) programFilter.status = status
+
+  const programs = await db
+    .collection<SurveyProgramDoc>('survey_programs')
+    .find(programFilter)
+    .sort({ createdAt: 1 })
+    .limit(200)
+    .toArray()
+
+  const coll = db.collection<SurveyResponseDoc>('survey_responses')
+
+  const items: Array<{
+    programId: string
+    name: string
+    type: SurveyProgramDoc['type']
+    status: SurveyProgramDoc['status']
+    summary: ProgramSummary
+  }> = []
+
+  for (const program of programs) {
+    const responses = await coll
+      .find({ programId: program._id as ObjectId })
+      .sort({ createdAt: -1 })
+      .limit(1000)
+      .toArray()
+
+    const summary = buildProgramSummary(program, responses)
+    items.push({
+      programId: String(program._id),
+      name: program.name,
+      type: program.type,
+      status: program.status,
+      summary,
+    })
+  }
+
+  res.json({ data: { items }, error: null })
 })
 // POST /api/crm/surveys/programs
 surveysRouter.post('/programs', async (req, res) => {
