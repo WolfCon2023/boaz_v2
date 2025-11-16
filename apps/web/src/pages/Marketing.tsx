@@ -308,6 +308,7 @@ function SimpleBuilderUI({
   testing,
   footerText,
   setFooterText,
+  hasSurvey,
 }: {
   blocks: SimpleBlock[]
   setBlocks: React.Dispatch<React.SetStateAction<SimpleBlock[]>>
@@ -319,6 +320,7 @@ function SimpleBuilderUI({
   testing: boolean
   footerText: string
   setFooterText: (v: string) => void
+  hasSurvey: boolean
 }) {
   const toast = useToast()
   const [editingBlockId, setEditingBlockId] = React.useState<string | null>(null)
@@ -805,15 +807,50 @@ function SimpleBuilderUI({
                 placeholder="Button text"
                 className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
               />
+
+              {hasSurvey && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-[color:var(--color-text-muted)]">
+                    Button target
+                  </label>
+                  <select
+                    value={currentEditingBlock.buttonUrl === '{{surveyUrl}}' ? 'survey' : 'custom'}
+                    onChange={(e) => {
+                      const mode = e.target.value
+                      const isSurvey = currentEditingBlock.buttonUrl === '{{surveyUrl}}'
+                      if (mode === 'survey') {
+                        const updates: Partial<SimpleBlock> = { buttonUrl: '{{surveyUrl}}' }
+                        if (!currentEditingBlock.buttonText) {
+                          updates.buttonText = 'Take the survey'
+                        }
+                        updateBlock(currentEditingBlock.id, updates)
+                      } else if (mode === 'custom' && isSurvey) {
+                        updateBlock(currentEditingBlock.id, { buttonUrl: '' })
+                      }
+                    }}
+                    className="rounded-lg border px-2 py-1 text-xs bg-[color:var(--color-panel)] text-[color:var(--color-text)]"
+                  >
+                    <option value="custom">Custom URL</option>
+                    <option value="survey">Linked survey ({{surveyUrl}})</option>
+                  </select>
+                </div>
+              )}
+
               <input
                 type="text"
                 value={currentEditingBlock.buttonUrl || ''}
                 onChange={(e) =>
                   updateBlock(currentEditingBlock.id, { buttonUrl: e.target.value })
                 }
-                placeholder="Button URL"
+                placeholder={
+                  hasSurvey && currentEditingBlock.buttonUrl === '{{surveyUrl}}'
+                    ? 'Uses {{surveyUrl}} from linked survey program'
+                    : 'Button URL'
+                }
+                readOnly={hasSurvey && currentEditingBlock.buttonUrl === '{{surveyUrl}}'}
                 className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
               />
+
               <input
                 type="color"
                 value={currentEditingBlock.backgroundColor || '#ffffff'}
@@ -1426,6 +1463,7 @@ ${sections}
                   testing={testing}
                   footerText={footerText}
                   setFooterText={setFooterText}
+                  hasSurvey={!!surveyProgramId}
                 />
               ) : (
                 <>

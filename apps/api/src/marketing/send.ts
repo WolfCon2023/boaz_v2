@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import mjml2html from 'mjml'
 import { sendEmail } from '../alerts/mail.js'
+import crypto from 'crypto'
 
 export const marketingSendRouter = Router()
 
@@ -36,6 +37,17 @@ function injectUnsubscribe(html: string, unsubscribeUrl: string): string {
   // If no placeholder found, append footer
   const footer = `<p style="font-size:12px;color:#64748b">You received this email because you subscribed. <a href="${unsubscribeUrl}">Unsubscribe</a></p>`
   return html + footer
+}
+
+function injectSurveyUrl(html: string, surveyUrl?: string | null): string {
+  if (!surveyUrl) return html
+  if (html.includes('{{surveyUrl}}')) {
+    return html.replaceAll('{{surveyUrl}}', surveyUrl)
+  }
+  if (html.includes('{{surveyurl}}')) {
+    return html.replaceAll('{{surveyurl}}', surveyUrl)
+  }
+  return html
 }
 
 function injectPixel(html: string, pixelUrl: string): string {
@@ -99,7 +111,24 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
       if (unsubSet.has(email.toLowerCase())) { skipped++; continue }
       const unsubscribeUrl = `${base}/api/marketing/unsubscribe?e=${encodeURIComponent(email)}&c=${_id.toHexString()}`
       const pixelUrl = `${base}/api/marketing/pixel.gif?c=${_id.toHexString()}&e=${encodeURIComponent(email)}`
-      let personalized = injectUnsubscribe(html, unsubscribeUrl)
+
+      let surveyUrl: string | undefined
+      if (campaign.surveyProgramId) {
+        const token = crypto.randomBytes(24).toString('hex')
+        await db.collection('survey_links').insertOne({
+          token,
+          programId: campaign.surveyProgramId,
+          contactId: null,
+          campaignId: _id,
+          email,
+          createdAt: new Date(),
+        })
+        surveyUrl = `${base}/surveys/respond/${token}`
+      }
+
+      let personalized = html
+      personalized = injectSurveyUrl(personalized, surveyUrl)
+      personalized = injectUnsubscribe(personalized, unsubscribeUrl)
       personalized = injectPixel(personalized, pixelUrl)
       if (dryRun) continue
       try {
