@@ -212,6 +212,25 @@ export default function SupportTickets() {
     },
   })
 
+  const sendSurveyEmail = useMutation({
+    mutationFn: async (payload: {
+      programId: string
+      recipientName?: string
+      recipientEmail: string
+      ticketId: string
+    }) => {
+      const { programId, ...rest } = payload
+      const res = await http.post(`/api/crm/surveys/programs/${programId}/send-email`, rest)
+      return res.data
+    },
+    onSuccess: () => {
+      toast.showToast('Survey email sent to customer.', 'success')
+    },
+    onError: () => {
+      toast.showToast('Failed to send survey email.', 'error')
+    },
+  })
+
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
   React.useEffect(() => { setPage(0) }, [q, status, statusMulti.join(','), priority, sort, dir, pageSize, breachedOnly, dueNext60])
@@ -382,11 +401,15 @@ export default function SupportTickets() {
   const [surveyProgramId, setSurveyProgramId] = React.useState('')
   const [surveyScore, setSurveyScore] = React.useState('')
   const [surveyComment, setSurveyComment] = React.useState('')
+  const [surveyRecipientName, setSurveyRecipientName] = React.useState('')
+  const [surveyRecipientEmail, setSurveyRecipientEmail] = React.useState('')
   React.useEffect(() => {
     if (!editing) {
       setSurveyProgramId('')
       setSurveyScore('')
       setSurveyComment('')
+      setSurveyRecipientName('')
+      setSurveyRecipientEmail('')
     }
   }, [editing])
 
@@ -699,7 +722,56 @@ export default function SupportTickets() {
                           placeholder="Customer feedback, notes, etc."
                         />
                       </div>
-                      <div className="sm:col-span-4 flex justify-end">
+                      <div className="sm:col-span-4">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                              Customer name (for email)
+                            </label>
+                            <input
+                              type="text"
+                              value={surveyRecipientName}
+                              onChange={(e) => setSurveyRecipientName(e.target.value)}
+                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                              placeholder="Customer name"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                              Customer email (for survey link)
+                            </label>
+                            <input
+                              type="email"
+                              value={surveyRecipientEmail}
+                              onChange={(e) => setSurveyRecipientEmail(e.target.value)}
+                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                              placeholder="name@example.com"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="sm:col-span-4 flex justify-between gap-2">
+                        <button
+                          type="button"
+                          className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)] disabled:opacity-60"
+                          disabled={
+                            !editing ||
+                            !surveyProgramId ||
+                            !surveyRecipientEmail ||
+                            sendSurveyEmail.isPending
+                          }
+                          onClick={() => {
+                            if (!editing || !surveyProgramId || !surveyRecipientEmail) return
+                            sendSurveyEmail.mutate({
+                              programId: surveyProgramId,
+                              recipientName: surveyRecipientName || undefined,
+                              recipientEmail: surveyRecipientEmail,
+                              ticketId: editing._id,
+                            })
+                          }}
+                        >
+                          Send survey email to customer
+                        </button>
                         <button
                           type="button"
                           className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-60"
