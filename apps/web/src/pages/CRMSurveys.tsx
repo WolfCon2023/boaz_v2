@@ -450,7 +450,32 @@ export default function CRMSurveys() {
           </div>
 
           <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-sm">
-            <h2 className="mb-2 text-md font-semibold">Program metrics</h2>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="text-md font-semibold">Program metrics</h2>
+              {selectedProgram && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await http.post(
+                        `/api/crm/surveys/programs/${selectedProgram.id}/generate-link`,
+                        {},
+                      )
+                      const payload = res.data as { data: { url: string } }
+                      const url = payload.data.url
+                      await navigator.clipboard.writeText(url)
+                      toast.showToast('BOAZ says: Survey URL copied to clipboard.', 'success')
+                    } catch (err) {
+                      console.error('Generate survey URL error:', err)
+                      toast.showToast('BOAZ says: Failed to generate survey URL.', 'error')
+                    }
+                  }}
+                  className="rounded-md border border-[color:var(--color-border)] px-2 py-1 text-[10px] text-[color:var(--color-primary-600)] hover:bg-[color:var(--color-muted)]"
+                >
+                  Copy survey URL
+                </button>
+              )}
+            </div>
             {!selectedProgram || !selectedProgramId ? (
               <p className="text-sm text-[color:var(--color-text-muted)]">
                 Select a survey program to see NPS/CSAT metrics and log sample responses.
