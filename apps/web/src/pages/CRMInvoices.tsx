@@ -118,6 +118,7 @@ export default function CRMInvoices() {
     { key: 'dueDate', visible: true, label: 'Due' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
+  // Ensure Survey column is always present and visible, even for old saved layouts
   function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
     let hasSurvey = false
     const next = cols.map((c) => {
