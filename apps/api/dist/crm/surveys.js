@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { getDb } from '../db.js';
 import { ObjectId } from 'mongodb';
 import { z } from 'zod';
+import crypto from 'crypto';
+import { env } from '../env.js';
 export const surveysRouter = Router();
 const surveyQuestionSchema = z.object({
     id: z.string().min(1),
@@ -34,6 +36,118 @@ const surveyResponseSchema = z
     outreachEnrollmentId: z.string().optional(),
 })
     .refine((v) => typeof v.score === 'number' || (v.answers && v.answers.length > 0), { message: 'score_or_answers_required' });
+function buildSurveyResponseDoc(program, raw, extra) {
+    const now = new Date();
+    const answers = raw.answers?.map((a) => ({
+        questionId: a.questionId,
+        score: a.score,
+    }));
+    let overallScore;
+    if (answers && answers.length > 0) {
+        const sum = answers.reduce((acc, a) => acc + a.score, 0);
+        overallScore = sum / answers.length;
+    }
+    else {
+        overallScore = raw.score;
+    }
+    const toObjectId = (v) => {
+        if (!v)
+            return null;
+        try {
+            return new ObjectId(v);
+        }
+        catch {
+            return null;
+        }
+    };
+    return {
+        programId: program._id,
+        type: program.type,
+        channel: program.channel,
+        score: overallScore,
+        answers,
+        comment: raw.comment,
+        contactId: extra?.contactId ?? toObjectId(raw.contactId),
+        accountId: extra?.accountId ?? toObjectId(raw.accountId),
+        ticketId: extra?.ticketId ?? toObjectId(raw.ticketId),
+        outreachEnrollmentId: extra?.outreachEnrollmentId ?? toObjectId(raw.outreachEnrollmentId),
+        createdAt: now,
+    };
+}
+function buildProgramSummary(program, responses) {
+    const total = responses.length;
+    let summary = {
+        totalResponses: total,
+    };
+    if (total === 0) {
+        return summary;
+    }
+    if (program.type === 'NPS') {
+        let detractors = 0;
+        let passives = 0;
+        let promoters = 0;
+        for (const r of responses) {
+            if (r.score <= 6)
+                detractors++;
+            else if (r.score <= 8)
+                passives++;
+            else
+                promoters++;
+        }
+        const detPct = (detractors / total) * 100;
+        const promPct = (promoters / total) * 100;
+        summary = {
+            ...summary,
+            detractors,
+            passives,
+            promoters,
+            detractorsPct: detPct,
+            passivesPct: (passives / total) * 100,
+            promotersPct: promPct,
+            nps: Math.round(promPct - detPct),
+        };
+    }
+    else {
+        const sum = responses.reduce((acc, r) => acc + r.score, 0);
+        const avg = sum / total;
+        const buckets = {};
+        for (const r of responses) {
+            const key = String(r.score);
+            buckets[key] = (buckets[key] ?? 0) + 1;
+        }
+        summary = {
+            ...summary,
+            averageScore: avg,
+            distribution: buckets,
+        };
+    }
+    // Per-question averages for multi-question surveys
+    const questionMeta = new Map();
+    for (const q of program.questions ?? []) {
+        questionMeta.set(q.id, q.label);
+    }
+    const perQuestion = new Map();
+    for (const r of responses) {
+        if (!r.answers)
+            continue;
+        for (const a of r.answers) {
+            const key = a.questionId;
+            const agg = perQuestion.get(key) ?? { total: 0, count: 0 };
+            agg.total += a.score;
+            agg.count += 1;
+            perQuestion.set(key, agg);
+        }
+    }
+    if (perQuestion.size > 0) {
+        summary.questions = Array.from(perQuestion.entries()).map(([questionId, agg]) => ({
+            questionId,
+            label: questionMeta.get(questionId) ?? questionId,
+            averageScore: agg.total / agg.count,
+            responses: agg.count,
+        }));
+    }
+    return summary;
+}
 // GET /api/crm/surveys/programs?type=&status=&q=&sort=&dir=
 surveysRouter.get('/programs', async (req, res) => {
     const db = await getDb();
@@ -109,44 +223,8 @@ surveysRouter.post('/programs/:id/responses', async (req, res) => {
     if (!program) {
         return res.status(404).json({ data: null, error: 'program_not_found' });
     }
-    const now = new Date();
-    const toObjectId = (v) => {
-        if (!v)
-            return null;
-        try {
-            return new ObjectId(v);
-        }
-        catch {
-            return null;
-        }
-    };
-    const body = parsed.data;
-    const answers = body.answers?.map((a) => ({
-        questionId: a.questionId,
-        score: a.score,
-    }));
-    let overallScore;
-    if (answers && answers.length > 0) {
-        const sum = answers.reduce((acc, a) => acc + a.score, 0);
-        overallScore = sum / answers.length;
-    }
-    else {
-        // Fallback to single score payloads (existing integrations)
-        overallScore = body.score;
-    }
-    const doc = {
-        programId,
-        type: program.type,
-        channel: program.channel,
-        score: overallScore,
-        answers,
-        comment: body.comment,
-        contactId: toObjectId(body.contactId),
-        accountId: toObjectId(body.accountId),
-        ticketId: toObjectId(body.ticketId),
-        outreachEnrollmentId: toObjectId(body.outreachEnrollmentId),
-        createdAt: now,
-    };
+    const doc = buildSurveyResponseDoc(program, parsed.data);
+    const now = doc.createdAt;
     await db.collection('survey_responses').insertOne(doc);
     // If this response is tied to a support ticket, append a system comment so the
     // ticket history clearly shows that a survey response was logged.
@@ -251,78 +329,143 @@ surveysRouter.get('/programs/:id/summary', async (req, res) => {
         .sort({ createdAt: -1 })
         .limit(1000)
         .toArray();
-    const total = responses.length;
-    let summary = {
-        totalResponses: total,
-    };
-    if (total === 0) {
-        return res.json({ data: summary, error: null });
-    }
-    if (program.type === 'NPS') {
-        let detractors = 0;
-        let passives = 0;
-        let promoters = 0;
-        for (const r of responses) {
-            if (r.score <= 6)
-                detractors++;
-            else if (r.score <= 8)
-                passives++;
-            else
-                promoters++;
-        }
-        const detPct = (detractors / total) * 100;
-        const promPct = (promoters / total) * 100;
-        summary = {
-            ...summary,
-            detractors,
-            passives,
-            promoters,
-            detractorsPct: detPct,
-            passivesPct: (passives / total) * 100,
-            promotersPct: promPct,
-            nps: Math.round(promPct - detPct),
-        };
-    }
-    else {
-        const sum = responses.reduce((acc, r) => acc + r.score, 0);
-        const avg = sum / total;
-        const buckets = {};
-        for (const r of responses) {
-            const key = String(r.score);
-            buckets[key] = (buckets[key] ?? 0) + 1;
-        }
-        summary = {
-            ...summary,
-            averageScore: avg,
-            distribution: buckets,
-        };
-    }
-    // Per-question averages for multi-question surveys
-    const questionMeta = new Map();
-    for (const q of program.questions ?? []) {
-        questionMeta.set(q.id, q.label);
-    }
-    const perQuestion = new Map();
-    for (const r of responses) {
-        if (!r.answers)
-            continue;
-        for (const a of r.answers) {
-            const key = a.questionId;
-            const agg = perQuestion.get(key) ?? { total: 0, count: 0 };
-            agg.total += a.score;
-            agg.count += 1;
-            perQuestion.set(key, agg);
-        }
-    }
-    if (perQuestion.size > 0) {
-        summary.questions = Array.from(perQuestion.entries()).map(([questionId, agg]) => ({
-            questionId,
-            label: questionMeta.get(questionId) ?? questionId,
-            averageScore: agg.total / agg.count,
-            responses: agg.count,
-        }));
-    }
+    const summary = buildProgramSummary(program, responses);
     res.json({ data: summary, error: null });
+});
+// GET /api/crm/surveys/programs/metrics?status=Active
+surveysRouter.get('/programs/metrics', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const status = String(req.query.status ?? 'Active').trim();
+    const programFilter = {};
+    if (status)
+        programFilter.status = status;
+    const programs = await db
+        .collection('survey_programs')
+        .find(programFilter)
+        .sort({ createdAt: 1 })
+        .limit(200)
+        .toArray();
+    const coll = db.collection('survey_responses');
+    const items = [];
+    for (const program of programs) {
+        const responses = await coll
+            .find({ programId: program._id })
+            .sort({ createdAt: -1 })
+            .limit(1000)
+            .toArray();
+        const summary = buildProgramSummary(program, responses);
+        items.push({
+            programId: String(program._id),
+            name: program.name,
+            type: program.type,
+            status: program.status,
+            summary,
+        });
+    }
+    res.json({ data: { items }, error: null });
+});
+// POST /api/crm/surveys/programs/:id/generate-link
+// Generates a shareable survey URL for a program (optionally linked to a campaign or contact)
+surveysRouter.post('/programs/:id/generate-link', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    let programId;
+    try {
+        programId = new ObjectId(req.params.id);
+    }
+    catch {
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+    const program = await db.collection('survey_programs').findOne({ _id: programId });
+    if (!program) {
+        return res.status(404).json({ data: null, error: 'program_not_found' });
+    }
+    const raw = req.body ?? {};
+    const contactId = raw.contactId && ObjectId.isValid(raw.contactId) ? new ObjectId(raw.contactId) : null;
+    const campaignId = raw.campaignId && ObjectId.isValid(raw.campaignId) ? new ObjectId(raw.campaignId) : null;
+    const email = typeof raw.email === 'string' ? raw.email.trim() || null : null;
+    const token = crypto.randomBytes(24).toString('hex');
+    const linkDoc = {
+        token,
+        programId,
+        contactId,
+        campaignId,
+        email,
+        createdAt: new Date(),
+    };
+    await db.collection('survey_links').insertOne(linkDoc);
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
+    const surveyUrl = `${baseUrl}/surveys/respond/${token}`;
+    res.json({ data: { url: surveyUrl }, error: null });
+});
+// GET /api/crm/surveys/respond/:token - public survey view
+surveysRouter.get('/respond/:token', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const token = String(req.params.token || '').trim();
+    if (!token)
+        return res.status(400).json({ data: null, error: 'invalid_token' });
+    const link = await db.collection('survey_links').findOne({ token });
+    if (!link) {
+        return res.status(404).json({ data: null, error: 'survey_link_not_found' });
+    }
+    const program = await db
+        .collection('survey_programs')
+        .findOne({ _id: link.programId });
+    if (!program) {
+        return res.status(404).json({ data: null, error: 'program_not_found' });
+    }
+    const questions = (program.questions ?? []).map((q) => ({
+        id: q.id,
+        label: q.label,
+        required: !!q.required,
+    }));
+    res.json({
+        data: {
+            program: {
+                name: program.name,
+                type: program.type,
+                scaleHelpText: program.scaleHelpText ?? null,
+                questions,
+            },
+        },
+        error: null,
+    });
+});
+// POST /api/crm/surveys/respond/:token - public submit
+surveysRouter.post('/respond/:token', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const token = String(req.params.token || '').trim();
+    if (!token)
+        return res.status(400).json({ data: null, error: 'invalid_token' });
+    const link = await db.collection('survey_links').findOne({ token });
+    if (!link) {
+        return res.status(404).json({ data: null, error: 'survey_link_not_found' });
+    }
+    const program = await db
+        .collection('survey_programs')
+        .findOne({ _id: link.programId });
+    if (!program) {
+        return res.status(404).json({ data: null, error: 'program_not_found' });
+    }
+    const parsed = surveyResponseSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ data: null, error: 'invalid_payload' });
+    }
+    const doc = buildSurveyResponseDoc(program, parsed.data, {
+        contactId: link.contactId ?? null,
+        accountId: null,
+        ticketId: null,
+        outreachEnrollmentId: link.campaignId ?? null,
+    });
+    await db.collection('survey_responses').insertOne(doc);
+    res.status(201).json({ data: { ok: true }, error: null });
 });
 // POST /api/crm/surveys/programs
 surveysRouter.post('/programs', async (req, res) => {
