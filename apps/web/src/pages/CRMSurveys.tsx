@@ -393,18 +393,18 @@ export default function CRMSurveys() {
                       <th className="px-2 py-1">Status</th>
                       <th className="px-2 py-1">Last Sent</th>
                       <th className="px-2 py-1">Response Rate</th>
+                      <th className="px-2 py-1 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredPrograms.map((p) => (
                       <tr
                         key={p.id}
-                        className={`cursor-pointer border-b border-[color:var(--color-border)] last:border-b-0 hover:bg-[color:var(--color-muted)] ${
+                        className={`border-b border-[color:var(--color-border)] last:border-b-0 hover:bg-[color:var(--color-muted)] ${
                           selectedProgramId === p.id ? 'bg-[color:var(--color-muted)]' : ''
                         }`}
                         onClick={() => {
                           setSelectedProgramId(p.id)
-                          openEditProgram(p)
                         }}
                       >
                         <td className="px-2 py-1 font-medium">{p.name}</td>
@@ -428,6 +428,18 @@ export default function CRMSurveys() {
                         </td>
                         <td className="px-2 py-1">
                           {typeof p.responseRate === 'number' ? `${p.responseRate}%` : '—'}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditProgram(p)
+                            }}
+                            className="rounded-md border border-[color:var(--color-border)] px-2 py-0.5 text-xs text-[color:var(--color-primary-600)] hover:bg-[color:var(--color-muted)]"
+                          >
+                            Edit
+                          </button>
                         </td>
                       </tr>
                     ))}
