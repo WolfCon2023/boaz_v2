@@ -72,6 +72,8 @@ function buildSurveyResponseDoc(program, raw, extra) {
         contactId: extra?.contactId ?? toObjectId(raw.contactId),
         accountId: extra?.accountId ?? toObjectId(raw.accountId),
         ticketId: extra?.ticketId ?? toObjectId(raw.ticketId),
+        quoteId: extra?.quoteId ?? null,
+        invoiceId: extra?.invoiceId ?? null,
         outreachEnrollmentId: extra?.outreachEnrollmentId ?? toObjectId(raw.outreachEnrollmentId),
         createdAt: now,
     };
@@ -531,6 +533,132 @@ surveysRouter.get('/accounts/status', async (req, res) => {
             .json({ data: null, error: err.message || 'failed_to_get_account_status' });
     }
 });
+// GET /api/crm/surveys/quotes/status?quoteIds=ID1,ID2,...
+// Returns per-quote survey status for CRM Quotes views
+surveysRouter.get('/quotes/status', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const raw = String(req.query.quoteIds ?? '').trim();
+    if (!raw) {
+        return res.json({ data: { items: [] }, error: null });
+    }
+    const ids = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => ObjectId.isValid(s))
+        .map((s) => new ObjectId(s));
+    if (ids.length === 0) {
+        return res.json({ data: { items: [] }, error: null });
+    }
+    try {
+        const respAgg = await db
+            .collection('survey_responses')
+            .aggregate([
+            { $match: { quoteId: { $in: ids } } },
+            { $sort: { createdAt: -1 } },
+            {
+                $group: {
+                    _id: '$quoteId',
+                    responseCount: { $sum: 1 },
+                    lastResponseAt: { $first: '$createdAt' },
+                    lastScore: { $first: '$score' },
+                },
+            },
+        ])
+            .toArray();
+        const respMap = new Map();
+        for (const r of respAgg) {
+            if (!r._id)
+                continue;
+            respMap.set(String(r._id), {
+                responseCount: r.responseCount ?? 0,
+                lastResponseAt: r.lastResponseAt ?? null,
+                lastScore: typeof r.lastScore === 'number' ? r.lastScore : null,
+            });
+        }
+        const items = ids.map((id) => {
+            const key = String(id);
+            const resp = respMap.get(key);
+            return {
+                quoteId: key,
+                responseCount: resp?.responseCount ?? 0,
+                lastResponseAt: resp?.lastResponseAt ?? null,
+                lastScore: resp?.lastScore ?? null,
+            };
+        });
+        return res.json({ data: { items }, error: null });
+    }
+    catch (err) {
+        console.error('Get quote survey status error:', err);
+        return res
+            .status(500)
+            .json({ data: null, error: err.message || 'failed_to_get_quote_status' });
+    }
+});
+// GET /api/crm/surveys/invoices/status?invoiceIds=ID1,ID2,...
+// Returns per-invoice survey status for CRM Invoices views
+surveysRouter.get('/invoices/status', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const raw = String(req.query.invoiceIds ?? '').trim();
+    if (!raw) {
+        return res.json({ data: { items: [] }, error: null });
+    }
+    const ids = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => ObjectId.isValid(s))
+        .map((s) => new ObjectId(s));
+    if (ids.length === 0) {
+        return res.json({ data: { items: [] }, error: null });
+    }
+    try {
+        const respAgg = await db
+            .collection('survey_responses')
+            .aggregate([
+            { $match: { invoiceId: { $in: ids } } },
+            { $sort: { createdAt: -1 } },
+            {
+                $group: {
+                    _id: '$invoiceId',
+                    responseCount: { $sum: 1 },
+                    lastResponseAt: { $first: '$createdAt' },
+                    lastScore: { $first: '$score' },
+                },
+            },
+        ])
+            .toArray();
+        const respMap = new Map();
+        for (const r of respAgg) {
+            if (!r._id)
+                continue;
+            respMap.set(String(r._id), {
+                responseCount: r.responseCount ?? 0,
+                lastResponseAt: r.lastResponseAt ?? null,
+                lastScore: typeof r.lastScore === 'number' ? r.lastScore : null,
+            });
+        }
+        const items = ids.map((id) => {
+            const key = String(id);
+            const resp = respMap.get(key);
+            return {
+                invoiceId: key,
+                responseCount: resp?.responseCount ?? 0,
+                lastResponseAt: resp?.lastResponseAt ?? null,
+                lastScore: resp?.lastScore ?? null,
+            };
+        });
+        return res.json({ data: { items }, error: null });
+    }
+    catch (err) {
+        console.error('Get invoice survey status error:', err);
+        return res
+            .status(500)
+            .json({ data: null, error: err.message || 'failed_to_get_invoice_status' });
+    }
+});
 // GET /api/crm/surveys/programs/:id/summary
 surveysRouter.get('/programs/:id/summary', async (req, res) => {
     const db = await getDb();
@@ -688,6 +816,8 @@ surveysRouter.post('/respond/:token', async (req, res) => {
         contactId: link.contactId ?? null,
         accountId: link.accountId ?? null,
         ticketId: link.ticketId ?? null,
+        quoteId: link.quoteId ?? null,
+        invoiceId: link.invoiceId ?? null,
         outreachEnrollmentId: link.campaignId ?? null,
     });
     await db.collection('survey_responses').insertOne(doc);
@@ -716,6 +846,8 @@ surveysRouter.post('/programs/:id/send-email', requireAuth, async (req, res) => 
     const contactId = raw.contactId && ObjectId.isValid(raw.contactId) ? new ObjectId(raw.contactId) : null;
     const accountId = raw.accountId && ObjectId.isValid(raw.accountId) ? new ObjectId(raw.accountId) : null;
     const ticketId = raw.ticketId && ObjectId.isValid(raw.ticketId) ? new ObjectId(raw.ticketId) : null;
+    const quoteId = raw.quoteId && ObjectId.isValid(raw.quoteId) ? new ObjectId(raw.quoteId) : null;
+    const invoiceId = raw.invoiceId && ObjectId.isValid(raw.invoiceId) ? new ObjectId(raw.invoiceId) : null;
     if (!recipientEmail) {
         return res.status(400).json({ data: null, error: 'invalid_payload' });
     }
@@ -727,6 +859,8 @@ surveysRouter.post('/programs/:id/send-email', requireAuth, async (req, res) => 
         accountId,
         campaignId: null,
         ticketId,
+        quoteId,
+        invoiceId,
         email: recipientEmail,
         createdAt: new Date(),
     };
