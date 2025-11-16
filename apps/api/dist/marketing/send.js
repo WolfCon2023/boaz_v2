@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '../db.js';
 import mjml2html from 'mjml';
 import { sendEmail } from '../alerts/mail.js';
+import crypto from 'crypto';
 export const marketingSendRouter = Router();
 function buildFilterFromRules(rules) {
     const ands = [];
@@ -37,6 +38,24 @@ function injectUnsubscribe(html, unsubscribeUrl) {
     // If no placeholder found, append footer
     const footer = `<p style="font-size:12px;color:#64748b">You received this email because you subscribed. <a href="${unsubscribeUrl}">Unsubscribe</a></p>`;
     return html + footer;
+}
+function injectSurveyUrl(html, surveyUrl) {
+    if (!surveyUrl)
+        return html;
+    let out = html;
+    // Replace bare placeholders first
+    if (out.includes('{{surveyUrl}}')) {
+        out = out.replaceAll('{{surveyUrl}}', surveyUrl);
+    }
+    if (out.includes('{{surveyurl}}')) {
+        out = out.replaceAll('{{surveyurl}}', surveyUrl);
+    }
+    // Also handle older patterns like "http://{{surveyurl}}/" or "https://{{surveyurl}}"
+    const fullRegex = /https?:\/\/\{\{surveyurl\}\}\/?/gi;
+    if (fullRegex.test(out)) {
+        out = out.replace(fullRegex, surveyUrl);
+    }
+    return out;
 }
 function injectPixel(html, pixelUrl) {
     const img = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="" />`;
@@ -111,7 +130,22 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
             }
             const unsubscribeUrl = `${base}/api/marketing/unsubscribe?e=${encodeURIComponent(email)}&c=${_id.toHexString()}`;
             const pixelUrl = `${base}/api/marketing/pixel.gif?c=${_id.toHexString()}&e=${encodeURIComponent(email)}`;
-            let personalized = injectUnsubscribe(html, unsubscribeUrl);
+            let surveyUrl;
+            if (campaign.surveyProgramId) {
+                const token = crypto.randomBytes(24).toString('hex');
+                await db.collection('survey_links').insertOne({
+                    token,
+                    programId: campaign.surveyProgramId,
+                    contactId: null,
+                    campaignId: _id,
+                    email,
+                    createdAt: new Date(),
+                });
+                surveyUrl = `${base}/surveys/respond/${token}`;
+            }
+            let personalized = html;
+            personalized = injectSurveyUrl(personalized, surveyUrl);
+            personalized = injectUnsubscribe(personalized, unsubscribeUrl);
             personalized = injectPixel(personalized, pixelUrl);
             if (dryRun)
                 continue;

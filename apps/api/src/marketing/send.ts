@@ -41,13 +41,23 @@ function injectUnsubscribe(html: string, unsubscribeUrl: string): string {
 
 function injectSurveyUrl(html: string, surveyUrl?: string | null): string {
   if (!surveyUrl) return html
-  if (html.includes('{{surveyUrl}}')) {
-    return html.replaceAll('{{surveyUrl}}', surveyUrl)
+  let out = html
+
+  // Replace bare placeholders first
+  if (out.includes('{{surveyUrl}}')) {
+    out = out.replaceAll('{{surveyUrl}}', surveyUrl)
   }
-  if (html.includes('{{surveyurl}}')) {
-    return html.replaceAll('{{surveyurl}}', surveyUrl)
+  if (out.includes('{{surveyurl}}')) {
+    out = out.replaceAll('{{surveyurl}}', surveyUrl)
   }
-  return html
+
+  // Also handle older patterns like "http://{{surveyurl}}/" or "https://{{surveyurl}}"
+  const fullRegex = /https?:\/\/\{\{surveyurl\}\}\/?/gi
+  if (fullRegex.test(out)) {
+    out = out.replace(fullRegex, surveyUrl)
+  }
+
+  return out
 }
 
 function injectPixel(html: string, pixelUrl: string): string {

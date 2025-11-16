@@ -41,6 +41,34 @@ const templates = [
     </mj-section>
   </mj-body>
 </mjml>`
+    },
+    {
+        key: 'survey',
+        name: 'Simple survey request',
+        mjml: `<mjml>
+  <mj-body background-color="#f4f5f7">
+    <mj-section background-color="#ffffff">
+      <mj-column>
+        <mj-text font-size="20px" font-weight="700">We'd love your feedback</mj-text>
+        <mj-text font-size="14px">
+          Hi {{name}},<br/><br/>
+          You recently interacted with our team, and we'd love to know how we did.
+          Please take a quick survey – it only takes a minute.
+        </mj-text>
+        <mj-button href="{{surveyUrl}}" background-color="#2563eb" color="#ffffff">
+          Take the survey
+        </mj-button>
+      </mj-column>
+    </mj-section>
+    <mj-section>
+      <mj-column>
+        <mj-text font-size="12px" color="#64748b">
+          © {{year}} Your Company — <a href="{{unsubscribeUrl}}">Unsubscribe</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>`
     }
 ];
 // GET /api/marketing/templates
