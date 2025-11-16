@@ -633,7 +633,7 @@ export default function CRMContacts() {
         <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
           <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+            <div className="w-[min(90vw,40rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
             <div className="mb-3 text-base font-semibold">Edit contact</div>
             <form
               className="grid gap-2 sm:grid-cols-2"
