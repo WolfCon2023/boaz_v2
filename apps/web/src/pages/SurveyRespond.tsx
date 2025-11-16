@@ -11,6 +11,7 @@ type PublicSurveyProgram = {
   questions: Array<{ id: string; label: string; required: boolean }>
 }
 
+// Public survey response page used by tokenized survey URLs
 export default function SurveyRespond() {
   const { token } = useParams<{ token: string }>()
   const [scores, setScores] = React.useState<Record<string, string>>({})
