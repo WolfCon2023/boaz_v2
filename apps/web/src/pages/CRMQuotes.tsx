@@ -96,6 +96,13 @@ type SurveyProgramPick = {
   type: 'NPS' | 'CSAT' | 'Post‑interaction'
 }
 
+type QuoteSurveyStatusSummary = {
+  quoteId: string
+  responseCount: number
+  lastResponseAt: string | null
+  lastScore: number | null
+}
+
 export default function CRMQuotes() {
   const qc = useQueryClient()
   const toast = useToast()
@@ -116,8 +123,15 @@ export default function CRMQuotes() {
     { key: 'signerEmail', visible: true, label: 'Signer Email' },
     { key: 'version', visible: true, label: 'Version' },
     { key: 'updatedAt', visible: true, label: 'Updated' },
+    { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
-  const [cols, setCols] = React.useState<ColumnDef[]>(defaultCols)
+  function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
+    if (!cols.some((c) => c.key === 'surveyStatus')) {
+      return [...cols, { key: 'surveyStatus', visible: true, label: 'Survey' }]
+    }
+    return cols
+  }
+  const [cols, setCols] = React.useState<ColumnDef[]>(ensureSurveyCol(defaultCols))
   const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
   const [showSaveViewDialog, setShowSaveViewDialog] = React.useState(false)
   const [savingViewName, setSavingViewName] = React.useState('')
@@ -204,6 +218,30 @@ export default function CRMQuotes() {
   const [surveyProgramId, setSurveyProgramId] = React.useState('')
   const [surveyRecipientName, setSurveyRecipientName] = React.useState('')
   const [surveyRecipientEmail, setSurveyRecipientEmail] = React.useState('')
+
+  const quoteIdsParam = React.useMemo(
+    () => (quotes.length ? quotes.map((q) => q._id).join(',') : ''),
+    [quotes],
+  )
+
+  const { data: quoteSurveyStatusData } = useQuery({
+    queryKey: ['quotes-survey-status', quoteIdsParam],
+    enabled: !!quoteIdsParam,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/quotes/status', {
+        params: { quoteIds: quoteIdsParam },
+      })
+      return res.data as { data: { items: QuoteSurveyStatusSummary[] } }
+    },
+  })
+
+  const quoteSurveyStatusMap = React.useMemo(() => {
+    const map = new Map<string, QuoteSurveyStatusSummary>()
+    for (const s of quoteSurveyStatusData?.data.items ?? []) {
+      map.set(s.quoteId, s)
+    }
+    return map
+  }, [quoteSurveyStatusData?.data.items])
 
   const create = useMutation({
     mutationFn: async (payload: any) => {
@@ -381,6 +419,29 @@ export default function CRMQuotes() {
     if (key==='signerEmail') return qt.signerEmail ?? '-'
     if (key==='version') return qt.version ?? '-'
     if (key==='updatedAt') return qt.updatedAt ? formatDateTime(qt.updatedAt) : '-'
+    if (key === 'surveyStatus') {
+      const status = quoteSurveyStatusMap.get(qt._id)
+      if (!status || status.responseCount === 0) {
+        return (
+          <span className="inline-flex rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+            No surveys
+          </span>
+        )
+      }
+      return (
+        <div className="flex flex-col gap-0.5 text-[11px]">
+          <span className="inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200">
+            {status.responseCount} response{status.responseCount === 1 ? '' : 's'}
+          </span>
+          <span className="text-[10px] text-[color:var(--color-text-muted)]">
+            Last score:{' '}
+            <span className="font-semibold text-[color:var(--color-text)]">
+              {status.lastScore != null ? status.lastScore.toFixed(1) : '-'}
+            </span>
+          </span>
+        </div>
+      )
+    }
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }

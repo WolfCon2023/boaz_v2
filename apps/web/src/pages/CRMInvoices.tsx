@@ -93,6 +93,13 @@ type SurveyProgramPick = {
   type: 'NPS' | 'CSAT' | 'Post‑interaction'
 }
 
+type InvoiceSurveyStatusSummary = {
+  invoiceId: string
+  responseCount: number
+  lastResponseAt: string | null
+  lastScore: number | null
+}
+
 export default function CRMInvoices() {
   const qc = useQueryClient()
   const toast = useToast()
@@ -109,8 +116,15 @@ export default function CRMInvoices() {
     { key: 'balance', visible: true, label: 'Balance' },
     { key: 'status', visible: true, label: 'Status' },
     { key: 'dueDate', visible: true, label: 'Due' },
+    { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
-  const [cols, setCols] = React.useState<ColumnDef[]>(defaultCols)
+  function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
+    if (!cols.some((c) => c.key === 'surveyStatus')) {
+      return [...cols, { key: 'surveyStatus', visible: true, label: 'Survey' }]
+    }
+    return cols
+  }
+  const [cols, setCols] = React.useState<ColumnDef[]>(ensureSurveyCol(defaultCols))
   const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
   const [showSaveViewDialog, setShowSaveViewDialog] = React.useState(false)
   const [savingViewName, setSavingViewName] = React.useState('')
@@ -188,6 +202,30 @@ export default function CRMInvoices() {
   const [surveyProgramId, setSurveyProgramId] = React.useState('')
   const [surveyRecipientName, setSurveyRecipientName] = React.useState('')
   const [surveyRecipientEmail, setSurveyRecipientEmail] = React.useState('')
+
+  const invoiceIdsParam = React.useMemo(
+    () => (items.length ? items.map((inv) => inv._id).join(',') : ''),
+    [items],
+  )
+
+  const { data: invoiceSurveyStatusData } = useQuery({
+    queryKey: ['invoices-survey-status', invoiceIdsParam],
+    enabled: !!invoiceIdsParam,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/invoices/status', {
+        params: { invoiceIds: invoiceIdsParam },
+      })
+      return res.data as { data: { items: InvoiceSurveyStatusSummary[] } }
+    },
+  })
+
+  const invoiceSurveyStatusMap = React.useMemo(() => {
+    const map = new Map<string, InvoiceSurveyStatusSummary>()
+    for (const s of invoiceSurveyStatusData?.data.items ?? []) {
+      map.set(s.invoiceId, s)
+    }
+    return map
+  }, [invoiceSurveyStatusData?.data.items])
 
   const create = useMutation({
     mutationFn: async (payload: any) => { const res = await http.post('/api/crm/invoices', payload); return res.data },
@@ -388,6 +426,29 @@ export default function CRMInvoices() {
     if (key === 'balance') return typeof inv.balance === 'number' ? `$${inv.balance.toLocaleString()}` : '-'
     if (key === 'status') return inv.status ?? '-'
     if (key === 'dueDate') return inv.dueDate ? formatDate(inv.dueDate) : '-'
+    if (key === 'surveyStatus') {
+      const status = invoiceSurveyStatusMap.get(inv._id)
+      if (!status || status.responseCount === 0) {
+        return (
+          <span className="inline-flex rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+            No surveys
+          </span>
+        )
+      }
+      return (
+        <div className="flex flex-col gap-0.5 text-[11px]">
+          <span className="inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200">
+            {status.responseCount} response{status.responseCount === 1 ? '' : 's'}
+          </span>
+          <span className="text-[10px] text-[color:var(--color-text-muted)]">
+            Last score:{' '}
+            <span className="font-semibold text-[color:var(--color-text)]">
+              {status.lastScore != null ? status.lastScore.toFixed(1) : '-'}
+            </span>
+          </span>
+        </div>
+      )
+    }
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
