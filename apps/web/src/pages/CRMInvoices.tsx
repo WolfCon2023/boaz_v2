@@ -87,6 +87,12 @@ type Discount = {
   isActive?: boolean
 }
 
+type SurveyProgramPick = {
+  _id: string
+  name: string
+  type: 'NPS' | 'CSAT' | 'Post‑interaction'
+}
+
 export default function CRMInvoices() {
   const qc = useQueryClient()
   const toast = useToast()
@@ -168,6 +174,21 @@ export default function CRMInvoices() {
   const [discountCode, setDiscountCode] = React.useState('')
   const [appliedDiscount, setAppliedDiscount] = React.useState<Discount | null>(null)
 
+  const { data: surveyProgramsData } = useQuery({
+    queryKey: ['surveys-programs-invoices'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/programs')
+      return res.data as { data: { items: SurveyProgramPick[] } }
+    },
+  })
+  const surveyPrograms = React.useMemo(
+    () => surveyProgramsData?.data.items ?? [],
+    [surveyProgramsData?.data.items],
+  )
+  const [surveyProgramId, setSurveyProgramId] = React.useState('')
+  const [surveyRecipientName, setSurveyRecipientName] = React.useState('')
+  const [surveyRecipientEmail, setSurveyRecipientEmail] = React.useState('')
+
   const create = useMutation({
     mutationFn: async (payload: any) => { const res = await http.post('/api/crm/invoices', payload); return res.data },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
@@ -228,6 +249,26 @@ export default function CRMInvoices() {
       return res.data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+  })
+
+  const sendSurveyEmail = useMutation({
+    mutationFn: async (payload: {
+      programId: string
+      recipientName?: string
+      recipientEmail: string
+      accountId?: string
+    }) => {
+      const { programId, ...rest } = payload
+      const res = await http.post(`/api/crm/surveys/programs/${programId}/send-email`, rest)
+      return res.data
+    },
+    onSuccess: () => {
+      toast.showToast('Survey email sent', 'success')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to send survey email'
+      toast.showToast(msg, 'error')
+    },
   })
 
   const visible = React.useMemo(() => {
@@ -785,6 +826,78 @@ export default function CRMInvoices() {
                 <input name="subtotal" type="number" step="0.01" defaultValue={(editing as any).subtotal ?? ''} placeholder="Subtotal" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="tax" type="number" step="0.01" defaultValue={(editing as any).tax ?? ''} placeholder="Tax" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="dueDate" type="date" defaultValue={editing.dueDate ? editing.dueDate.slice(0,10) : ''} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+
+                {surveyPrograms.length > 0 && (
+                  <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold">Surveys &amp; Feedback</div>
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Send a CSAT/NPS survey related to this invoice.
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                          Survey program
+                        </label>
+                        <select
+                          value={surveyProgramId}
+                          onChange={(e) => setSurveyProgramId(e.target.value)}
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                        >
+                          <option value="">Select a program…</option>
+                          {surveyPrograms.map((p) => (
+                            <option key={p._id} value={p._id}>
+                              {p.name} ({p.type})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                          Customer name (for email)
+                        </label>
+                        <input
+                          type="text"
+                          value={surveyRecipientName}
+                          onChange={(e) => setSurveyRecipientName(e.target.value)}
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                          placeholder="Customer name"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                          Customer email (for survey link)
+                        </label>
+                        <input
+                          type="email"
+                          value={surveyRecipientEmail}
+                          onChange={(e) => setSurveyRecipientEmail(e.target.value)}
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                          placeholder="name@example.com"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-60"
+                        disabled={!surveyProgramId || !surveyRecipientEmail || sendSurveyEmail.isPending}
+                        onClick={() => {
+                          if (!editing || !surveyProgramId || !surveyRecipientEmail) return
+                          sendSurveyEmail.mutate({
+                            programId: surveyProgramId,
+                            recipientName: surveyRecipientName || undefined,
+                            recipientEmail: surveyRecipientEmail,
+                            accountId: editing.accountId,
+                          })
+                        }}
+                      >
+                        {sendSurveyEmail.isPending ? 'Sending…' : 'Send survey email for invoice'}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Line Items Section */}
                 <div className="col-span-full mt-4 space-y-3">
