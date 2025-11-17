@@ -8,7 +8,18 @@ import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
 
-type Deal = { _id: string; dealNumber?: number; title?: string; amount?: number; stage?: string; closeDate?: string; accountId?: string; accountNumber?: number; marketingCampaignId?: string }
+type Deal = {
+  _id: string
+  dealNumber?: number
+  title?: string
+  amount?: number
+  stage?: string
+  closeDate?: string
+  accountId?: string
+  accountNumber?: number
+  marketingCampaignId?: string
+  approver?: string
+}
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
 
 export default function CRMDeals() {
@@ -190,6 +201,17 @@ export default function CRMDeals() {
   })
   const accounts = accountsQ.data?.data.items ?? []
   const acctById = React.useMemo(() => new Map(accounts.map((a) => [a._id, a])), [accounts])
+  // Managers for approval workflow
+  const { data: managersData } = useQuery({
+    queryKey: ['managers'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/managers')
+      return res.data as { managers: Array<{ id: string; email: string; name?: string }> }
+    },
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+  const managers = managersData?.managers ?? []
   const create = useMutation({
     mutationFn: async (payload: { title: string; accountId: string; amount?: number; stage?: string; closeDate?: string }) => {
       const res = await http.post('/api/crm/deals', payload)
@@ -233,6 +255,21 @@ export default function CRMDeals() {
         data: errorData,
         url: err?.config?.url
       })
+    },
+  })
+  const requestApproval = useMutation({
+    mutationFn: async (dealId: string) => {
+      const res = await http.post(`/api/crm/deals/${dealId}/request-approval`)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      qc.invalidateQueries({ queryKey: ['deal-history'] })
+      toast.showToast('BOAZ says: Deal approval request sent.', 'success')
+    },
+    onError: (err: any) => {
+      const errorMsg = err?.response?.data?.error || 'Failed to send approval request'
+      toast.showToast(errorMsg, 'error')
     },
   })
   async function applyBulkStage() {
@@ -767,6 +804,51 @@ export default function CRMDeals() {
                     ))}
                   </select>
                 </label>
+                <div className="col-span-full flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <select
+                    name="approver"
+                    id="deal-approver-select"
+                    defaultValue={editing.approver ?? ''}
+                    className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                  >
+                    <option value="">Select Manager (Approver)</option>
+                    {managers.map((manager) => (
+                      <option key={manager.id} value={manager.email}>
+                        {manager.name ? `${manager.name} (${manager.email})` : manager.email}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const select = document.getElementById('deal-approver-select') as HTMLSelectElement | null
+                      const approverEmail = select?.value || editing.approver
+                      if (!approverEmail) {
+                        toast.showToast('Please select an approver first', 'warning')
+                        return
+                      }
+                      const confirmed = await confirm(`Send approval request to ${approverEmail}?`)
+                      if (!confirmed) return
+
+                      // Save approver if changed
+                      if (editing.approver !== approverEmail) {
+                        try {
+                          await update.mutateAsync({ _id: editing._id, approver: approverEmail } as any)
+                        } catch {
+                          toast.showToast('Failed to save approver. Please try again.', 'error')
+                          return
+                        }
+                      }
+
+                      requestApproval.mutate(editing._id)
+                    }}
+                    disabled={requestApproval.isPending || update.isPending || managers.length === 0}
+                    className="mt-2 flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 sm:mt-0"
+                    title={managers.length === 0 ? 'No managers available' : 'Send approval request to manager'}
+                  >
+                    Request Approval
+                  </button>
+                </div>
                 <label className="col-span-full text-sm">Marketing Campaign (for ROI attribution)
                   <select name="marketingCampaignId" defaultValue={editing.marketingCampaignId ?? ''} className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                     <option value="">None</option>
@@ -792,6 +874,9 @@ export default function CRMDeals() {
                               case 'created': return '✨'
                               case 'stage_changed': return '🔄'
                               case 'amount_changed': return '💰'
+                              case 'approval_requested': return '📨'
+                              case 'approved': return '✅'
+                              case 'rejected': return '❌'
                               case 'field_changed': return '📋'
                               case 'updated': return '📝'
                               default: return '📌'
@@ -802,6 +887,9 @@ export default function CRMDeals() {
                               case 'created': return 'text-blue-600'
                               case 'stage_changed': return 'text-purple-600'
                               case 'amount_changed': return 'text-green-600'
+                              case 'approval_requested': return 'text-amber-600'
+                              case 'approved': return 'text-emerald-600'
+                              case 'rejected': return 'text-red-600'
                               case 'field_changed': return 'text-gray-600'
                               case 'updated': return 'text-gray-600'
                               default: return 'text-gray-600'

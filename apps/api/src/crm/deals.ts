@@ -3,6 +3,8 @@ import { getDb } from '../db.js'
 import { z } from 'zod'
 import { ObjectId } from 'mongodb'
 import { requireAuth, requirePermission } from '../auth/rbac.js'
+import { sendAuthEmail } from '../auth/email.js'
+import { env } from '../env.js'
 
 export const dealsRouter = Router()
 
@@ -10,7 +12,16 @@ export const dealsRouter = Router()
 type DealHistoryEntry = {
   _id: ObjectId
   dealId: ObjectId
-  eventType: 'created' | 'updated' | 'status_changed' | 'stage_changed' | 'amount_changed' | 'field_changed'
+  eventType:
+    | 'created'
+    | 'updated'
+    | 'status_changed'
+    | 'stage_changed'
+    | 'amount_changed'
+    | 'field_changed'
+    | 'approval_requested'
+    | 'approved'
+    | 'rejected'
   description: string
   userId?: string
   userName?: string
@@ -19,6 +30,26 @@ type DealHistoryEntry = {
   newValue?: any
   metadata?: Record<string, any>
   createdAt: Date
+}
+
+// Types for deal approval requests
+type DealApprovalRequestDoc = {
+  _id: ObjectId
+  dealId: ObjectId
+  dealNumber?: number
+  dealTitle?: string
+  requesterId: string
+  requesterEmail: string
+  requesterName?: string
+  approverEmail: string
+  approverId?: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedAt: Date
+  reviewedAt?: Date
+  reviewedBy?: string
+  reviewNotes?: string
+  createdAt: Date
+  updatedAt: Date
 }
 
 // Helper function to add history entry
@@ -233,6 +264,7 @@ dealsRouter.post('/', async (req, res) => {
       accountId: accountObjectId,
       amount: typeof amountParsed === 'number' && Number.isFinite(amountParsed) ? amountParsed : undefined,
       stage: stageRaw || 'new',
+      approver: typeof raw.approver === 'string' ? raw.approver.trim() || undefined : undefined,
     }
     if (ObjectId.isValid(raw.marketingCampaignId)) doc.marketingCampaignId = new ObjectId(raw.marketingCampaignId)
     if (typeof raw.attributionToken === 'string') doc.attributionToken = raw.attributionToken.trim()
@@ -389,6 +421,515 @@ dealsRouter.delete('/:id', async (req, res) => {
   }
 })
 
+// POST /api/crm/deals/:id/request-approval - Request approval for a deal
+dealsRouter.post('/:id/request-approval', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const dealId = new ObjectId(req.params.id)
+
+    const deal = await db.collection('deals').findOne({ _id: dealId })
+    if (!deal) {
+      return res.status(404).json({ data: null, error: 'deal_not_found' })
+    }
+
+    const dealData = deal as any
+    const approverEmailRaw = dealData.approver
+    if (!approverEmailRaw || typeof approverEmailRaw !== 'string') {
+      return res.status(400).json({ data: null, error: 'approver_email_required' })
+    }
+    const approverEmail = approverEmailRaw.toLowerCase()
+
+    // Requester info
+    const requester = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    if (!requester) {
+      return res.status(404).json({ data: null, error: 'requester_not_found' })
+    }
+    const requesterData = requester as any
+
+    // Approver must exist and be a manager
+    const approver = await db.collection('users').findOne({ email: approverEmail })
+    if (!approver) {
+      return res.status(404).json({ data: null, error: 'approver_not_found' })
+    }
+    const approverData = approver as any
+
+    const managerRole = await db.collection('roles').findOne({ name: 'manager' })
+    if (!managerRole) {
+      return res.status(500).json({ data: null, error: 'manager_role_not_found' })
+    }
+
+    const hasManagerRole = await db.collection('user_roles').findOne({
+      userId: approverData._id.toString(),
+      roleId: managerRole._id,
+    })
+    if (!hasManagerRole) {
+      return res.status(403).json({ data: null, error: 'approver_not_manager' })
+    }
+
+    // Ensure there's no existing pending request for this approver/deal
+    const existingRequest = (await db.collection('deal_approval_requests').findOne({
+      dealId,
+      approverEmail,
+      status: 'pending',
+    })) as DealApprovalRequestDoc | null
+
+    if (existingRequest) {
+      return res.status(400).json({ data: null, error: 'approval_request_already_exists' })
+    }
+
+    const now = new Date()
+    const approvalRequest: DealApprovalRequestDoc = {
+      _id: new ObjectId(),
+      dealId,
+      dealNumber: dealData.dealNumber,
+      dealTitle: dealData.title,
+      requesterId: auth.userId,
+      requesterEmail: requesterData.email,
+      requesterName: requesterData.name,
+      approverEmail,
+      approverId: approverData._id.toString(),
+      status: 'pending',
+      requestedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    await db.collection('deal_approval_requests').insertOne(approvalRequest)
+
+    // Move deal to "Submitted for Review" stage
+    const previousStage = dealData.stage
+    await db.collection('deals').updateOne(
+      { _id: dealId },
+      { $set: { stage: 'Submitted for Review', updatedAt: now } },
+    )
+
+    await addDealHistory(
+      db,
+      dealId,
+      'approval_requested',
+      `Approval requested from ${approverEmail}`,
+      auth.userId,
+      requesterData.name,
+      requesterData.email,
+      previousStage,
+      'Submitted for Review',
+      { approvalRequestId: approvalRequest._id, approverEmail },
+    )
+
+    // Email approver with a link to the deal approval queue
+    const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+    const approvalQueueUrl = `${baseUrl}/apps/crm/deals/approval-queue`
+
+    try {
+      await sendAuthEmail({
+        to: approverEmail,
+        subject: `Deal Approval Request: ${dealData.dealNumber ? `#${dealData.dealNumber}` : dealData.title}`,
+        checkPreferences: true,
+        html: `
+          <h2>Deal Approval Request</h2>
+          <p>A new deal requires your approval:</p>
+          <ul>
+            <li><strong>Deal:</strong> ${dealData.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${
+          dealData.title || 'Untitled'
+        }</li>
+            <li><strong>Requested by:</strong> ${requesterData.name || requesterData.email}</li>
+            <li><strong>Amount:</strong> $${
+              (dealData.amount || 0).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
+            }</li>
+            <li><strong>Requested:</strong> ${now.toLocaleString()}</li>
+          </ul>
+          <p><a href="${approvalQueueUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Deal Approval Queue</a></p>
+          <p>Or copy and paste this URL into your browser:</p>
+          <p><code>${approvalQueueUrl}</code></p>
+        `,
+        text: `Deal Approval Request
+
+A new deal requires your approval:
+
+Deal: ${dealData.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData.title || 'Untitled'}
+Requested by: ${requesterData.name || requesterData.email}
+Amount: $${(dealData.amount || 0).toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+Requested: ${now.toLocaleString()}
+
+View Deal Approval Queue: ${approvalQueueUrl}
+        `,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send deal approval request email:', emailErr)
+      // Do not fail the request if email sending fails
+    }
+
+    res.json({
+      data: { approvalRequestId: approvalRequest._id, message: 'Approval request sent' },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Request deal approval error:', err)
+    if (err.message?.includes('invalid_id')) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    res.status(500).json({ data: null, error: err.message || 'failed_to_request_approval' })
+  }
+})
+
+// GET /api/crm/deals/approval-queue - Get approval queue for managers
+dealsRouter.get('/approval-queue', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+
+    // Check roles
+    const userRoles = await db.collection('user_roles').find({ userId: auth.userId } as any).toArray()
+    const roleIds = userRoles.map((ur: any) => ur.roleId)
+    if (roleIds.length === 0) {
+      return res.status(403).json({ data: null, error: 'manager_access_required' })
+    }
+
+    const roles = await db.collection('roles').find({ _id: { $in: roleIds } } as any).toArray()
+    const roleNames = roles.map((r: any) => r.name)
+    const hasManagerRole = roleNames.includes('manager')
+    const hasAdminRole = roleNames.includes('admin')
+
+    if (!hasManagerRole && !hasAdminRole) {
+      return res.status(403).json({ data: null, error: 'manager_access_required' })
+    }
+
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    if (!user) {
+      return res.status(404).json({ data: null, error: 'user_not_found' })
+    }
+    const userData = user as any
+
+    const status = (req.query.status as string) || 'all'
+    const query: any = { approverEmail: userData.email.toLowerCase() }
+    if (status !== 'all') query.status = status
+
+    const requests = (await db
+      .collection<DealApprovalRequestDoc>('deal_approval_requests')
+      .find(query)
+      .sort({ requestedAt: -1 })
+      .limit(100)
+      .toArray()) as DealApprovalRequestDoc[]
+
+    const dealIds = Array.from(
+      new Set(requests.map((r) => r.dealId).filter((id): id is ObjectId => !!id)),
+    )
+
+    const dealsById = new Map<string, any>()
+    if (dealIds.length > 0) {
+      const deals = await db
+        .collection('deals')
+        .find({ _id: { $in: dealIds } } as any)
+        .toArray()
+      for (const d of deals) {
+        dealsById.set(String(d._id), d)
+      }
+    }
+
+    const items = requests.map((r) => {
+      const deal = r.dealId ? dealsById.get(String(r.dealId)) : null
+      return {
+        _id: String(r._id),
+        dealId: String(r.dealId),
+        deal: deal
+          ? {
+              _id: String(deal._id),
+              dealNumber: deal.dealNumber,
+              title: deal.title,
+              amount: deal.amount,
+              stage: deal.stage,
+              accountId: deal.accountId ? String(deal.accountId) : undefined,
+            }
+          : undefined,
+        requesterId: r.requesterId,
+        requesterEmail: r.requesterEmail,
+        requesterName: r.requesterName,
+        approverEmail: r.approverEmail,
+        status: r.status,
+        requestedAt: r.requestedAt,
+        reviewedAt: r.reviewedAt,
+        reviewedBy: r.reviewedBy,
+        reviewNotes: r.reviewNotes,
+      }
+    })
+
+    res.json({ data: { items }, error: null })
+  } catch (err: any) {
+    console.error('Failed to get deal approval queue:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_approval_queue' })
+  }
+})
+
+// POST /api/crm/deals/:id/approve - Approve a deal
+dealsRouter.post('/:id/approve', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const dealId = new ObjectId(req.params.id)
+    const { reviewNotes } = req.body || {}
+
+    const userRoles = await db.collection('user_roles').find({ userId: auth.userId } as any).toArray()
+    const roleIds = userRoles.map((ur: any) => ur.roleId)
+    if (roleIds.length === 0) {
+      return res.status(403).json({ data: null, error: 'manager_access_required' })
+    }
+
+    const roles = await db.collection('roles').find({ _id: { $in: roleIds } } as any).toArray()
+    const roleNames = roles.map((r: any) => r.name)
+    const hasManagerRole = roleNames.includes('manager')
+    const hasAdminRole = roleNames.includes('admin')
+    if (!hasManagerRole && !hasAdminRole) {
+      return res.status(403).json({ data: null, error: 'manager_access_required' })
+    }
+
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    if (!user) {
+      return res.status(404).json({ data: null, error: 'user_not_found' })
+    }
+    const userData = user as any
+
+    const approvalRequest = (await db.collection('deal_approval_requests').findOne({
+      dealId,
+      approverEmail: userData.email.toLowerCase(),
+      status: 'pending',
+    })) as DealApprovalRequestDoc | null
+
+    if (!approvalRequest) {
+      return res.status(404).json({ data: null, error: 'approval_request_not_found' })
+    }
+
+    const now = new Date()
+    await db.collection('deal_approval_requests').updateOne(
+      { _id: approvalRequest._id },
+      {
+        $set: {
+          status: 'approved',
+          reviewedAt: now,
+          reviewedBy: auth.userId,
+          reviewNotes: typeof reviewNotes === 'string' ? reviewNotes : undefined,
+          updatedAt: now,
+        },
+      },
+    )
+
+    const currentDeal = await db.collection('deals').findOne({ _id: dealId })
+    if (!currentDeal) {
+      return res.status(404).json({ data: null, error: 'deal_not_found' })
+    }
+
+    const update: any = {
+      stage: 'Approved / Ready for Signature',
+      approvedAt: now,
+      updatedAt: now,
+    }
+    if (!(currentDeal as any).approver) {
+      update.approver = userData.email
+    }
+
+    await db.collection('deals').updateOne({ _id: dealId }, { $set: update })
+
+    await addDealHistory(
+      db,
+      dealId,
+      'approved',
+      `Deal approved by ${userData.name || userData.email}${
+        typeof reviewNotes === 'string' && reviewNotes ? `: ${reviewNotes}` : ''
+      }`,
+      auth.userId,
+      userData.name,
+      userData.email,
+      (currentDeal as any).stage,
+      'Approved / Ready for Signature',
+      { approvalRequestId: approvalRequest._id, reviewNotes },
+    )
+
+    // Notify requester
+    try {
+      const deal = await db.collection('deals').findOne({ _id: dealId })
+      const dealData = deal as any
+
+      await sendAuthEmail({
+        to: approvalRequest.requesterEmail,
+        subject: `Deal Approved: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : dealData?.title || 'Untitled'}`,
+        checkPreferences: true,
+        html: `
+          <h2>Deal Approved</h2>
+          <p>Your deal has been approved:</p>
+          <ul>
+            <li><strong>Deal:</strong> ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${
+          dealData?.title || 'Untitled'
+        }</li>
+            <li><strong>Approved by:</strong> ${userData.name || userData.email}</li>
+            <li><strong>Approved at:</strong> ${now.toLocaleString()}</li>
+            ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
+          </ul>
+        `,
+        text: `Deal Approved
+
+Your deal has been approved:
+
+Deal: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData?.title || 'Untitled'}
+Approved by: ${userData.name || userData.email}
+Approved at: ${now.toLocaleString()}
+${reviewNotes ? `Notes: ${reviewNotes}` : ''}
+        `,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send deal approval email:', emailErr)
+    }
+
+    res.json({ data: { message: 'Deal approved' }, error: null })
+  } catch (err: any) {
+    console.error('Approve deal error:', err)
+    if (err.message?.includes('invalid_id')) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    res.status(500).json({ data: null, error: err.message || 'failed_to_approve_deal' })
+  }
+})
+
+// POST /api/crm/deals/:id/reject - Reject a deal
+dealsRouter.post('/:id/reject', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const auth = (req as any).auth as { userId: string; email: string }
+    const dealId = new ObjectId(req.params.id)
+    const { reviewNotes } = req.body || {}
+
+    const userRoles = await db.collection('user_roles').find({ userId: auth.userId } as any).toArray()
+    const roleIds = userRoles.map((ur: any) => ur.roleId)
+    if (roleIds.length === 0) {
+      return res.status(403).json({ data: null, error: 'manager_access_required' })
+    }
+
+    const roles = await db.collection('roles').find({ _id: { $in: roleIds } } as any).toArray()
+    const roleNames = roles.map((r: any) => r.name)
+    const hasManagerRole = roleNames.includes('manager')
+    const hasAdminRole = roleNames.includes('admin')
+    if (!hasManagerRole && !hasAdminRole) {
+      return res.status(403).json({ data: null, error: 'manager_access_required' })
+    }
+
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    if (!user) {
+      return res.status(404).json({ data: null, error: 'user_not_found' })
+    }
+    const userData = user as any
+
+    const approvalRequest = (await db.collection('deal_approval_requests').findOne({
+      dealId,
+      approverEmail: userData.email.toLowerCase(),
+      status: 'pending',
+    })) as DealApprovalRequestDoc | null
+
+    if (!approvalRequest) {
+      return res.status(404).json({ data: null, error: 'approval_request_not_found' })
+    }
+
+    const now = new Date()
+    await db.collection('deal_approval_requests').updateOne(
+      { _id: approvalRequest._id },
+      {
+        $set: {
+          status: 'rejected',
+          reviewedAt: now,
+          reviewedBy: auth.userId,
+          reviewNotes: typeof reviewNotes === 'string' ? reviewNotes : undefined,
+          updatedAt: now,
+        },
+      },
+    )
+
+    const currentDeal = await db.collection('deals').findOne({ _id: dealId })
+    if (!currentDeal) {
+      return res.status(404).json({ data: null, error: 'deal_not_found' })
+    }
+
+    await db.collection('deals').updateOne(
+      { _id: dealId },
+      {
+        $set: {
+          stage: 'Rejected / Returned for Revision',
+          updatedAt: now,
+        },
+      },
+    )
+
+    await addDealHistory(
+      db,
+      dealId,
+      'rejected',
+      `Deal rejected by ${userData.name || userData.email}${
+        typeof reviewNotes === 'string' && reviewNotes ? `: ${reviewNotes}` : ''
+      }`,
+      auth.userId,
+      userData.name,
+      userData.email,
+      (currentDeal as any).stage,
+      'Rejected / Returned for Revision',
+      { approvalRequestId: approvalRequest._id, reviewNotes },
+    )
+
+    // Notify requester
+    try {
+      const deal = await db.collection('deals').findOne({ _id: dealId })
+      const dealData = deal as any
+
+      await sendAuthEmail({
+        to: approvalRequest.requesterEmail,
+        subject: `Deal Rejected: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : dealData?.title || 'Untitled'}`,
+        checkPreferences: true,
+        html: `
+          <h2>Deal Rejected</h2>
+          <p>Your deal has been reviewed and rejected:</p>
+          <ul>
+            <li><strong>Deal:</strong> ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${
+          dealData?.title || 'Untitled'
+        }</li>
+            <li><strong>Reviewed by:</strong> ${userData.name || userData.email}</li>
+            <li><strong>Reviewed at:</strong> ${now.toLocaleString()}</li>
+            ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
+          </ul>
+        `,
+        text: `Deal Rejected
+
+Your deal has been reviewed and rejected:
+
+Deal: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData?.title || 'Untitled'}
+Reviewed by: ${userData.name || userData.email}
+Reviewed at: ${now.toLocaleString()}
+${reviewNotes ? `Notes: ${reviewNotes}` : ''}
+        `,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send deal rejection email:', emailErr)
+    }
+
+    res.json({ data: { message: 'Deal rejected' }, error: null })
+  } catch (err: any) {
+    console.error('Reject deal error:', err)
+    if (err.message?.includes('invalid_id')) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    res.status(500).json({ data: null, error: err.message || 'failed_to_reject_deal' })
+  }
+})
+
 // PUT /api/crm/deals/:id
 dealsRouter.put('/:id', async (req, res) => {
   try {
@@ -423,6 +964,7 @@ dealsRouter.put('/:id', async (req, res) => {
       closeDate: z.string().optional(),
       marketingCampaignId: z.string().optional().or(z.literal('')),
       attributionToken: z.string().optional(),
+      approver: z.string().optional(),
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) {
@@ -542,6 +1084,21 @@ dealsRouter.put('/:id', async (req, res) => {
         auth?.userId,
         user?.name,
         auth?.email
+      )
+    }
+
+    // Track approver changes
+    if (update.approver && update.approver !== (currentDeal as any).approver) {
+      await addDealHistory(
+        db,
+        _id,
+        'field_changed',
+        `Approver changed from "${(currentDeal as any).approver ?? 'empty'}" to "${update.approver}"`,
+        auth?.userId,
+        user?.name,
+        auth?.email,
+        (currentDeal as any).approver,
+        update.approver
       )
     }
 

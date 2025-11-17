@@ -20,6 +20,7 @@ import CRMDeals from '@/pages/CRMDeals'
 import CRMHub from '@/pages/CRMHub'
 import CRMQuotes from '@/pages/CRMQuotes'
 import CRMApprovalQueue from '@/pages/CRMApprovalQueue'
+import CRMDealApprovalQueue from '@/pages/CRMDealApprovalQueue'
 import CRMInvoices from '@/pages/CRMInvoices'
 import CRMProducts from '@/pages/CRMProducts'
 import CRMInvoicePrint from '@/pages/CRMInvoicePrint'
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/quotes', element: <RequireAuth><RequireApplication appKey="crm"><CRMQuotes /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/quotes/approval-queue', element: <RequireAuth><RequireApplication appKey="crm"><CRMApprovalQueue /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/quotes/acceptance-queue', element: <RequireAuth><RequireApplication appKey="crm"><QuoteAcceptanceQueue /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/deals/approval-queue', element: <RequireAuth><RequireApplication appKey="crm"><CRMDealApprovalQueue /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoices /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices/:id/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoicePrint /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/deals', element: <RequireAuth><RequireApplication appKey="crm"><CRMDeals /></RequireApplication></RequireAuth> },
