@@ -7,7 +7,8 @@ import { requireAuth } from '../auth/rbac.js'
 
 export type ProductType = 'product' | 'service' | 'bundle'
 
-// Types for product history
+// ===== HISTORY TYPES & HELPERS =====
+
 type ProductHistoryEntry = {
   _id: ObjectId
   productId: ObjectId
@@ -22,7 +23,49 @@ type ProductHistoryEntry = {
   createdAt: Date
 }
 
-// Helper function to add history entry
+type BundleHistoryEntry = {
+  _id: ObjectId
+  bundleId: ObjectId
+  eventType: 'created' | 'updated' | 'field_changed'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+type DiscountHistoryEntry = {
+  _id: ObjectId
+  discountId: ObjectId
+  eventType: 'created' | 'updated' | 'field_changed'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+type TermsHistoryEntry = {
+  _id: ObjectId
+  termsId: ObjectId
+  eventType: 'created' | 'updated' | 'field_changed'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add product history entry
 async function addProductHistory(
   db: any,
   productId: ObjectId,
@@ -52,6 +95,99 @@ async function addProductHistory(
   } catch (err) {
     console.error('Failed to add product history:', err)
     // Don't fail the main operation if history fails
+  }
+}
+
+async function addBundleHistory(
+  db: any,
+  bundleId: ObjectId,
+  eventType: BundleHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('bundle_history').insertOne({
+      _id: new ObjectId(),
+      bundleId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as BundleHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add bundle history:', err)
+  }
+}
+
+async function addDiscountHistory(
+  db: any,
+  discountId: ObjectId,
+  eventType: DiscountHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('discount_history').insertOne({
+      _id: new ObjectId(),
+      discountId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as DiscountHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add discount history:', err)
+  }
+}
+
+async function addTermsHistory(
+  db: any,
+  termsId: ObjectId,
+  eventType: TermsHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('terms_history').insertOne({
+      _id: new ObjectId(),
+      termsId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as TermsHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add terms history:', err)
   }
 }
 export type DiscountType = 'percentage' | 'fixed' | 'tiered'
@@ -404,6 +540,39 @@ productsRouter.get('/bundles/:id', async (req, res) => {
   }
 })
 
+// GET /api/crm/bundles/:id/history
+productsRouter.get('/bundles/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const bundle = await db.collection<BundleDoc>('bundles').findOne({ _id })
+    if (!bundle) return res.status(404).json({ data: null, error: 'not_found' })
+
+    const historyEntries = await db
+      .collection<BundleHistoryEntry>('bundle_history')
+      .find({ bundleId: _id })
+      .sort({ createdAt: -1 })
+      .toArray()
+
+    res.json({
+      data: {
+        history: historyEntries,
+        bundle: {
+          name: bundle.name,
+          sku: bundle.sku,
+          bundlePrice: bundle.bundlePrice,
+          createdAt: bundle.createdAt || _id.getTimestamp(),
+          updatedAt: bundle.updatedAt,
+        },
+      },
+      error: null,
+    })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 // POST /api/crm/bundles
 productsRouter.post('/bundles', async (req, res) => {
   const db = await getDb()
@@ -435,6 +604,29 @@ productsRouter.post('/bundles', async (req, res) => {
   }
 
   const result = await db.collection<BundleDoc>('bundles').insertOne(doc as BundleDoc)
+
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  if (auth) {
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    await addBundleHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Bundle created: ${name}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email
+    )
+  } else {
+    await addBundleHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Bundle created: ${name}`
+    )
+  }
+
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
@@ -444,26 +636,79 @@ productsRouter.put('/bundles/:id', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
     const _id = new ObjectId(req.params.id)
+
+    const currentBundle = await db.collection<BundleDoc>('bundles').findOne({ _id })
+    if (!currentBundle) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+
     const raw = req.body ?? {}
     const update: Partial<BundleDoc> = { updatedAt: new Date() }
-    
-    if (raw.name !== undefined) update.name = String(raw.name).trim()
-    if (raw.sku !== undefined) update.sku = String(raw.sku).trim() || undefined
-    if (raw.description !== undefined) update.description = String(raw.description).trim() || undefined
-    if (raw.items !== undefined) {
-      update.items = Array.isArray(raw.items) ? raw.items.map((item: any) => ({
-        productId: new ObjectId(item.productId),
-        quantity: Number(item.quantity) || 1,
-        priceOverride: item.priceOverride != null ? Number(item.priceOverride) : undefined,
-      })) : []
+
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    let user: any = null
+    if (auth) {
+      user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
     }
-    if (raw.bundlePrice !== undefined) update.bundlePrice = Number(raw.bundlePrice) || 0
-    if (raw.currency !== undefined) update.currency = String(raw.currency).trim()
-    if (raw.isActive !== undefined) update.isActive = Boolean(raw.isActive)
-    if (raw.category !== undefined) update.category = String(raw.category).trim() || undefined
+
+    const fieldsToTrack = ['name', 'sku', 'description', 'bundlePrice', 'currency', 'isActive', 'category'] as const
+    let hasChanges = false
+
+    for (const field of fieldsToTrack) {
+      if (raw[field] !== undefined) {
+        const newValue =
+          field === 'bundlePrice' ? (raw[field] != null ? Number(raw[field]) : undefined) :
+          field === 'isActive' ? Boolean(raw[field]) :
+          String(raw[field]).trim() || undefined
+        const oldValue = (currentBundle as any)[field]
+
+        if (newValue !== oldValue) {
+          hasChanges = true
+          const fieldName =
+            field === 'bundlePrice'
+              ? 'Bundle price'
+              : field === 'isActive'
+              ? 'Active status'
+              : field.charAt(0).toUpperCase() + field.slice(1)
+          await addBundleHistory(
+            db,
+            _id,
+            'field_changed',
+            `${fieldName} changed from "${oldValue ?? 'empty'}" to "${newValue ?? 'empty'}"`,
+            auth?.userId,
+            user?.name,
+            auth?.email,
+            oldValue,
+            newValue
+          )
+        }
+
+        if (field === 'name') update.name = String(raw.name).trim()
+        else if (field === 'sku') update.sku = String(raw.sku).trim() || undefined
+        else if (field === 'description') update.description = String(raw.description).trim() || undefined
+        else if (field === 'bundlePrice') update.bundlePrice = Number(raw.bundlePrice) || 0
+        else if (field === 'currency') update.currency = String(raw.currency).trim()
+        else if (field === 'isActive') update.isActive = Boolean(raw.isActive)
+        else if (field === 'category') update.category = String(raw.category).trim() || undefined
+      }
+    }
+
     if (raw.tags !== undefined) update.tags = Array.isArray(raw.tags) ? raw.tags.map(String).filter(Boolean) : undefined
 
     await db.collection<BundleDoc>('bundles').updateOne({ _id }, { $set: update })
+
+    if (!hasChanges) {
+      await addBundleHistory(
+        db,
+        _id,
+        'updated',
+        'Bundle updated',
+        auth?.userId,
+        user?.name,
+        auth?.email
+      )
+    }
+
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
@@ -531,6 +776,40 @@ productsRouter.get('/discounts/:id', async (req, res) => {
   }
 })
 
+// GET /api/crm/discounts/:id/history
+productsRouter.get('/discounts/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const discount = await db.collection<DiscountDoc>('discounts').findOne({ _id })
+    if (!discount) return res.status(404).json({ data: null, error: 'not_found' })
+
+    const historyEntries = await db
+      .collection<DiscountHistoryEntry>('discount_history')
+      .find({ discountId: _id })
+      .sort({ createdAt: -1 })
+      .toArray()
+
+    res.json({
+      data: {
+        history: historyEntries,
+        discount: {
+          name: discount.name,
+          code: discount.code,
+          type: discount.type,
+          value: discount.value,
+          createdAt: discount.createdAt || _id.getTimestamp(),
+          updatedAt: discount.updatedAt,
+        },
+      },
+      error: null,
+    })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 // POST /api/crm/discounts
 productsRouter.post('/discounts', async (req, res) => {
   const db = await getDb()
@@ -563,6 +842,29 @@ productsRouter.post('/discounts', async (req, res) => {
   }
 
   const result = await db.collection<DiscountDoc>('discounts').insertOne(doc as DiscountDoc)
+
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  if (auth) {
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    await addDiscountHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Discount created: ${name}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email
+    )
+  } else {
+    await addDiscountHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Discount created: ${name}`
+    )
+  }
+
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
@@ -572,27 +874,104 @@ productsRouter.put('/discounts/:id', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
     const _id = new ObjectId(req.params.id)
+
+    const current = await db.collection<DiscountDoc>('discounts').findOne({ _id })
+    if (!current) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+
     const raw = req.body ?? {}
     const update: Partial<DiscountDoc> = { updatedAt: new Date() }
-    
-    if (raw.name !== undefined) update.name = String(raw.name).trim()
-    if (raw.code !== undefined) update.code = String(raw.code).trim().toUpperCase() || undefined
-    if (raw.description !== undefined) update.description = String(raw.description).trim() || undefined
-    if (raw.type !== undefined) update.type = raw.type as DiscountType
-    if (raw.value !== undefined) update.value = Number(raw.value) || 0
-    if (raw.scope !== undefined) update.scope = raw.scope as DiscountScope
+
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    let user: any = null
+    if (auth) {
+      user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    }
+
+    const fieldsToTrack = [
+      'name',
+      'code',
+      'description',
+      'type',
+      'value',
+      'scope',
+      'minQuantity',
+      'minAmount',
+      'maxDiscount',
+      'startDate',
+      'endDate',
+      'isActive',
+      'usageLimit',
+    ] as const
+
+    let hasChanges = false
+
+    for (const field of fieldsToTrack) {
+      if (raw[field] !== undefined) {
+        let newValue: any
+        if (field === 'value' || field === 'minQuantity' || field === 'minAmount' || field === 'maxDiscount' || field === 'usageLimit') {
+          newValue = raw[field] != null ? Number(raw[field]) : undefined
+        } else if (field === 'isActive') {
+          newValue = Boolean(raw[field])
+        } else if (field === 'startDate' || field === 'endDate') {
+          newValue = raw[field] ? new Date(raw[field]) : undefined
+        } else {
+          newValue = String(raw[field]).trim() || undefined
+        }
+
+        const oldValue = (current as any)[field]
+
+        if (String(newValue) !== String(oldValue)) {
+          hasChanges = true
+          const fieldName = field.charAt(0).toUpperCase() + field.slice(1)
+          await addDiscountHistory(
+            db,
+            _id,
+            'field_changed',
+            `${fieldName} changed from "${oldValue ?? 'empty'}" to "${newValue ?? 'empty'}"`,
+            auth?.userId,
+            user?.name,
+            auth?.email,
+            oldValue,
+            newValue
+          )
+        }
+
+        if (field === 'name') update.name = String(raw.name).trim()
+        else if (field === 'code') update.code = String(raw.code).trim().toUpperCase() || undefined
+        else if (field === 'description') update.description = String(raw.description).trim() || undefined
+        else if (field === 'type') update.type = raw.type as DiscountType
+        else if (field === 'value') update.value = Number(raw.value) || 0
+        else if (field === 'scope') update.scope = raw.scope as DiscountScope
+        else if (field === 'minQuantity') update.minQuantity = raw.minQuantity != null ? Number(raw.minQuantity) : undefined
+        else if (field === 'minAmount') update.minAmount = raw.minAmount != null ? Number(raw.minAmount) : undefined
+        else if (field === 'maxDiscount') update.maxDiscount = raw.maxDiscount != null ? Number(raw.maxDiscount) : undefined
+        else if (field === 'startDate') update.startDate = raw.startDate ? new Date(raw.startDate) : undefined
+        else if (field === 'endDate') update.endDate = raw.endDate ? new Date(raw.endDate) : undefined
+        else if (field === 'isActive') update.isActive = Boolean(raw.isActive)
+        else if (field === 'usageLimit') update.usageLimit = raw.usageLimit != null ? Number(raw.usageLimit) : undefined
+      }
+    }
+
     if (raw.productIds !== undefined) update.productIds = Array.isArray(raw.productIds) ? raw.productIds.map((id: string) => new ObjectId(id)) : undefined
     if (raw.bundleIds !== undefined) update.bundleIds = Array.isArray(raw.bundleIds) ? raw.bundleIds.map((id: string) => new ObjectId(id)) : undefined
     if (raw.accountIds !== undefined) update.accountIds = Array.isArray(raw.accountIds) ? raw.accountIds.map((id: string) => new ObjectId(id)) : undefined
-    if (raw.minQuantity !== undefined) update.minQuantity = raw.minQuantity != null ? Number(raw.minQuantity) : undefined
-    if (raw.minAmount !== undefined) update.minAmount = raw.minAmount != null ? Number(raw.minAmount) : undefined
-    if (raw.maxDiscount !== undefined) update.maxDiscount = raw.maxDiscount != null ? Number(raw.maxDiscount) : undefined
-    if (raw.startDate !== undefined) update.startDate = raw.startDate ? new Date(raw.startDate) : undefined
-    if (raw.endDate !== undefined) update.endDate = raw.endDate ? new Date(raw.endDate) : undefined
-    if (raw.isActive !== undefined) update.isActive = Boolean(raw.isActive)
-    if (raw.usageLimit !== undefined) update.usageLimit = raw.usageLimit != null ? Number(raw.usageLimit) : undefined
 
     await db.collection<DiscountDoc>('discounts').updateOne({ _id }, { $set: update })
+
+    if (!hasChanges) {
+      await addDiscountHistory(
+        db,
+        _id,
+        'updated',
+        'Discount updated',
+        auth?.userId,
+        user?.name,
+        auth?.email
+      )
+    }
+
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
@@ -686,6 +1065,40 @@ productsRouter.get('/terms/ledger', requireAuth, async (req, res) => {
   }
 })
 
+// GET /api/crm/terms/:id/history
+productsRouter.get('/terms/:id([0-9a-fA-F]{24})/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const _id = new ObjectId(req.params.id)
+    const terms = await db.collection<CustomTermsDoc>('custom_terms').findOne({ _id })
+    if (!terms) return res.status(404).json({ data: null, error: 'not_found' })
+
+    const historyEntries = await db
+      .collection<TermsHistoryEntry>('terms_history')
+      .find({ termsId: _id })
+      .sort({ createdAt: -1 })
+      .toArray()
+
+    res.json({
+      data: {
+        history: historyEntries,
+        terms: {
+          name: terms.name,
+          isDefault: terms.isDefault,
+          isActive: terms.isActive,
+          createdAt: terms.createdAt || _id.getTimestamp(),
+          updatedAt: terms.updatedAt,
+        },
+      },
+      error: null,
+    })
+  } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
 // GET /api/crm/terms/:id
 // IMPORTANT: This route must be defined AFTER /terms/review-requests to avoid route conflicts
 // Using a regex pattern to only match valid ObjectId hex strings (24 hex characters)
@@ -743,6 +1156,29 @@ productsRouter.post('/terms', async (req, res) => {
   }
 
   const result = await db.collection<CustomTermsDoc>('custom_terms').insertOne(doc as CustomTermsDoc)
+
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  if (auth) {
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    await addTermsHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Terms created: ${name}`,
+      auth.userId,
+      (user as any)?.name,
+      auth.email
+    )
+  } else {
+    await addTermsHistory(
+      db,
+      result.insertedId,
+      'created',
+      `Terms created: ${name}`
+    )
+  }
+
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
@@ -753,26 +1189,86 @@ productsRouter.put('/terms/:id([0-9a-fA-F]{24})', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
     const _id = new ObjectId(req.params.id)
+
+    const current = await db.collection<CustomTermsDoc>('custom_terms').findOne({ _id })
+    if (!current) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+
     const raw = req.body ?? {}
     const update: Partial<CustomTermsDoc> = { updatedAt: new Date() }
-    
-    if (raw.name !== undefined) update.name = String(raw.name).trim()
-    if (raw.description !== undefined) update.description = String(raw.description).trim() || undefined
-    if (raw.content !== undefined) update.content = String(raw.content).trim()
-    if (raw.isDefault !== undefined) {
-      update.isDefault = Boolean(raw.isDefault)
-      // If setting as default, unset other defaults
-      if (update.isDefault) {
-        await db.collection<CustomTermsDoc>('custom_terms').updateMany(
-          { _id: { $ne: _id }, isDefault: true },
-          { $set: { isDefault: false } }
-        )
+
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    let user: any = null
+    if (auth) {
+      user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    }
+
+    const fieldsToTrack = ['name', 'description', 'content', 'isDefault', 'isActive'] as const
+    let hasChanges = false
+
+    for (const field of fieldsToTrack) {
+      if (raw[field] !== undefined) {
+        let newValue: any
+        if (field === 'isDefault' || field === 'isActive') {
+          newValue = Boolean(raw[field])
+        } else {
+          newValue = String(raw[field]).trim() || undefined
+        }
+
+        const oldValue = (current as any)[field]
+
+        if (String(newValue) !== String(oldValue)) {
+          hasChanges = true
+          const fieldName = field.charAt(0).toUpperCase() + field.slice(1)
+          await addTermsHistory(
+            db,
+            _id,
+            'field_changed',
+            `${fieldName} changed from "${oldValue ?? 'empty'}" to "${newValue ?? 'empty'}"`,
+            auth?.userId,
+            user?.name,
+            auth?.email,
+            oldValue,
+            newValue
+          )
+        }
+
+        if (field === 'name') update.name = String(raw.name).trim()
+        else if (field === 'description') update.description = String(raw.description).trim() || undefined
+        else if (field === 'content') update.content = String(raw.content).trim()
+        else if (field === 'isDefault') update.isDefault = Boolean(raw.isDefault)
+        else if (field === 'isActive') update.isActive = Boolean(raw.isActive)
       }
     }
-    if (raw.accountIds !== undefined) update.accountIds = Array.isArray(raw.accountIds) ? raw.accountIds.map((id: string) => new ObjectId(id)) : undefined
-    if (raw.isActive !== undefined) update.isActive = Boolean(raw.isActive)
+
+    if (update.isDefault) {
+      await db.collection<CustomTermsDoc>('custom_terms').updateMany(
+        { _id: { $ne: _id }, isDefault: true },
+        { $set: { isDefault: false } }
+      )
+    }
+
+    if (raw.accountIds !== undefined) {
+      update.accountIds = Array.isArray(raw.accountIds)
+        ? raw.accountIds.map((id: string) => new ObjectId(id))
+        : undefined
+    }
 
     await db.collection<CustomTermsDoc>('custom_terms').updateOne({ _id }, { $set: update })
+
+    if (!hasChanges) {
+      await addTermsHistory(
+        db,
+        _id,
+        'updated',
+        'Terms updated',
+        auth?.userId,
+        user?.name,
+        auth?.email
+      )
+    }
+
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
