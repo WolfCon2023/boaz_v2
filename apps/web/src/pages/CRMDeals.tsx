@@ -241,31 +241,6 @@ export default function CRMDeals() {
   const [surveyRecipientName, setSurveyRecipientName] = React.useState('')
   const [surveyRecipientEmail, setSurveyRecipientEmail] = React.useState('')
 
-  // Survey status for visible deals
-  const dealIdsParam = React.useMemo(
-    () => (items.length ? items.map((d) => d._id).join(',') : ''),
-    [items],
-  )
-
-  const { data: dealSurveyStatusData } = useQuery({
-    queryKey: ['deals-survey-status', dealIdsParam],
-    enabled: !!dealIdsParam,
-    queryFn: async () => {
-      const res = await http.get('/api/crm/surveys/deals/status', {
-        params: { dealIds: dealIdsParam },
-      })
-      return res.data as { data: { items: DealSurveyStatusSummary[] } }
-    },
-  })
-
-  const dealSurveyStatusMap = React.useMemo(() => {
-    const map = new Map<string, DealSurveyStatusSummary>()
-    for (const s of dealSurveyStatusData?.data.items ?? []) {
-      map.set(s.dealId, s)
-    }
-    return map
-  }, [dealSurveyStatusData?.data.items])
-
   const create = useMutation({
     mutationFn: async (payload: { title: string; accountId: string; amount?: number; stage?: string; closeDate?: string }) => {
       const res = await http.post('/api/crm/deals', payload)
@@ -422,6 +397,31 @@ export default function CRMDeals() {
   React.useEffect(() => { setPage(0) }, [q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, pageSize])
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const pageItems = items
+
+  // Survey status for visible deals
+  const dealIdsParam = React.useMemo(
+    () => (items.length ? items.map((d) => d._id).join(',') : ''),
+    [items],
+  )
+
+  const { data: dealSurveyStatusData } = useQuery({
+    queryKey: ['deals-survey-status', dealIdsParam],
+    enabled: !!dealIdsParam,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/deals/status', {
+        params: { dealIds: dealIdsParam },
+      })
+      return res.data as { data: { items: DealSurveyStatusSummary[] } }
+    },
+  })
+
+  const dealSurveyStatusMap = React.useMemo(() => {
+    const map = new Map<string, DealSurveyStatusSummary>()
+    for (const s of dealSurveyStatusData?.data.items ?? []) {
+      map.set(s.dealId, s)
+    }
+    return map
+  }, [dealSurveyStatusData?.data.items])
 
   const [editing, setEditing] = React.useState<Deal | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)

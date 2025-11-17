@@ -262,7 +262,7 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       toast.showToast('Survey email sent', 'success')
-      queryClient.invalidateQueries({ queryKey: ['products-survey-status'] })
+      qc.invalidateQueries({ queryKey: ['products-survey-status'] })
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.error || err?.message || 'Failed to send survey email'
