@@ -53,8 +53,23 @@ export default function CRMDeals() {
     { key: 'closeDate', visible: true, label: 'Close date' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
+  // Ensure Survey column is always present and visible, even for old saved layouts
+  function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
+    let hasSurvey = false
+    const next = cols.map((c) => {
+      if (c.key === 'surveyStatus') {
+        hasSurvey = true
+        return { ...c, visible: true, label: 'Survey' }
+      }
+      return c
+    })
+    if (!hasSurvey) {
+      next.push({ key: 'surveyStatus', visible: true, label: 'Survey' })
+    }
+    return next
+  }
   const [showColsMenu, setShowColsMenu] = React.useState(false)
-  const [cols, setCols] = React.useState<ColumnDef[]>(defaultCols)
+  const [cols, setCols] = React.useState<ColumnDef[]>(ensureSurveyCol(defaultCols))
   const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
   const [showSaveViewDialog, setShowSaveViewDialog] = React.useState(false)
   const [savingViewName, setSavingViewName] = React.useState('')
@@ -105,14 +120,16 @@ export default function CRMDeals() {
       if (stored) {
         const parsed = JSON.parse(stored)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setCols(parsed)
+          setCols(ensureSurveyCol(parsed))
         }
       }
     } catch {}
     const colsParam = get('cols')
     if (colsParam) {
       const keys = new Set(colsParam.split(',').map((s) => s.trim()).filter(Boolean))
-      setCols(defaultCols.map((c) => ({ ...c, visible: keys.has(c.key) })))
+      setCols(
+        ensureSurveyCol(defaultCols.map((c) => ({ ...c, visible: keys.has(c.key) }))),
+      )
     }
 
     // Load saved views
@@ -480,7 +497,7 @@ export default function CRMDeals() {
     if (c.maxAmount !== undefined) setMaxAmount(c.maxAmount)
     if (c.startDate !== undefined) setStartDate(c.startDate)
     if (c.endDate !== undefined) setEndDate(c.endDate)
-    if (c.cols) setCols(c.cols)
+    if (c.cols) setCols(ensureSurveyCol(c.cols))
     if (c.pageSize) setPageSize(c.pageSize)
     setPage(0)
   }
