@@ -411,6 +411,8 @@ export default function CRMProducts() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] })
       qc.invalidateQueries({ queryKey: ['product-history'] })
+      toast.showToast('BOAZ says: Product deleted.', 'success')
+      setEditing(null)
     },
   })
 
@@ -816,15 +818,6 @@ export default function CRMProducts() {
                             className="rounded-lg border px-2 py-1 text-xs"
                           >
                             Open
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (confirm(`Delete "${product.name}"?`)) deleteProduct.mutate(product._id)
-                            }}
-                            className="rounded border border-red-400 px-2 py-1 text-xs text-red-400 hover:bg-red-50"
-                          >
-                            Delete
                           </button>
                         </div>
                       )}
@@ -2158,14 +2151,38 @@ export default function CRMProducts() {
                   </div>
                   <div className="flex justify-end gap-2 pt-4 border-t border-[color:var(--color-border)]">
                     {activeTab === 'products' && editing._id && (
-                      <button type="button" onClick={() => setShowHistory((v) => !v)} className="mr-auto rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]">
-                        {showHistory ? 'Hide history' : 'View history'}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setShowHistory((v) => !v)}
+                          className="mr-auto rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                        >
+                          {showHistory ? 'Hide history' : 'View history'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Delete "${(editing as Product).name}"?`)) {
+                              deleteProduct.mutate((editing as Product)._id)
+                            }
+                          }}
+                          className="mr-2 rounded-lg border border-red-500 px-4 py-2 text-sm text-red-500 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
-                    <button type="button" onClick={() => setEditing(null)} className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]">
+                    <button
+                      type="button"
+                      onClick={() => setEditing(null)}
+                      className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                    >
                       Cancel
                     </button>
-                    <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+                    >
                       Save
                     </button>
                   </div>
