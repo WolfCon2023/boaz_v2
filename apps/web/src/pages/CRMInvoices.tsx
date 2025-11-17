@@ -50,6 +50,7 @@ type Product = {
   name: string
   description?: string
   basePrice: number
+  currency?: string
   taxRate?: number
   cost?: number
   isActive?: boolean
