@@ -25,6 +25,29 @@ type Product = {
   updatedAt?: string
 }
 
+const CURRENCY_OPTIONS: Array<{ code: string; label: string; symbol: string }> = [
+  { code: 'USD', label: 'USD — US Dollar', symbol: '$' },
+  { code: 'EUR', label: 'EUR — Euro', symbol: '€' },
+  { code: 'GBP', label: 'GBP — British Pound', symbol: '£' },
+  { code: 'CAD', label: 'CAD — Canadian Dollar', symbol: '$' },
+  { code: 'AUD', label: 'AUD — Australian Dollar', symbol: '$' },
+  { code: 'JPY', label: 'JPY — Japanese Yen', symbol: '¥' },
+  { code: 'INR', label: 'INR — Indian Rupee', symbol: '₹' },
+]
+
+const currencySymbolMap: Record<string, string> = CURRENCY_OPTIONS.reduce((acc, c) => {
+  acc[c.code] = c.symbol
+  return acc
+}, {} as Record<string, string>)
+
+function formatCurrency(amount: number, currency?: string) {
+  const code = currency || 'USD'
+  const symbol = currencySymbolMap[code]
+  const fixed = Number.isFinite(amount) ? amount.toFixed(2) : '0.00'
+  if (symbol) return `${symbol}${fixed}`
+  return `${code} ${fixed}`
+}
+
 type Bundle = {
   _id: string
   sku?: string
@@ -574,7 +597,7 @@ export default function CRMProducts() {
             <button
               type="button"
               onClick={() => {
-                const headers = ['SKU', 'Name', 'Type', 'Price', 'Cost', 'Margin', 'Margin %', 'Category', 'Status', 'Updated']
+                const headers = ['SKU', 'Name', 'Type', 'Currency', 'Price', 'Cost', 'Margin', 'Margin %', 'Category', 'Status', 'Updated']
                 const rows = products.map((product) => {
                   const cost = product.cost ?? 0
                   const margin = product.basePrice - cost
@@ -583,6 +606,7 @@ export default function CRMProducts() {
                     product.sku || '',
                     product.name || '',
                     product.type || '',
+                    product.currency || 'USD',
                     product.basePrice?.toFixed(2) || '0.00',
                     cost > 0 ? cost.toFixed(2) : '',
                     cost > 0 ? margin.toFixed(2) : '',
@@ -634,6 +658,7 @@ export default function CRMProducts() {
                 >
                   Type {getSortIndicator('type', productSort, productDir)}
                 </th>
+                <th className="px-4 py-2">Currency</th>
                 <th 
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('basePrice', productSort, productDir, setProductSort, setProductDir)}
@@ -687,22 +712,23 @@ export default function CRMProducts() {
                       )}
                     </td>
                     <td className="px-4 py-2 capitalize">{product.type}</td>
+                    <td className="px-4 py-2">{product.currency || 'USD'}</td>
                     <td className="px-4 py-2">
                       {inlineEditId === product._id ? (
                         <input type="number" step="0.01" value={inlinePrice} onChange={(e) => setInlinePrice(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
                       ) : (
-                        `$${product.basePrice.toFixed(2)}`
+                        formatCurrency(product.basePrice, product.currency)
                       )}
                     </td>
                     <td className="px-4 py-2">
                       {inlineEditId === product._id ? (
                         <input type="number" step="0.01" value={inlineCost} onChange={(e) => setInlineCost(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
                       ) : (
-                        cost > 0 ? `$${cost.toFixed(2)}` : '—'
+                        cost > 0 ? formatCurrency(cost, product.currency) : '—'
                       )}
                     </td>
                     <td className={`px-4 py-2 font-medium ${marginColor}`}>
-                      {cost > 0 ? `$${margin.toFixed(2)}` : '—'}
+                      {cost > 0 ? formatCurrency(margin, product.currency) : '—'}
                     </td>
                     <td className={`px-4 py-2 font-medium ${marginColor}`}>
                       {cost > 0 ? `${marginPercent.toFixed(1)}%` : '—'}
@@ -2036,7 +2062,17 @@ export default function CRMProducts() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Currency</label>
-                      <input name="currency" defaultValue={(editing as Product).currency || 'USD'} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                      <select
+                        name="currency"
+                        defaultValue={(editing as Product).currency || 'USD'}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                      >
+                        {CURRENCY_OPTIONS.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Cost (COGS)</label>
@@ -2060,9 +2096,9 @@ export default function CRMProducts() {
                         <div className="flex items-center justify-between">
                           <div>
                             <span className="text-sm font-medium">Margin: </span>
-                            <span className={`font-semibold ${marginColor}`}>
-                              ${margin.toFixed(2)} ({marginPercent.toFixed(1)}%)
-                            </span>
+                        <span className={`font-semibold ${marginColor}`}>
+                          {formatCurrency(margin, (editing as Product).currency)} ({marginPercent.toFixed(1)}%)
+                        </span>
                           </div>
                         </div>
                       </div>
@@ -2202,7 +2238,17 @@ export default function CRMProducts() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">Currency</label>
-                      <input name="currency" defaultValue={(editing as Bundle).currency || 'USD'} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                      <select
+                        name="currency"
+                        defaultValue={(editing as Bundle).currency || 'USD'}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                      >
+                        {CURRENCY_OPTIONS.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div className="sm:col-span-2">
                       <label className="flex items-center gap-2">

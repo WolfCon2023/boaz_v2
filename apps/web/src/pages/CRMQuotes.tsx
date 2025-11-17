@@ -1083,7 +1083,8 @@ export default function CRMQuotes() {
                                         <optgroup label="Products" className="text-gray-900">
                                           {products.map((p: Product) => (
                                             <option key={p._id} value={p._id} className="text-gray-900">
-                                              {p.sku ? `${p.sku} - ` : ''}{p.name} (${p.basePrice.toFixed(2)})
+                                              {p.sku ? `${p.sku} - ` : ''}
+                                              {p.name} ({(p.currency || 'USD')} {p.basePrice.toFixed(2)})
                                             </option>
                                           ))}
                                         </optgroup>
@@ -1092,7 +1093,8 @@ export default function CRMQuotes() {
                                         <optgroup label="Bundles" className="text-gray-900">
                                           {bundles.map((b: Bundle) => (
                                             <option key={`bundle-${b._id}`} value={`bundle-${b._id}`} className="text-gray-900 font-semibold">
-                                              {b.sku ? `${b.sku} - ` : ''}{b.name} (${b.bundlePrice.toFixed(2)})
+                                              {b.sku ? `${b.sku} - ` : ''}
+                                              {b.name} ({(b.currency || 'USD')} {b.bundlePrice.toFixed(2)})
                                             </option>
                                           ))}
                                         </optgroup>
