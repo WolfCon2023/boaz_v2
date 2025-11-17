@@ -1987,8 +1987,8 @@ export default function CRMProducts() {
       {editing && portalEl && createPortal(
         <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
           <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4 overflow-y-auto">
-            <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl my-8">
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl my-8">
               <div className="mb-4 text-lg font-semibold">
                 {activeTab === 'products' && (editing._id ? 'Edit Product' : 'New Product')}
                 {activeTab === 'bundles' && (editing._id ? 'Edit Bundle' : 'New Bundle')}
