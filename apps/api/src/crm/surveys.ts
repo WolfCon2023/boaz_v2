@@ -53,8 +53,10 @@ type SurveyResponseDoc = {
   contactId?: ObjectId | null
   accountId?: ObjectId | null
   ticketId?: ObjectId | null
-   quoteId?: ObjectId | null
-   invoiceId?: ObjectId | null
+  quoteId?: ObjectId | null
+  invoiceId?: ObjectId | null
+  dealId?: ObjectId | null
+  productId?: ObjectId | null
   outreachEnrollmentId?: ObjectId | null
   createdAt: Date
 }
@@ -99,6 +101,8 @@ type SurveyLinkDoc = {
   ticketId?: ObjectId | null
   quoteId?: ObjectId | null
   invoiceId?: ObjectId | null
+  dealId?: ObjectId | null
+  productId?: ObjectId | null
   email?: string | null
   createdAt: Date
 }
@@ -150,6 +154,8 @@ function buildSurveyResponseDoc(
     ticketId?: ObjectId | null
     quoteId?: ObjectId | null
     invoiceId?: ObjectId | null
+    dealId?: ObjectId | null
+    productId?: ObjectId | null
     outreachEnrollmentId?: ObjectId | null
   },
 ): SurveyResponseDoc {
@@ -189,6 +195,8 @@ function buildSurveyResponseDoc(
     ticketId: extra?.ticketId ?? toObjectId(raw.ticketId),
     quoteId: extra?.quoteId ?? null,
     invoiceId: extra?.invoiceId ?? null,
+    dealId: extra?.dealId ?? null,
+    productId: extra?.productId ?? null,
     outreachEnrollmentId:
       extra?.outreachEnrollmentId ?? toObjectId(raw.outreachEnrollmentId),
     createdAt: now,
@@ -857,6 +865,148 @@ surveysRouter.get('/invoices/status', async (req, res) => {
   }
 })
 
+// GET /api/crm/surveys/deals/status?dealIds=ID1,ID2,...
+// Returns per-deal survey status for CRM Deals views
+surveysRouter.get('/deals/status', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const raw = String((req.query.dealIds as string) ?? '').trim()
+  if (!raw) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  const ids = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => ObjectId.isValid(s))
+    .map((s) => new ObjectId(s))
+
+  if (ids.length === 0) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  try {
+    const respAgg = await db
+      .collection<SurveyResponseDoc>('survey_responses')
+      .aggregate([
+        { $match: { dealId: { $in: ids } } },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
+            _id: '$dealId',
+            responseCount: { $sum: 1 },
+            lastResponseAt: { $first: '$createdAt' },
+            lastScore: { $first: '$score' },
+          },
+        },
+      ])
+      .toArray()
+
+    const respMap = new Map<
+      string,
+      { responseCount: number; lastResponseAt: Date | null; lastScore: number | null }
+    >()
+    for (const r of respAgg) {
+      if (!r._id) continue
+      respMap.set(String(r._id), {
+        responseCount: r.responseCount ?? 0,
+        lastResponseAt: r.lastResponseAt ?? null,
+        lastScore: typeof r.lastScore === 'number' ? (r.lastScore as number) : null,
+      })
+    }
+
+    const items = ids.map((id) => {
+      const key = String(id)
+      const resp = respMap.get(key)
+      return {
+        dealId: key,
+        responseCount: resp?.responseCount ?? 0,
+        lastResponseAt: resp?.lastResponseAt ?? null,
+        lastScore: resp?.lastScore ?? null,
+      }
+    })
+
+    return res.json({ data: { items }, error: null })
+  } catch (err: any) {
+    console.error('Get deal survey status error:', err)
+    return res
+      .status(500)
+      .json({ data: null, error: err.message || 'failed_to_get_deal_status' })
+  }
+})
+
+// GET /api/crm/surveys/products/status?productIds=ID1,ID2,...
+// Returns per-product survey status for CRM Products views
+surveysRouter.get('/products/status', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const raw = String((req.query.productIds as string) ?? '').trim()
+  if (!raw) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  const ids = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => ObjectId.isValid(s))
+    .map((s) => new ObjectId(s))
+
+  if (ids.length === 0) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  try {
+    const respAgg = await db
+      .collection<SurveyResponseDoc>('survey_responses')
+      .aggregate([
+        { $match: { productId: { $in: ids } } },
+        { $sort: { createdAt: -1 } },
+        {
+          $group: {
+            _id: '$productId',
+            responseCount: { $sum: 1 },
+            lastResponseAt: { $first: '$createdAt' },
+            lastScore: { $first: '$score' },
+          },
+        },
+      ])
+      .toArray()
+
+    const respMap = new Map<
+      string,
+      { responseCount: number; lastResponseAt: Date | null; lastScore: number | null }
+    >()
+    for (const r of respAgg) {
+      if (!r._id) continue
+      respMap.set(String(r._id), {
+        responseCount: r.responseCount ?? 0,
+        lastResponseAt: r.lastResponseAt ?? null,
+        lastScore: typeof r.lastScore === 'number' ? (r.lastScore as number) : null,
+      })
+    }
+
+    const items = ids.map((id) => {
+      const key = String(id)
+      const resp = respMap.get(key)
+      return {
+        productId: key,
+        responseCount: resp?.responseCount ?? 0,
+        lastResponseAt: resp?.lastResponseAt ?? null,
+        lastScore: resp?.lastScore ?? null,
+      }
+    })
+
+    return res.json({ data: { items }, error: null })
+  } catch (err: any) {
+    console.error('Get product survey status error:', err)
+    return res
+      .status(500)
+      .json({ data: null, error: err.message || 'failed_to_get_product_status' })
+  }
+})
+
 
 // GET /api/crm/surveys/programs/:id/summary
 surveysRouter.get('/programs/:id/summary', async (req, res) => {
@@ -1051,6 +1201,8 @@ surveysRouter.post('/respond/:token', async (req, res) => {
     ticketId: link.ticketId ?? null,
     quoteId: link.quoteId ?? null,
     invoiceId: link.invoiceId ?? null,
+    dealId: link.dealId ?? null,
+    productId: link.productId ?? null,
     outreachEnrollmentId: link.campaignId ?? null,
   })
 
@@ -1092,6 +1244,10 @@ surveysRouter.post('/programs/:id/send-email', requireAuth, async (req, res) => 
     raw.quoteId && ObjectId.isValid(raw.quoteId) ? new ObjectId(raw.quoteId) : null
   const invoiceId =
     raw.invoiceId && ObjectId.isValid(raw.invoiceId) ? new ObjectId(raw.invoiceId) : null
+  const dealId =
+    raw.dealId && ObjectId.isValid(raw.dealId) ? new ObjectId(raw.dealId) : null
+  const productId =
+    raw.productId && ObjectId.isValid(raw.productId) ? new ObjectId(raw.productId) : null
 
   if (!recipientEmail) {
     return res.status(400).json({ data: null, error: 'invalid_payload' })
@@ -1108,6 +1264,8 @@ surveysRouter.post('/programs/:id/send-email', requireAuth, async (req, res) => 
     ticketId,
     quoteId,
     invoiceId,
+    dealId,
+    productId,
     email: recipientEmail,
     createdAt: new Date(),
   }

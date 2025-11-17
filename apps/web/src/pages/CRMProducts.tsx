@@ -25,6 +25,13 @@ type Product = {
   updatedAt?: string
 }
 
+type ProductSurveyStatusSummary = {
+  productId: string
+  responseCount: number
+  lastResponseAt: string | null
+  lastScore: number | null
+}
+
 const CURRENCY_OPTIONS: Array<{ code: string; label: string; symbol: string }> = [
   { code: 'USD', label: 'USD — US Dollar', symbol: '$' },
   { code: 'EUR', label: 'EUR — Euro', symbol: '€' },
@@ -124,6 +131,9 @@ export default function CRMProducts() {
   const [sendTermsCustomMessage, setSendTermsCustomMessage] = React.useState('')
   const [sendTermsAccountId, setSendTermsAccountId] = React.useState('')
   const [sendTermsContactId, setSendTermsContactId] = React.useState('')
+  const [surveyProgramId, setSurveyProgramId] = React.useState('')
+  const [surveyRecipientName, setSurveyRecipientName] = React.useState('')
+  const [surveyRecipientEmail, setSurveyRecipientEmail] = React.useState('')
   
   // Terms Ledger state
   const [ledgerQ, setLedgerQ] = React.useState('')
@@ -167,6 +177,48 @@ export default function CRMProducts() {
   })
   const products = productsData?.data.items ?? []
 
+  // Survey programs
+  const { data: surveyProgramsData } = useQuery({
+    queryKey: ['survey-programs'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/programs')
+      return res.data as {
+        data: {
+          items: Array<{ _id: string; name: string; type: 'NPS' | 'CSAT' | 'Post‑interaction' }>
+        }
+      }
+    },
+  })
+  const surveyPrograms = React.useMemo(
+    () => surveyProgramsData?.data.items ?? [],
+    [surveyProgramsData?.data.items],
+  )
+
+  // Product survey status
+  const productIdsParam = React.useMemo(
+    () => (products.length ? products.map((p) => p._id).join(',') : ''),
+    [products],
+  )
+
+  const { data: productSurveyStatusData } = useQuery({
+    queryKey: ['products-survey-status', productIdsParam],
+    enabled: !!productIdsParam,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/surveys/products/status', {
+        params: { productIds: productIdsParam },
+      })
+      return res.data as { data: { items: ProductSurveyStatusSummary[] } }
+    },
+  })
+
+  const productSurveyStatusMap = React.useMemo(() => {
+    const map = new Map<string, ProductSurveyStatusSummary>()
+    for (const s of productSurveyStatusData?.data.items ?? []) {
+      map.set(s.productId, s)
+    }
+    return map
+  }, [productSurveyStatusData?.data.items])
+
   // Bundles query
   const { data: bundlesData } = useQuery({
     queryKey: ['bundles', q, bundleSort, bundleDir],
@@ -196,6 +248,27 @@ export default function CRMProducts() {
     },
   })
   const terms = termsData?.data.items ?? []
+  // Send survey mutation for products
+  const sendSurveyEmail = useMutation({
+    mutationFn: async (payload: {
+      programId: string
+      recipientName?: string
+      recipientEmail: string
+      productId: string
+    }) => {
+      const { programId, ...rest } = payload
+      const res = await http.post(`/api/crm/surveys/programs/${programId}/send-email`, rest)
+      return res.data
+    },
+    onSuccess: () => {
+      toast.showToast('Survey email sent', 'success')
+      queryClient.invalidateQueries({ queryKey: ['products-survey-status'] })
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to send survey email'
+      toast.showToast(msg, 'error')
+    },
+  })
   
   // Accounts and Contacts queries for sending terms
   const accountsQ = useQuery({
@@ -735,6 +808,7 @@ export default function CRMProducts() {
                 >
                   Updated {getSortIndicator('updatedAt', productSort, productDir)}
                 </th>
+                <th className="px-4 py-2">Survey</th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
@@ -797,6 +871,31 @@ export default function CRMProducts() {
                       )}
                     </td>
                     <td className="px-4 py-2">{product.updatedAt ? formatDateTime(product.updatedAt) : '—'}</td>
+                    <td className="px-4 py-2">
+                      {(() => {
+                        const status = productSurveyStatusMap.get(product._id)
+                        if (!status || status.responseCount === 0) {
+                          return (
+                            <span className="inline-flex rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+                              No surveys
+                            </span>
+                          )
+                        }
+                        return (
+                          <div className="flex flex-col gap-0.5 text-[11px]">
+                            <span className="inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200">
+                              {status.responseCount} response{status.responseCount === 1 ? '' : 's'}
+                            </span>
+                            <span className="text-[10px] text-[color:var(--color-text-muted)]">
+                              Last score:{' '}
+                              <span className="font-semibold text-[color:var(--color-text)]">
+                                {status.lastScore != null ? status.lastScore.toFixed(1) : '-'}
+                              </span>
+                            </span>
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td className="px-4 py-2">
                       {inlineEditId === product._id ? (
                         <div className="flex items-center gap-2">
@@ -2127,26 +2226,102 @@ export default function CRMProducts() {
                     </div>
                     {productFormCost > 0 && (
                       <div className="sm:col-span-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
-                        <div className="text-xs text-[color:var(--color-text-muted)] mb-1">Projected Margin</div>
+                        <div className="mb-1 text-xs text-[color:var(--color-text-muted)]">
+                          Projected Margin
+                        </div>
                         <div className="flex items-center justify-between">
                           <div>
                             <span className="text-sm font-medium">Margin: </span>
-                        <span className={`font-semibold ${marginColor}`}>
-                          {formatCurrency(margin, (editing as Product).currency)} ({marginPercent.toFixed(1)}%)
-                        </span>
+                            <span className={`font-semibold ${marginColor}`}>
+                              {formatCurrency(margin, (editing as Product).currency)} ({marginPercent.toFixed(1)}%)
+                            </span>
                           </div>
                         </div>
                       </div>
                     )}
                     <div>
-                      <label className="block text-sm font-medium mb-1">Category</label>
-                      <input name="category" defaultValue={(editing as Product).category} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                      <label className="mb-1 block text-sm font-medium">Category</label>
+                      <input
+                        name="category"
+                        defaultValue={(editing as Product).category}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                      />
                     </div>
                     <div className="sm:col-span-2">
                       <label className="flex items-center gap-2">
-                        <input name="isActive" type="checkbox" defaultChecked={(editing as Product).isActive !== false} className="rounded border-[color:var(--color-border)]" />
+                        <input
+                          name="isActive"
+                          type="checkbox"
+                          defaultChecked={(editing as Product).isActive !== false}
+                          className="rounded border-[color:var(--color-border)]"
+                        />
                         <span className="text-sm">Active</span>
                       </label>
+                    </div>
+                    {/* Surveys & Feedback */}
+                    <div className="sm:col-span-2 mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-3">
+                      <div className="text-sm font-semibold">Surveys &amp; Feedback</div>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                            Program
+                          </label>
+                          <select
+                            value={surveyProgramId}
+                            onChange={(e) => setSurveyProgramId(e.target.value)}
+                            className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                          >
+                            <option value="">Select a program…</option>
+                            {surveyPrograms.map((p) => (
+                              <option key={p._id} value={p._id}>
+                                {p.name} ({p.type})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                            Customer name (for email)
+                          </label>
+                          <input
+                            type="text"
+                            value={surveyRecipientName}
+                            onChange={(e) => setSurveyRecipientName(e.target.value)}
+                            className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                            placeholder="Customer name"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                            Customer email (for survey link)
+                          </label>
+                          <input
+                            type="email"
+                            value={surveyRecipientEmail}
+                            onChange={(e) => setSurveyRecipientEmail(e.target.value)}
+                            className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                            placeholder="name@example.com"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-60"
+                          disabled={!surveyProgramId || !surveyRecipientEmail || sendSurveyEmail.isPending}
+                          onClick={() => {
+                            if (!editing || !surveyProgramId || !surveyRecipientEmail) return
+                            sendSurveyEmail.mutate({
+                              programId: surveyProgramId,
+                              recipientName: surveyRecipientName || undefined,
+                              recipientEmail: surveyRecipientEmail,
+                              productId: editing._id,
+                            })
+                          }}
+                        >
+                          {sendSurveyEmail.isPending ? 'Sending…' : 'Send survey email for product'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div className="flex justify-end gap-2 pt-4 border-t border-[color:var(--color-border)]">
