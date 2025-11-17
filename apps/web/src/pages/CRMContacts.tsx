@@ -98,7 +98,10 @@ export default function CRMContacts() {
       const res = await http.put(`/api/crm/contacts/${_id}`, rest)
       return res.data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contacts'] })
+      toast.showToast('BOAZ says: Contact saved.', 'success')
+    },
   })
 
   function startInlineEdit(c: Contact) {

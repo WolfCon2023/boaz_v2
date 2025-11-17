@@ -238,12 +238,25 @@ export default function CRMInvoices() {
   }, [invoiceSurveyStatusData?.data.items])
 
   const create = useMutation({
-    mutationFn: async (payload: any) => { const res = await http.post('/api/crm/invoices', payload); return res.data },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+    mutationFn: async (payload: any) => {
+      const res = await http.post('/api/crm/invoices', payload)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['invoices'] })
+      toast.showToast('BOAZ says: Invoice saved.', 'success')
+    },
   })
   const update = useMutation({
-    mutationFn: async (payload: any) => { const { _id, ...rest } = payload; const res = await http.put(`/api/crm/invoices/${_id}`, rest); return res.data },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+    mutationFn: async (payload: any) => {
+      const { _id, ...rest } = payload
+      const res = await http.put(`/api/crm/invoices/${_id}`, rest)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['invoices'] })
+      toast.showToast('BOAZ says: Invoice saved.', 'success')
+    },
   })
   const sendEmail = useMutation({
     mutationFn: async ({ id, recipientEmail }: { id: string; recipientEmail?: string }) => {

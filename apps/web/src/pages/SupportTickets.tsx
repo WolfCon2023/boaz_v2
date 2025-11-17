@@ -191,12 +191,25 @@ export default function SupportTickets() {
   }, [items, nowTs])
 
   const create = useMutation({
-    mutationFn: async (payload: any) => { const res = await http.post('/api/crm/support/tickets', payload); return res.data },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['support-tickets'] }),
+    mutationFn: async (payload: any) => {
+      const res = await http.post('/api/crm/support/tickets', payload)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['support-tickets'] })
+      toast.showToast('BOAZ says: Ticket saved.', 'success')
+    },
   })
   const update = useMutation({
-    mutationFn: async (payload: any) => { const { _id, ...rest } = payload; const res = await http.put(`/api/crm/support/tickets/${_id}`, rest); return res.data },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['support-tickets'] }),
+    mutationFn: async (payload: any) => {
+      const { _id, ...rest } = payload
+      const res = await http.put(`/api/crm/support/tickets/${_id}`, rest)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['support-tickets'] })
+      toast.showToast('BOAZ says: Ticket saved.', 'success')
+    },
   })
   const addComment = useMutation({
     mutationFn: async (payload: { _id: string, body: string }) => { const res = await http.post(`/api/crm/support/tickets/${payload._id}/comments`, { body: payload.body }); return res.data },

@@ -195,7 +195,10 @@ export default function CRMDeals() {
       const res = await http.post('/api/crm/deals', payload)
       return res.data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['deals'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['deals'] })
+      toast.showToast('BOAZ says: Deal saved.', 'success')
+    },
   })
   const update = useMutation({
     mutationFn: async (payload: Partial<Deal> & { _id: string } & { accountId?: string; accountNumber?: number }) => {
@@ -213,6 +216,7 @@ export default function CRMDeals() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['deals'] })
       qc.invalidateQueries({ queryKey: ['deal-history'] })
+      toast.showToast('BOAZ says: Deal saved.', 'success')
     },
     onError: (err: any) => {
       console.error('Deal update error (full):', err)

@@ -287,6 +287,7 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] })
+      toast.showToast('BOAZ says: Product saved.', 'success')
       setEditing(null)
     },
   })
@@ -299,6 +300,7 @@ export default function CRMProducts() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] })
       qc.invalidateQueries({ queryKey: ['product-history'] })
+      toast.showToast('BOAZ says: Product saved.', 'success')
       setEditing(null)
     },
   })
@@ -420,6 +422,7 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bundles'] })
+      toast.showToast('BOAZ says: Bundle saved.', 'success')
       setEditing(null)
     },
   })
@@ -431,6 +434,7 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['bundles'] })
+      toast.showToast('BOAZ says: Bundle saved.', 'success')
       setEditing(null)
     },
   })
@@ -452,6 +456,7 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['discounts'] })
+      toast.showToast('BOAZ says: Discount saved.', 'success')
       setEditing(null)
     },
   })
@@ -463,6 +468,7 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['discounts'] })
+      toast.showToast('BOAZ says: Discount saved.', 'success')
       setEditing(null)
     },
   })
@@ -484,6 +490,7 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['terms'] })
+      toast.showToast('BOAZ says: Terms saved.', 'success')
       setEditing(null)
     },
   })
@@ -495,6 +502,7 @@ export default function CRMProducts() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['terms'] })
+      toast.showToast('BOAZ says: Terms saved.', 'success')
       setEditing(null)
     },
   })

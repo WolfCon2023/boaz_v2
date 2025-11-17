@@ -111,7 +111,10 @@ export default function CRMAccounts() {
       const res = await http.put(`/api/crm/accounts/${_id}`, rest)
       return res.data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      toast.showToast('BOAZ says: Account saved.', 'success')
+    },
   })
 
   const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)

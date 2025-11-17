@@ -271,6 +271,7 @@ export default function CRMQuotes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quotes'] })
       qc.invalidateQueries({ queryKey: ['quote-history'] })
+      toast.showToast('BOAZ says: Quote saved.', 'success')
     },
   })
 
