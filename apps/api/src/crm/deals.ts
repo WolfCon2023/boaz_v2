@@ -8,6 +8,12 @@ import { env } from '../env.js'
 
 export const dealsRouter = Router()
 
+// Debug middleware to log all requests to deals router
+dealsRouter.use((req, _res, next) => {
+  console.log('🔍 DEALS ROUTER - REQUEST:', req.method, req.path, 'Full URL:', req.originalUrl)
+  next()
+})
+
 // Types for deal history
 type DealHistoryEntry = {
   _id: ObjectId
