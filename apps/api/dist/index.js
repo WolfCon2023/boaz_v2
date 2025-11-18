@@ -30,6 +30,7 @@ import { marketingSendRouter } from './marketing/send.js';
 import { marketingUnsubscribeRouter } from './marketing/unsubscribe.js';
 import { marketingImagesRouter } from './marketing/images.js';
 import { surveysRouter } from './crm/surveys.js';
+import { renewalsRouter } from './crm/renewals.js';
 import { viewsRouter } from './views.js';
 import { getDb } from './db.js';
 import { rolesRouter } from './auth/roles_routes.js';
@@ -88,6 +89,7 @@ app.use('/api/crm/support', supportTicketsRouter);
 app.use('/api/crm/support', kbRouter);
 app.use('/api/crm/support', supportAlertsRouter);
 app.use('/api/crm/surveys', surveysRouter);
+app.use('/api/crm/renewals', renewalsRouter);
 // Add logging middleware before products router
 app.use('/api/crm/products', (req, res, next) => {
     console.log('🚀 REQUEST TO /api/crm/products:', req.method, req.path, req.originalUrl);
