@@ -17,6 +17,9 @@ type RenewalDoc = {
   accountId?: ObjectId | null
   accountNumber?: number | null
   accountName?: string | null
+  productId?: ObjectId | null
+  productName?: string | null
+  productSku?: string | null
   name: string
   status: RenewalStatus
   termStart?: Date | null
@@ -39,6 +42,9 @@ const renewalBaseSchema = z.object({
   accountId: z.string().optional(),
   accountNumber: z.number().optional(),
   accountName: z.string().optional(),
+  productId: z.string().optional(),
+  productName: z.string().optional(),
+  productSku: z.string().optional(),
   name: z.string().min(1),
   status: z
     .enum(['Active', 'Pending Renewal', 'Churned', 'Cancelled', 'On Hold'])
@@ -105,6 +111,7 @@ renewalsRouter.get('/', async (req, res) => {
         ...r,
         _id: String(r._id),
         accountId: r.accountId ? String(r.accountId) : null,
+        productId: r.productId ? String(r.productId) : null,
         termStart: r.termStart ?? null,
         termEnd: r.termEnd ?? null,
         renewalDate: r.renewalDate ?? null,
@@ -131,11 +138,31 @@ renewalsRouter.post('/', async (req, res) => {
   const mrr = data.mrr ?? (data.arr != null ? data.arr / 12 : null)
   const arr = data.arr ?? (data.mrr != null ? data.mrr * 12 : null)
 
+  // Optionally hydrate product metadata if a productId is provided
+  let productId: ObjectId | null = null
+  let productName: string | null = data.productName ?? null
+  let productSku: string | null = data.productSku ?? null
+  if (data.productId) {
+    try {
+      productId = new ObjectId(data.productId)
+      const prod = await db.collection('products').findOne({ _id: productId })
+      if (prod) {
+        if (!productName) productName = (prod as any).name ?? null
+        if (!productSku) productSku = (prod as any).sku ?? null
+      }
+    } catch {
+      productId = null
+    }
+  }
+
   const doc: RenewalDoc = {
     _id: new ObjectId(),
     accountId: data.accountId ? new ObjectId(data.accountId) : null,
     accountNumber: data.accountNumber ?? null,
     accountName: data.accountName ?? null,
+    productId,
+    productName,
+    productSku,
     name: data.name,
     status: data.status as RenewalStatus,
     termStart: toDate(data.termStart),
@@ -191,6 +218,24 @@ renewalsRouter.put('/:id', async (req, res) => {
   if (data.termStart !== undefined) update.termStart = toDate(data.termStart)
   if (data.termEnd !== undefined) update.termEnd = toDate(data.termEnd)
   if (data.renewalDate !== undefined) update.renewalDate = toDate(data.renewalDate)
+
+  if (data.productId !== undefined) {
+    if (data.productId) {
+      try {
+        const pid = new ObjectId(data.productId)
+        update.productId = pid
+        const prod = await db.collection('products').findOne({ _id: pid })
+        if (prod) {
+          if (data.productName === undefined) update.productName = (prod as any).name ?? null
+          if (data.productSku === undefined) update.productSku = (prod as any).sku ?? null
+        }
+      } catch {
+        update.productId = null
+      }
+    } else {
+      update.productId = null
+    }
+  }
 
   // Recompute MRR/ARR if one of them changed
   if (data.mrr != null && (data.arr == null || Number.isNaN(data.arr))) {

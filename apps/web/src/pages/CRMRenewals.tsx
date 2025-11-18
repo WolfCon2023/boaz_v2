@@ -5,12 +5,16 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { HelpCircle } from 'lucide-react'
 
 type Renewal = {
   _id: string
   accountId?: string | null
   accountNumber?: number | null
   accountName?: string | null
+  productId?: string | null
+  productName?: string | null
+  productSku?: string | null
   name: string
   status: 'Active' | 'Pending Renewal' | 'Churned' | 'Cancelled' | 'On Hold'
   termStart?: string | null
@@ -42,6 +46,7 @@ const defaultCols: ColumnDef[] = [
 ]
 
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
+type ProductPick = { _id: string; sku?: string; name: string; type?: string }
 
 export default function CRMRenewals() {
   const qc = useQueryClient()
@@ -105,6 +110,23 @@ export default function CRMRenewals() {
   const acctById = React.useMemo(
     () => new Map(accounts.map((a) => [a._id, a])),
     [accounts],
+  )
+
+  const productsQ = useQuery({
+    queryKey: ['products-for-renewals'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/products', {
+        params: { sort: 'name', dir: 'asc', limit: 1000 },
+      })
+      return res.data as { data: { items: ProductPick[] } }
+    },
+  })
+  const products = React.useMemo(
+    () =>
+      (productsQ.data?.data.items ?? []).filter(
+        (p) => p.type !== 'bundle' && p.name,
+      ),
+    [productsQ.data?.data.items],
   )
 
   const create = useMutation({
@@ -296,21 +318,22 @@ export default function CRMRenewals() {
         </div>
 
         <form
-          className="flex flex-wrap items-center gap-2 p-4"
+          className="flex flex-wrap items-center gap-3 p-4"
           onSubmit={(e) => {
             e.preventDefault()
             const fd = new FormData(e.currentTarget)
-            const payload: any = {
-              name: String(fd.get('name') || '').trim(),
-              accountId: String(fd.get('accountId') || '') || undefined,
-              status: String(fd.get('status') || 'Active'),
-              renewalDate: String(fd.get('renewalDate') || '') || undefined,
-              mrr: fd.get('mrr') ? Number(fd.get('mrr')) : undefined,
-              arr: fd.get('arr') ? Number(fd.get('arr')) : undefined,
-              healthScore: fd.get('healthScore') ? Number(fd.get('healthScore')) : undefined,
-              churnRisk: String(fd.get('churnRisk') || '') || undefined,
-              upsellPotential: String(fd.get('upsellPotential') || '') || undefined,
-            }
+              const payload: any = {
+                name: String(fd.get('name') || '').trim(),
+                accountId: String(fd.get('accountId') || '') || undefined,
+                productId: String(fd.get('productId') || '') || undefined,
+                status: String(fd.get('status') || 'Active'),
+                renewalDate: String(fd.get('renewalDate') || '') || undefined,
+                mrr: fd.get('mrr') ? Number(fd.get('mrr')) : undefined,
+                arr: fd.get('arr') ? Number(fd.get('arr')) : undefined,
+                healthScore: fd.get('healthScore') ? Number(fd.get('healthScore')) : undefined,
+                churnRisk: String(fd.get('churnRisk') || '') || undefined,
+                upsellPotential: String(fd.get('upsellPotential') || '') || undefined,
+              }
             if (!payload.name) {
               toast.showToast('Please enter a name for the renewal.', 'error')
               return
@@ -319,80 +342,211 @@ export default function CRMRenewals() {
             ;(e.currentTarget as HTMLFormElement).reset()
           }}
         >
-          <input
-            name="name"
-            required
-            placeholder="Renewal / Subscription name"
-            className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-          />
-          <select
-            name="accountId"
-            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-          >
-            <option value="">Account (optional)</option>
-            {accounts.map((a) => (
-              <option key={a._id} value={a._id}>
-                {(a.accountNumber ?? '—')} — {a.name ?? 'Account'}
-              </option>
-            ))}
-          </select>
-          <input
-            name="renewalDate"
-            type="date"
-            className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-          />
-          <input
-            name="mrr"
-            type="number"
-            step="0.01"
-            placeholder="MRR"
-            className="w-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-          />
-          <input
-            name="arr"
-            type="number"
-            step="0.01"
-            placeholder="ARR"
-            className="w-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-          />
-          <select
-            name="status"
-            defaultValue="Active"
-            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-          >
-            <option value="Active">Active</option>
-            <option value="Pending Renewal">Pending Renewal</option>
-            <option value="Churned">Churned</option>
-            <option value="Cancelled">Cancelled</option>
-            <option value="On Hold">On Hold</option>
-          </select>
-          <input
-            name="healthScore"
-            type="number"
-            min={0}
-            max={10}
-            step="0.1"
-            placeholder="Health 0–10"
-            className="w-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-          />
-          <select
-            name="churnRisk"
-            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-          >
-            <option value="">Churn risk</option>
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
-          </select>
-          <select
-            name="upsellPotential"
-            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-          >
-            <option value="">Upsell potential</option>
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
-          </select>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                Name
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="Short label for this renewal or subscription (e.g., 'ACME – CRM Enterprise, Year 2')."
+              />
+            </div>
+            <input
+              name="name"
+              required
+              placeholder="Renewal / Subscription name"
+              className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                Account
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="Optional: link this renewal to an existing CRM account so you can see renewals by customer."
+              />
+            </div>
+            <select
+              name="accountId"
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="">Account (optional)</option>
+              {accounts.map((a) => (
+                <option key={a._id} value={a._id}>
+                  {(a.accountNumber ?? '—')} — {a.name ?? 'Account'}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                Product / service
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="Optional: tie this renewal to a specific product or service from your catalog."
+              />
+            </div>
+            <select
+              name="productId"
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="">Product / service (optional)</option>
+              {products.map((p) => (
+                <option key={p._id} value={p._id}>
+                  {p.sku ? `${p.sku} — ${p.name}` : p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                Renewal date
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="The date this contract term renews or expires. Use this to drive your renewal pipeline."
+              />
+            </div>
+            <input
+              name="renewalDate"
+              type="date"
+              className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                MRR
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="Monthly Recurring Revenue for this renewal. If you only enter MRR, ARR will be calculated for you."
+              />
+            </div>
+            <input
+              name="mrr"
+              type="number"
+              step="0.01"
+              placeholder="MRR"
+              className="w-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                ARR
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="Annual Recurring Revenue for this renewal. If you only enter ARR, MRR will be calculated for you."
+              />
+            </div>
+            <input
+              name="arr"
+              type="number"
+              step="0.01"
+              placeholder="ARR"
+              className="w-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                Status
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="High‑level lifecycle stage: Active subscription, upcoming renewal, churned, cancelled, or on hold."
+              />
+            </div>
+            <select
+              name="status"
+              defaultValue="Active"
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="Active">Active</option>
+              <option value="Pending Renewal">Pending Renewal</option>
+              <option value="Churned">Churned</option>
+              <option value="Cancelled">Cancelled</option>
+              <option value="On Hold">On Hold</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                Health (0–10)
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="Quick numeric health score for this customer/renewal (0–10). Use your own rubric for adoption, satisfaction, and value."
+              />
+            </div>
+            <input
+              name="healthScore"
+              type="number"
+              min={0}
+              max={10}
+              step="0.1"
+              placeholder="Health 0–10"
+              className="w-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                Churn risk
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="Subjective churn risk for this renewal: Low, Medium, or High, based on sentiment, usage, and account signals."
+              />
+            </div>
+            <select
+              name="churnRisk"
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="">Churn risk</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
+                Upsell potential
+              </span>
+              <HelpCircle
+                size={14}
+                className="text-[color:var(--color-text-muted)]"
+                title="Rough sense of expansion opportunity: Low/Medium/High based on pipeline, product fit, or customer requests."
+              />
+            </div>
+            <select
+              name="upsellPotential"
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="">Upsell potential</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
           <button className="ml-auto rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">
             Add renewal
           </button>
