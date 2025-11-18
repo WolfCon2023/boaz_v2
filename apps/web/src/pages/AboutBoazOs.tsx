@@ -94,7 +94,7 @@ export default function AboutBoazOs() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Contact and support</h2>
         <div className="max-w-md rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-sm">
-          <div className="font-semibold">Wolf Consulting Group, LLC</div>
+          <div className="font-semibold whitespace-nowrap">Wolf Consulting Group, LLC</div>
           <div>
             Email:{' '}
             <a

@@ -1,16 +1,26 @@
+import { Link } from 'react-router-dom'
+
 export default function LegalTerms() {
   return (
-    <div className="space-y-6">
-      <header className="space-y-2">
+    <div className="mx-auto max-w-4xl rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 space-y-6">
+      <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">BOAZ-OS Terms of Service</h1>
-        <p className="max-w-3xl text-sm text-[color:var(--color-text-muted)]">
+        <Link
+          to="/"
+          className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+        >
+          Back to Home
+        </Link>
+      </div>
+      <header className="space-y-2">
+        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text-muted)]">
           These Terms of Service are a template and should be reviewed by legal counsel before being treated as a final legal document.
         </p>
       </header>
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">1. Acceptance of terms</h2>
-        <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
           By accessing or using BOAZ-OS Version 2, you agree to these Terms of Service.
           If you do not agree, you must not use the service.
         </p>
@@ -18,7 +28,7 @@ export default function LegalTerms() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">2. Use of the service</h2>
-        <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
           BOAZ-OS is provided for business use by customers of Wolf Consulting Group, LLC.
           You agree to use the service only for lawful purposes and in accordance with any applicable service or subscription agreement.
         </p>
@@ -26,7 +36,7 @@ export default function LegalTerms() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">3. Accounts and security</h2>
-        <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
           You are responsible for keeping your account credentials secure and for all actions taken using your credentials.
           Notify Wolf Consulting Group, LLC immediately if you suspect unauthorized access to your account.
         </p>
@@ -34,7 +44,7 @@ export default function LegalTerms() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">4. Service availability</h2>
-        <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
           While Wolf Consulting Group, LLC intends for BOAZ-OS to be available and reliable, there may be times when the service is
           unavailable due to maintenance, upgrades, or events beyond our control. We are not responsible for downtime or data inaccessibility.
         </p>
@@ -42,7 +52,7 @@ export default function LegalTerms() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">5. Data and privacy</h2>
-        <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
           Your use of BOAZ-OS is also governed by the BOAZ-OS Privacy Policy. You are responsible for ensuring that your own use of BOAZ-OS
           with customer or employee data complies with applicable privacy and data protection laws.
         </p>
@@ -50,7 +60,7 @@ export default function LegalTerms() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">6. Prohibited activities</h2>
-        <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
           Users must not:
         </p>
         <ul className="max-w-3xl list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
@@ -62,7 +72,7 @@ export default function LegalTerms() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">7. Modifications to the service or terms</h2>
-        <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
           Wolf Consulting Group, LLC may modify BOAZ-OS or these Terms of Service from time to time.
           If you continue using BOAZ-OS after changes take effect, you are agreeing to the updated terms.
         </p>
