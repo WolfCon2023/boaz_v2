@@ -27,9 +27,6 @@ export default function AboutBoazOs() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">What BOAZ-OS helps you manage</h2>
-        <p className="text-sm leading-relaxed text-[color:var(--color-text-muted)]">
-          BOAZ-OS provides a collection of connected modules that support core back office tasks.
-        </p>
         <ul className="list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
           <li>Appointments and scheduling</li>
           <li>CRM and customer tracking</li>
@@ -96,9 +93,6 @@ export default function AboutBoazOs() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Contact and support</h2>
-        <p className="text-sm leading-relaxed text-[color:var(--color-text-muted)]">
-          For technical support, onboarding assistance, or general questions about BOAZ-OS, please contact:
-        </p>
         <div className="max-w-md rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-sm">
           <div className="font-semibold">Wolf Consulting Group, LLC</div>
           <div>
