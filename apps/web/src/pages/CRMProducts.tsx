@@ -881,18 +881,18 @@ export default function CRMProducts() {
                             </span>
                           )
                         }
+                        const label =
+                          status.responseCount === 1
+                            ? '1 response'
+                            : `${status.responseCount} responses`
+                        const last =
+                          status.lastScore != null ? status.lastScore.toFixed(1) : '-'
                         return (
-                          <div className="flex flex-col gap-0.5 text-[11px]">
-                            <span className="inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-200">
-                              {status.responseCount} response{status.responseCount === 1 ? '' : 's'}
-                            </span>
-                            <span className="text-[10px] text-[color:var(--color-text-muted)]">
-                              Last score:{' '}
-                              <span className="font-semibold text-[color:var(--color-text)]">
-                                {status.lastScore != null ? status.lastScore.toFixed(1) : '-'}
-                              </span>
-                            </span>
-                          </div>
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">
+                            <span>{label}</span>
+                            <span className="opacity-80">•</span>
+                            <span className="font-semibold">Last {last}</span>
+                          </span>
                         )
                       })()}
                     </td>
