@@ -20,6 +20,10 @@ type RenewalDoc = {
   productId?: ObjectId | null
   productName?: string | null
   productSku?: string | null
+  // Optional links back to source CRM objects
+  sourceDealId?: ObjectId | null
+  sourceInvoiceId?: ObjectId | null
+  sourceType?: 'deal' | 'invoice' | null
   name: string
   status: RenewalStatus
   termStart?: Date | null
@@ -45,6 +49,10 @@ const renewalBaseSchema = z.object({
   productId: z.string().optional(),
   productName: z.string().optional(),
   productSku: z.string().optional(),
+  // Optional linkage back to CRM objects
+  sourceDealId: z.string().optional(),
+  sourceInvoiceId: z.string().optional(),
+  sourceType: z.enum(['deal', 'invoice']).optional(),
   name: z.string().min(1),
   status: z
     .enum(['Active', 'Pending Renewal', 'Churned', 'Cancelled', 'On Hold'])
@@ -80,7 +88,8 @@ renewalsRouter.get('/', async (req, res) => {
   const q = String((req.query.q as string) ?? '').trim()
   const status = String((req.query.status as string) ?? '').trim()
   const accountIdParam = String((req.query.accountId as string) ?? '').trim()
-  const accountIdParam = String((req.query.accountId as string) ?? '').trim()
+  const sourceDealIdParam = String((req.query.sourceDealId as string) ?? '').trim()
+  const sourceInvoiceIdParam = String((req.query.sourceInvoiceId as string) ?? '').trim()
   const sortKeyRaw = (req.query.sort as string) ?? 'renewalDate'
   const dirParam = ((req.query.dir as string) ?? 'asc').toLowerCase()
   const dir: SortDirection = dirParam === 'desc' ? -1 : 1
@@ -106,12 +115,11 @@ renewalsRouter.get('/', async (req, res) => {
       // ignore bad accountId
     }
   }
-  if (accountIdParam) {
-    try {
-      filter.accountId = new ObjectId(accountIdParam)
-    } catch {
-      // ignore bad accountId
-    }
+  if (sourceDealIdParam && ObjectId.isValid(sourceDealIdParam)) {
+    filter.sourceDealId = new ObjectId(sourceDealIdParam)
+  }
+  if (sourceInvoiceIdParam && ObjectId.isValid(sourceInvoiceIdParam)) {
+    filter.sourceInvoiceId = new ObjectId(sourceInvoiceIdParam)
   }
 
   const items = await db
@@ -128,6 +136,8 @@ renewalsRouter.get('/', async (req, res) => {
         _id: String(r._id),
         accountId: r.accountId ? String(r.accountId) : null,
         productId: r.productId ? String(r.productId) : null,
+        sourceDealId: r.sourceDealId ? String(r.sourceDealId) : null,
+        sourceInvoiceId: r.sourceInvoiceId ? String(r.sourceInvoiceId) : null,
         termStart: r.termStart ?? null,
         termEnd: r.termEnd ?? null,
         renewalDate: r.renewalDate ?? null,
@@ -201,6 +211,134 @@ renewalsRouter.get('/metrics/summary', async (_req, res) => {
     },
     error: null,
   })
+})
+
+// GET /api/crm/renewals/metrics/account?accountId=...
+renewalsRouter.get('/metrics/account', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const accountIdStr = String((req.query.accountId as string) ?? '').trim()
+  if (!accountIdStr || !ObjectId.isValid(accountIdStr)) {
+    return res.status(400).json({ data: null, error: 'invalid_accountId' })
+  }
+
+  const accountId = new ObjectId(accountIdStr)
+
+  const now = new Date()
+
+  const docs = await db
+    .collection<RenewalDoc>('renewals')
+    .find({ accountId })
+    .toArray()
+
+  let totalMRR = 0
+  let totalARR = 0
+  let activeCount = 0
+  let churnedCount = 0
+  let pendingCount = 0
+  let sumHealth = 0
+  let healthCount = 0
+  let mrrAtRisk = 0
+  let mrrChurned = 0
+  let nextRenewalDate: Date | null = null
+  const countsByRisk: Record<string, number> = {}
+
+  for (const r of docs) {
+    const mrr = r.mrr ?? (r.arr != null ? r.arr / 12 : 0)
+    const arr = r.arr ?? (r.mrr != null ? r.mrr * 12 : 0)
+    totalMRR += mrr || 0
+    totalARR += arr || 0
+
+    if (r.status === 'Active') activeCount += 1
+    if (r.status === 'Churned') churnedCount += 1
+    if (r.status === 'Pending Renewal') pendingCount += 1
+
+    if (typeof r.healthScore === 'number') {
+      sumHealth += r.healthScore
+      healthCount += 1
+    }
+
+    if (r.churnRisk) {
+      countsByRisk[r.churnRisk] = (countsByRisk[r.churnRisk] ?? 0) + 1
+      if (r.churnRisk === 'High') {
+        mrrAtRisk += mrr || 0
+      }
+    }
+
+    if (r.status === 'Churned') {
+      mrrChurned += mrr || 0
+    }
+
+    if (r.renewalDate instanceof Date && r.renewalDate > now) {
+      if (!nextRenewalDate || r.renewalDate < nextRenewalDate) {
+        nextRenewalDate = r.renewalDate
+      }
+    }
+  }
+
+  const avgHealthScore = healthCount > 0 ? sumHealth / healthCount : null
+
+  res.json({
+    data: {
+      totalMRR,
+      totalARR,
+      activeCount,
+      churnedCount,
+      pendingCount,
+      avgHealthScore,
+      countsByRisk,
+      mrrAtRisk,
+      mrrChurned,
+      nextRenewalDate,
+      renewalCount: docs.length,
+    },
+    error: null,
+  })
+})
+
+// GET /api/crm/renewals/alerts/upcoming-high-value?days=&minMrr=
+renewalsRouter.get('/alerts/upcoming-high-value', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const days = Number(req.query.days ?? 60)
+  const minMrr = Number(req.query.minMrr ?? 1000)
+
+  const now = new Date()
+  const until = new Date(now)
+  until.setDate(until.getDate() + (Number.isFinite(days) && days > 0 ? days : 60))
+
+  const baseFilter: any = {
+    status: { $in: ['Active', 'Pending Renewal'] as RenewalStatus[] },
+    renewalDate: { $gte: now, $lte: until },
+  }
+
+  const docs = await db
+    .collection<RenewalDoc>('renewals')
+    .find(baseFilter)
+    .sort({ renewalDate: 1 })
+    .limit(50)
+    .toArray()
+
+  const alerts = docs
+    .map((r) => {
+      const mrr = r.mrr ?? (r.arr != null ? r.arr / 12 : 0)
+      return {
+        _id: String(r._id),
+        accountId: r.accountId ? String(r.accountId) : null,
+        accountName: r.accountName ?? null,
+        name: r.name,
+        renewalDate: r.renewalDate ?? null,
+        mrr,
+        arr: r.arr ?? null,
+        churnRisk: r.churnRisk ?? null,
+        status: r.status,
+      }
+    })
+    .filter((a) => (Number.isFinite(a.mrr) ? (a.mrr as number) >= minMrr : false))
+
+  res.json({ data: { items: alerts }, error: null })
 })
 
 // POST /api/crm/renewals

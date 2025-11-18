@@ -562,11 +562,15 @@ invoicesRouter.post('/:id/subscribe', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
     const _id = new ObjectId(req.params.id)
-    const interval = (String(req.body?.interval || 'monthly') as 'monthly' | 'annual')
+    const interval = String(req.body?.interval || 'monthly') as 'monthly' | 'annual'
     const startAt = req.body?.startAt ? new Date(req.body.startAt) : new Date()
     const next = new Date(startAt)
     if (interval === 'monthly') next.setMonth(next.getMonth() + 1)
     else next.setFullYear(next.getFullYear() + 1)
+
+    // Load invoice to get account, totals, etc.
+    const invoice = await db.collection<InvoiceDoc>('invoices').findOne({ _id }) as any
+    if (!invoice) return res.status(404).json({ data: null, error: 'not_found' })
     
     const auth = (req as any).auth as { userId: string; email: string } | undefined
     let user: any = null
@@ -591,6 +595,69 @@ invoicesRouter.post('/:id/subscribe', async (req, res) => {
       null,
       { interval, startAt, nextInvoiceAt: next }
     )
+
+    // Auto-create or update a Renewal tied to this subscription invoice
+    try {
+      const renewals = db.collection('renewals')
+      const existing = await renewals.findOne({ sourceInvoiceId: _id })
+
+      const accountId = (invoice as any).accountId as ObjectId | undefined
+      let accountName: string | null = null
+      let accountNumber: number | null = null
+      if (accountId) {
+        const acc = await db.collection('accounts').findOne({ _id: accountId })
+        if (acc) {
+          accountName = (acc as any).name ?? null
+          accountNumber = (acc as any).accountNumber ?? null
+        }
+      }
+
+      const total = Number((invoice as any).total ?? 0)
+      const arr = interval === 'annual' ? total : total * 12
+      const mrr = arr / 12
+
+      const baseDoc = {
+        accountId: accountId ?? null,
+        accountNumber,
+        accountName,
+        productId: null,
+        productName: null,
+        productSku: null,
+        sourceDealId: null,
+        sourceInvoiceId: _id,
+        sourceType: 'invoice' as const,
+        name: (invoice as any).title || 'Subscription invoice',
+        status: 'Active',
+        termStart: startAt,
+        termEnd: next,
+        renewalDate: next,
+        mrr,
+        arr,
+        healthScore: null,
+        churnRisk: null,
+        upsellPotential: 'Medium',
+        ownerId: auth?.userId ?? null,
+        ownerName: user?.name ?? null,
+        ownerEmail: auth?.email ?? null,
+        notes: 'Auto-created from subscription invoice',
+        updatedAt: new Date(),
+      }
+
+      if (existing) {
+        await renewals.updateOne(
+          { _id: (existing as any)._id },
+          { $set: baseDoc },
+        )
+      } else {
+        await renewals.insertOne({
+          _id: new ObjectId(),
+          ...baseDoc,
+          createdAt: new Date(),
+        })
+      }
+    } catch (err) {
+      console.error('Failed to auto-create renewal from subscription invoice:', err)
+    }
     
     res.json({ data: { ok: true }, error: null })
   } catch {

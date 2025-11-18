@@ -1033,17 +1033,20 @@ dealsRouter.put('/:id', async (req, res) => {
     const closedWon = 'Contract Signed / Closed Won'
     if (update.closeDate) update.closeDate = new Date(`${update.closeDate}T12:00:00Z`)
 
+    const previousStage = (currentDeal as any).stage as string | undefined
+    const movingToClosedWon = update.stage === closedWon && previousStage !== closedWon
+
     // Track stage changes
-    if (update.stage && update.stage !== (currentDeal as any).stage) {
+    if (update.stage && update.stage !== previousStage) {
       await addDealHistory(
         db,
         _id,
         'stage_changed',
-        `Stage changed from "${(currentDeal as any).stage}" to "${update.stage}"`,
+        `Stage changed from "${previousStage ?? 'empty'}" to "${update.stage}"`,
         auth?.userId,
         user?.name,
         auth?.email,
-        (currentDeal as any).stage,
+        previousStage,
         update.stage
       )
     }
@@ -1120,6 +1123,84 @@ dealsRouter.put('/:id', async (req, res) => {
     }
 
     await db.collection('deals').updateOne({ _id }, updateDoc)
+
+    // If the deal just moved to Closed Won, auto-create a Renewal record (if one doesn't already exist)
+    if (movingToClosedWon) {
+      try {
+        const renewals = db.collection('renewals')
+        const existing = await renewals.findOne({ sourceDealId: _id })
+        if (!existing) {
+          const accountObjectId =
+            (update.accountId as ObjectId | undefined) ?? ((currentDeal as any).accountId as ObjectId | undefined) ?? null
+
+          let accountName: string | null = null
+          let accountNumber: number | null = null
+          if (accountObjectId) {
+            const acc = await db.collection('accounts').findOne({ _id: accountObjectId })
+            if (acc) {
+              accountName = (acc as any).name ?? null
+              accountNumber = (acc as any).accountNumber ?? null
+            }
+          }
+
+          const amount = (update.amount as number | undefined) ?? ((currentDeal as any).amount as number | undefined) ?? 0
+          const closeDateValue =
+            (update.closeDate as Date | undefined) ?? ((currentDeal as any).closeDate as Date | undefined) ?? new Date()
+
+          const termStart = closeDateValue
+          const termEnd = new Date(termStart)
+          termEnd.setFullYear(termEnd.getFullYear() + 1)
+
+          const arr = amount
+          const mrr = arr / 12
+
+          const renewalDoc = {
+            _id: new ObjectId(),
+            accountId: accountObjectId,
+            accountNumber,
+            accountName,
+            productId: null,
+            productName: null,
+            productSku: null,
+            sourceDealId: _id,
+            sourceInvoiceId: null,
+            sourceType: 'deal' as const,
+            name: (currentDeal as any).title || 'Closed-won deal',
+            status: 'Active',
+            termStart,
+            termEnd,
+            renewalDate: termEnd,
+            mrr,
+            arr,
+            healthScore: null,
+            churnRisk: null,
+            upsellPotential: 'Medium',
+            ownerId: auth?.userId ?? null,
+            ownerName: user?.name ?? null,
+            ownerEmail: auth?.email ?? null,
+            notes: 'Auto-created from closed-won deal',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+
+          await renewals.insertOne(renewalDoc)
+
+          await addDealHistory(
+            db,
+            _id,
+            'field_changed',
+            `Auto-created renewal "${renewalDoc.name}" (MRR $${(renewalDoc.mrr ?? 0).toFixed(
+              2,
+            )}) from Closed Won stage`,
+            auth?.userId,
+            user?.name,
+            auth?.email,
+          )
+        }
+      } catch (err) {
+        console.error('Failed to auto-create renewal from closed-won deal:', err)
+      }
+    }
     
     // Add general update entry if no specific changes were tracked
     if (!update.stage && update.amount === undefined && !update.title && !update.closeDate) {

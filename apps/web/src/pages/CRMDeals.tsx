@@ -28,6 +28,13 @@ type DealSurveyStatusSummary = {
   lastScore: number | null
 }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
+type LinkedRenewal = {
+  _id: string
+  name: string
+  renewalDate?: string | null
+  mrr?: number | null
+  arr?: number | null
+}
 
 export default function CRMDeals() {
   const qc = useQueryClient()
@@ -408,6 +415,17 @@ export default function CRMDeals() {
   }
 
   const items = data?.data.items ?? []
+
+  const { data: linkedRenewalData } = useQuery({
+    queryKey: ['renewals-by-deal', editing?._id],
+    enabled: !!editing?._id,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/renewals', {
+        params: { sourceDealId: editing?._id },
+      })
+      return res.data as { data: { items: LinkedRenewal[] } }
+    },
+  })
   const total = data?.data.total ?? 0
   const anySelected = selectedIds.size > 0
   const allPageSelected = items.length > 0 && items.every((d) => selectedIds.has(d._id))
@@ -924,11 +942,8 @@ export default function CRMDeals() {
                   </select>
                 </label>
                 <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
-                  <div className="text-sm font-semibold">Renewals &amp; Subscriptions</div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                      View renewals tied to this deal&apos;s account in the Renewals app.
-                    </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold">Renewals &amp; Subscriptions</div>
                     <button
                       type="button"
                       className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
@@ -944,6 +959,45 @@ export default function CRMDeals() {
                       Open renewals for this account
                     </button>
                   </div>
+                  <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                    View renewals tied to this deal&apos;s account in the Renewals app.
+                  </div>
+                  {linkedRenewalData?.data?.items?.length ? (
+                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs">
+                      {(() => {
+                        const r = linkedRenewalData.data.items[0]
+                        return (
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="font-medium">
+                              Linked renewal: {r.name}
+                            </div>
+                            <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
+                              <span>
+                                {r.renewalDate ? `Renews ${formatDate(r.renewalDate)}` : 'No renewal date'}
+                              </span>
+                              <span>
+                                MRR {typeof r.mrr === 'number' ? `$${r.mrr.toLocaleString()}` : '—'}
+                              </span>
+                              <button
+                                type="button"
+                                className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] hover:bg-[color:var(--color-muted)]"
+                                onClick={() => {
+                                  const accId = (editing as any).accountId
+                                  window.location.href = `/apps/crm/renewals?accountId=${accId ?? ''}`
+                                }}
+                              >
+                                View in Renewals
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                      Once this deal is moved to Closed Won, BOAZ will auto-create a renewal record.
+                    </div>
+                  )}
                 </div>
                 {/* Surveys & Feedback */}
                 <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-3">
