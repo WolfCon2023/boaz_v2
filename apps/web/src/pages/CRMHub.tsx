@@ -21,7 +21,7 @@ export default function CRMHub() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">CRM</h1>
+      <h1 className="text-xl font-semibold">CRM Hub</h1>
       <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((it) => (
           <li key={it.label}>
