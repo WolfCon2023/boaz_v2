@@ -347,11 +347,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 Name
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="Short label for this renewal or subscription (e.g., 'ACME – CRM Enterprise, Year 2')."
-              />
+              <span title="Short label for this renewal or subscription (e.g., 'ACME – CRM Enterprise, Year 2').">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <input
               name="name"
@@ -365,11 +366,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 Account
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="Optional: link this renewal to an existing CRM account so you can see renewals by customer."
-              />
+              <span title="Optional: link this renewal to an existing CRM account so you can see renewals by customer.">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <select
               name="accountId"
@@ -388,11 +390,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 Product / service
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="Optional: tie this renewal to a specific product or service from your catalog."
-              />
+              <span title="Optional: tie this renewal to a specific product or service from your catalog.">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <select
               name="productId"
@@ -411,11 +414,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 Renewal date
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="The date this contract term renews or expires. Use this to drive your renewal pipeline."
-              />
+              <span title="The date this contract term renews or expires. Use this to drive your renewal pipeline.">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <input
               name="renewalDate"
@@ -428,11 +432,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 MRR
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="Monthly Recurring Revenue for this renewal. If you only enter MRR, ARR will be calculated for you."
-              />
+              <span title="Monthly Recurring Revenue for this renewal. If you only enter MRR, ARR will be calculated for you.">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <input
               name="mrr"
@@ -447,11 +452,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 ARR
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="Annual Recurring Revenue for this renewal. If you only enter ARR, MRR will be calculated for you."
-              />
+              <span title="Annual Recurring Revenue for this renewal. If you only enter ARR, MRR will be calculated for you.">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <input
               name="arr"
@@ -466,11 +472,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 Status
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="High‑level lifecycle stage: Active subscription, upcoming renewal, churned, cancelled, or on hold."
-              />
+              <span title="High‑level lifecycle stage: Active subscription, upcoming renewal, churned, cancelled, or on hold.">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <select
               name="status"
@@ -489,11 +496,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 Health (0–10)
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="Quick numeric health score for this customer/renewal (0–10). Use your own rubric for adoption, satisfaction, and value."
-              />
+              <span title="Quick numeric health score for this customer/renewal (0–10). Use your own rubric for adoption, satisfaction, and value.">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <input
               name="healthScore"
@@ -510,11 +518,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 Churn risk
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="Subjective churn risk for this renewal: Low, Medium, or High, based on sentiment, usage, and account signals."
-              />
+              <span title="Subjective churn risk for this renewal: Low, Medium, or High, based on sentiment, usage, and account signals.">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <select
               name="churnRisk"
@@ -531,11 +540,12 @@ export default function CRMRenewals() {
               <span className="text-xs font-medium text-[color:var(--color-text-muted)]">
                 Upsell potential
               </span>
-              <HelpCircle
-                size={14}
-                className="text-[color:var(--color-text-muted)]"
-                title="Rough sense of expansion opportunity: Low/Medium/High based on pipeline, product fit, or customer requests."
-              />
+              <span title="Rough sense of expansion opportunity: Low/Medium/High based on pipeline, product fit, or customer requests.">
+                <HelpCircle
+                  size={14}
+                  className="text-[color:var(--color-text-muted)]"
+                />
+              </span>
             </div>
             <select
               name="upsellPotential"
