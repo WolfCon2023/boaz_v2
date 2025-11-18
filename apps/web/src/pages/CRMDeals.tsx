@@ -923,6 +923,28 @@ export default function CRMDeals() {
                     ))}
                   </select>
                 </label>
+                <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
+                  <div className="text-sm font-semibold">Renewals &amp; Subscriptions</div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                      View renewals tied to this deal&apos;s account in the Renewals app.
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                      onClick={() => {
+                        const accId = (editing as any).accountId
+                        if (!accId) {
+                          toast.showToast('No account is linked to this deal yet.', 'error')
+                          return
+                        }
+                        window.location.href = `/apps/crm/renewals?accountId=${encodeURIComponent(accId)}`
+                      }}
+                    >
+                      Open renewals for this account
+                    </button>
+                  </div>
+                </div>
                 {/* Surveys & Feedback */}
                 <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-3">
                   <div className="text-sm font-semibold">Surveys &amp; Feedback</div>

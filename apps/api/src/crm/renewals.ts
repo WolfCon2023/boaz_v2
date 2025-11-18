@@ -79,6 +79,8 @@ renewalsRouter.get('/', async (req, res) => {
 
   const q = String((req.query.q as string) ?? '').trim()
   const status = String((req.query.status as string) ?? '').trim()
+  const accountIdParam = String((req.query.accountId as string) ?? '').trim()
+  const accountIdParam = String((req.query.accountId as string) ?? '').trim()
   const sortKeyRaw = (req.query.sort as string) ?? 'renewalDate'
   const dirParam = ((req.query.dir as string) ?? 'asc').toLowerCase()
   const dir: SortDirection = dirParam === 'desc' ? -1 : 1
@@ -96,6 +98,20 @@ renewalsRouter.get('/', async (req, res) => {
   }
   if (status) {
     filter.status = status
+  }
+  if (accountIdParam) {
+    try {
+      filter.accountId = new ObjectId(accountIdParam)
+    } catch {
+      // ignore bad accountId
+    }
+  }
+  if (accountIdParam) {
+    try {
+      filter.accountId = new ObjectId(accountIdParam)
+    } catch {
+      // ignore bad accountId
+    }
   }
 
   const items = await db

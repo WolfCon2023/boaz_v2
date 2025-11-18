@@ -62,6 +62,7 @@ export default function CRMRenewals() {
 
   const [q, setQ] = React.useState('')
   const [statusFilter, setStatusFilter] = React.useState<string>('')
+  const [accountFilterId, setAccountFilterId] = React.useState<string>('')
   const [sort, setSort] = React.useState<'renewalDate' | 'updatedAt' | 'accountName' | 'mrr' | 'arr'>(
     'renewalDate',
   )
@@ -76,10 +77,12 @@ export default function CRMRenewals() {
   React.useEffect(() => {
     const q0 = searchParams.get('q') || ''
     const status0 = searchParams.get('status') || ''
+    const account0 = searchParams.get('accountId') || ''
     const sort0 = (searchParams.get('sort') as any) || 'renewalDate'
     const dir0 = (searchParams.get('dir') as any) || 'asc'
     setQ(q0)
     setStatusFilter(status0)
+    setAccountFilterId(account0)
     setSort(sort0)
     setDir(dir0)
   }, [searchParams])
@@ -88,16 +91,17 @@ export default function CRMRenewals() {
     const params: Record<string, string> = {}
     if (q) params.q = q
     if (statusFilter) params.status = statusFilter
+    if (accountFilterId) params.accountId = accountFilterId
     if (sort !== 'renewalDate') params.sort = sort
     if (dir !== 'asc') params.dir = dir
     setSearchParams(params, { replace: true })
-  }, [q, statusFilter, sort, dir, setSearchParams])
+  }, [q, statusFilter, accountFilterId, sort, dir, setSearchParams])
 
   const { data, isFetching } = useQuery({
-    queryKey: ['renewals', q, statusFilter, sort, dir],
+    queryKey: ['renewals', q, statusFilter, accountFilterId, sort, dir],
     queryFn: async () => {
       const res = await http.get('/api/crm/renewals', {
-        params: { q, status: statusFilter, sort, dir },
+        params: { q, status: statusFilter, accountId: accountFilterId || undefined, sort, dir },
       })
       return res.data as { data: { items: Renewal[] } }
     },

@@ -916,6 +916,28 @@ export default function CRMInvoices() {
                 <input name="subtotal" type="number" step="0.01" defaultValue={(editing as any).subtotal ?? ''} placeholder="Subtotal" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="tax" type="number" step="0.01" defaultValue={(editing as any).tax ?? ''} placeholder="Tax" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="dueDate" type="date" defaultValue={editing.dueDate ? editing.dueDate.slice(0,10) : ''} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
+                  <div className="text-sm font-semibold">Renewals &amp; Subscriptions</div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                      View renewals tied to this invoice&apos;s account in the Renewals app.
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                      onClick={() => {
+                        const accId = editing.accountId as any
+                        if (!accId) {
+                          toast.showToast('No account is linked to this invoice yet.', 'error')
+                          return
+                        }
+                        window.location.href = `/apps/crm/renewals?accountId=${encodeURIComponent(accId)}`
+                      }}
+                    >
+                      Open renewals for this account
+                    </button>
+                  </div>
+                </div>
 
                 {surveyPrograms.length > 0 && (
                   <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] p-3 space-y-3">

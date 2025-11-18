@@ -578,6 +578,24 @@ export default function CRMAccounts() {
                 <input name="primaryContactName" defaultValue={editing.primaryContactName ?? ''} placeholder="Primary contact name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="primaryContactEmail" defaultValue={editing.primaryContactEmail ?? ''} placeholder="Primary contact email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="primaryContactPhone" defaultValue={editing.primaryContactPhone ?? ''} placeholder="Primary contact phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
+                  <div className="text-sm font-semibold">Renewals &amp; Subscriptions</div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                      View renewals tied to this account in the Renewals app.
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                      onClick={() => {
+                        if (!editing._id) return
+                        window.location.href = `/apps/crm/renewals?accountId=${encodeURIComponent(editing._id)}`
+                      }}
+                    >
+                      Open renewals for this account
+                    </button>
+                  </div>
+                </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) remove.mutate(editing._id); setEditing(null) }}>Delete</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
