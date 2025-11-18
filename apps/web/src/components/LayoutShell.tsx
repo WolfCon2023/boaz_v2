@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Topbar } from '@/components/Topbar'
 import { Sidebar } from '@/components/Sidebar'
+import { AppFooter } from '@/components/AppFooter'
 
 export function LayoutShell({ children }: { children?: ReactNode }) {
   return (
@@ -20,8 +21,8 @@ export function LayoutShell({ children }: { children?: ReactNode }) {
         </div>
       </main>
       {/* Footer pinned to bottom across pages */}
-      <footer className="row-start-3 lg:col-start-2 border-t border-[color:var(--color-border)] py-6 text-center text-sm text-[color:var(--color-text-muted)] print:hidden">
-        Built by <span className="font-semibold text-[color:var(--color-primary)]">Wolf Consulting Group, LLC</span> — Agile. Strategic. Powerful.
+      <footer className="row-start-3 lg:col-start-2 border-t border-[color:var(--color-border)] py-4 print:hidden">
+        <AppFooter />
       </footer>
     </div>
   )

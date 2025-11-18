@@ -1,0 +1,13 @@
+BOAZ-OS Version 2
+Back Office Applications ZoneOS (BOAZ)
+
+Copyright © 2025 Wolf Consulting Group, LLC. All Rights Reserved.
+
+This software is proprietary and is licensed, not sold. Unauthorized copying, modification, distribution, or use of this software, in whole or in part, is strictly prohibited except as expressly permitted by Wolf Consulting Group, LLC.
+
+For licensing inquiries, please contact:
+Wolf Consulting Group, LLC
+Email: support@wolfconsultingnc.com
+Website: https://www.wolfconsultingnc.com
+
+

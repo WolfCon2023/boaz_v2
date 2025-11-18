@@ -33,13 +33,13 @@ type ProductSurveyStatusSummary = {
 }
 
 const CURRENCY_OPTIONS: Array<{ code: string; label: string; symbol: string }> = [
-  { code: 'USD', label: 'USD — US Dollar', symbol: '$' },
-  { code: 'EUR', label: 'EUR — Euro', symbol: '€' },
-  { code: 'GBP', label: 'GBP — British Pound', symbol: '£' },
-  { code: 'CAD', label: 'CAD — Canadian Dollar', symbol: '$' },
-  { code: 'AUD', label: 'AUD — Australian Dollar', symbol: '$' },
-  { code: 'JPY', label: 'JPY — Japanese Yen', symbol: '¥' },
-  { code: 'INR', label: 'INR — Indian Rupee', symbol: '₹' },
+  { code: 'USD', label: 'USD - US Dollar', symbol: '$' },
+  { code: 'EUR', label: 'EUR - Euro', symbol: '€' },
+  { code: 'GBP', label: 'GBP - British Pound', symbol: '£' },
+  { code: 'CAD', label: 'CAD - Canadian Dollar', symbol: '$' },
+  { code: 'AUD', label: 'AUD - Australian Dollar', symbol: '$' },
+  { code: 'JPY', label: 'JPY - Japanese Yen', symbol: '¥' },
+  { code: 'INR', label: 'INR - Indian Rupee', symbol: '₹' },
 ]
 
 const currencySymbolMap: Record<string, string> = CURRENCY_OPTIONS.reduce((acc, c) => {
@@ -833,7 +833,7 @@ export default function CRMProducts() {
                           {product.sku}
                         </button>
                       ) : (
-                        '—'
+                        '-'
                       )}
                     </td>
                     <td className="px-4 py-2">
@@ -863,20 +863,20 @@ export default function CRMProducts() {
                       {inlineEditId === product._id ? (
                         <input type="number" step="0.01" value={inlineCost} onChange={(e) => setInlineCost(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
                       ) : (
-                        cost > 0 ? formatCurrency(cost, product.currency) : '—'
+                        cost > 0 ? formatCurrency(cost, product.currency) : '-'
                       )}
                     </td>
                     <td className={`px-4 py-2 font-medium ${marginColor}`}>
-                      {cost > 0 ? formatCurrency(margin, product.currency) : '—'}
+                      {cost > 0 ? formatCurrency(margin, product.currency) : '-'}
                     </td>
                     <td className={`px-4 py-2 font-medium ${marginColor}`}>
-                      {cost > 0 ? `${marginPercent.toFixed(1)}%` : '—'}
+                      {cost > 0 ? `${marginPercent.toFixed(1)}%` : '-'}
                     </td>
                     <td className="px-4 py-2">
                       {inlineEditId === product._id ? (
                         <input value={inlineCategory} onChange={(e) => setInlineCategory(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
                       ) : (
-                        product.category || '—'
+                        product.category || '-'
                       )}
                     </td>
                     <td className="px-4 py-2">
@@ -891,7 +891,7 @@ export default function CRMProducts() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-2">{product.updatedAt ? formatDateTime(product.updatedAt) : '—'}</td>
+                    <td className="px-4 py-2">{product.updatedAt ? formatDateTime(product.updatedAt) : '-'}</td>
                     <td className="px-4 py-2">
                       {(() => {
                         const status = productSurveyStatusMap.get(product._id)
@@ -1047,7 +1047,7 @@ export default function CRMProducts() {
             <tbody>
               {bundles.map((bundle) => (
                 <tr key={bundle._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
-                  <td className="px-4 py-2">{bundle.sku || '—'}</td>
+                  <td className="px-4 py-2">{bundle.sku || '-'}</td>
                   <td className="px-4 py-2">{bundle.name}</td>
                   <td className="px-4 py-2">{bundle.items?.length || 0} items</td>
                   <td className="px-4 py-2">${bundle.bundlePrice.toFixed(2)}</td>
@@ -1056,7 +1056,7 @@ export default function CRMProducts() {
                       {bundle.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-4 py-2">{bundle.updatedAt ? formatDateTime(bundle.updatedAt) : '—'}</td>
+                  <td className="px-4 py-2">{bundle.updatedAt ? formatDateTime(bundle.updatedAt) : '-'}</td>
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
                       <button
@@ -1179,7 +1179,7 @@ export default function CRMProducts() {
             <tbody>
               {discounts.map((discount) => (
                 <tr key={discount._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
-                  <td className="px-4 py-2">{discount.code || '—'}</td>
+                  <td className="px-4 py-2">{discount.code || '-'}</td>
                   <td className="px-4 py-2">{discount.name}</td>
                   <td className="px-4 py-2 capitalize">{discount.type}</td>
                   <td className="px-4 py-2">
@@ -1191,7 +1191,7 @@ export default function CRMProducts() {
                       {discount.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-4 py-2">{discount.updatedAt ? formatDateTime(discount.updatedAt) : '—'}</td>
+                  <td className="px-4 py-2">{discount.updatedAt ? formatDateTime(discount.updatedAt) : '-'}</td>
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
                       <button
@@ -1355,16 +1355,16 @@ export default function CRMProducts() {
                     <tr key={item._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
                       <td className="px-4 py-2 font-medium">{item.termsName}</td>
                       <td className="px-4 py-2">{item.recipientEmail}</td>
-                      <td className="px-4 py-2">{item.recipientName || '—'}</td>
-                      <td className="px-4 py-2">{item.senderName || item.senderEmail || '—'}</td>
+                      <td className="px-4 py-2">{item.recipientName || '-'}</td>
+                      <td className="px-4 py-2">{item.senderName || item.senderEmail || '-'}</td>
                       <td className="px-4 py-2">
                         <span className={`rounded px-2 py-0.5 text-xs capitalize ${statusColors[item.status] || 'bg-gray-100 text-gray-800'}`}>
                           {item.status}
                         </span>
                       </td>
-                      <td className="px-4 py-2">{item.sentAt ? formatDateTime(item.sentAt) : '—'}</td>
-                      <td className="px-4 py-2">{item.viewedAt ? formatDateTime(item.viewedAt) : '—'}</td>
-                      <td className="px-4 py-2">{item.respondedAt ? formatDateTime(item.respondedAt) : '—'}</td>
+                      <td className="px-4 py-2">{item.sentAt ? formatDateTime(item.sentAt) : '-'}</td>
+                      <td className="px-4 py-2">{item.viewedAt ? formatDateTime(item.viewedAt) : '-'}</td>
+                      <td className="px-4 py-2">{item.respondedAt ? formatDateTime(item.respondedAt) : '-'}</td>
                       <td className="px-4 py-2">
                         <div className="flex gap-2">
                           <button
@@ -2117,7 +2117,7 @@ export default function CRMProducts() {
                       {term.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td className="px-4 py-2">{term.updatedAt ? formatDateTime(term.updatedAt) : '—'}</td>
+                  <td className="px-4 py-2">{term.updatedAt ? formatDateTime(term.updatedAt) : '-'}</td>
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
                       <button

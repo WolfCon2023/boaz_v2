@@ -424,10 +424,10 @@ export default function CRMSurveys() {
                           </span>
                         </td>
                         <td className="px-2 py-1">
-                          {p.lastSentAt ? formatDateTime(p.lastSentAt) : '—'}
+                          {p.lastSentAt ? formatDateTime(p.lastSentAt) : '-'}
                         </td>
                         <td className="px-2 py-1">
-                          {typeof p.responseRate === 'number' ? `${p.responseRate}%` : '—'}
+                          {typeof p.responseRate === 'number' ? `${p.responseRate}%` : '-'}
                         </td>
                         <td className="px-2 py-1 text-right">
                           <button
@@ -745,14 +745,14 @@ export default function CRMSurveys() {
                   {activeMetricsQuery.data.map((row) => {
                     const s = row.summary
                     const isNps = 'nps' in s
-                    let keyScore: string = '—'
+                    let keyScore: string = '-'
                     if (isNps) {
                       keyScore = `NPS ${s.nps}`
                     } else if ('averageScore' in s) {
                       keyScore = `Avg ${s.averageScore.toFixed(2)}`
                     }
 
-                    let distributionSummary = '—'
+                    let distributionSummary = '-'
                     if (isNps && 'promotersPct' in s) {
                       distributionSummary = `Promoters ${s.promotersPct.toFixed(
                         1,
@@ -828,8 +828,8 @@ export default function CRMSurveys() {
                   <h2 className="text-lg font-semibold">
                     {editing.id ? 'Edit survey program' : 'New survey program'}
                   </h2>
-                  <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                    Define the survey name, type, channel, and status — plus the exact question text and scale
+                    <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                    Define the survey name, type, channel, and status, plus the exact question text and scale
                     guidance your customers will see.
                   </p>
                 </div>

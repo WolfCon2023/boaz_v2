@@ -533,7 +533,7 @@ export default function CRMDeals() {
       if (a) {
         return a.name ?? 'Account'
       }
-      return '—'
+      return '-'
     }
     if (key === 'title') return d.title ?? ''
     if (key === 'amount') return typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'
@@ -712,7 +712,7 @@ export default function CRMDeals() {
                   if (a) {
                     return a.name ?? 'Account'
                   }
-                  return '—'
+                  return '-'
                 }
                 if (col.key === 'title') return d.title ?? ''
                 if (col.key === 'amount') return typeof d.amount === 'number' ? d.amount : ''
@@ -737,7 +737,7 @@ export default function CRMDeals() {
             <option value="">Select account</option>
             {(accountsQ.data?.data.items ?? []).filter((a) => typeof a.accountNumber === 'number').map((a) => (
               <option key={a._id} value={a.accountNumber ?? ''}>
-                {(a.accountNumber ?? '—')} — {a.name ?? 'Account'}
+                {(a.accountNumber ?? '-')} - {a.name ?? 'Account'}
               </option>
             ))}
           </select>
@@ -937,7 +937,7 @@ export default function CRMDeals() {
                   <select name="accountId" className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                     <option value="">(no change)</option>
                     {(accountsQ.data?.data.items ?? []).map((a) => (
-                      <option key={a._id} value={a._id}>{(a.accountNumber ?? '—')} — {a.name ?? 'Account'}</option>
+                      <option key={a._id} value={a._id}>{(a.accountNumber ?? '-')} - {a.name ?? 'Account'}</option>
                     ))}
                   </select>
                 </label>
@@ -976,7 +976,7 @@ export default function CRMDeals() {
                                 {r.renewalDate ? `Renews ${formatDate(r.renewalDate)}` : 'No renewal date'}
                               </span>
                               <span>
-                                MRR {typeof r.mrr === 'number' ? `$${r.mrr.toLocaleString()}` : '—'}
+                                MRR {typeof r.mrr === 'number' ? `$${r.mrr.toLocaleString()}` : '-'}
                               </span>
                               <button
                                 type="button"

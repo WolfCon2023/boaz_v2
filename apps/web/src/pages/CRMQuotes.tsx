@@ -429,7 +429,7 @@ export default function CRMQuotes() {
   function getColValue(qt: Quote, key: string) {
     if (key==='quoteNumber') return qt.quoteNumber ?? '-'
     if (key==='title') return qt.title ?? '-'
-    if (key==='account') { const a = qt.accountId && acctById.get(qt.accountId!); return a ? `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}` : (qt.accountNumber ?? '—') }
+    if (key==='account') { const a = qt.accountId && acctById.get(qt.accountId!); return a ? `${a.accountNumber ?? '-'} - ${a.name ?? 'Account'}` : (qt.accountNumber ?? '-') }
     if (key==='total') return typeof qt.total==='number' ? `$${qt.total.toLocaleString()}` : '-'
     if (key==='status') return qt.status ?? '-'
     if (key==='approver') return qt.approver ?? '-'
@@ -737,7 +737,7 @@ export default function CRMQuotes() {
               const headers = ['Quote #','Title','Account','Total','Status','Approver','Signer Name','Signer Email','Version','Updated']
               const rows = visible.map((q) => {
                 const acc = q.accountId && acctById.get(q.accountId)
-                const accLabel = acc ? `${acc.accountNumber ?? '—'} — ${acc.name ?? 'Account'}` : (q.accountNumber ?? '')
+                const accLabel = acc ? `${acc.accountNumber ?? '-'} - ${acc.name ?? 'Account'}` : (q.accountNumber ?? '')
                 return [q.quoteNumber ?? '', q.title ?? '', accLabel, q.total ?? '', q.status ?? '', q.approver ?? '', q.signerName ?? '', q.signerEmail ?? '', q.version ?? '', q.updatedAt ? new Date(q.updatedAt).toISOString() : '']
               })
               const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
@@ -780,7 +780,7 @@ export default function CRMQuotes() {
           <select name="accountNumber" required className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="">Select account</option>
             {accounts.filter((a) => typeof a.accountNumber === 'number').map((a) => (
-              <option key={a._id} value={a.accountNumber ?? ''}>{(a.accountNumber ?? '—')} — {a.name ?? 'Account'}</option>
+              <option key={a._id} value={a.accountNumber ?? ''}>{(a.accountNumber ?? '-')} - {a.name ?? 'Account'}</option>
             ))}
           </select>
           <button className="ml-auto rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">
@@ -1320,7 +1320,7 @@ export default function CRMQuotes() {
                   <select name="accountId" className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                     <option value="">(no change)</option>
                     {accounts.map((a) => (
-                      <option key={a._id} value={a._id}>{(a.accountNumber ?? '—')} — {a.name ?? 'Account'}</option>
+                      <option key={a._id} value={a._id}>{(a.accountNumber ?? '-')} - {a.name ?? 'Account'}</option>
                     ))}
                   </select>
                 </label>

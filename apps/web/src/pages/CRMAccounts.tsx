@@ -698,7 +698,7 @@ export default function CRMAccounts() {
                         </div>
                         <div>
                           <div className="font-semibold">Activities</div>
-                          <ul className="list-disc pl-5">{historyQ.data.data.activities.map((a, i) => (<li key={i}>{formatDateTime(a.at)} — {a.type ?? ''} {a.subject ?? ''}</li>))}{historyQ.data.data.activities.length===0 && <li>None</li>}</ul>
+                          <ul className="list-disc pl-5">{historyQ.data.data.activities.map((a, i) => (<li key={i}>{formatDateTime(a.at)} - {a.type ?? ''} {a.subject ?? ''}</li>))}{historyQ.data.data.activities.length===0 && <li>None</li>}</ul>
                         </div>
                       </div>
                     )}

@@ -59,10 +59,10 @@ export default function CRMInvoicePrint() {
         </div>
         <div className="text-right">
           <div className="text-3xl font-extrabold">INVOICE</div>
-          <div className="text-sm">Invoice #: {inv?.invoiceNumber ?? '—'}</div>
-          <div className="text-sm">Status: {inv?.status ?? '—'}</div>
-          <div className="text-sm">Issued: {inv?.issuedAt ? new Date(inv.issuedAt).toLocaleDateString() : '—'}</div>
-          <div className="text-sm">Due: {inv?.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</div>
+          <div className="text-sm">Invoice #: {inv?.invoiceNumber ?? '-'}</div>
+          <div className="text-sm">Status: {inv?.status ?? '-'}</div>
+          <div className="text-sm">Issued: {inv?.issuedAt ? new Date(inv.issuedAt).toLocaleDateString() : '-'}</div>
+          <div className="text-sm">Due: {inv?.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '-'}</div>
         </div>
       </div>
 
@@ -73,18 +73,18 @@ export default function CRMInvoicePrint() {
             {acct ? (
               <>
                 <div>{acct.name ?? 'Account'}</div>
-                <div>Account #: {acct.accountNumber ?? '—'}</div>
+                <div>Account #: {acct.accountNumber ?? '-'}</div>
               </>
             ) : (
               <>
-                <div>{inv?.accountNumber ? `Account #: ${inv.accountNumber}` : '—'}</div>
+                <div>{inv?.accountNumber ? `Account #: ${inv.accountNumber}` : '-'}</div>
               </>
             )}
           </div>
         </div>
         <div className="rounded-lg border border-neutral-300 p-4">
           <div className="mb-1 text-sm font-semibold">Summary</div>
-          <div className="text-sm">Title: {inv?.title ?? '—'}</div>
+          <div className="text-sm">Title: {inv?.title ?? '-'}</div>
           <div className="text-sm">Total: ${Number(inv?.total ?? 0).toLocaleString()}</div>
           <div className="text-sm">Balance: ${Number(inv?.balance ?? inv?.total ?? 0).toLocaleString()}</div>
         </div>

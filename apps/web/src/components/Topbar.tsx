@@ -4,6 +4,7 @@ import { Bell, User2, LogOut, ChevronDown } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { logout, useAccessToken } from './Auth'
 import { http } from '@/lib/http'
+import { AboutBoazModal } from '@/components/AboutBoazModal'
 
 type UserInfo = {
   id: string
@@ -13,6 +14,7 @@ type UserInfo = {
 
 export function Topbar() {
   const [userMenuOpen, setUserMenuOpen] = React.useState(false)
+  const [aboutOpen, setAboutOpen] = React.useState(false)
   const token = useAccessToken()
   const userMenuRef = React.useRef<HTMLDivElement>(null)
   
@@ -56,6 +58,13 @@ export function Topbar() {
         </Link>
         <div className="absolute right-4 flex items-center gap-3">
           <Link to="/apps/support" className="hidden sm:inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-sm hover:bg-[color:var(--color-muted)]">Support</Link>
+          <button
+            type="button"
+            onClick={() => setAboutOpen(true)}
+            className="hidden sm:inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-sm hover:bg-[color:var(--color-muted)]"
+          >
+            About
+          </button>
           <button className="rounded-full p-2 hover:bg-[color:var(--color-muted)]" aria-label="Notifications">
             <Bell className="w-5 h-5" />
           </button>
@@ -106,6 +115,7 @@ export function Topbar() {
           )}
         </div>
       </div>
+      <AboutBoazModal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
     </header>
   )
 }

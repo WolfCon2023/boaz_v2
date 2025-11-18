@@ -524,7 +524,7 @@ export default function Settings() {
             <div>
               <label className="mb-1 block text-sm font-medium">Email</label>
               <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-3 py-2 text-sm text-[color:var(--color-text-muted)]">
-                {userData?.email || '—'}
+                {userData?.email || '-'}
               </div>
               <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                 Your email address cannot be changed.
@@ -534,7 +534,7 @@ export default function Settings() {
             <div>
               <label className="mb-1 block text-sm font-medium">User ID</label>
               <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-3 py-2 text-sm text-[color:var(--color-text-muted)] font-mono">
-                {userData?.id || '—'}
+                {userData?.id || '-'}
               </div>
               <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                 Your unique user identifier

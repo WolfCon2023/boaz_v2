@@ -210,7 +210,7 @@ export default function CRMApprovalQueue() {
                       {getStatusBadge(request.status)}
                     </td>
                     <td className="px-4 py-3">
-                      {request.reviewedAt ? formatDateTime(request.reviewedAt) : '—'}
+                      {request.reviewedAt ? formatDateTime(request.reviewedAt) : '-'}
                     </td>
                     <td className="px-4 py-3">
                       {request.status === 'pending' && (

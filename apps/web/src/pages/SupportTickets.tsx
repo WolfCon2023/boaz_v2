@@ -776,7 +776,7 @@ export default function SupportTickets() {
                               </div>
                               <div className="text-[color:var(--color-text-muted)]">
                                 Score: <span className="font-semibold">{r.score}</span>
-                                {r.comment ? ` — ${r.comment}` : ''}
+                                {r.comment ? ` - ${r.comment}` : ''}
                               </div>
                             </div>
                             <div className="text-[10px] text-[color:var(--color-text-muted)] whitespace-nowrap ml-2">

@@ -35,6 +35,10 @@ import SupportTickets from '@/pages/SupportTickets'
 import KnowledgeBase from '@/pages/KnowledgeBase'
 import SupportPortal from '@/pages/SupportPortal'
 import { PublicShell } from '@/components/PublicShell'
+import AboutBoazOs from '@/pages/AboutBoazOs'
+import LegalEula from '@/pages/legal/Eula'
+import LegalTerms from '@/pages/legal/Terms'
+import LegalPrivacy from '@/pages/legal/Privacy'
 import Helpdesk from '@/pages/Helpdesk'
 import Support from '@/pages/Support'
 import Marketing from '@/pages/Marketing'
@@ -84,6 +88,22 @@ export const router = createBrowserRouter([
       { path: 'apps/support', element: <RequireAuth><Support /></RequireAuth> },
       { path: 'request-status', element: <RequireAuth><RequestStatus /></RequireAuth> },
     ],
+  },
+  {
+    path: '/about',
+    element: <PublicShell><AboutBoazOs /></PublicShell>,
+  },
+  {
+    path: '/legal/eula',
+    element: <PublicShell><LegalEula /></PublicShell>,
+  },
+  {
+    path: '/legal/terms',
+    element: <PublicShell><LegalTerms /></PublicShell>,
+  },
+  {
+    path: '/legal/privacy',
+    element: <PublicShell><LegalPrivacy /></PublicShell>,
   },
   {
     path: '/portal',

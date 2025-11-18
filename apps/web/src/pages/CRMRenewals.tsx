@@ -251,28 +251,28 @@ export default function CRMRenewals() {
     if (key === 'account') {
       if (r.accountId) {
         const a = acctById.get(r.accountId)
-        if (a) return `${a.accountNumber ?? '—'} — ${a.name ?? 'Account'}`
+        if (a) return `${a.accountNumber ?? '-'} - ${a.name ?? 'Account'}`
       }
       if (r.accountNumber && r.accountName) {
-        return `${r.accountNumber} — ${r.accountName}`
+        return `${r.accountNumber} - ${r.accountName}`
       }
-      return r.accountName ?? '—'
+      return r.accountName ?? '-'
     }
     if (key === 'name') return r.name
     if (key === 'status') return r.status
-    if (key === 'renewalDate') return r.renewalDate ? formatDate(r.renewalDate) : '—'
+    if (key === 'renewalDate') return r.renewalDate ? formatDate(r.renewalDate) : '-'
     if (key === 'mrr')
-      return typeof r.mrr === 'number' ? `$${r.mrr.toLocaleString()}` : '—'
+      return typeof r.mrr === 'number' ? `$${r.mrr.toLocaleString()}` : '-'
     if (key === 'arr')
-      return typeof r.arr === 'number' ? `$${r.arr.toLocaleString()}` : '—'
+      return typeof r.arr === 'number' ? `$${r.arr.toLocaleString()}` : '-'
     if (key === 'healthScore') {
-      if (r.healthScore == null) return '—'
+      if (r.healthScore == null) return '-'
       return `${r.healthScore.toFixed(1)}/10`
     }
-    if (key === 'churnRisk') return r.churnRisk ?? '—'
-    if (key === 'upsellPotential') return r.upsellPotential ?? '—'
+    if (key === 'churnRisk') return r.churnRisk ?? '-'
+    if (key === 'upsellPotential') return r.upsellPotential ?? '-'
     if (key === 'owner')
-      return r.ownerName || r.ownerEmail || '—'
+      return r.ownerName || r.ownerEmail || '-'
     return ''
   }
 
@@ -347,7 +347,7 @@ export default function CRMRenewals() {
               Health:{' '}
               {accountMetricsData.data.avgHealthScore != null
                 ? `${accountMetricsData.data.avgHealthScore.toFixed(1)}/10`
-                : '—'}
+                : '-'}
             </div>
             <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
               High‑risk: {(accountMetricsData.data.countsByRisk['High'] ?? 0).toLocaleString()} ·
@@ -362,7 +362,7 @@ export default function CRMRenewals() {
               Next renewal:{' '}
               {accountMetricsData.data.nextRenewalDate
                 ? formatDate(accountMetricsData.data.nextRenewalDate)
-                : '—'}
+                : '-'}
             </div>
             <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
               MRR at risk: ${accountMetricsData.data.mrrAtRisk.toLocaleString()} ·
@@ -532,7 +532,7 @@ export default function CRMRenewals() {
               <option value="">Account (optional)</option>
               {accounts.map((a) => (
                 <option key={a._id} value={a._id}>
-                  {(a.accountNumber ?? '—')} — {a.name ?? 'Account'}
+                    {(a.accountNumber ?? '-')} - {a.name ?? 'Account'}
                 </option>
               ))}
             </select>
@@ -557,7 +557,7 @@ export default function CRMRenewals() {
               <option value="">Product / service (optional)</option>
               {products.map((p) => (
                 <option key={p._id} value={p._id}>
-                  {p.sku ? `${p.sku} — ${p.name}` : p.name}
+                  {p.sku ? `${p.sku} - ${p.name}` : p.name}
                 </option>
               ))}
             </select>
@@ -852,7 +852,7 @@ export default function CRMRenewals() {
                       <option value="">(none)</option>
                       {accounts.map((a) => (
                         <option key={a._id} value={a._id}>
-                          {(a.accountNumber ?? '—')} — {a.name ?? 'Account'}
+                          {(a.accountNumber ?? '-')} - {a.name ?? 'Account'}
                         </option>
                       ))}
                     </select>

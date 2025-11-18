@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { AppFooter } from '@/components/AppFooter'
 
 export function PublicShell({ children }: { children?: ReactNode }) {
   return (
@@ -13,8 +14,8 @@ export function PublicShell({ children }: { children?: ReactNode }) {
       <main className="mx-auto max-w-5xl p-4">
         {children}
       </main>
-      <footer className="border-t border-[color:var(--color-border)] py-6 text-center text-sm text-[color:var(--color-text-muted)]">
-        Built by <span className="font-semibold text-[color:var(--color-primary)]">Wolf Consulting Group, LLC</span> — Agile. Strategic. Powerful.
+      <footer className="border-t border-[color:var(--color-border)] py-4">
+        <AppFooter />
       </footer>
     </div>
   )

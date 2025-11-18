@@ -225,7 +225,7 @@ function SegmentsTab() {
       {editing && (
         <div className="rounded-2xl border p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <div className="text-base font-semibold">Segment — {editing.name}</div>
+            <div className="text-base font-semibold">Segment - {editing.name}</div>
             <div className="flex items-center gap-2">
               <button className="rounded-lg border border-red-400 text-red-400 px-2 py-1 text-sm" onClick={async () => { if (!editing) return; if (!confirm('Delete this segment? This cannot be undone.')) return; await remove.mutateAsync(editing._id) }}>Delete</button>
               <button className="rounded-lg border px-2 py-1 text-sm" onClick={() => { setEditing(null); setRules([]); setPreview(null); setEmailsText('') }}>Close</button>
@@ -634,7 +634,7 @@ function SimpleBuilderUI({
         <div className="space-y-2 pt-2 border-t rounded-lg border px-3 py-2 bg-[color:var(--color-panel)]">
           <div className="flex items-center justify-between">
             <div className="text-xs font-semibold text-[color:var(--color-text-muted)]">
-              Editing block —{' '}
+              Editing block -{' '}
               {currentEditingBlock.type === 'heading' && 'Heading'}
               {currentEditingBlock.type === 'text' && 'Text'}
               {currentEditingBlock.type === 'image' && 'Image'}
@@ -888,7 +888,7 @@ function SimpleBuilderUI({
             className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
           />
           <p className="text-xs text-[color:var(--color-text-muted)] mt-1">
-            Footer will display as: © {new Date().getFullYear()} {footerText || '(your text here)'} — Unsubscribe
+            Footer will display as: © {new Date().getFullYear()} {footerText || '(your text here)'} - Unsubscribe
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1090,7 +1090,7 @@ function CampaignsTab() {
 ${sections}
     <mj-section>
       <mj-column>
-        <mj-text align="center" font-size="12px" color="#64748b">© ${new Date().getFullYear()}${footerDisplay} — <a href="{{unsubscribeUrl}}" style="color:#60a5fa">Unsubscribe</a></mj-text>
+        <mj-text align="center" font-size="12px" color="#64748b">© ${new Date().getFullYear()}${footerDisplay} - <a href="{{unsubscribeUrl}}" style="color:#60a5fa">Unsubscribe</a></mj-text>
       </mj-column>
     </mj-section>
   </mj-body>
@@ -1109,7 +1109,7 @@ ${sections}
     let footerText = ''
     
     // Extract footer text from the footer section
-    const footerMatch = mjml.match(/<mj-text[^>]*>©\s*\d{4}\s*([^—<]*)\s*—/i)
+    const footerMatch = mjml.match(/<mj-text[^>]*>©\s*\d{4}\s*([^-\s<]*)\s*-/i)
     if (footerMatch && footerMatch[1]) {
       footerText = footerMatch[1].trim()
     }
@@ -1367,7 +1367,7 @@ ${sections}
                     ? (surveyProgramsData?.data.items ?? []).find(
                         (p) => p._id === c.surveyProgramId,
                       )?.name ?? 'Linked'
-                    : '—'}
+                    : '-'}
                 </td>
               </tr>
             ))}
@@ -1378,7 +1378,7 @@ ${sections}
       {editing && (
         <div className="rounded-2xl border p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <div className="text-base font-semibold">Builder — {editing.name}</div>
+            <div className="text-base font-semibold">Builder - {editing.name}</div>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 rounded-lg border p-1">
                 <button
@@ -1934,7 +1934,7 @@ function UnsubscribesTab() {
               items.map((item) => (
                 <tr key={item._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
                   <td className="px-4 py-2 font-medium">{item.email}</td>
-                  <td className="px-4 py-2">{item.name || item.email || '—'}</td>
+                  <td className="px-4 py-2">{item.name || item.email || '-'}</td>
                   <td className="px-4 py-2">
                     {item.campaignName ? (
                       <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
@@ -1944,7 +1944,7 @@ function UnsubscribesTab() {
                       <span className="text-[color:var(--color-text-muted)]">All Campaigns</span>
                     )}
                   </td>
-                  <td className="px-4 py-2">{item.at ? formatDateTime(item.at) : '—'}</td>
+                  <td className="px-4 py-2">{item.at ? formatDateTime(item.at) : '-'}</td>
                   {isAdmin && (
                     <td className="px-4 py-2">
                       <button

@@ -454,7 +454,7 @@ export default function CRMInvoices() {
     if (key === 'title') return inv.title ?? '-'
     if (key === 'account') {
       const acc = inv.accountId && acctById.get(inv.accountId)
-      return acc ? `${acc.accountNumber ?? '—'} — ${acc.name ?? 'Account'}` : (inv.accountNumber ?? '—')
+      return acc ? `${acc.accountNumber ?? '-'} - ${acc.name ?? 'Account'}` : (inv.accountNumber ?? '-')
     }
     if (key === 'total') return typeof inv.total === 'number' ? `$${inv.total.toLocaleString()}` : '-'
     if (key === 'balance') return typeof inv.balance === 'number' ? `$${inv.balance.toLocaleString()}` : '-'
@@ -729,7 +729,7 @@ export default function CRMInvoices() {
                 if (col.key==='title') return inv.title ?? ''
                 if (col.key==='account') {
                   const acc = inv.accountId && acctById.get(inv.accountId!)
-                  return acc ? `${acc.accountNumber ?? '—'} — ${acc.name ?? 'Account'}` : (inv.accountNumber ?? '—')
+                  return acc ? `${acc.accountNumber ?? '-'} - ${acc.name ?? 'Account'}` : (inv.accountNumber ?? '-')
                 }
                 if (col.key==='total') return typeof inv.total==='number' ? inv.total : ''
                 if (col.key==='balance') return typeof inv.balance==='number' ? inv.balance : ''
@@ -780,7 +780,7 @@ export default function CRMInvoices() {
           <select name="accountNumber" required className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="">Select account</option>
             {accounts.filter((a) => typeof a.accountNumber === 'number').map((a) => (
-              <option key={a._id} value={a.accountNumber ?? ''}>{(a.accountNumber ?? '—')} — {a.name ?? 'Account'}</option>
+              <option key={a._id} value={a.accountNumber ?? ''}>{(a.accountNumber ?? '-')} - {a.name ?? 'Account'}</option>
             ))}
           </select>
           <input name="dueDate" type="date" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
@@ -969,7 +969,7 @@ export default function CRMInvoices() {
                                 {r.renewalDate ? `Renews ${formatDate(r.renewalDate)}` : 'No renewal date'}
                               </span>
                               <span>
-                                MRR {typeof r.mrr === 'number' ? `$${r.mrr.toLocaleString()}` : '—'}
+                                MRR {typeof r.mrr === 'number' ? `$${r.mrr.toLocaleString()}` : '-'}
                               </span>
                               <button
                                 type="button"
@@ -1388,7 +1388,7 @@ export default function CRMInvoices() {
                 <label className="col-span-full text-sm">Account
                   <select name="accountId" className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                     <option value="">(no change)</option>
-                    {accounts.map((a) => (<option key={a._id} value={a._id}>{(a.accountNumber ?? '—')} — {a.name ?? 'Account'}</option>))}
+                    {accounts.map((a) => (<option key={a._id} value={a._id}>{(a.accountNumber ?? '-')} - {a.name ?? 'Account'}</option>))}
                   </select>
                 </label>
                 <div className="col-span-full mt-2 flex items-center gap-2">

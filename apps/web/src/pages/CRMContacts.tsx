@@ -880,7 +880,7 @@ export default function CRMContacts() {
                         <div className="font-semibold">Outreach events</div>
                         <ul className="list-disc pl-5">
                           {historyQ.data.data.events.map((ev, idx) => (
-                            <li key={idx}>{formatDateTime(ev.at)} — {ev.channel} {ev.event}{ev.recipient ? ` (${ev.recipient})` : ''}</li>
+                            <li key={idx}>{formatDateTime(ev.at)} - {ev.channel} {ev.event}{ev.recipient ? ` (${ev.recipient})` : ''}</li>
                           ))}
                           {historyQ.data.data.events.length === 0 && <li>None</li>}
                         </ul>

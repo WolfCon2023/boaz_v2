@@ -157,7 +157,7 @@ export default function QuoteAcceptanceQueue() {
                           {acceptance.notes}
                         </div>
                       ) : (
-                        <span className="text-[color:var(--color-text-muted)]">—</span>
+                        <span className="text-[color:var(--color-text-muted)]">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3">

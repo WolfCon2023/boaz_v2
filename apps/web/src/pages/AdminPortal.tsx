@@ -1917,8 +1917,8 @@ function MaintenanceTab({
                 <tbody>
                   {logs.map((log) => (
                     <tr key={log._id} className="border-b border-[color:var(--color-border)] last:border-b-0">
-                      <td className="px-2 py-1">{log.startedAt ? formatDateTime(log.startedAt) : '—'}</td>
-                      <td className="px-2 py-1">{log.finishedAt ? formatDateTime(log.finishedAt) : '—'}</td>
+                      <td className="px-2 py-1">{log.startedAt ? formatDateTime(log.startedAt) : '-'}</td>
+                      <td className="px-2 py-1">{log.finishedAt ? formatDateTime(log.finishedAt) : '-'}</td>
                       <td className="px-2 py-1">
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -1933,11 +1933,11 @@ function MaintenanceTab({
                         </span>
                       </td>
                       <td className="px-2 py-1">
-                        {log.triggeredByEmail || log.triggeredByUserId || '—'}
+                        {log.triggeredByEmail || log.triggeredByUserId || '-'}
                       </td>
                       <td className="px-2 py-1 max-w-xs">
                         {log.status === 'success' || !log.error ? (
-                          <span className="text-[color:var(--color-text-muted)]">—</span>
+                          <span className="text-[color:var(--color-text-muted)]">-</span>
                         ) : (
                           <span className="text-xs text-[color:var(--color-text-muted)] break-words">
                             {typeof log.error === 'string'
