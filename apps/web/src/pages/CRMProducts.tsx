@@ -821,12 +821,32 @@ export default function CRMProducts() {
                 
                 return (
                   <tr key={product._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
-                    <td className="px-4 py-2">{product.sku || '—'}</td>
+                    <td className="px-4 py-2">
+                      {product.sku ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditing(product)}
+                          className="max-w-[12rem] truncate text-left text-[color:var(--color-primary-400)] hover:text-[color:var(--color-primary-300)] hover:underline"
+                          title={product.sku}
+                        >
+                          {product.sku}
+                        </button>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-4 py-2">
                       {inlineEditId === product._id ? (
                         <input value={inlineName} onChange={(e) => setInlineName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
                       ) : (
-                        product.name
+                        <button
+                          type="button"
+                          onClick={() => setEditing(product)}
+                          className="max-w-[16rem] truncate text-left text-[color:var(--color-text)] hover:text-[color:var(--color-primary-300)] hover:underline"
+                          title={product.name}
+                        >
+                          {product.name}
+                        </button>
                       )}
                     </td>
                     <td className="px-4 py-2 capitalize">{product.type}</td>
@@ -876,7 +896,7 @@ export default function CRMProducts() {
                         const status = productSurveyStatusMap.get(product._id)
                         if (!status || status.responseCount === 0) {
                           return (
-                            <span className="inline-flex rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+                            <span className="inline-flex rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
                               No surveys
                             </span>
                           )
@@ -888,17 +908,17 @@ export default function CRMProducts() {
                         const last =
                           status.lastScore != null ? status.lastScore.toFixed(1) : '-'
                         return (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-100">
-                            <span>{label}</span>
-                            <span className="opacity-80">•</span>
-                            <span className="font-semibold">Last {last}</span>
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-100">
+                            <span className="font-semibold">{label}</span>
+                            <span className="opacity-75">|</span>
+                            <span>Last {last}</span>
                           </span>
                         )
                       })()}
                     </td>
                     <td className="px-4 py-2 pr-8 whitespace-nowrap text-right">
                       {inlineEditId === product._id ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-end gap-2">
                           <button
                             className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs"
                             onClick={saveInlineEdit}
@@ -913,22 +933,13 @@ export default function CRMProducts() {
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startInlineEdit(product)}
-                            className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditing(product)}
-                            className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs"
-                          >
-                            Open
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => startInlineEdit(product)}
+                          className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs"
+                        >
+                          Edit
+                        </button>
                       )}
                     </td>
                   </tr>
