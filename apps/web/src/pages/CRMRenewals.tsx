@@ -168,18 +168,6 @@ export default function CRMRenewals() {
     renewalCount: number
   }
 
-  type HighValueAlert = {
-    _id: string
-    accountId?: string | null
-    accountName?: string | null
-    name: string
-    renewalDate?: string | null
-    mrr?: number | null
-    arr?: number | null
-    churnRisk?: string | null
-    status: string
-  }
-
   const { data: metricsData } = useQuery({
     queryKey: ['renewals-metrics'],
     queryFn: async () => {
@@ -199,22 +187,7 @@ export default function CRMRenewals() {
     },
   })
 
-  const { data: alertsData } = useQuery({
-    queryKey: ['renewals-alerts-high-value'],
-    queryFn: async () => {
-      try {
-        const res = await http.get('/api/crm/renewals/alerts/upcoming-high-value')
-        return res.data as { data: { items: HighValueAlert[] } }
-      } catch (err: any) {
-        // If the backend does not yet have this endpoint, fail soft and hide alerts
-        const status = err?.response?.status
-        if (status === 404) {
-          return { data: { items: [] as HighValueAlert[] } }
-        }
-        throw err
-      }
-    },
-  })
+  // High-value alerts are disabled for now in production until the API is deployed everywhere.
 
   const create = useMutation({
     mutationFn: async (payload: any) => {
@@ -389,35 +362,6 @@ export default function CRMRenewals() {
           </div>
         </div>
       )}
-
-      {alertsData?.data?.items?.length ? (
-        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="text-xs font-semibold text-[color:var(--color-text-muted)]">
-              Upcoming high‑value renewals
-            </div>
-            <div className="text-[11px] text-[color:var(--color-text-muted)]">
-              Next 60 days, MRR ≥ $1,000
-            </div>
-          </div>
-          <div className="space-y-1 text-xs">
-            {alertsData.data.items.slice(0, 5).map((a) => (
-              <div key={a._id} className="flex flex-wrap items-baseline justify-between gap-1">
-                <div className="font-medium">
-                  {a.accountName || 'Account'} · {a.name}
-                </div>
-                <div className="flex items-center gap-2 text-[color:var(--color-text-muted)]">
-                  <span>
-                    {a.renewalDate ? formatDate(a.renewalDate) : 'No date'}
-                  </span>
-                  <span>MRR ${a.mrr != null ? a.mrr.toLocaleString() : '—'}</span>
-                  {a.churnRisk && <span>Risk: {a.churnRisk}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
