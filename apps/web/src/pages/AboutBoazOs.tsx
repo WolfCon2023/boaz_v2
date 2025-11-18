@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 
 export default function AboutBoazOs() {
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-4xl rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">About BOAZ-OS Version 2</h1>
         <Link
