@@ -730,7 +730,7 @@ export default function CRMInvoices() {
             }}>Export CSV</button>
         </div>
 
-        <form className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { 
+        <form className="flex flex-wrap items-center gap-2 p-4" onSubmit={(e) => {
           e.preventDefault(); 
           const fd = new FormData(e.currentTarget); 
           const title = String(fd.get('title')||''); 
