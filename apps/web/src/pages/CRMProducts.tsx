@@ -900,13 +900,13 @@ export default function CRMProducts() {
                       {inlineEditId === product._id ? (
                         <div className="flex items-center gap-2">
                           <button
-                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs"
+                            className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs"
                             onClick={saveInlineEdit}
                           >
                             Save
                           </button>
                           <button
-                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs"
+                            className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs"
                             onClick={cancelInlineEdit}
                           >
                             Cancel
@@ -917,14 +917,14 @@ export default function CRMProducts() {
                           <button
                             type="button"
                             onClick={() => startInlineEdit(product)}
-                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs"
+                            className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => setEditing(product)}
-                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs"
+                            className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs"
                           >
                             Open
                           </button>
