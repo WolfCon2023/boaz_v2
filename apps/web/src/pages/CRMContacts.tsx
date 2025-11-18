@@ -444,7 +444,9 @@ export default function CRMContacts() {
               </select>
             </label>
           </div>
-          <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add contact</button>
+          <button className="inline-flex w-auto items-center justify-center rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)]">
+            Add contact
+          </button>
         </form>
         <div className="flex items-center justify-between px-4 gap-2">
           <div className="flex items-center gap-2">

@@ -783,7 +783,9 @@ export default function CRMQuotes() {
               <option key={a._id} value={a.accountNumber ?? ''}>{(a.accountNumber ?? '—')} — {a.name ?? 'Account'}</option>
             ))}
           </select>
-          <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add quote</button>
+          <button className="inline-flex w-auto items-center justify-center rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)]">
+            Add quote
+          </button>
         </form>
 
         <div className="overflow-x-auto">

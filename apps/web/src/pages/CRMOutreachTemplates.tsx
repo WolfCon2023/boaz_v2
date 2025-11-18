@@ -100,7 +100,9 @@ export default function CRMOutreachTemplates() {
           <input name="subject" placeholder="Subject (email only)" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <input name="variant" placeholder="Variant (A/B) e.g., A" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <textarea name="body" required placeholder="Body" className="sm:col-span-2 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
-          <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add template</button>
+          <button className="inline-flex w-auto items-center justify-center rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)]">
+            Add template
+          </button>
         </form>
         <table className="w-full text-sm">
           <thead className="text-left text-[color:var(--color-text-muted)]"><tr>
