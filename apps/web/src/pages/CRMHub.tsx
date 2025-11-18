@@ -41,7 +41,7 @@ export default function CRMHub() {
           href={getPortalUrl()}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)]"
+          className="mt-3 inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
         >
           Open Customer Portal
         </a>
