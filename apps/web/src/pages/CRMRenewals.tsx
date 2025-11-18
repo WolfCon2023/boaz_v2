@@ -202,8 +202,17 @@ export default function CRMRenewals() {
   const { data: alertsData } = useQuery({
     queryKey: ['renewals-alerts-high-value'],
     queryFn: async () => {
-      const res = await http.get('/api/crm/renewals/alerts/upcoming-high-value')
-      return res.data as { data: { items: HighValueAlert[] } }
+      try {
+        const res = await http.get('/api/crm/renewals/alerts/upcoming-high-value')
+        return res.data as { data: { items: HighValueAlert[] } }
+      } catch (err: any) {
+        // If the backend does not yet have this endpoint, fail soft and hide alerts
+        const status = err?.response?.status
+        if (status === 404) {
+          return { data: { items: [] as HighValueAlert[] } }
+        }
+        throw err
+      }
     },
   })
 
