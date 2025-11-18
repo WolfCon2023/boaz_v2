@@ -689,7 +689,7 @@ export default function CRMQuotes() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+      <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search quotes..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <button type="button" onClick={() => { setQ(''); setSort('updatedAt'); setDir('desc'); setPage(0) }} disabled={!q && sort==='updatedAt' && dir==='desc'}
@@ -786,24 +786,51 @@ export default function CRMQuotes() {
           <button className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Add quote</button>
         </form>
 
-        <table className="w-full text-sm">
-          <thead className="text-left text-[color:var(--color-text-muted)]">
-            <tr>
-              {cols.filter((c)=> c.visible).map((col)=> (
-                <th key={col.key} draggable onDragStart={()=>handleDragStart(col.key)} onDragOver={(e)=>{e.preventDefault()}} onDrop={()=>handleDrop(col.key)} className={`px-4 py-2 cursor-move ${draggedCol===col.key ? 'opacity-50' : ''}`} title="Drag to reorder">{col.label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pageItems.map((row) => (
-              <tr key={row._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer" onClick={() => setEditing(row)}>
-                {cols.filter((c)=> c.visible).map((col)=> (
-                  <td key={col.key} className="px-4 py-2">{getColValue(row, col.key)}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-[color:var(--color-text-muted)]">
+              <tr>
+                {cols.filter((c) => c.visible).map((col) => (
+                  <th
+                    key={col.key}
+                    draggable
+                    onDragStart={() => handleDragStart(col.key)}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                    }}
+                    onDrop={() => handleDrop(col.key)}
+                    className={`px-4 py-2 cursor-move ${
+                      draggedCol === col.key ? 'opacity-50' : ''
+                    } ${col.key === 'quoteNumber' ? 'whitespace-nowrap' : ''}`}
+                    title="Drag to reorder"
+                  >
+                    {col.label}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {pageItems.map((row) => (
+                <tr
+                  key={row._id}
+                  className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer"
+                  onClick={() => setEditing(row)}
+                >
+                  {cols.filter((c) => c.visible).map((col) => (
+                    <td
+                      key={col.key}
+                      className={`px-4 py-2 ${
+                        col.key === 'quoteNumber' ? 'whitespace-nowrap' : ''
+                      }`}
+                    >
+                      {getColValue(row, col.key)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="flex items-center justify-between p-4 text-sm">
           <div className="flex items-center gap-2">
             <span>Rows: {visible.length}</span>
