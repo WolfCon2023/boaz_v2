@@ -154,20 +154,6 @@ export default function CRMRenewals() {
     countsByRisk: Record<string, number>
   }
 
-  type AccountRenewalMetrics = {
-    totalMRR: number
-    totalARR: number
-    activeCount: number
-    churnedCount: number
-    pendingCount: number
-    avgHealthScore: number | null
-    countsByRisk: Record<string, number>
-    mrrAtRisk: number
-    mrrChurned: number
-    nextRenewalDate: string | null
-    renewalCount: number
-  }
-
   const { data: metricsData } = useQuery({
     queryKey: ['renewals-metrics'],
     queryFn: async () => {
@@ -178,7 +164,6 @@ export default function CRMRenewals() {
 
   // Per-account renewal metrics are currently disabled in production
   // until the /metrics/account endpoint is deployed everywhere.
-  const accountMetricsData: { data: AccountRenewalMetrics } | undefined = undefined
 
   // High-value alerts are disabled for now in production until the API is deployed everywhere.
 
