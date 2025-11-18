@@ -154,6 +154,20 @@ export default function CRMRenewals() {
     countsByRisk: Record<string, number>
   }
 
+  type AccountRenewalMetrics = {
+    totalMRR: number
+    totalARR: number
+    activeCount: number
+    churnedCount: number
+    pendingCount: number
+    avgHealthScore: number | null
+    countsByRisk: Record<string, number>
+    mrrAtRisk: number
+    mrrChurned: number
+    nextRenewalDate: string | null
+    renewalCount: number
+  }
+
   const { data: metricsData } = useQuery({
     queryKey: ['renewals-metrics'],
     queryFn: async () => {
@@ -162,8 +176,25 @@ export default function CRMRenewals() {
     },
   })
 
-  // Per-account renewal metrics are currently disabled in production
-  // until the /metrics/account endpoint is deployed everywhere.
+  const { data: accountMetricsData } = useQuery({
+    queryKey: ['renewals-account-metrics', accountFilterId],
+    enabled: !!accountFilterId,
+    queryFn: async () => {
+      try {
+        const res = await http.get('/api/crm/renewals/metrics/account', {
+          params: { accountId: accountFilterId },
+        })
+        return res.data as { data: AccountRenewalMetrics }
+      } catch (err: any) {
+        // If the backend does not yet have this endpoint, fail soft and hide account metrics
+        const status = err?.response?.status
+        if (status === 404) {
+          return { data: null as any }
+        }
+        throw err
+      }
+    },
+  })
 
   // High-value alerts are disabled for now in production until the API is deployed everywhere.
 
@@ -295,7 +326,51 @@ export default function CRMRenewals() {
         </div>
       )}
 
-      {/* Per-account metrics temporarily disabled until API is deployed */}
+      {accountFilterId && accountMetricsData?.data && (
+        <div className="grid gap-3 lg:grid-cols-3">
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Account MRR / ARR
+            </div>
+            <div className="mt-1 text-lg font-semibold">
+              ${accountMetricsData.data.totalMRR.toLocaleString()} MRR
+            </div>
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              ${accountMetricsData.data.totalARR.toLocaleString()} ARR
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Health &amp; risk
+            </div>
+            <div className="mt-1 text-sm">
+              Health:{' '}
+              {accountMetricsData.data.avgHealthScore != null
+                ? `${accountMetricsData.data.avgHealthScore.toFixed(1)}/10`
+                : '—'}
+            </div>
+            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              High‑risk: {(accountMetricsData.data.countsByRisk['High'] ?? 0).toLocaleString()} ·
+              Churned: {accountMetricsData.data.churnedCount.toLocaleString()}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Next renewal &amp; at‑risk MRR
+            </div>
+            <div className="mt-1 text-sm">
+              Next renewal:{' '}
+              {accountMetricsData.data.nextRenewalDate
+                ? formatDate(accountMetricsData.data.nextRenewalDate)
+                : '—'}
+            </div>
+            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              MRR at risk: ${accountMetricsData.data.mrrAtRisk.toLocaleString()} ·
+              Churned MRR: ${accountMetricsData.data.mrrChurned.toLocaleString()}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
