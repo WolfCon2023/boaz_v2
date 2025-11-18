@@ -161,17 +161,6 @@ export default function CRMInvoices() {
   })
   const items = data?.data.items ?? []
 
-  const { data: linkedRenewalData } = useQuery({
-    queryKey: ['renewals-by-invoice', editing?._id],
-    enabled: !!editing?._id,
-    queryFn: async () => {
-      const res = await http.get('/api/crm/renewals', {
-        params: { sourceInvoiceId: editing?._id },
-      })
-      return res.data as { data: { items: LinkedRenewal[] } }
-    },
-  })
-
   const accountsQ = useQuery({
     queryKey: ['accounts-pick'],
     queryFn: async () => {
@@ -525,6 +514,17 @@ export default function CRMInvoices() {
   const editingIdRef = React.useRef<string | null>(null)
   // Recipient email state for "Send Invoice"
   const [invoiceRecipientEmail, setInvoiceRecipientEmail] = React.useState('')
+
+  const { data: linkedRenewalData } = useQuery({
+    queryKey: ['renewals-by-invoice', editing?._id],
+    enabled: !!editing?._id,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/renewals', {
+        params: { sourceInvoiceId: editing?._id },
+      })
+      return res.data as { data: { items: LinkedRenewal[] } }
+    },
+  })
 
   // Initialize line items when editing changes
   React.useEffect(() => {

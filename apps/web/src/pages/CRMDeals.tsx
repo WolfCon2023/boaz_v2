@@ -415,17 +415,6 @@ export default function CRMDeals() {
   }
 
   const items = data?.data.items ?? []
-
-  const { data: linkedRenewalData } = useQuery({
-    queryKey: ['renewals-by-deal', editing?._id],
-    enabled: !!editing?._id,
-    queryFn: async () => {
-      const res = await http.get('/api/crm/renewals', {
-        params: { sourceDealId: editing?._id },
-      })
-      return res.data as { data: { items: LinkedRenewal[] } }
-    },
-  })
   const total = data?.data.total ?? 0
   const anySelected = selectedIds.size > 0
   const allPageSelected = items.length > 0 && items.every((d) => selectedIds.has(d._id))
@@ -461,6 +450,17 @@ export default function CRMDeals() {
   const [editing, setEditing] = React.useState<Deal | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   const [showHistory, setShowHistory] = React.useState(false)
+
+  const { data: linkedRenewalData } = useQuery({
+    queryKey: ['renewals-by-deal', editing?._id],
+    enabled: !!editing?._id,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/renewals', {
+        params: { sourceDealId: editing?._id },
+      })
+      return res.data as { data: { items: LinkedRenewal[] } }
+    },
+  })
   
   // History query
   const historyQ = useQuery({
