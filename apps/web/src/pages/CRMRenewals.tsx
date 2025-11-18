@@ -46,7 +46,14 @@ const defaultCols: ColumnDef[] = [
 ]
 
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
-type ProductPick = { _id: string; sku?: string; name: string; type?: string }
+type ProductPick = {
+  _id: string
+  sku?: string
+  name: string
+  type?: string
+  basePrice?: number
+  currency?: string
+}
 
 export default function CRMRenewals() {
   const qc = useQueryClient()
@@ -127,6 +134,11 @@ export default function CRMRenewals() {
         (p) => p.type !== 'bundle' && p.name,
       ),
     [productsQ.data?.data.items],
+  )
+  const [selectedProductId, setSelectedProductId] = React.useState<string>('')
+  const selectedProduct = React.useMemo(
+    () => products.find((p) => p._id === selectedProductId),
+    [products, selectedProductId],
   )
 
   const create = useMutation({
@@ -400,6 +412,7 @@ export default function CRMRenewals() {
             <select
               name="productId"
               className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+              onChange={(e) => setSelectedProductId(e.target.value)}
             >
               <option value="">Product / service (optional)</option>
               {products.map((p) => (
@@ -408,6 +421,17 @@ export default function CRMRenewals() {
                 </option>
               ))}
             </select>
+            {selectedProduct && (
+              <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                Baseline price:{' '}
+                <span className="font-semibold text-[color:var(--color-text)]">
+                  {typeof selectedProduct.basePrice === 'number'
+                    ? `${selectedProduct.currency ?? 'USD'} ${selectedProduct.basePrice.toLocaleString()}`
+                    : 'n/a'}
+                </span>
+                {' '}from product catalog
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1">
@@ -649,6 +673,7 @@ export default function CRMRenewals() {
                   const payload: any = {
                     _id: editing._id,
                     name: String(fd.get('name') || '').trim() || undefined,
+                    accountId: String(fd.get('accountId') || '') || undefined,
                     status: String(fd.get('status') || '') || undefined,
                     renewalDate: String(fd.get('renewalDate') || '') || undefined,
                     mrr: fd.get('mrr') ? Number(fd.get('mrr')) : undefined,
@@ -674,6 +699,23 @@ export default function CRMRenewals() {
                       defaultValue={editing.name}
                       className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
                     />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                      Account
+                    </label>
+                    <select
+                      name="accountId"
+                      defaultValue={editing.accountId ?? ''}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="">(none)</option>
+                      {accounts.map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {(a.accountNumber ?? '—')} — {a.name ?? 'Account'}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
