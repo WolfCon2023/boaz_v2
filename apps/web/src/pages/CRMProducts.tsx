@@ -809,7 +809,7 @@ export default function CRMProducts() {
                   Updated {getSortIndicator('updatedAt', productSort, productDir)}
                 </th>
                 <th className="px-4 py-2">Survey</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2 pr-8 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -896,7 +896,7 @@ export default function CRMProducts() {
                         )
                       })()}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap">
+                    <td className="px-4 py-2 pr-8 whitespace-nowrap text-right">
                       {inlineEditId === product._id ? (
                         <div className="flex items-center gap-2">
                           <button
