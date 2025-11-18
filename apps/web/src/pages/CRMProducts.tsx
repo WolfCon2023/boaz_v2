@@ -703,8 +703,8 @@ export default function CRMProducts() {
 
       {/* Products Tab */}
       {activeTab === 'products' && (
-        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4">
-          <div className="flex flex-wrap items-center gap-2 py-4">
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+          <div className="flex flex-wrap items-center gap-2 p-4">
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
