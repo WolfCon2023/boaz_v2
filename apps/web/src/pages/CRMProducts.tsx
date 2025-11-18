@@ -703,7 +703,7 @@ export default function CRMProducts() {
 
       {/* Products Tab */}
       {activeTab === 'products' && (
-        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+        <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
           <div className="flex flex-wrap items-center gap-2 p-4">
             <input
               value={q}
@@ -754,6 +754,7 @@ export default function CRMProducts() {
               New Product
             </button>
           </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-[color:var(--color-text-muted)]">
               <tr>
@@ -959,6 +960,7 @@ export default function CRMProducts() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
