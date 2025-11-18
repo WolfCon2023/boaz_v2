@@ -141,6 +141,23 @@ export default function CRMRenewals() {
     [products, selectedProductId],
   )
 
+  type RenewalMetrics = {
+    totalActiveMRR: number
+    totalActiveARR: number
+    mrrNext30: number
+    mrrNext90: number
+    countsByStatus: Record<string, number>
+    countsByRisk: Record<string, number>
+  }
+
+  const { data: metricsData } = useQuery({
+    queryKey: ['renewals-metrics'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/renewals/metrics/summary')
+      return res.data as { data: RenewalMetrics }
+    },
+  })
+
   const create = useMutation({
     mutationFn: async (payload: any) => {
       const res = await http.post('/api/crm/renewals', payload)
@@ -231,6 +248,43 @@ export default function CRMRenewals() {
     <div className="space-y-4">
       <CRMNav />
       <h1 className="text-xl font-semibold">Renewals &amp; Subscriptions</h1>
+
+      {metricsData?.data && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Active MRR
+            </div>
+            <div className="mt-1 text-lg font-semibold">
+              ${metricsData.data.totalActiveMRR.toLocaleString()}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Active ARR
+            </div>
+            <div className="mt-1 text-lg font-semibold">
+              ${metricsData.data.totalActiveARR.toLocaleString()}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              MRR renewing next 30 days
+            </div>
+            <div className="mt-1 text-lg font-semibold">
+              ${metricsData.data.mrrNext30.toLocaleString()}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              High‑risk renewals
+            </div>
+            <div className="mt-1 text-lg font-semibold">
+              {(metricsData.data.countsByRisk['High'] ?? 0).toLocaleString()}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">

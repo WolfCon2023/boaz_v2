@@ -121,6 +121,72 @@ renewalsRouter.get('/', async (req, res) => {
   })
 })
 
+// GET /api/crm/renewals/metrics/summary
+renewalsRouter.get('/metrics/summary', async (_req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const now = new Date()
+  const inDays = (days: number) => {
+    const d = new Date(now)
+    d.setDate(d.getDate() + days)
+    return d
+  }
+
+  const baseFilter = {
+    status: { $in: ['Active', 'Pending Renewal'] as RenewalStatus[] },
+  }
+
+  const all = await db
+    .collection<RenewalDoc>('renewals')
+    .find(baseFilter as any)
+    .toArray()
+
+  let totalActiveMRR = 0
+  let totalActiveARR = 0
+  let mrrNext30 = 0
+  let mrrNext90 = 0
+  const countsByStatus: Record<string, number> = {}
+  const countsByRisk: Record<string, number> = {}
+
+  const next30 = inDays(30)
+  const next90 = inDays(90)
+
+  for (const r of all) {
+    const mrr = r.mrr ?? (r.arr != null ? r.arr / 12 : 0)
+    const arr = r.arr ?? (r.mrr != null ? r.mrr * 12 : 0)
+    totalActiveMRR += mrr || 0
+    totalActiveARR += arr || 0
+
+    if (r.renewalDate instanceof Date) {
+      const d = r.renewalDate
+      if (d >= now && d <= next30) {
+        mrrNext30 += mrr || 0
+      }
+      if (d >= now && d <= next90) {
+        mrrNext90 += mrr || 0
+      }
+    }
+
+    countsByStatus[r.status] = (countsByStatus[r.status] ?? 0) + 1
+    if (r.churnRisk) {
+      countsByRisk[r.churnRisk] = (countsByRisk[r.churnRisk] ?? 0) + 1
+    }
+  }
+
+  res.json({
+    data: {
+      totalActiveMRR,
+      totalActiveARR,
+      mrrNext30,
+      mrrNext90,
+      countsByStatus,
+      countsByRisk,
+    },
+    error: null,
+  })
+})
+
 // POST /api/crm/renewals
 renewalsRouter.post('/', async (req, res) => {
   const parsed = createSchema.safeParse(req.body)
