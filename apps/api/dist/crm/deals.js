@@ -844,9 +844,11 @@ dealsRouter.put('/:id', async (req, res) => {
             const closedWon = 'Contract Signed / Closed Won';
             if (update.closeDate)
                 update.closeDate = new Date(`${update.closeDate}T12:00:00Z`);
+            const previousStage = currentDeal.stage;
+            const movingToClosedWon = update.stage === closedWon && previousStage !== closedWon;
             // Track stage changes
-            if (update.stage && update.stage !== currentDeal.stage) {
-                await addDealHistory(db, _id, 'stage_changed', `Stage changed from "${currentDeal.stage}" to "${update.stage}"`, auth?.userId, user?.name, auth?.email, currentDeal.stage, update.stage);
+            if (update.stage && update.stage !== previousStage) {
+                await addDealHistory(db, _id, 'stage_changed', `Stage changed from "${previousStage ?? 'empty'}" to "${update.stage}"`, auth?.userId, user?.name, auth?.email, previousStage, update.stage);
             }
             // Track amount changes
             if (update.amount !== undefined && update.amount !== currentDeal.amount) {
@@ -876,6 +878,65 @@ dealsRouter.put('/:id', async (req, res) => {
                 updateDoc.$unset = { closeDate: '' };
             }
             await db.collection('deals').updateOne({ _id }, updateDoc);
+            // If the deal just moved to Closed Won, auto-create a Renewal record (if one doesn't already exist)
+            if (movingToClosedWon) {
+                try {
+                    const renewals = db.collection('renewals');
+                    const existing = await renewals.findOne({ sourceDealId: _id });
+                    if (!existing) {
+                        const accountObjectId = update.accountId ?? currentDeal.accountId ?? null;
+                        let accountName = null;
+                        let accountNumber = null;
+                        if (accountObjectId) {
+                            const acc = await db.collection('accounts').findOne({ _id: accountObjectId });
+                            if (acc) {
+                                accountName = acc.name ?? null;
+                                accountNumber = acc.accountNumber ?? null;
+                            }
+                        }
+                        const amount = update.amount ?? currentDeal.amount ?? 0;
+                        const closeDateValue = update.closeDate ?? currentDeal.closeDate ?? new Date();
+                        const termStart = closeDateValue;
+                        const termEnd = new Date(termStart);
+                        termEnd.setFullYear(termEnd.getFullYear() + 1);
+                        const arr = amount;
+                        const mrr = arr / 12;
+                        const renewalDoc = {
+                            _id: new ObjectId(),
+                            accountId: accountObjectId,
+                            accountNumber,
+                            accountName,
+                            productId: null,
+                            productName: null,
+                            productSku: null,
+                            sourceDealId: _id,
+                            sourceInvoiceId: null,
+                            sourceType: 'deal',
+                            name: currentDeal.title || 'Closed-won deal',
+                            status: 'Active',
+                            termStart,
+                            termEnd,
+                            renewalDate: termEnd,
+                            mrr,
+                            arr,
+                            healthScore: null,
+                            churnRisk: null,
+                            upsellPotential: 'Medium',
+                            ownerId: auth?.userId ?? null,
+                            ownerName: user?.name ?? null,
+                            ownerEmail: auth?.email ?? null,
+                            notes: 'Auto-created from closed-won deal',
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        };
+                        await renewals.insertOne(renewalDoc);
+                        await addDealHistory(db, _id, 'field_changed', `Auto-created renewal "${renewalDoc.name}" (MRR $${(renewalDoc.mrr ?? 0).toFixed(2)}) from Closed Won stage`, auth?.userId, user?.name, auth?.email);
+                    }
+                }
+                catch (err) {
+                    console.error('Failed to auto-create renewal from closed-won deal:', err);
+                }
+            }
             // Add general update entry if no specific changes were tracked
             if (!update.stage && update.amount === undefined && !update.title && !update.closeDate) {
                 await addDealHistory(db, _id, 'updated', 'Deal updated', auth?.userId, user?.name, auth?.email);
