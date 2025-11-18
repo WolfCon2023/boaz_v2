@@ -34,8 +34,17 @@ export default function CRMHub() {
       </ul>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
         <div className="text-base font-semibold">External Customer Portal</div>
-        <div className="text-xs text-[color:var(--color-text-muted)] mt-1">Share this link with customers to submit and view tickets.</div>
-        <a href={getPortalUrl()} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">Open Customer Portal</a>
+        <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+          Share this link with customers to submit and view tickets.
+        </div>
+        <a
+          href={getPortalUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)]"
+        >
+          Open Customer Portal
+        </a>
       </div>
     </div>
   )
