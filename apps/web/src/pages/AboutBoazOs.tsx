@@ -1,5 +1,3 @@
-import * as React from 'react'
-
 export default function AboutBoazOs() {
   return (
     <div className="space-y-8">
