@@ -158,7 +158,25 @@ export default function CRMTasks() {
     setEditPriority(task.priority ?? 'normal')
     setEditSubject(task.subject ?? '')
     setEditDescription(task.description ?? '')
-    setEditDueAt(task.dueAt ? task.dueAt.slice(0, 16) : '')
+
+    // Pre-fill due date/time in local datetime-local format so the existing value shows up
+    if (task.dueAt) {
+      const d = new Date(task.dueAt)
+      if (!Number.isNaN(d.getTime())) {
+        const pad = (n: number) => String(n).padStart(2, '0')
+        const year = d.getFullYear()
+        const month = pad(d.getMonth() + 1)
+        const day = pad(d.getDate())
+        const hours = pad(d.getHours())
+        const minutes = pad(d.getMinutes())
+        setEditDueAt(`${year}-${month}-${day}T${hours}:${minutes}`)
+      } else {
+        setEditDueAt('')
+      }
+    } else {
+      setEditDueAt('')
+    }
+
     setEditRelatedType((task.relatedType ?? '') as any)
     setEditRelatedId(task.relatedId ?? '')
   }
@@ -574,7 +592,11 @@ export default function CRMTasks() {
             const isOverdue =
               t.dueAt && t.status !== 'completed' && t.status !== 'cancelled' && new Date(t.dueAt) < new Date()
             return (
-              <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" key={t._id}>
+              <div
+                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between cursor-pointer"
+                key={t._id}
+                onDoubleClick={() => startEdit(t)}
+              >
                 <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
