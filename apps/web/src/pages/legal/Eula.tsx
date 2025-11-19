@@ -24,7 +24,7 @@ export default function LegalEula() {
         </div>
       </div>
       <header className="space-y-2">
-        <p className="text-sm leading-relaxed text-[color:var(--color-text-muted)]">
+        <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text-muted)]">
           This End User License Agreement is a template and is provided for general informational purposes.
           It should be reviewed by legal counsel before being treated as a final legal document.
         </p>
@@ -37,7 +37,7 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               Subject to your compliance with this Agreement, Wolf Consulting Group, LLC grants you a limited, non exclusive,
               non transferable, non sublicensable license to access and use BOAZ-OS Version 2 solely for your internal business purposes.
             </p>
@@ -50,7 +50,7 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               BOAZ-OS, including all software, code, interfaces, visual elements, workflows, and documentation, is owned by
               Wolf Consulting Group, LLC and is protected by copyright and other intellectual property laws. You receive a
               license to use the product, not ownership of the product.
@@ -64,10 +64,10 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               You agree not to:
             </p>
-            <ul className="list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
+            <ul className="list-disc space-y-1 pl-5 text-sm whitespace-normal text-[color:var(--color-text)]">
               <li>Copy, modify, or create derivative works of BOAZ-OS except as expressly permitted in writing by Wolf Consulting Group, LLC.</li>
               <li>Reverse engineer, decompile, or attempt to extract the source code of BOAZ-OS except to the extent that applicable law permits it despite this limitation.</li>
               <li>Rent, lease, sell, sublicense, or otherwise transfer your access to BOAZ-OS to any third party.</li>
@@ -82,7 +82,7 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               You are responsible for maintaining the confidentiality of your login credentials and for all activity that occurs under your account.
               You are responsible for the accuracy of any data entered into BOAZ-OS.
             </p>
@@ -95,7 +95,7 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               Wolf Consulting Group, LLC may update, enhance, or modify BOAZ-OS from time to time. Some updates may be applied automatically.
               Continued use of BOAZ-OS after an update constitutes acceptance of the updated version.
             </p>
@@ -108,7 +108,7 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               This Agreement remains in effect for as long as you have authorized access to BOAZ-OS.
               Wolf Consulting Group, LLC may suspend or terminate your access if you violate this Agreement or if access is otherwise
               discontinued under a separate service or subscription agreement. Upon termination, your license to use BOAZ-OS ends and you
@@ -137,7 +137,7 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="text-sm text-[color:var(--color-text)]">
+            <p className="text-sm whitespace-normal text-[color:var(--color-text)]">
               To the maximum extent permitted by law, Wolf Consulting Group, LLC is not liable for any indirect, incidental, consequential, special,
               or punitive damages, or for any loss of profits or revenue, even if advised of the possibility of such damages.
               The total liability of Wolf Consulting Group, LLC for any claim arising out of or relating to this Agreement or BOAZ-OS is limited to
@@ -152,7 +152,7 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="text-sm text-[color:var(--color-text)]">
+            <p className="text-sm whitespace-normal text-[color:var(--color-text)]">
               This Agreement is governed by the laws of the State of North Carolina, United States of America, without regard to its conflict of law principles.
             </p>
           </div>
@@ -164,7 +164,7 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="text-sm text-[color:var(--color-text)]">
+            <p className="text-sm whitespace-normal text-[color:var(--color-text)]">
               For questions about this Agreement, contact Wolf Consulting Group, LLC at{' '}
               <a href="mailto:support@wolfconsultingnc.com" className="text-[color:var(--color-primary-600)] hover:underline">
                 support@wolfconsultingnc.com
