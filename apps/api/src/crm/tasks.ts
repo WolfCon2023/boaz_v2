@@ -156,19 +156,7 @@ tasksRouter.get('/:id', async (req, res) => {
   const idStr = String(req.params.id)
   const coll = db.collection<TaskDoc>('crm_tasks')
 
-  const doc = await coll.findOne({
-    $or: [
-      { _id: idStr },
-      // In case some tasks were stored with ObjectId IDs
-      (() => {
-        try {
-          return { _id: new ObjectId(idStr) as any }
-        } catch {
-          return { _id: idStr }
-        }
-      })(),
-    ],
-  } as any)
+  const doc = await coll.findOne({ _id: idStr } as any)
 
   if (!doc) {
     return res.status(404).json({ data: null, error: 'not_found' })
@@ -288,12 +276,7 @@ tasksRouter.put('/:id', async (req, res) => {
   update.updatedAt = now
 
   const coll = db.collection<TaskDoc>('crm_tasks')
-  const filter: any = {
-    $or: [
-      { _id: idStr },
-      { _id: new ObjectId(idStr) },
-    ],
-  }
+  const filter: any = { _id: idStr }
   const result = await coll.findOneAndUpdate(
     filter,
     { $set: update },
@@ -315,12 +298,7 @@ tasksRouter.post('/:id/complete', async (req, res) => {
   const idStr = String(req.params.id)
   const now = new Date()
   const coll = db.collection<TaskDoc>('crm_tasks')
-  const filter: any = {
-    $or: [
-      { _id: idStr },
-      { _id: new ObjectId(idStr) },
-    ],
-  }
+  const filter: any = { _id: idStr }
   const result = await coll.findOneAndUpdate(
     filter,
     { $set: { status: 'completed' as TaskStatus, completedAt: now, updatedAt: now } },
@@ -340,12 +318,7 @@ tasksRouter.delete('/:id', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const idStr = String(req.params.id)
-  const result = await db.collection<TaskDoc>('crm_tasks').deleteOne({
-    $or: [
-      { _id: idStr },
-      { _id: new ObjectId(idStr) },
-    ],
-  } as any)
+  const result = await db.collection<TaskDoc>('crm_tasks').deleteOne({ _id: idStr } as any)
   if (!result.deletedCount) {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
