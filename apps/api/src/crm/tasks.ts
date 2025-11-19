@@ -65,7 +65,7 @@ function serializeTask(doc: TaskDoc) {
 
 // GET /api/crm/tasks
 // Query params:
-//   status, type, priority, mine (1|0), ownerId, relatedType, relatedId, page, limit
+//   q, status, type, priority, mine (1|0), ownerId, relatedType, relatedId, sort, dir, page, limit
 tasksRouter.get('/', async (req, res) => {
   const db = await getDb()
   if (!db) return res.json({ data: { items: [], total: 0, page: 0, limit: 25 }, error: null })
@@ -76,6 +76,14 @@ tasksRouter.get('/', async (req, res) => {
   const skip = page * limit
 
   const filter: Record<string, any> = {}
+
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : ''
+  if (q) {
+    filter.$or = [
+      { subject: { $regex: q, $options: 'i' } },
+      { description: { $regex: q, $options: 'i' } },
+    ]
+  }
 
   const status = typeof req.query.status === 'string' && req.query.status ? req.query.status : undefined
   if (status && ['open', 'in_progress', 'completed', 'cancelled'].includes(status)) {
@@ -109,9 +117,21 @@ tasksRouter.get('/', async (req, res) => {
     filter.relatedId = relatedId
   }
 
+  const sortKeyRaw = (req.query.sort as string) || ''
+  const dirRaw = (req.query.dir as string) || 'asc'
+  const dir: 1 | -1 = dirRaw.toLowerCase() === 'desc' ? -1 : 1
+  const allowedSort: Record<string, 1 | -1> = {
+    dueAt: dir,
+    createdAt: dir,
+    priority: dir,
+    status: dir,
+  }
+  const sort: Record<string, 1 | -1> =
+    allowedSort[sortKeyRaw] ? { [sortKeyRaw]: allowedSort[sortKeyRaw] } : { dueAt: 1, createdAt: -1 }
+
   const coll = db.collection<TaskDoc>('tasks')
   const [items, total] = await Promise.all([
-    coll.find(filter).sort({ dueAt: 1, createdAt: -1 }).skip(skip).limit(limit).toArray(),
+    coll.find(filter).sort(sort).skip(skip).limit(limit).toArray(),
     coll.countDocuments(filter),
   ])
 

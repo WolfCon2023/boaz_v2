@@ -41,7 +41,11 @@ export default function CRMTasks() {
 
   const [status, setStatus] = React.useState<'all' | TaskStatus>('open')
   const [type, setType] = React.useState<'all' | TaskType>('all')
+  const [priorityFilter, setPriorityFilter] = React.useState<'all' | TaskPriority>('all')
   const [mine, setMine] = React.useState<'mine' | 'all'>('mine')
+  const [q, setQ] = React.useState('')
+  const [sort, setSort] = React.useState<'dueAt' | 'createdAt' | 'priority' | 'status'>('dueAt')
+  const [dir, setDir] = React.useState<'asc' | 'desc'>('asc')
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(20)
 
@@ -64,7 +68,7 @@ export default function CRMTasks() {
   const [editRelatedId, setEditRelatedId] = React.useState('')
 
   const { data, isFetching } = useQuery<TasksResponse>({
-    queryKey: ['tasks', status, type, mine, page, pageSize],
+    queryKey: ['tasks', status, type, priorityFilter, mine, q, sort, dir, page, pageSize],
     queryFn: async () => {
       const params: any = {
         page,
@@ -73,6 +77,10 @@ export default function CRMTasks() {
       if (status !== 'all') params.status = status
       if (type !== 'all') params.type = type
       if (mine === 'mine') params.mine = '1'
+      if (priorityFilter !== 'all') params.priority = priorityFilter
+      if (q.trim()) params.q = q.trim()
+      params.sort = sort
+      params.dir = dir
       const res = await http.get('/api/crm/tasks', { params })
       return res.data as TasksResponse
     },
@@ -283,6 +291,23 @@ export default function CRMTasks() {
           </div>
 
           <div>
+            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Priority</label>
+            <select
+              value={priorityFilter}
+              onChange={(e) => {
+                setPriorityFilter(e.target.value as any)
+                setPage(0)
+              }}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="all">All priorities</option>
+              <option value="high">High</option>
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          <div>
             <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Page size</label>
             <select
               value={pageSize}
@@ -297,6 +322,57 @@ export default function CRMTasks() {
               <option value={50}>50</option>
             </select>
           </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[color:var(--color-border)] pt-3">
+          <input
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value)
+              setPage(0)
+            }}
+            placeholder="Search tasks (short description or description)…"
+            className="min-w-[180px] flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+          />
+          <select
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value as any)
+              setPage(0)
+            }}
+            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-xs text-[color:var(--color-text)]"
+          >
+            <option value="dueAt">Sort by due date</option>
+            <option value="createdAt">Sort by created date</option>
+            <option value="priority">Sort by priority</option>
+            <option value="status">Sort by status</option>
+          </select>
+          <select
+            value={dir}
+            onChange={(e) => {
+              setDir(e.target.value as any)
+              setPage(0)
+            }}
+            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-xs text-[color:var(--color-text)]"
+          >
+            <option value="asc">Asc</option>
+            <option value="desc">Desc</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              setStatus('open')
+              setType('all')
+              setPriorityFilter('all')
+              setMine('mine')
+              setQ('')
+              setSort('dueAt')
+              setDir('asc')
+              setPage(0)
+            }}
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+          >
+            Reset filters
+          </button>
         </div>
       </section>
 
@@ -366,8 +442,8 @@ export default function CRMTasks() {
                 type="text"
                 value={newRelatedId}
                 onChange={(e) => setNewRelatedId(e.target.value)}
-                className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                placeholder="Record ID (optional)"
+                className="w-28 md:w-40 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                placeholder="Record ID"
               />
             </div>
           </div>
@@ -445,7 +521,7 @@ export default function CRMTasks() {
                     </div>
                     {t.description ? (
                       <div className="text-xs text-[color:var(--color-text-muted)] whitespace-normal">
-                        {t.description}
+                        <span className="font-semibold">Description:</span> {t.description}
                       </div>
                     ) : null}
                     <div className="flex flex-wrap gap-3 text-[11px] text-[color:var(--color-text-muted)]">
@@ -581,8 +657,8 @@ export default function CRMTasks() {
                         type="text"
                         value={editRelatedId}
                         onChange={(e) => setEditRelatedId(e.target.value)}
-                        className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                        placeholder="Record ID (optional)"
+                        className="w-28 md:w-40 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                        placeholder="Record ID"
                       />
                     </div>
                   </div>
