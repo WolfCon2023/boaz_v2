@@ -15,7 +15,7 @@ type TaskPriority = 'low' | 'normal' | 'high'
 type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote'
 
 type TaskDoc = {
-  _id: ObjectId
+  _id: string
   type: TaskType
   subject: string
   description?: string
@@ -187,8 +187,10 @@ tasksRouter.post('/', async (req, res) => {
     // If user lookup fails, we still create the task
   }
 
+  const newId = new ObjectId().toHexString()
+
   const doc: TaskDoc = {
-    _id: new ObjectId(),
+    _id: newId,
     type: parsed.data.type,
     subject: parsed.data.subject,
     description: parsed.data.description,
@@ -220,13 +222,7 @@ tasksRouter.put('/:id', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
-  let _id: ObjectId
-  try {
-    _id = new ObjectId(req.params.id)
-  } catch {
-    return res.status(400).json({ data: null, error: 'invalid_id' })
-  }
-
+  const idStr = String(req.params.id)
   const update: Partial<TaskDoc> = {}
   const body = parsed.data
 
@@ -263,8 +259,7 @@ tasksRouter.put('/:id', async (req, res) => {
   update.updatedAt = now
 
   const coll = db.collection<TaskDoc>('tasks')
-  const idStr = req.params.id
-  const filter: any = { $or: [{ _id }, { _id: idStr }] }
+  const filter: any = { _id: idStr }
   const result = await coll.findOneAndUpdate(
     filter,
     { $set: update },
@@ -283,17 +278,10 @@ tasksRouter.post('/:id/complete', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
-  let _id: ObjectId
-  try {
-    _id = new ObjectId(req.params.id)
-  } catch {
-    return res.status(400).json({ data: null, error: 'invalid_id' })
-  }
-
+  const idStr = String(req.params.id)
   const now = new Date()
   const coll = db.collection<TaskDoc>('tasks')
-  const idStr = req.params.id
-  const filter: any = { $or: [{ _id }, { _id: idStr }] }
+  const filter: any = { _id: idStr }
   const result = await coll.findOneAndUpdate(
     filter,
     { $set: { status: 'completed' as TaskStatus, completedAt: now, updatedAt: now } },
@@ -312,15 +300,8 @@ tasksRouter.delete('/:id', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
-  let _id: ObjectId
-  try {
-    _id = new ObjectId(req.params.id)
-  } catch {
-    return res.status(400).json({ data: null, error: 'invalid_id' })
-  }
-
-  const idStr = req.params.id
-  const result = await db.collection<TaskDoc>('tasks').deleteOne({ $or: [{ _id }, { _id: idStr }] } as any)
+  const idStr = String(req.params.id)
+  const result = await db.collection<TaskDoc>('tasks').deleteOne({ _id: idStr } as any)
   if (!result.deletedCount) {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
