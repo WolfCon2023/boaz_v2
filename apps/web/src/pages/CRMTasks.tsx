@@ -434,64 +434,65 @@ export default function CRMTasks() {
             const isOverdue =
               t.dueAt && t.status !== 'completed' && t.status !== 'cancelled' && new Date(t.dueAt) < new Date()
             return (
-              <div key={t._id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                      {t.type}
-                    </span>
-                    <span className="text-sm font-medium">{t.subject}</span>
-                  </div>
-                  {t.description ? (
-                    <div className="text-xs text-[color:var(--color-text-muted)] whitespace-normal">
-                      {t.description}
+              <>
+                <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" key={t._id}>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                        {t.type}
+                      </span>
+                      <span className="text-sm font-medium">{t.subject}</span>
                     </div>
-                  ) : null}
-                  <div className="flex flex-wrap gap-3 text-[11px] text-[color:var(--color-text-muted)]">
-                    {t.dueAt && (
-                      <span className={isOverdue ? 'text-[color:var(--color-danger)] font-semibold' : ''}>
-                        Due {formatDateTime(t.dueAt)}
-                      </span>
-                    )}
-                    {t.status && <span>Status: {t.status.replace('_', ' ')}</span>}
-                    <span>Priority: {t.priority ?? 'normal'}</span>
-                    {t.completedAt && <span>Completed {formatDate(t.completedAt)}</span>}
-                    {t.relatedType && t.relatedId && (
-                      <span>
-                        Related {t.relatedType}: <span className="font-mono text-[10px]">{t.relatedId}</span>
-                      </span>
-                    )}
+                    {t.description ? (
+                      <div className="text-xs text-[color:var(--color-text-muted)] whitespace-normal">
+                        {t.description}
+                      </div>
+                    ) : null}
+                    <div className="flex flex-wrap gap-3 text-[11px] text-[color:var(--color-text-muted)]">
+                      {t.dueAt && (
+                        <span className={isOverdue ? 'text-[color:var(--color-danger)] font-semibold' : ''}>
+                          Due {formatDateTime(t.dueAt)}
+                        </span>
+                      )}
+                      {t.status && <span>Status: {t.status.replace('_', ' ')}</span>}
+                      <span>Priority: {t.priority ?? 'normal'}</span>
+                      {t.completedAt && <span>Completed {formatDate(t.completedAt)}</span>}
+                      {t.relatedType && t.relatedId && (
+                        <span>
+                          Related {t.relatedType}: <span className="font-mono text-[10px]">{t.relatedId}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  {t.status !== 'completed' && t.status !== 'cancelled' && (
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    {t.status !== 'completed' && t.status !== 'cancelled' && (
+                      <button
+                        type="button"
+                        onClick={() => completeTask.mutate(t._id)}
+                        disabled={completeTask.isPending}
+                        className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                      >
+                        Mark done
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => completeTask.mutate(t._id)}
-                      disabled={completeTask.isPending}
-                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                      onClick={() => startEdit(t)}
+                      className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
                     >
-                      Mark done
+                      Edit
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => startEdit(t)}
-                    className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteTask.mutate(t._id)}
-                    disabled={deleteTask.isPending}
-                    className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                  >
-                    Delete
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteTask.mutate(t._id)}
+                      disabled={deleteTask.isPending}
+                      className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
-              {editingTask && editingTask._id === t._id && (
+                {editingTask && editingTask._id === t._id && (
                 <div className="mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-xs space-y-3">
                   <div className="grid gap-3 md:grid-cols-5">
                     <div>
@@ -603,7 +604,8 @@ export default function CRMTasks() {
                     </button>
                   </div>
                 </div>
-              )}
+                )}
+              </>
             )
           })}
 
