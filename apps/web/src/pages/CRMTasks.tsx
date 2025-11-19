@@ -8,7 +8,7 @@ import { useToast } from '@/components/Toast'
 type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
 type TaskType = 'call' | 'meeting' | 'todo'
 type TaskPriority = 'low' | 'normal' | 'high'
-type TaskRelatedType = 'contact' | 'account' | 'deal'
+type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote'
 
 type Task = {
   _id: string
@@ -266,12 +266,14 @@ export default function CRMTasks() {
               <select
                 value={newRelatedType}
                 onChange={(e) => setNewRelatedType(e.target.value as any)}
-                className="w-24 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-xs text-[color:var(--color-text)]"
+                className="w-28 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-xs text-[color:var(--color-text)]"
               >
                 <option value="">None</option>
                 <option value="contact">Contact</option>
                 <option value="account">Account</option>
                 <option value="deal">Deal</option>
+                <option value="quote">Quote</option>
+                <option value="invoice">Invoice</option>
               </select>
               <input
                 type="text"

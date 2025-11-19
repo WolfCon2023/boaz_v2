@@ -12,7 +12,7 @@ tasksRouter.use(requireAuth)
 type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
 type TaskType = 'call' | 'meeting' | 'todo'
 type TaskPriority = 'low' | 'normal' | 'high'
-type TaskRelatedType = 'contact' | 'account' | 'deal'
+type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote'
 
 type TaskDoc = {
   _id: ObjectId
@@ -39,7 +39,7 @@ const createTaskSchema = z.object({
   status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
   priority: z.enum(['low', 'normal', 'high']).optional(),
   dueAt: z.string().optional(), // ISO string from client
-  relatedType: z.enum(['contact', 'account', 'deal']).optional(),
+  relatedType: z.enum(['contact', 'account', 'deal', 'invoice', 'quote']).optional(),
   relatedId: z.string().optional(),
 })
 
@@ -50,7 +50,7 @@ const updateTaskSchema = z.object({
   status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
   priority: z.enum(['low', 'normal', 'high']).optional(),
   dueAt: z.string().optional().nullable(),
-  relatedType: z.enum(['contact', 'account', 'deal']).optional().nullable(),
+  relatedType: z.enum(['contact', 'account', 'deal', 'invoice', 'quote']).optional().nullable(),
   relatedId: z.string().optional().nullable(),
 })
 
@@ -101,7 +101,7 @@ tasksRouter.get('/', async (req, res) => {
   }
 
   const relatedType = typeof req.query.relatedType === 'string' && req.query.relatedType ? req.query.relatedType : undefined
-  if (relatedType && ['contact', 'account', 'deal'].includes(relatedType)) {
+  if (relatedType && ['contact', 'account', 'deal', 'invoice', 'quote'].includes(relatedType)) {
     filter.relatedType = relatedType
   }
   const relatedId = typeof req.query.relatedId === 'string' && req.query.relatedId ? req.query.relatedId : undefined
