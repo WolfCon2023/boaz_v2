@@ -95,7 +95,6 @@ export default function CRMTasks() {
   const total = data?.data.total ?? 0
   const totalPages = total ? Math.ceil(total / pageSize) : 0
   const anySelected = selectedIds.size > 0
-  const allSelectedOnPage = tasks.length > 0 && tasks.every((t) => selectedIds.has(t._id))
 
   const createTask = useMutation({
     mutationFn: async () => {
