@@ -204,6 +204,7 @@ export default function CRMTasks() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
+      setEditingTask(null)
       toast.showToast('Task marked as completed.', 'success')
     },
   })
@@ -573,8 +574,7 @@ export default function CRMTasks() {
             const isOverdue =
               t.dueAt && t.status !== 'completed' && t.status !== 'cancelled' && new Date(t.dueAt) < new Date()
             return (
-              <>
-                <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" key={t._id}>
+              <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" key={t._id}>
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
@@ -653,122 +653,7 @@ export default function CRMTasks() {
                     </button>
                   </div>
                 </div>
-                {editingTask && editingTask._id === t._id && (
-                <div className="mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-xs space-y-3">
-                  <div className="grid gap-3 md:grid-cols-5">
-                    <div>
-                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Type</label>
-                      <select
-                        value={editType}
-                        onChange={(e) => setEditType(e.target.value as TaskType)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs text-[color:var(--color-text)]"
-                      >
-                        <option value="todo">To‑do</option>
-                        <option value="call">Call</option>
-                        <option value="meeting">Meeting</option>
-                        <option value="email">Email</option>
-                        <option value="note">Note</option>
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Short description</label>
-                      <input
-                        type="text"
-                        value={editSubject}
-                        onChange={(e) => setEditSubject(e.target.value)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Status</label>
-                      <select
-                        value={editStatus}
-                        onChange={(e) => setEditStatus(e.target.value as TaskStatus)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs text-[color:var(--color-text)]"
-                      >
-                        <option value="open">Open</option>
-                        <option value="in_progress">In progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Priority</label>
-                      <select
-                        value={editPriority}
-                        onChange={(e) => setEditPriority(e.target.value as TaskPriority)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs text-[color:var(--color-text)]"
-                      >
-                        <option value="low">Low</option>
-                        <option value="normal">Normal</option>
-                        <option value="high">High</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div>
-                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Due date/time</label>
-                      <input
-                        type="datetime-local"
-                        value={editDueAt}
-                        onChange={(e) => setEditDueAt(e.target.value)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Description</label>
-                      <textarea
-                        rows={2}
-                        value={editDescription}
-                        onChange={(e) => setEditDescription(e.target.value)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Related to</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={editRelatedType}
-                        onChange={(e) => setEditRelatedType(e.target.value as any)}
-                        className="w-28 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs text-[color:var(--color-text)]"
-                      >
-                        <option value="">None</option>
-                        <option value="contact">Contact</option>
-                        <option value="account">Account</option>
-                        <option value="deal">Deal</option>
-                        <option value="quote">Quote</option>
-                        <option value="invoice">Invoice</option>
-                      </select>
-                      <input
-                        type="text"
-                        value={editRelatedId}
-                        onChange={(e) => setEditRelatedId(e.target.value)}
-                        className="w-28 md:w-40 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                        placeholder="Record ID"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={cancelEdit}
-                      className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={saveEdit}
-                      disabled={updateTask.isPending}
-                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-700)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-600)] disabled:opacity-50"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-                )}
-              </>
+              </div>
             )
           })}
 
@@ -779,6 +664,157 @@ export default function CRMTasks() {
           )}
         </div>
       </section>
+
+      {editingTask && (
+        <div className="fixed inset-0 z-[2147483647]">
+          <div className="absolute inset-0 bg-black/60" onClick={cancelEdit} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,32rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+              <div className="mb-3 text-base font-semibold">Edit task</div>
+              <div className="mb-4 text-[11px] text-[color:var(--color-text-muted)] space-y-1">
+                <div><span className="font-semibold">ID:</span> <span className="font-mono text-[10px]">{editingTask._id}</span></div>
+                {editingTask.createdAt && <div><span className="font-semibold">Created:</span> {formatDateTime(editingTask.createdAt)}</div>}
+                {editingTask.updatedAt && <div><span className="font-semibold">Last updated:</span> {formatDateTime(editingTask.updatedAt)}</div>}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 mb-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Type</label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value as TaskType)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                  >
+                    <option value="todo">To‑do</option>
+                    <option value="call">Call</option>
+                    <option value="meeting">Meeting</option>
+                    <option value="email">Email</option>
+                    <option value="note">Note</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as TaskStatus)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                  >
+                    <option value="open">Open</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Priority</label>
+                  <select
+                    value={editPriority}
+                    onChange={(e) => setEditPriority(e.target.value as TaskPriority)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                  >
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Due date/time</label>
+                  <input
+                    type="datetime-local"
+                    value={editDueAt}
+                    onChange={(e) => setEditDueAt(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="mb-3">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Short description</label>
+                <input
+                  type="text"
+                  value={editSubject}
+                  onChange={(e) => setEditSubject(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="mb-3">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Description</label>
+                <textarea
+                  rows={4}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Related to</label>
+                <div className="flex gap-2">
+                  <select
+                    value={editRelatedType}
+                    onChange={(e) => setEditRelatedType(e.target.value as any)}
+                    className="w-28 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-xs text-[color:var(--color-text)]"
+                  >
+                    <option value="">None</option>
+                    <option value="contact">Contact</option>
+                    <option value="account">Account</option>
+                    <option value="deal">Deal</option>
+                    <option value="quote">Quote</option>
+                    <option value="invoice">Invoice</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={editRelatedId}
+                    onChange={(e) => setEditRelatedId(e.target.value)}
+                    className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                    placeholder="Record ID"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-between items-center gap-2">
+                <div className="flex gap-2">
+                  {editingTask.status !== 'completed' && editingTask.status !== 'cancelled' && (
+                    <button
+                      type="button"
+                      onClick={() => completeTask.mutate(editingTask._id)}
+                      disabled={completeTask.isPending}
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                    >
+                      Mark done
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm('Delete this task? This cannot be undone.')) return
+                      deleteTask.mutate(editingTask._id)
+                      setEditingTask(null)
+                    }}
+                    disabled={deleteTask.isPending}
+                    className="rounded-lg border border-red-400 bg-transparent px-3 py-1.5 text-xs text-red-500 hover:bg-red-950/40"
+                  >
+                    Delete
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveEdit}
+                    disabled={updateTask.isPending}
+                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-700)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-600)] disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
