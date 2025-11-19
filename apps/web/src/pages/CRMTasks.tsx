@@ -159,20 +159,25 @@ export default function CRMTasks() {
     setEditSubject(task.subject ?? '')
     setEditDescription(task.description ?? '')
 
-    // Pre-fill due date/time in local datetime-local format so the existing value shows up
+    // Pre-fill due date/time so the existing value shows up in the datetime-local control
     if (task.dueAt) {
-      const d = new Date(task.dueAt)
-      if (!Number.isNaN(d.getTime())) {
-        const pad = (n: number) => String(n).padStart(2, '0')
-        const year = d.getFullYear()
-        const month = pad(d.getMonth() + 1)
-        const day = pad(d.getDate())
-        const hours = pad(d.getHours())
-        const minutes = pad(d.getMinutes())
-        setEditDueAt(`${year}-${month}-${day}T${hours}:${minutes}`)
+      let value = ''
+      // If it's an ISO-like value, slice to the yyyy-MM-ddTHH:mm format expected by datetime-local
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(task.dueAt)) {
+        value = task.dueAt.slice(0, 16)
       } else {
-        setEditDueAt('')
+        const d = new Date(task.dueAt)
+        if (!Number.isNaN(d.getTime())) {
+          const pad = (n: number) => String(n).padStart(2, '0')
+          const year = d.getFullYear()
+          const month = pad(d.getMonth() + 1)
+          const day = pad(d.getDate())
+          const hours = pad(d.getHours())
+          const minutes = pad(d.getMinutes())
+          value = `${year}-${month}-${day}T${hours}:${minutes}`
+        }
       }
+      setEditDueAt(value)
     } else {
       setEditDueAt('')
     }
