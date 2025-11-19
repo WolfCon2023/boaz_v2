@@ -60,6 +60,8 @@ function serializeTask(doc: TaskDoc) {
     _id: String(doc._id),
     dueAt: doc.dueAt ? doc.dueAt.toISOString() : null,
     completedAt: doc.completedAt ? doc.completedAt.toISOString() : null,
+    createdAt: doc.createdAt ? doc.createdAt.toISOString() : undefined,
+    updatedAt: doc.updatedAt ? doc.updatedAt.toISOString() : undefined,
   }
 }
 

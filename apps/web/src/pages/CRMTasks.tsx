@@ -24,6 +24,8 @@ type Task = {
   ownerEmail?: string
   relatedType?: TaskRelatedType
   relatedId?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 type TasksResponse = {
@@ -430,15 +432,6 @@ export default function CRMTasks() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Due date/time</label>
-            <input
-              type="datetime-local"
-              value={newDueAt}
-              onChange={(e) => setNewDueAt(e.target.value)}
-              className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
             <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Related to</label>
             <div className="flex gap-2">
               <select
@@ -461,6 +454,15 @@ export default function CRMTasks() {
                 placeholder="Record ID"
               />
             </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Due date/time</label>
+            <input
+              type="datetime-local"
+              value={newDueAt}
+              onChange={(e) => setNewDueAt(e.target.value)}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+            />
           </div>
         </div>
         <div>
@@ -545,8 +547,17 @@ export default function CRMTasks() {
                           Due {formatDateTime(t.dueAt)}
                         </span>
                       )}
+                      {t.createdAt && <span>Created {formatDateTime(t.createdAt)}</span>}
                       {t.status && <span>Status: {t.status.replace('_', ' ')}</span>}
                       <span>Priority: {t.priority ?? 'normal'}</span>
+                      {t.ownerName || t.ownerEmail ? (
+                        <span>
+                          Owner:{' '}
+                          <span className="font-semibold">
+                            {t.ownerName || t.ownerEmail}
+                          </span>
+                        </span>
+                      ) : null}
                       {t.completedAt && <span>Completed {formatDate(t.completedAt)}</span>}
                       {t.relatedType && t.relatedId && (
                         <span>
