@@ -277,17 +277,16 @@ tasksRouter.put('/:id', async (req, res) => {
 
   const coll = db.collection<TaskDoc>('crm_tasks')
   const filter: any = { _id: idStr }
-  const result = await coll.findOneAndUpdate(
-    filter,
-    { $set: update },
-    { returnDocument: 'after' },
-  ) as any
 
-  if (!result || !result.value) {
+  const existing = await coll.findOne(filter as any)
+  if (!existing) {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
 
-  res.json({ data: serializeTask(result.value), error: null })
+  await coll.updateOne(filter as any, { $set: update } as any)
+  const updated = await coll.findOne(filter as any)
+
+  res.json({ data: serializeTask(updated as TaskDoc), error: null })
 })
 
 // POST /api/crm/tasks/:id/complete
@@ -299,17 +298,16 @@ tasksRouter.post('/:id/complete', async (req, res) => {
   const now = new Date()
   const coll = db.collection<TaskDoc>('crm_tasks')
   const filter: any = { _id: idStr }
-  const result = await coll.findOneAndUpdate(
-    filter,
-    { $set: { status: 'completed' as TaskStatus, completedAt: now, updatedAt: now } },
-    { returnDocument: 'after' },
-  ) as any
 
-  if (!result || !result.value) {
+  const existing = await coll.findOne(filter as any)
+  if (!existing) {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
 
-  res.json({ data: serializeTask(result.value), error: null })
+  await coll.updateOne(filter as any, { $set: { status: 'completed' as TaskStatus, completedAt: now, updatedAt: now } } as any)
+  const updated = await coll.findOne(filter as any)
+
+  res.json({ data: serializeTask(updated as TaskDoc), error: null })
 })
 
 // DELETE /api/crm/tasks/:id
