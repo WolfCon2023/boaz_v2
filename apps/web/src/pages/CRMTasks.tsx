@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
@@ -65,7 +65,7 @@ export default function CRMTasks() {
       const res = await http.get('/api/crm/tasks', { params })
       return res.data as TasksResponse
     },
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   })
 
   const tasks = data?.data.items ?? []
@@ -341,7 +341,7 @@ export default function CRMTasks() {
         </div>
 
         <div className="divide-y divide-[color:var(--color-border)]">
-          {tasks.map((t) => {
+          {tasks.map((t: Task) => {
             const isOverdue =
               t.dueAt && t.status !== 'completed' && t.status !== 'cancelled' && new Date(t.dueAt) < new Date()
             return (

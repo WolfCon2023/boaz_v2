@@ -245,9 +245,9 @@ tasksRouter.put('/:id', async (req, res) => {
     { _id },
     { $set: update },
     { returnDocument: 'after' },
-  )
+  ) as any
 
-  if (!result.value) {
+  if (!result || !result.value) {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
 
@@ -272,9 +272,9 @@ tasksRouter.post('/:id/complete', async (req, res) => {
     { _id },
     { $set: { status: 'completed' as TaskStatus, completedAt: now, updatedAt: now } },
     { returnDocument: 'after' },
-  )
+  ) as any
 
-  if (!result.value) {
+  if (!result || !result.value) {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
 
