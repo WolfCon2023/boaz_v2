@@ -575,7 +575,7 @@ export default function CRMTasks() {
               t.dueAt && t.status !== 'completed' && t.status !== 'cancelled' && new Date(t.dueAt) < new Date()
             return (
               <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" key={t._id}>
-                  <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
                       className="mt-1 h-3 w-3"
@@ -589,40 +589,40 @@ export default function CRMTasks() {
                     />
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                        {t.type}
-                      </span>
-                      <span className="text-sm font-medium">{t.subject}</span>
-                    </div>
-                    {t.description ? (
-                      <div className="text-xs text-[color:var(--color-text-muted)] whitespace-normal">
-                        <span className="font-semibold">Description:</span> {t.description}
+                        <span className="inline-flex items-center rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-[10px] uppercase tracking-wide">
+                          {t.type}
+                        </span>
+                        <span className="text-sm font-medium">{t.subject}</span>
                       </div>
-                    ) : null}
-                    <div className="flex flex-wrap gap-3 text-[11px] text-[color:var(--color-text-muted)]">
-                      {t.dueAt && (
-                        <span className={isOverdue ? 'text-[color:var(--color-danger)] font-semibold' : ''}>
-                          Due {formatDateTime(t.dueAt)}
-                        </span>
-                      )}
-                      {t.createdAt && <span>Created {formatDateTime(t.createdAt)}</span>}
-                      {t.status && <span>Status: {t.status.replace('_', ' ')}</span>}
-                      <span>Priority: {t.priority ?? 'normal'}</span>
-                      {t.ownerName || t.ownerEmail ? (
-                        <span>
-                          Owner:{' '}
-                          <span className="font-semibold">
-                            {t.ownerName || t.ownerEmail}
-                          </span>
-                        </span>
+                      {t.description ? (
+                        <div className="text-xs text-[color:var(--color-text-muted)] whitespace-normal">
+                          <span className="font-semibold">Description:</span> {t.description}
+                        </div>
                       ) : null}
-                      {t.completedAt && <span>Completed {formatDate(t.completedAt)}</span>}
-                      {t.relatedType && t.relatedId && (
-                        <span>
-                          Related {t.relatedType}: <span className="font-mono text-[10px]">{t.relatedId}</span>
-                        </span>
-                      )}
-                    </div>
+                      <div className="flex flex-wrap gap-3 text-[11px] text-[color:var(--color-text-muted)]">
+                        {t.dueAt && (
+                          <span className={isOverdue ? 'text-[color:var(--color-danger)] font-semibold' : ''}>
+                            Due {formatDateTime(t.dueAt)}
+                          </span>
+                        )}
+                        {t.createdAt && <span>Created {formatDateTime(t.createdAt)}</span>}
+                        {t.status && <span>Status: {t.status.replace('_', ' ')}</span>}
+                        <span>Priority: {t.priority ?? 'normal'}</span>
+                        {t.ownerName || t.ownerEmail ? (
+                          <span>
+                            Owner{' '}
+                            <span className="font-semibold">
+                              {t.ownerName || t.ownerEmail}
+                            </span>
+                          </span>
+                        ) : null}
+                        {t.completedAt && <span>Completed {formatDate(t.completedAt)}</span>}
+                        {t.relatedType && t.relatedId && (
+                          <span>
+                            Related {t.relatedType}: <span className="font-mono text-[10px]">{t.relatedId}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -653,7 +653,6 @@ export default function CRMTasks() {
                     </button>
                   </div>
                 </div>
-              </div>
             )
           })}
 
