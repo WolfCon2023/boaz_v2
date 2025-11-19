@@ -50,6 +50,7 @@ export default function CRMTasks() {
   const [pageSize, setPageSize] = React.useState(20)
 
   const [newType, setNewType] = React.useState<TaskType>('todo')
+  const [newStatus, setNewStatus] = React.useState<TaskStatus>('open')
   const [newPriority, setNewPriority] = React.useState<TaskPriority>('normal')
   const [newSubject, setNewSubject] = React.useState('')
   const [newDescription, setNewDescription] = React.useState('')
@@ -97,7 +98,7 @@ export default function CRMTasks() {
         type: newType,
         subject: newSubject.trim(),
         description: newDescription.trim() || undefined,
-        status: 'open' as TaskStatus,
+        status: newStatus,
         priority: newPriority,
       }
       if (newDueAt) {
@@ -118,6 +119,7 @@ export default function CRMTasks() {
       setNewSubject('')
       setNewDescription('')
       setNewDueAt('')
+      setNewStatus('open')
       setNewPriority('normal')
       setNewRelatedType('')
       setNewRelatedId('')
@@ -379,7 +381,7 @@ export default function CRMTasks() {
       {/* New task */}
       <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 space-y-3">
         <h2 className="text-sm font-semibold">New task</h2>
-        <div className="grid gap-3 md:grid-cols-6">
+        <div className="grid gap-3 md:grid-cols-7">
           <div>
             <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Type</label>
             <select
@@ -401,6 +403,19 @@ export default function CRMTasks() {
               className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
               placeholder="Follow-up call, onboarding meeting, etc."
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Status</label>
+            <select
+              value={newStatus}
+              onChange={(e) => setNewStatus(e.target.value as TaskStatus)}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="open">Open</option>
+              <option value="in_progress">In progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Priority</label>
@@ -463,7 +478,7 @@ export default function CRMTasks() {
             type="button"
             onClick={() => {
               if (!newSubject.trim()) {
-                toast.showToast('Subject is required.', 'error')
+                toast.showToast('Short description is required.', 'error')
                 return
               }
               createTask.mutate()
