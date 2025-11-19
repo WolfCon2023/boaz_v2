@@ -32,6 +32,7 @@ import { marketingImagesRouter } from './marketing/images.js'
 import { surveysRouter } from './crm/surveys.js'
 import { renewalsRouter } from './crm/renewals.js'
 import { viewsRouter } from './views.js'
+import { tasksRouter } from './crm/tasks.js'
 import { getDb } from './db.js'
 import { rolesRouter } from './auth/roles_routes.js'
 import { preferencesRouter } from './auth/preferences.js'
@@ -95,6 +96,7 @@ app.use('/api/crm/products', (req, res, next) => {
 })
 app.use('/api/crm/products', productsRouter)
 app.use('/api/crm/documents', documentsRouter)
+app.use('/api/crm/tasks', tasksRouter)
 app.use('/api/terms', termsReviewRouter)
 app.use('/api/marketing', marketingSegmentsRouter)
 app.use('/api/marketing', marketingCampaignsRouter)
@@ -124,8 +126,14 @@ app.get('/api/metrics/summary', async (_req, res) => {
     tomorrow.setDate(today.getDate() + 1)
 
     const appointmentsToday = await db.collection('appointments').countDocuments({ startsAt: { $gte: today, $lt: tomorrow } })
-    const tasksDueToday = await db.collection('tasks').countDocuments({ dueAt: { $gte: today, $lt: tomorrow }, status: { $ne: 'done' } })
-    const tasksCompletedToday = await db.collection('tasks').countDocuments({ status: 'done', completedAt: { $gte: today, $lt: tomorrow } })
+    const tasksDueToday = await db.collection('tasks').countDocuments({
+      dueAt: { $gte: today, $lt: tomorrow },
+      status: { $in: ['open', 'in_progress'] },
+    })
+    const tasksCompletedToday = await db.collection('tasks').countDocuments({
+      status: 'completed',
+      completedAt: { $gte: today, $lt: tomorrow },
+    })
 
     res.json({ data: { appointmentsToday, tasksDueToday, tasksCompletedToday }, error: null })
   } catch (e) {
