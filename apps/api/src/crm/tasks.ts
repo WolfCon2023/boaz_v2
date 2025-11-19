@@ -264,8 +264,9 @@ tasksRouter.put('/:id', async (req, res) => {
 
   const coll = db.collection<TaskDoc>('tasks')
   const idStr = req.params.id
+  const filter: any = { $or: [{ _id }, { _id: idStr }] }
   const result = await coll.findOneAndUpdate(
-    { $or: [{ _id }, { _id: idStr }] },
+    filter,
     { $set: update },
     { returnDocument: 'after' },
   ) as any
@@ -292,8 +293,9 @@ tasksRouter.post('/:id/complete', async (req, res) => {
   const now = new Date()
   const coll = db.collection<TaskDoc>('tasks')
   const idStr = req.params.id
+  const filter: any = { $or: [{ _id }, { _id: idStr }] }
   const result = await coll.findOneAndUpdate(
-    { $or: [{ _id }, { _id: idStr }] },
+    filter,
     { $set: { status: 'completed' as TaskStatus, completedAt: now, updatedAt: now } },
     { returnDocument: 'after' },
   ) as any
