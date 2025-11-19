@@ -24,19 +24,19 @@ export default function LegalTerms() {
         </div>
       </div>
       <header className="space-y-2">
-        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text-muted)]">
+        <p className="text-sm leading-relaxed text-[color:var(--color-text-muted)]">
           These Terms of Service are a template and should be reviewed by legal counsel before being treated as a final legal document.
         </p>
       </header>
 
-      <section className="space-y-3">
+      <section className="space-y-3 max-h-[70vh] overflow-y-auto pr-2">
         <details className="group rounded-lg bg-[color:var(--color-muted)]/30 p-4">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold">
             <span>1. Acceptance of terms</span>
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               By accessing or using BOAZ-OS Version 2, you agree to these Terms of Service.
               If you do not agree, you must not use the service.
             </p>
@@ -49,7 +49,7 @@ export default function LegalTerms() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               BOAZ-OS is provided for business use by customers of Wolf Consulting Group, LLC.
               You agree to use the service only for lawful purposes and in accordance with any applicable service or subscription agreement.
             </p>
@@ -62,7 +62,7 @@ export default function LegalTerms() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               You are responsible for keeping your account credentials secure and for all actions taken using your credentials.
               Notify Wolf Consulting Group, LLC immediately if you suspect unauthorized access to your account.
             </p>
@@ -75,7 +75,7 @@ export default function LegalTerms() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               While Wolf Consulting Group, LLC intends for BOAZ-OS to be available and reliable, there may be times when the service is
               unavailable due to maintenance, upgrades, or events beyond our control. We are not responsible for downtime or data inaccessibility.
             </p>
@@ -88,7 +88,7 @@ export default function LegalTerms() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               Your use of BOAZ-OS is also governed by the BOAZ-OS Privacy Policy. You are responsible for ensuring that your own use of BOAZ-OS
               with customer or employee data complies with applicable privacy and data protection laws.
             </p>
@@ -101,7 +101,7 @@ export default function LegalTerms() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               Users must not:
             </p>
             <ul className="max-w-3xl list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
@@ -131,7 +131,7 @@ export default function LegalTerms() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+            <p className="text-sm text-[color:var(--color-text)]">
               Wolf Consulting Group, LLC may suspend or terminate your access to BOAZ-OS if you violate these Terms or if access is otherwise
               discontinued under a separate agreement.
             </p>
@@ -144,7 +144,7 @@ export default function LegalTerms() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+            <p className="text-sm text-[color:var(--color-text)]">
               Use of BOAZ-OS is at your own risk. The service is provided "as is" and "as available," without warranties of any kind.
               Wolf Consulting Group, LLC is not liable for indirect or consequential damages, and its total liability is limited as described in the EULA.
             </p>
@@ -157,7 +157,7 @@ export default function LegalTerms() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+            <p className="text-sm text-[color:var(--color-text)]">
               For questions about these Terms, contact{' '}
               <a href="mailto:support@wolfconsultingnc.com" className="text-[color:var(--color-primary-600)] hover:underline">
                 support@wolfconsultingnc.com

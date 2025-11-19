@@ -24,19 +24,19 @@ export default function LegalPrivacy() {
         </div>
       </div>
       <header className="space-y-2">
-        <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text-muted)]">
+        <p className="text-sm leading-relaxed text-[color:var(--color-text-muted)]">
           This Privacy Policy is a template and should be reviewed by legal counsel before being treated as a final legal document.
         </p>
       </header>
 
-      <section className="space-y-3">
+      <section className="space-y-3 max-h-[70vh] overflow-y-auto pr-2">
         <details className="group rounded-lg bg-[color:var(--color-muted)]/30 p-4">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold">
             <span>1. Introduction</span>
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               BOAZ-OS is provided by Wolf Consulting Group, LLC. This Privacy Policy explains how we handle information in connection with BOAZ-OS Version 2.
             </p>
           </div>
@@ -48,15 +48,15 @@ export default function LegalPrivacy() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               Depending on how BOAZ-OS is configured and used, the system may store:
             </p>
-            <ul className="max-w-3xl list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
+            <ul className="list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
               <li>Account information such as names, email addresses, and roles.</li>
               <li>Business data such as customers, appointments, tasks, and notes.</li>
               <li>Technical data such as log entries, audit events, and usage metrics.</li>
             </ul>
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               Customer organizations are responsible for the data they choose to enter or integrate into BOAZ-OS.
             </p>
           </div>
@@ -68,7 +68,7 @@ export default function LegalPrivacy() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               Information in BOAZ-OS is used to:
             </p>
             <ul className="max-w-3xl list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
@@ -86,7 +86,7 @@ export default function LegalPrivacy() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               Wolf Consulting Group, LLC does not sell BOAZ-OS customer data. Information may be shared with infrastructure and service providers,
               for example hosting, storage, monitoring, as needed to operate the service, subject to appropriate safeguards.
             </p>
@@ -99,7 +99,7 @@ export default function LegalPrivacy() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               Reasonable technical and organizational measures are used to help protect information in BOAZ-OS.
               However, no system can be completely secure, and we cannot guarantee absolute security.
             </p>
@@ -112,7 +112,7 @@ export default function LegalPrivacy() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed text-[color:var(--color-text)]">
               Data is retained for as long as needed to provide the BOAZ-OS service and to comply with legal or contractual obligations.
               Customers may have additional data retention settings or policies within their own organizations.
             </p>
@@ -155,7 +155,7 @@ export default function LegalPrivacy() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+            <p className="text-sm text-[color:var(--color-text)]">
               This Privacy Policy may be updated from time to time. The updated version will be posted within BOAZ-OS or on the Wolf Consulting Group, LLC website.
             </p>
           </div>
@@ -167,7 +167,7 @@ export default function LegalPrivacy() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm text-[color:var(--color-text)]">
+            <p className="text-sm text-[color:var(--color-text)]">
               For questions about this Privacy Policy, contact{' '}
               <a href="mailto:support@wolfconsultingnc.com" className="text-[color:var(--color-primary-600)] hover:underline">
                 support@wolfconsultingnc.com
