@@ -6,7 +6,7 @@ import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 
 type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
-type TaskType = 'call' | 'meeting' | 'todo'
+type TaskType = 'call' | 'meeting' | 'todo' | 'email' | 'note'
 type TaskPriority = 'low' | 'normal' | 'high'
 type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote'
 
@@ -69,6 +69,7 @@ export default function CRMTasks() {
   const [editDueAt, setEditDueAt] = React.useState('')
   const [editRelatedType, setEditRelatedType] = React.useState<'' | TaskRelatedType>('')
   const [editRelatedId, setEditRelatedId] = React.useState('')
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
 
   const { data, isFetching } = useQuery<TasksResponse>({
     queryKey: ['tasks', status, type, priorityFilter, mine, q, sort, dir, page, pageSize],
@@ -93,6 +94,8 @@ export default function CRMTasks() {
   const tasks = data?.data.items ?? []
   const total = data?.data.total ?? 0
   const totalPages = total ? Math.ceil(total / pageSize) : 0
+  const anySelected = selectedIds.size > 0
+  const allSelectedOnPage = tasks.length > 0 && tasks.every((t) => selectedIds.has(t._id))
 
   const createTask = useMutation({
     mutationFn: async () => {
@@ -217,6 +220,25 @@ export default function CRMTasks() {
     },
   })
 
+  async function bulkComplete() {
+    if (!anySelected) return
+    const ids = Array.from(selectedIds)
+    await Promise.allSettled(ids.map((id) => http.post(`/api/crm/tasks/${id}/complete`)))
+    setSelectedIds(new Set())
+    qc.invalidateQueries({ queryKey: ['tasks'] })
+    toast.showToast('Selected tasks marked as completed.', 'success')
+  }
+
+  async function bulkDelete() {
+    if (!anySelected) return
+    if (!window.confirm(`Delete ${selectedIds.size} task(s)? This cannot be undone.`)) return
+    const ids = Array.from(selectedIds)
+    await Promise.allSettled(ids.map((id) => http.delete(`/api/crm/tasks/${id}`)))
+    setSelectedIds(new Set())
+    qc.invalidateQueries({ queryKey: ['tasks'] })
+    toast.showToast('Selected tasks deleted.', 'success')
+  }
+
   return (
     <div className="space-y-6">
       <CRMNav />
@@ -291,6 +313,8 @@ export default function CRMTasks() {
               <option value="call">Call</option>
               <option value="meeting">Meeting</option>
               <option value="todo">To‑do</option>
+              <option value="email">Email</option>
+              <option value="note">Note</option>
             </select>
           </div>
 
@@ -394,6 +418,8 @@ export default function CRMTasks() {
               <option value="todo">To‑do</option>
               <option value="call">Call</option>
               <option value="meeting">Meeting</option>
+              <option value="email">Email</option>
+              <option value="note">Note</option>
             </select>
           </div>
           <div className="md:col-span-2">
@@ -495,31 +521,52 @@ export default function CRMTasks() {
 
       {/* Task list */}
       <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
-        <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3 text-xs text-[color:var(--color-text-muted)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--color-border)] px-4 py-3 text-xs text-[color:var(--color-text-muted)]">
           <div>{isFetching ? 'Loading tasks…' : `${total} task${total === 1 ? '' : 's'}`}</div>
-          {totalPages > 1 && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={page === 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                className="rounded border border-[color:var(--color-border)] px-2 py-1 disabled:opacity-50"
-              >
-                Prev
-              </button>
-              <span>
-                Page {page + 1} of {totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={page + 1 >= totalPages}
-                onClick={() => setPage((p) => (page + 1 >= totalPages ? p : p + 1))}
-                className="rounded border border-[color:var(--color-border)] px-2 py-1 disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {anySelected && (
+              <div className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1">
+                <span>{selectedIds.size} selected</span>
+                <button
+                  type="button"
+                  onClick={bulkComplete}
+                  className="rounded border border-[color:var(--color-border)] px-2 py-1 text-[10px] hover:bg-[color:var(--color-muted)]"
+                >
+                  Mark done
+                </button>
+                <button
+                  type="button"
+                  onClick={bulkDelete}
+                  className="rounded border border-red-400 px-2 py-1 text-[10px] text-red-500 hover:bg-red-950/40"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  className="rounded border border-[color:var(--color-border)] px-2 py-1 disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <span>
+                  Page {page + 1} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={page + 1 >= totalPages}
+                  onClick={() => setPage((p) => (page + 1 >= totalPages ? p : p + 1))}
+                  className="rounded border border-[color:var(--color-border)] px-2 py-1 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="divide-y divide-[color:var(--color-border)]">
@@ -529,8 +576,20 @@ export default function CRMTasks() {
             return (
               <>
                 <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" key={t._id}>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-3 w-3"
+                      checked={selectedIds.has(t._id)}
+                      onChange={(e) => {
+                        const next = new Set(selectedIds)
+                        if (e.target.checked) next.add(t._id)
+                        else next.delete(t._id)
+                        setSelectedIds(next)
+                      }}
+                    />
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
                       <span className="inline-flex items-center rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-[10px] uppercase tracking-wide">
                         {t.type}
                       </span>
@@ -564,6 +623,7 @@ export default function CRMTasks() {
                           Related {t.relatedType}: <span className="font-mono text-[10px]">{t.relatedId}</span>
                         </span>
                       )}
+                    </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -607,6 +667,8 @@ export default function CRMTasks() {
                         <option value="todo">To‑do</option>
                         <option value="call">Call</option>
                         <option value="meeting">Meeting</option>
+                        <option value="email">Email</option>
+                        <option value="note">Note</option>
                       </select>
                     </div>
                     <div className="md:col-span-2">

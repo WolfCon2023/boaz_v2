@@ -7,6 +7,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
+import { RelatedTasks } from '@/components/RelatedTasks'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
 
@@ -775,6 +776,9 @@ export default function CRMContacts() {
                     <button type="button" className="mt-2 rounded border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]" onClick={() => { http.post('/api/crm/outreach/enroll/bulk/unenroll', { contactId: editing._id }).then(() => enrollmentsQ.refetch()) }}>Unenroll all</button>
                   )}
                 </div>
+              </div>
+              <div className="col-span-full mt-4">
+                <RelatedTasks relatedType="contact" relatedId={editing._id} />
               </div>
 
               {surveyPrograms.length > 0 && (

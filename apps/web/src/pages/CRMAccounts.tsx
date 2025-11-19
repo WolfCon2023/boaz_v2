@@ -7,6 +7,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
+import { RelatedTasks } from '@/components/RelatedTasks'
 
 type Account = { _id: string; accountNumber?: number; name?: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }
 
@@ -711,6 +712,9 @@ export default function CRMAccounts() {
                     relatedToName={editing.name || editing.companyName}
                     compact={true}
                   />
+                </div>
+                <div className="col-span-full mt-4">
+                  <RelatedTasks relatedType="account" relatedId={editing._id} />
                 </div>
               </form>
             </div>

@@ -10,7 +10,7 @@ export const tasksRouter = Router()
 tasksRouter.use(requireAuth)
 
 type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
-type TaskType = 'call' | 'meeting' | 'todo'
+type TaskType = 'call' | 'meeting' | 'todo' | 'email' | 'note'
 type TaskPriority = 'low' | 'normal' | 'high'
 type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote'
 
@@ -33,7 +33,7 @@ type TaskDoc = {
 }
 
 const createTaskSchema = z.object({
-  type: z.enum(['call', 'meeting', 'todo']).default('todo'),
+  type: z.enum(['call', 'meeting', 'todo', 'email', 'note']).default('todo'),
   subject: z.string().min(1),
   description: z.string().optional(),
   status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
@@ -44,7 +44,7 @@ const createTaskSchema = z.object({
 })
 
 const updateTaskSchema = z.object({
-  type: z.enum(['call', 'meeting', 'todo']).optional(),
+  type: z.enum(['call', 'meeting', 'todo', 'email', 'note']).optional(),
   subject: z.string().min(1).optional(),
   description: z.string().optional(),
   status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
@@ -93,7 +93,7 @@ tasksRouter.get('/', async (req, res) => {
   }
 
   const type = typeof req.query.type === 'string' && req.query.type ? req.query.type : undefined
-  if (type && ['call', 'meeting', 'todo'].includes(type)) {
+  if (type && ['call', 'meeting', 'todo', 'email', 'note'].includes(type)) {
     filter.type = type
   }
 

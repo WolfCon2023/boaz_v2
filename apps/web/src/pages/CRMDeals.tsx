@@ -7,6 +7,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
+import { RelatedTasks } from '@/components/RelatedTasks'
 
 type Deal = {
   _id: string
@@ -1206,6 +1207,9 @@ export default function CRMDeals() {
                     relatedToName={editing.title}
                     compact={true}
                   />
+                </div>
+                <div className="col-span-full mt-4">
+                  <RelatedTasks relatedType="deal" relatedId={editing._id} />
                 </div>
               </form>
             </div>
