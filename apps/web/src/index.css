@@ -154,3 +154,11 @@ body {
 /* Skip link visible on focus */
 .skip-link{position:absolute;left:-999px;top:auto;width:1px;height:1px;overflow:hidden}
 .skip-link:focus{left:1rem;top:1rem;width:auto;height:auto;padding:0.5rem 0.75rem;background:var(--primary);color:white;border-radius:0.5rem;z-index:50}
+
+/* Legal pages typography fixes */
+.legal-page-body,
+.legal-page-body * {
+  white-space: normal !important;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}

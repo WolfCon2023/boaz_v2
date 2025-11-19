@@ -29,7 +29,7 @@ export default function LegalTerms() {
         </p>
       </header>
 
-      <section className="space-y-3 max-h-[70vh] overflow-y-auto pr-2">
+      <section className="space-y-3 max-h-[70vh] overflow-y-auto pr-2 legal-page-body">
         <details className="group rounded-lg bg-[color:var(--color-muted)]/30 p-4">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold">
             <span>1. Acceptance of terms</span>
