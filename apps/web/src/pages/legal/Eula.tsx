@@ -1,16 +1,27 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 export default function LegalEula() {
+  const navigate = useNavigate()
+
   return (
     <div className="mx-auto max-w-4xl rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">BOAZ-OS End User License Agreement (EULA)</h1>
-        <Link
-          to="/"
-          className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
-        >
-          Back to Home
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+          >
+            Back
+          </button>
+          <Link
+            to="/"
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+          >
+            Home
+          </Link>
+        </div>
       </div>
       <header className="space-y-2">
         <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text-muted)]">
