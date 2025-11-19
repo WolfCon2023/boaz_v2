@@ -46,11 +46,22 @@ export default function CRMTasks() {
   const [pageSize, setPageSize] = React.useState(20)
 
   const [newType, setNewType] = React.useState<TaskType>('todo')
+  const [newPriority, setNewPriority] = React.useState<TaskPriority>('normal')
   const [newSubject, setNewSubject] = React.useState('')
   const [newDescription, setNewDescription] = React.useState('')
   const [newDueAt, setNewDueAt] = React.useState('')
   const [newRelatedType, setNewRelatedType] = React.useState<'' | TaskRelatedType>('')
   const [newRelatedId, setNewRelatedId] = React.useState('')
+
+  const [editingTask, setEditingTask] = React.useState<Task | null>(null)
+  const [editType, setEditType] = React.useState<TaskType>('todo')
+  const [editStatus, setEditStatus] = React.useState<TaskStatus>('open')
+  const [editPriority, setEditPriority] = React.useState<TaskPriority>('normal')
+  const [editSubject, setEditSubject] = React.useState('')
+  const [editDescription, setEditDescription] = React.useState('')
+  const [editDueAt, setEditDueAt] = React.useState('')
+  const [editRelatedType, setEditRelatedType] = React.useState<'' | TaskRelatedType>('')
+  const [editRelatedId, setEditRelatedId] = React.useState('')
 
   const { data, isFetching } = useQuery<TasksResponse>({
     queryKey: ['tasks', status, type, mine, page, pageSize],
@@ -79,6 +90,7 @@ export default function CRMTasks() {
         subject: newSubject.trim(),
         description: newDescription.trim() || undefined,
         status: 'open' as TaskStatus,
+        priority: newPriority,
       }
       if (newDueAt) {
         // newDueAt is in local datetime input format; convert to ISO
@@ -98,6 +110,7 @@ export default function CRMTasks() {
       setNewSubject('')
       setNewDescription('')
       setNewDueAt('')
+      setNewPriority('normal')
       setNewRelatedType('')
       setNewRelatedId('')
       qc.invalidateQueries({ queryKey: ['tasks'] })
@@ -108,6 +121,68 @@ export default function CRMTasks() {
     },
   })
 
+  const updateTask = useMutation({
+    mutationFn: async (payload: { id: string; body: any }) => {
+      const { id, body } = payload
+      const res = await http.put(`/api/crm/tasks/${id}`, body)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      setEditingTask(null)
+      toast.showToast('Task updated.', 'success')
+    },
+    onError: () => {
+      toast.showToast('Failed to update task.', 'error')
+    },
+  })
+
+  function startEdit(task: Task) {
+    setEditingTask(task)
+    setEditType(task.type)
+    setEditStatus(task.status)
+    setEditPriority(task.priority ?? 'normal')
+    setEditSubject(task.subject ?? '')
+    setEditDescription(task.description ?? '')
+    setEditDueAt(task.dueAt ? task.dueAt.slice(0, 16) : '')
+    setEditRelatedType((task.relatedType ?? '') as any)
+    setEditRelatedId(task.relatedId ?? '')
+  }
+
+  function cancelEdit() {
+    setEditingTask(null)
+  }
+
+  function saveEdit() {
+    if (!editingTask) return
+    if (!editSubject.trim()) {
+      toast.showToast('Short description is required.', 'error')
+      return
+    }
+    const body: any = {
+      type: editType,
+      subject: editSubject.trim(),
+      description: editDescription.trim() || undefined,
+      status: editStatus,
+      priority: editPriority,
+    }
+    if (editDueAt) {
+      const d = new Date(editDueAt)
+      if (!Number.isNaN(d.getTime())) {
+        body.dueAt = d.toISOString()
+      }
+    } else {
+      body.dueAt = null
+    }
+    if (editRelatedType && editRelatedId.trim()) {
+      body.relatedType = editRelatedType
+      body.relatedId = editRelatedId.trim()
+    } else {
+      body.relatedType = null
+      body.relatedId = null
+    }
+    updateTask.mutate({ id: editingTask._id, body })
+  }
   const completeTask = useMutation({
     mutationFn: async (id: string) => {
       const res = await http.post(`/api/crm/tasks/${id}/complete`)
@@ -228,7 +303,7 @@ export default function CRMTasks() {
       {/* New task */}
       <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 space-y-3">
         <h2 className="text-sm font-semibold">New task</h2>
-        <div className="grid gap-3 md:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-6">
           <div>
             <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Type</label>
             <select
@@ -242,7 +317,7 @@ export default function CRMTasks() {
             </select>
           </div>
           <div className="md:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Subject</label>
+            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Short description</label>
             <input
               type="text"
               value={newSubject}
@@ -250,6 +325,18 @@ export default function CRMTasks() {
               className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
               placeholder="Follow-up call, onboarding meeting, etc."
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Priority</label>
+            <select
+              value={newPriority}
+              onChange={(e) => setNewPriority(e.target.value as TaskPriority)}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Due date/time</label>
@@ -286,7 +373,7 @@ export default function CRMTasks() {
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Notes (optional)</label>
+          <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Description</label>
           <textarea
             value={newDescription}
             onChange={(e) => setNewDescription(e.target.value)}
@@ -367,6 +454,7 @@ export default function CRMTasks() {
                       </span>
                     )}
                     {t.status && <span>Status: {t.status.replace('_', ' ')}</span>}
+                    <span>Priority: {t.priority ?? 'normal'}</span>
                     {t.completedAt && <span>Completed {formatDate(t.completedAt)}</span>}
                     {t.relatedType && t.relatedId && (
                       <span>
@@ -388,6 +476,13 @@ export default function CRMTasks() {
                   )}
                   <button
                     type="button"
+                    onClick={() => startEdit(t)}
+                    className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => deleteTask.mutate(t._id)}
                     disabled={deleteTask.isPending}
                     className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
@@ -396,6 +491,119 @@ export default function CRMTasks() {
                   </button>
                 </div>
               </div>
+              {editingTask && editingTask._id === t._id && (
+                <div className="mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-xs space-y-3">
+                  <div className="grid gap-3 md:grid-cols-5">
+                    <div>
+                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Type</label>
+                      <select
+                        value={editType}
+                        onChange={(e) => setEditType(e.target.value as TaskType)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs text-[color:var(--color-text)]"
+                      >
+                        <option value="todo">To‑do</option>
+                        <option value="call">Call</option>
+                        <option value="meeting">Meeting</option>
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Short description</label>
+                      <input
+                        type="text"
+                        value={editSubject}
+                        onChange={(e) => setEditSubject(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Status</label>
+                      <select
+                        value={editStatus}
+                        onChange={(e) => setEditStatus(e.target.value as TaskStatus)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs text-[color:var(--color-text)]"
+                      >
+                        <option value="open">Open</option>
+                        <option value="in_progress">In progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Priority</label>
+                      <select
+                        value={editPriority}
+                        onChange={(e) => setEditPriority(e.target.value as TaskPriority)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs text-[color:var(--color-text)]"
+                      >
+                        <option value="low">Low</option>
+                        <option value="normal">Normal</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Due date/time</label>
+                      <input
+                        type="datetime-local"
+                        value={editDueAt}
+                        onChange={(e) => setEditDueAt(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Description</label>
+                      <textarea
+                        rows={2}
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-medium text-[color:var(--color-text-muted)]">Related to</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={editRelatedType}
+                        onChange={(e) => setEditRelatedType(e.target.value as any)}
+                        className="w-28 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs text-[color:var(--color-text)]"
+                      >
+                        <option value="">None</option>
+                        <option value="contact">Contact</option>
+                        <option value="account">Account</option>
+                        <option value="deal">Deal</option>
+                        <option value="quote">Quote</option>
+                        <option value="invoice">Invoice</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={editRelatedId}
+                        onChange={(e) => setEditRelatedId(e.target.value)}
+                        className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                        placeholder="Record ID (optional)"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveEdit}
+                      disabled={updateTask.isPending}
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-700)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-600)] disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
             )
           })}
 
