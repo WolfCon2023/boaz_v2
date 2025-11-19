@@ -263,8 +263,9 @@ tasksRouter.put('/:id', async (req, res) => {
   update.updatedAt = now
 
   const coll = db.collection<TaskDoc>('tasks')
+  const idStr = req.params.id
   const result = await coll.findOneAndUpdate(
-    { _id },
+    { $or: [{ _id }, { _id: idStr }] },
     { $set: update },
     { returnDocument: 'after' },
   ) as any
@@ -290,8 +291,9 @@ tasksRouter.post('/:id/complete', async (req, res) => {
 
   const now = new Date()
   const coll = db.collection<TaskDoc>('tasks')
+  const idStr = req.params.id
   const result = await coll.findOneAndUpdate(
-    { _id },
+    { $or: [{ _id }, { _id: idStr }] },
     { $set: { status: 'completed' as TaskStatus, completedAt: now, updatedAt: now } },
     { returnDocument: 'after' },
   ) as any
@@ -315,7 +317,8 @@ tasksRouter.delete('/:id', async (req, res) => {
     return res.status(400).json({ data: null, error: 'invalid_id' })
   }
 
-  const result = await db.collection<TaskDoc>('tasks').deleteOne({ _id })
+  const idStr = req.params.id
+  const result = await db.collection<TaskDoc>('tasks').deleteOne({ $or: [{ _id }, { _id: idStr }] } as any)
   if (!result.deletedCount) {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
