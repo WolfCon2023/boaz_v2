@@ -159,6 +159,13 @@ body {
 .legal-page-body,
 .legal-page-body * {
   white-space: normal !important;
-  word-break: normal;
-  overflow-wrap: anywhere;
+}
+
+.legal-page-body p,
+.legal-page-body li {
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  max-width: none !important;
+  display: block;
 }
