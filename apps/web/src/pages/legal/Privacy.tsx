@@ -71,7 +71,7 @@ export default function LegalPrivacy() {
             <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               Information in BOAZ-OS is used to:
             </p>
-            <ul className="max-w-3xl list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
+            <ul className="list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
               <li>Provide and operate the application.</li>
               <li>Support user authentication and authorization.</li>
               <li>Maintain logs and audit trails for security and troubleshooting.</li>
@@ -125,10 +125,10 @@ export default function LegalPrivacy() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               Customers are responsible for:
             </p>
-            <ul className="max-w-3xl list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
+            <ul className="list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
               <li>Configuring BOAZ-OS in a way that complies with their own policies.</li>
               <li>Providing appropriate notices and obtaining any required consents from end users.</li>
               <li>Handling data export and deletion requests applicable to their own data.</li>
@@ -169,8 +169,8 @@ export default function LegalPrivacy() {
           <div className="mt-2 space-y-2">
             <p className="text-sm whitespace-normal text-[color:var(--color-text)]">
               For questions about this Privacy Policy, contact{' '}
-              <a href="mailto:support@wolfconsultingnc.com" className="text-[color:var(--color-primary-600)] hover:underline">
-                support@wolfconsultingnc.com
+              <a href="mailto:contactwcg@wolfconsultingnc.com" className="text-[color:var(--color-primary-600)] hover:underline">
+                contactwcg@wolfconsultingnc.com
               </a>
               .
             </p>

@@ -165,9 +165,9 @@ export default function LegalEula() {
           </summary>
           <div className="mt-2 space-y-2">
             <p className="text-sm whitespace-normal text-[color:var(--color-text)]">
-              For questions about this Agreement, contact Wolf Consulting Group, LLC at{' '}
-              <a href="mailto:support@wolfconsultingnc.com" className="text-[color:var(--color-primary-600)] hover:underline">
-                support@wolfconsultingnc.com
+              For questions about this Agreement, contact{' '}
+              <a href="mailto:contactwcg@wolfconsultingnc.com" className="text-[color:var(--color-primary-600)] hover:underline">
+                contactwcg@wolfconsultingnc.com
               </a>
               .
             </p>

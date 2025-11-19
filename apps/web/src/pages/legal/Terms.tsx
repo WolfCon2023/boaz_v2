@@ -104,7 +104,7 @@ export default function LegalTerms() {
             <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               Users must not:
             </p>
-            <ul className="max-w-3xl list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
+            <ul className="list-disc space-y-1 pl-5 text-sm text-[color:var(--color-text)]">
               <li>Attempt to interfere with the security or integrity of BOAZ-OS.</li>
               <li>Use BOAZ-OS to distribute malware, spam, or illegal content.</li>
               <li>Access, or attempt to access, other users&apos; data without authorization.</li>
@@ -118,7 +118,7 @@ export default function LegalTerms() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="text-sm leading-relaxed whitespace-normal text-[color:var(--color-text)]">
               Wolf Consulting Group, LLC may modify BOAZ-OS or these Terms of Service from time to time.
               If you continue using BOAZ-OS after changes take effect, you are agreeing to the updated terms.
             </p>
@@ -159,8 +159,8 @@ export default function LegalTerms() {
           <div className="mt-2 space-y-2">
             <p className="text-sm whitespace-normal text-[color:var(--color-text)]">
               For questions about these Terms, contact{' '}
-              <a href="mailto:support@wolfconsultingnc.com" className="text-[color:var(--color-primary-600)] hover:underline">
-                support@wolfconsultingnc.com
+              <a href="mailto:contactwcg@wolfconsultingnc.com" className="text-[color:var(--color-primary-600)] hover:underline">
+                contactwcg@wolfconsultingnc.com
               </a>
               .
             </p>
