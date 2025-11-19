@@ -131,7 +131,7 @@ tasksRouter.get('/', async (req, res) => {
   const sort: Record<string, 1 | -1> =
     allowedSort[sortKeyRaw] ? { [sortKeyRaw]: allowedSort[sortKeyRaw] } : { dueAt: 1, createdAt: -1 }
 
-  const coll = db.collection<TaskDoc>('tasks')
+  const coll = db.collection<TaskDoc>('crm_tasks')
   const [items, total] = await Promise.all([
     coll.find(filter).sort(sort).skip(skip).limit(limit).toArray(),
     coll.countDocuments(filter),
@@ -207,7 +207,7 @@ tasksRouter.post('/', async (req, res) => {
     updatedAt: now,
   }
 
-  await db.collection<TaskDoc>('tasks').insertOne(doc)
+  await db.collection<TaskDoc>('crm_tasks').insertOne(doc)
 
   res.status(201).json({ data: serializeTask(doc), error: null })
 })
@@ -258,7 +258,7 @@ tasksRouter.put('/:id', async (req, res) => {
 
   update.updatedAt = now
 
-  const coll = db.collection<TaskDoc>('tasks')
+  const coll = db.collection<TaskDoc>('crm_tasks')
   const filter: any = {
     $or: [
       { _id: idStr },
@@ -285,7 +285,7 @@ tasksRouter.post('/:id/complete', async (req, res) => {
 
   const idStr = String(req.params.id)
   const now = new Date()
-  const coll = db.collection<TaskDoc>('tasks')
+  const coll = db.collection<TaskDoc>('crm_tasks')
   const filter: any = {
     $or: [
       { _id: idStr },
@@ -311,7 +311,7 @@ tasksRouter.delete('/:id', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const idStr = String(req.params.id)
-  const result = await db.collection<TaskDoc>('tasks').deleteOne({
+  const result = await db.collection<TaskDoc>('crm_tasks').deleteOne({
     $or: [
       { _id: idStr },
       { _id: new ObjectId(idStr) },

@@ -126,11 +126,11 @@ app.get('/api/metrics/summary', async (_req, res) => {
     tomorrow.setDate(today.getDate() + 1)
 
     const appointmentsToday = await db.collection('appointments').countDocuments({ startsAt: { $gte: today, $lt: tomorrow } })
-    const tasksDueToday = await db.collection('tasks').countDocuments({
+    const tasksDueToday = await db.collection('crm_tasks').countDocuments({
       dueAt: { $gte: today, $lt: tomorrow },
       status: { $in: ['open', 'in_progress'] },
     })
-    const tasksCompletedToday = await db.collection('tasks').countDocuments({
+    const tasksCompletedToday = await db.collection('crm_tasks').countDocuments({
       status: 'completed',
       completedAt: { $gte: today, $lt: tomorrow },
     })
