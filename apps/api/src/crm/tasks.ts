@@ -148,6 +148,35 @@ tasksRouter.get('/', async (req, res) => {
   })
 })
 
+// GET /api/crm/tasks/:id - debug helper and single-task fetch
+tasksRouter.get('/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const idStr = String(req.params.id)
+  const coll = db.collection<TaskDoc>('crm_tasks')
+
+  const doc = await coll.findOne({
+    $or: [
+      { _id: idStr },
+      // In case some tasks were stored with ObjectId IDs
+      (() => {
+        try {
+          return { _id: new ObjectId(idStr) as any }
+        } catch {
+          return { _id: idStr }
+        }
+      })(),
+    ],
+  } as any)
+
+  if (!doc) {
+    return res.status(404).json({ data: null, error: 'not_found' })
+  }
+
+  return res.json({ data: serializeTask(doc), error: null })
+})
+
 // POST /api/crm/tasks
 tasksRouter.post('/', async (req, res) => {
   const parsed = createTaskSchema.safeParse(req.body ?? {})
