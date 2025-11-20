@@ -43,6 +43,7 @@ export default function CRMTasks() {
   const toast = useToast()
   const [searchParams] = useSearchParams()
 
+  const [viewMode, setViewMode] = React.useState<'list' | 'board'>('list')
   const [status, setStatus] = React.useState<'all' | TaskStatus>('open')
   const [type, setType] = React.useState<'all' | TaskType>('all')
   const [priorityFilter, setPriorityFilter] = React.useState<'all' | TaskPriority>('all')
@@ -74,13 +75,14 @@ export default function CRMTasks() {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
 
   const { data, isFetching } = useQuery<TasksResponse>({
-    queryKey: ['tasks', status, type, priorityFilter, mine, q, sort, dir, page, pageSize],
+    queryKey: ['tasks', status, type, priorityFilter, mine, q, sort, dir, page, pageSize, viewMode],
     queryFn: async () => {
       const params: any = {
         page,
         limit: pageSize,
       }
-      if (status !== 'all') params.status = status
+      // For Kanban board we want to see all statuses; for list view we respect the status filter
+      if (viewMode === 'list' && status !== 'all') params.status = status
       if (type !== 'all') params.type = type
       if (mine === 'mine') params.mine = '1'
       if (priorityFilter !== 'all') params.priority = priorityFilter
@@ -569,11 +571,27 @@ export default function CRMTasks() {
         </div>
       </section>
 
-      {/* Task list */}
+      {/* Task list / board */}
       <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--color-border)] px-4 py-3 text-xs text-[color:var(--color-text-muted)]">
           <div>{isFetching ? 'Loading tasks…' : `${total} task${total === 1 ? '' : 's'}`}</div>
           <div className="flex items-center gap-3">
+            <div className="inline-flex rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-0.5 text-[10px]">
+              <button
+                type="button"
+                className={`px-2 py-1 rounded-md ${viewMode === 'list' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
+                onClick={() => setViewMode('list')}
+              >
+                List
+              </button>
+              <button
+                type="button"
+                className={`px-2 py-1 rounded-md ${viewMode === 'board' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
+                onClick={() => setViewMode('board')}
+              >
+                Board
+              </button>
+            </div>
             {anySelected && (
               <div className="flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-2 py-1">
                 <span>{selectedIds.size} selected</span>
@@ -619,17 +637,18 @@ export default function CRMTasks() {
           </div>
         </div>
 
-        <div className="divide-y divide-[color:var(--color-border)]">
-          {tasks.map((t: Task) => {
-            const isOverdue =
-              t.dueAt && t.status !== 'completed' && t.status !== 'cancelled' && new Date(t.dueAt) < new Date()
-            return (
-              <div
-                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between cursor-pointer"
-                key={t._id}
-                onDoubleClick={() => startEdit(t)}
-              >
-                <div className="flex items-start gap-3">
+        {viewMode === 'list' ? (
+          <div className="divide-y divide-[color:var(--color-border)]">
+            {tasks.map((t: Task) => {
+              const isOverdue =
+                t.dueAt && t.status !== 'completed' && t.status !== 'cancelled' && new Date(t.dueAt) < new Date()
+              return (
+                <div
+                  className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between cursor-pointer"
+                  key={t._id}
+                  onDoubleClick={() => startEdit(t)}
+                >
+                  <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
                       className="mt-1 h-3 w-3"
@@ -707,15 +726,112 @@ export default function CRMTasks() {
                     </button>
                   </div>
                 </div>
-            )
-          })}
+              )
+            })}
 
-          {!tasks.length && !isFetching && (
-            <div className="px-4 py-8 text-center text-xs text-[color:var(--color-text-muted)]">
-              No tasks found. Create a task above to get started.
+            {!tasks.length && !isFetching && (
+              <div className="px-4 py-8 text-center text-xs text-[color:var(--color-text-muted)]">
+                No tasks found. Create a task above to get started.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="px-3 pb-4 pt-2 text-[11px]">
+            <div className="mb-2 text-[color:var(--color-text-muted)]">
+              Drag cards between columns to change status. Overdue tasks are highlighted in red.
             </div>
-          )}
-        </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              {(['open', 'in_progress', 'completed', 'cancelled'] as TaskStatus[]).map((columnStatus) => (
+                <div
+                  key={columnStatus}
+                  className="flex min-h-[120px] flex-col rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)]"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const id = e.dataTransfer.getData('text/plain')
+                    if (!id) return
+                    updateTask.mutate({ id, body: { status: columnStatus } })
+                  }}
+                >
+                  <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wide">
+                    <span>
+                      {columnStatus === 'open'
+                        ? 'Open'
+                        : columnStatus === 'in_progress'
+                        ? 'In progress'
+                        : columnStatus === 'completed'
+                        ? 'Completed'
+                        : 'Cancelled'}
+                    </span>
+                    <span className="text-[color:var(--color-text-muted)]">
+                      {tasks.filter((t) => t.status === columnStatus).length}
+                    </span>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2 p-2">
+                    {tasks
+                      .filter((t) => t.status === columnStatus)
+                      .map((t) => {
+                        const isOverdue =
+                          t.dueAt &&
+                          t.status !== 'completed' &&
+                          t.status !== 'cancelled' &&
+                          new Date(t.dueAt) < new Date()
+                        return (
+                          <button
+                            key={t._id}
+                            type="button"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', t._id)
+                            }}
+                            onDoubleClick={() => startEdit(t)}
+                            className="flex flex-col gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-left text-[11px] hover:border-[color:var(--color-primary-500)] hover:bg-[color:var(--color-muted)]"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="inline-flex items-center rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-[9px] uppercase tracking-wide">
+                                {t.type}
+                              </span>
+                              <span className="text-[10px] text-[color:var(--color-text-muted)]">
+                                {t.priority === 'high'
+                                  ? 'High priority'
+                                  : t.priority === 'low'
+                                  ? 'Low priority'
+                                  : 'Normal priority'}
+                              </span>
+                            </div>
+                            <div className="text-xs font-medium">{t.subject}</div>
+                            {t.description && (
+                              <div className="line-clamp-2 text-[11px] text-[color:var(--color-text-muted)]">
+                                {t.description}
+                              </div>
+                            )}
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-[color:var(--color-text-muted)]">
+                              {t.dueAt && (
+                                <span className={isOverdue ? 'text-[color:var(--color-danger)] font-semibold' : ''}>
+                                  Due {formatDateTime(t.dueAt)}
+                                </span>
+                              )}
+                              {t.relatedType && t.relatedId && (
+                                <span>
+                                  {t.relatedType}:{' '}
+                                  <span className="font-mono text-[9px]">{t.relatedId}</span>
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    {tasks.filter((t) => t.status === columnStatus).length === 0 && (
+                      <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-[color:var(--color-border)] bg-transparent px-2 py-4 text-center text-[10px] text-[color:var(--color-text-muted)]">
+                        No tasks in this column.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {editingTask && (
