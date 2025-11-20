@@ -330,7 +330,18 @@ assetsRouter.put('/products/:productId', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const id = String(req.params.productId)
-  const update: Partial<InstalledProductDoc> = { ...parsed.data, updatedAt: new Date() }
+  const update: Partial<InstalledProductDoc> = { updatedAt: new Date() }
+
+  if (parsed.data.customerId !== undefined) update.customerId = parsed.data.customerId
+  if (parsed.data.environmentId !== undefined) update.environmentId = parsed.data.environmentId
+  if (parsed.data.productName !== undefined) update.productName = parsed.data.productName
+  if (parsed.data.productType !== undefined) update.productType = parsed.data.productType
+  if (parsed.data.vendor !== undefined) update.vendor = parsed.data.vendor
+  if (parsed.data.version !== undefined) update.version = parsed.data.version
+  if (parsed.data.serialNumber !== undefined) update.serialNumber = parsed.data.serialNumber
+  if (parsed.data.configuration !== undefined) update.configuration = parsed.data.configuration
+  if (parsed.data.status !== undefined) update.status = parsed.data.status
+  if (parsed.data.supportLevel !== undefined) update.supportLevel = parsed.data.supportLevel
   if (parsed.data.deploymentDate !== undefined) {
     update.deploymentDate = parsed.data.deploymentDate ? new Date(parsed.data.deploymentDate) : null
   }
@@ -421,10 +432,20 @@ assetsRouter.put('/licenses/:licenseId', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const id = String(req.params.licenseId)
-  const update: Partial<LicenseDoc> = { ...parsed.data, updatedAt: new Date() }
+  const update: Partial<LicenseDoc> = { updatedAt: new Date() }
+
+  if (parsed.data.productId !== undefined) update.productId = parsed.data.productId
+  if (parsed.data.licenseType !== undefined) update.licenseType = parsed.data.licenseType
+  if (parsed.data.licenseKey !== undefined) update.licenseKey = parsed.data.licenseKey
+  if (parsed.data.licenseIdentifier !== undefined) update.licenseIdentifier = parsed.data.licenseIdentifier
+  if (parsed.data.licenseCount !== undefined) update.licenseCount = parsed.data.licenseCount
+  if (parsed.data.seatsAssigned !== undefined) update.seatsAssigned = parsed.data.seatsAssigned
   if (parsed.data.expirationDate !== undefined) {
     update.expirationDate = parsed.data.expirationDate ? new Date(parsed.data.expirationDate) : null
   }
+  if (parsed.data.renewalStatus !== undefined) update.renewalStatus = parsed.data.renewalStatus
+  if (parsed.data.cost !== undefined) update.cost = parsed.data.cost
+  if (parsed.data.assignedUsers !== undefined) update.assignedUsers = parsed.data.assignedUsers
 
   const coll = db.collection<LicenseDoc>('assets_licenses')
   const existing = await coll.findOne({ _id: id } as any)
