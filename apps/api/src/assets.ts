@@ -373,6 +373,10 @@ assetsRouter.post('/licenses', async (req, res) => {
 
   const expirationDate = parsed.data.expirationDate ? new Date(parsed.data.expirationDate) : null
 
+  if (parsed.data.seatsAssigned && parsed.data.seatsAssigned > parsed.data.licenseCount) {
+    return res.status(400).json({ data: null, error: 'seats_exceed_license_count' })
+  }
+
   const doc: LicenseDoc = {
     _id,
     productId: parsed.data.productId,
@@ -425,6 +429,13 @@ assetsRouter.put('/licenses/:licenseId', async (req, res) => {
   const coll = db.collection<LicenseDoc>('assets_licenses')
   const existing = await coll.findOne({ _id: id } as any)
   if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const nextSeats =
+    update.seatsAssigned !== undefined ? update.seatsAssigned : existing.seatsAssigned ?? 0
+  const nextCount = update.licenseCount !== undefined ? update.licenseCount : existing.licenseCount ?? 0
+  if (nextSeats > nextCount && nextCount > 0) {
+    return res.status(400).json({ data: null, error: 'seats_exceed_license_count' })
+  }
 
   await coll.updateOne({ _id: id } as any, { $set: update } as any)
   const updated = await coll.findOne({ _id: id } as any)
