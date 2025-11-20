@@ -27,6 +27,23 @@ export default function CRMAccounts() {
   const [sort, setSort] = React.useState<'name'|'companyName'|'accountNumber'>('name')
   const [dir, setDir] = React.useState<'asc'|'desc'>('asc')
   type ColumnDef = { key: string; visible: boolean; label: string }
+  type AssetsSummary = {
+    totalEnvironments: number
+    totalProducts: number
+    upcomingRenewals: Array<{
+      _id: string
+      licenseIdentifier?: string
+      licenseKey?: string
+      expirationDate?: string | null
+      renewalStatus: string
+    }>
+    productHealth: {
+      Active: number
+      NeedsUpgrade: number
+      PendingRenewal: number
+      Retired: number
+    }
+  }
   const defaultCols: ColumnDef[] = [
     { key: 'accountNumber', visible: true, label: 'Account #' },
     { key: 'name', visible: true, label: 'Name' },
@@ -420,6 +437,14 @@ export default function CRMAccounts() {
 
   const [editing, setEditing] = React.useState<Account | null>(null)
   const [showHistory, setShowHistory] = React.useState(false)
+  const assetsSummaryQ = useQuery({
+    queryKey: ['assets-summary-account', editing?._id],
+    enabled: !!editing?._id,
+    queryFn: async () => {
+      const res = await http.get(`/api/assets/summary/${editing?._id}`)
+      return res.data as { data: AssetsSummary }
+    },
+  })
   const historyQ = useQuery({
     queryKey: ['account-history', editing?._id, showHistory],
     enabled: Boolean(editing?._id && showHistory),
@@ -698,6 +723,66 @@ export default function CRMAccounts() {
                       Open renewals for this account
                     </button>
                   </div>
+                </div>
+                <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold">Installed Base</div>
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Environments, installed products, and license renewals for this account.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                      onClick={() => {
+                        if (!editing?._id) return
+                        window.location.href = `/apps/crm/assets?customerId=${encodeURIComponent(editing._id)}`
+                      }}
+                    >
+                      Open assets
+                    </button>
+                  </div>
+                  {assetsSummaryQ.isLoading && (
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">Loading installed base…</div>
+                  )}
+                  {assetsSummaryQ.data && (
+                    <div className="grid gap-3 md:grid-cols-3 text-[11px]">
+                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2">
+                        <div className="text-[10px] text-[color:var(--color-text-muted)]">Environments</div>
+                        <div className="mt-1 text-lg font-semibold">
+                          {assetsSummaryQ.data.data.totalEnvironments}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2">
+                        <div className="text-[10px] text-[color:var(--color-text-muted)]">Installed products</div>
+                        <div className="mt-1 text-lg font-semibold">
+                          {assetsSummaryQ.data.data.totalProducts}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2">
+                        <div className="text-[10px] text-[color:var(--color-text-muted)]">Upcoming renewals (90 days)</div>
+                        <div className="mt-1 text-lg font-semibold">
+                          {assetsSummaryQ.data.data.upcomingRenewals.length}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {assetsSummaryQ.data?.data.upcomingRenewals?.length ? (
+                    <div className="mt-2 space-y-1">
+                      <div className="text-[10px] font-semibold text-[color:var(--color-text-muted)]">
+                        Next renewals
+                      </div>
+                      <ul className="space-y-1 text-[10px] text-[color:var(--color-text-muted)]">
+                        {assetsSummaryQ.data.data.upcomingRenewals.slice(0, 3).map((lic) => (
+                          <li key={lic._id} className="flex items-center justify-between gap-2">
+                            <span>{lic.licenseIdentifier || lic.licenseKey || 'License'}</span>
+                            <span>{lic.expirationDate ? formatDateTime(lic.expirationDate) : 'No date'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
                   <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) remove.mutate(editing._id); setEditing(null) }}>Delete</button>

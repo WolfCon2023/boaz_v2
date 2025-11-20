@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
@@ -75,6 +76,7 @@ type Summary = {
 export default function CRMAssets() {
   const toast = useToast()
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [customerId, setCustomerId] = React.useState('')
 
   const [newEnvName, setNewEnvName] = React.useState('')
@@ -163,15 +165,29 @@ export default function CRMAssets() {
   }, [environments])
 
   React.useEffect(() => {
-    if (!customers.length || customerId) return
-    setCustomerId(customers[0].id)
-  }, [customers, customerId])
+    if (!customers.length) return
+    const fromUrl = searchParams.get('customerId')
+    if (fromUrl && customers.some((c) => c.id === fromUrl)) {
+      setCustomerId(fromUrl)
+      return
+    }
+    if (!customerId) {
+      setCustomerId(customers[0].id)
+    }
+  }, [customers, customerId, searchParams])
 
   React.useEffect(() => {
     if (customersQ.isError) {
       toast.showToast('Failed to load customers for assets.', 'error')
     }
   }, [customersQ.isError, toast])
+
+  React.useEffect(() => {
+    if (!customerId) return
+    const params = new URLSearchParams(searchParams)
+    params.set('customerId', customerId)
+    setSearchParams(params, { replace: true })
+  }, [customerId, searchParams, setSearchParams])
 
   const createEnvironment = useMutation({
     mutationFn: async () => {
