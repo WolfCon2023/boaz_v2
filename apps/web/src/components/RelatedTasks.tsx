@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
@@ -27,6 +28,7 @@ type Props = {
 export function RelatedTasks({ relatedType, relatedId }: Props) {
   const qc = useQueryClient()
   const toast = useToast()
+  const navigate = useNavigate()
 
   const { data, isFetching } = useQuery<RelatedTasksResponse>({
     queryKey: ['related-tasks', relatedType, relatedId],
@@ -121,19 +123,29 @@ export function RelatedTasks({ relatedType, relatedId }: Props) {
               <div className="flex flex-col">
                 <span className="font-medium">{t.subject}</span>
                 <span className="text-[color:var(--color-text-muted)]">
-                  {t.status}{t.dueAt ? ` • Due ${formatDateTime(t.dueAt)}` : ''}
+                  {t.status}
+                  {t.dueAt ? ` • Due ${formatDateTime(t.dueAt)}` : ''}
                 </span>
               </div>
-              {t.status !== 'completed' && (
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => complete.mutate(t._id)}
-                  disabled={complete.isPending}
+                  onClick={() => navigate(`/apps/crm/tasks?task=${encodeURIComponent(t._id)}`)}
                   className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[10px] hover:bg-[color:var(--color-muted)]"
                 >
-                  Mark done
+                  Open
                 </button>
-              )}
+                {t.status !== 'completed' && (
+                  <button
+                    type="button"
+                    onClick={() => complete.mutate(t._id)}
+                    disabled={complete.isPending}
+                    className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[10px] hover:bg-[color:var(--color-muted)]"
+                  >
+                    Mark done
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>

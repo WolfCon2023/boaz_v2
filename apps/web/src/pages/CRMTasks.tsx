@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
@@ -40,6 +41,7 @@ type TasksResponse = {
 export default function CRMTasks() {
   const qc = useQueryClient()
   const toast = useToast()
+  const [searchParams] = useSearchParams()
 
   const [status, setStatus] = React.useState<'all' | TaskStatus>('open')
   const [type, setType] = React.useState<'all' | TaskType>('all')
@@ -90,6 +92,31 @@ export default function CRMTasks() {
     },
     placeholderData: keepPreviousData,
   })
+
+  // If navigated with ?task=<id> (from Contacts/Accounts/Deals related tasks), auto-open that task
+  React.useEffect(() => {
+    const taskId = searchParams.get('task')
+    if (!taskId) return
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await http.get(`/api/crm/tasks/${encodeURIComponent(taskId)}`)
+        const task = res.data?.data as Task | null
+        if (!cancelled && task && task._id) {
+          startEdit(task)
+        }
+      } catch {
+        if (!cancelled) {
+          toast.showToast('Unable to open task from link.', 'error')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [searchParams])
 
   const tasks = data?.data.items ?? []
   const total = data?.data.total ?? 0
