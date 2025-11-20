@@ -44,13 +44,18 @@ export default function CRMContacts() {
     { key: 'officePhone', visible: true, label: 'Office' },
     { key: 'isPrimary', visible: true, label: 'Primary' },
     { key: 'primaryPhone', visible: true, label: 'Primary phone' },
+    { key: 'tasks', visible: true, label: 'Tasks' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
   function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
-    if (!cols.some((c) => c.key === 'surveyStatus')) {
-      return [...cols, { key: 'surveyStatus', visible: true, label: 'Survey' }]
+    let next = cols
+    if (!next.some((c) => c.key === 'tasks')) {
+      next = [...next, { key: 'tasks', visible: true, label: 'Tasks' }]
     }
-    return cols
+    if (!next.some((c) => c.key === 'surveyStatus')) {
+      next = [...next, { key: 'surveyStatus', visible: true, label: 'Survey' }]
+    }
+    return next
   }
   const [cols, setCols] = React.useState<ColumnDef[]>(ensureSurveyCol(defaultCols))
   const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
@@ -191,6 +196,30 @@ export default function CRMContacts() {
       return res.data as { data: { items: ContactSurveyStatusSummary[] } }
     },
   })
+
+  const contactIdsForTasks = React.useMemo(
+    () => (visibleItems.length ? visibleItems.map((c) => c._id).join(',') : ''),
+    [visibleItems],
+  )
+
+  const { data: contactTaskCountsData } = useQuery({
+    queryKey: ['contacts-task-counts', contactIdsForTasks],
+    enabled: !!contactIdsForTasks,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/tasks/counts', {
+        params: { relatedType: 'contact', relatedIds: contactIdsForTasks, status: 'open' },
+      })
+      return res.data as { data: { items: Array<{ relatedId: string; count: number }> } }
+    },
+  })
+
+  const contactTaskCountMap = React.useMemo(() => {
+    const map = new Map<string, number>()
+    for (const row of contactTaskCountsData?.data.items ?? []) {
+      map.set(row.relatedId, row.count)
+    }
+    return map
+  }, [contactTaskCountsData?.data.items])
 
   const contactSurveyStatusMap = React.useMemo(() => {
     const map = new Map<string, ContactSurveyStatusSummary>()
@@ -371,6 +400,16 @@ export default function CRMContacts() {
     if (key === 'officePhone') return c.officePhone ?? '-'
     if (key === 'isPrimary') return c.isPrimary ? 'Yes' : 'No'
     if (key === 'primaryPhone') return c.primaryPhone ?? '-'
+    if (key === 'tasks') {
+      const count = contactTaskCountMap.get(c._id) ?? 0
+      if (!count) return '-'
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px]">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--color-primary-500)]" />
+          {count} open
+        </span>
+      )
+    }
     if (key === 'surveyStatus') {
       const status = contactSurveyStatusMap.get(c._id)
       if (!status || status.responseCount === 0) {

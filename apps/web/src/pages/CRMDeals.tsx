@@ -59,18 +59,27 @@ export default function CRMDeals() {
     { key: 'amount', visible: true, label: 'Amount' },
     { key: 'stage', visible: true, label: 'Stage' },
     { key: 'closeDate', visible: true, label: 'Close date' },
+    { key: 'tasks', visible: true, label: 'Tasks' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
-  // Ensure Survey column is always present and visible, even for old saved layouts
+  // Ensure Survey and Tasks columns are always present and visible, even for old saved layouts
   function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
     let hasSurvey = false
+    let hasTasks = false
     const next = cols.map((c) => {
       if (c.key === 'surveyStatus') {
         hasSurvey = true
         return { ...c, visible: true, label: 'Survey' }
       }
+      if (c.key === 'tasks') {
+        hasTasks = true
+        return { ...c, visible: true, label: 'Tasks' }
+      }
       return c
     })
+    if (!hasTasks) {
+      next.push({ key: 'tasks', visible: true, label: 'Tasks' })
+    }
     if (!hasSurvey) {
       next.push({ key: 'surveyStatus', visible: true, label: 'Survey' })
     }
@@ -448,6 +457,30 @@ export default function CRMDeals() {
     return map
   }, [dealSurveyStatusData?.data.items])
 
+  const dealIdsForTasks = React.useMemo(
+    () => (items.length ? items.map((d) => d._id).join(',') : ''),
+    [items],
+  )
+
+  const { data: dealTaskCountsData } = useQuery({
+    queryKey: ['deals-task-counts', dealIdsForTasks],
+    enabled: !!dealIdsForTasks,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/tasks/counts', {
+        params: { relatedType: 'deal', relatedIds: dealIdsForTasks, status: 'open' },
+      })
+      return res.data as { data: { items: Array<{ relatedId: string; count: number }> } }
+    },
+  })
+
+  const dealTaskCountMap = React.useMemo(() => {
+    const map = new Map<string, number>()
+    for (const row of dealTaskCountsData?.data.items ?? []) {
+      map.set(row.relatedId, row.count)
+    }
+    return map
+  }, [dealTaskCountsData?.data.items])
+
   const [editing, setEditing] = React.useState<Deal | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   const [showHistory, setShowHistory] = React.useState(false)
@@ -540,6 +573,16 @@ export default function CRMDeals() {
     if (key === 'amount') return typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'
     if (key === 'stage') return d.stage ?? '-'
     if (key === 'closeDate') return d.closeDate ? formatDate(d.closeDate) : '-'
+    if (key === 'tasks') {
+      const count = dealTaskCountMap.get(d._id) ?? 0
+      if (!count) return '-'
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px]">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--color-primary-500)]" />
+          {count} open
+        </span>
+      )
+    }
     if (key === 'surveyStatus') {
       const status = dealSurveyStatusMap.get(d._id)
       if (!status || status.responseCount === 0) {

@@ -148,6 +148,55 @@ tasksRouter.get('/', async (req, res) => {
   })
 })
 
+// GET /api/crm/tasks/counts?relatedType=contact&relatedIds=id1,id2,id3&status=open
+tasksRouter.get('/counts', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const relatedType = typeof req.query.relatedType === 'string' ? req.query.relatedType : ''
+  const idsParam = typeof req.query.relatedIds === 'string' ? req.query.relatedIds : ''
+  const status = typeof req.query.status === 'string' ? req.query.status : ''
+
+  if (!relatedType || !['contact', 'account', 'deal', 'invoice', 'quote'].includes(relatedType)) {
+    return res.status(400).json({ data: null, error: 'invalid_relatedType' })
+  }
+  const rawIds = idsParam
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (!rawIds.length) {
+    return res.json({ data: { items: [] }, error: null })
+  }
+
+  const match: any = {
+    relatedType,
+    relatedId: { $in: rawIds },
+  }
+  if (status && ['open', 'in_progress', 'completed', 'cancelled'].includes(status)) {
+    match.status = status
+  }
+
+  const coll = db.collection<TaskDoc>('crm_tasks')
+  const rows = await coll
+    .aggregate<{ _id: string; count: number }>([
+      { $match: match },
+      { $group: { _id: '$relatedId', count: { $sum: 1 } } },
+    ])
+    .toArray()
+
+  const map = new Map<string, number>()
+  for (const r of rows) {
+    map.set(String(r._id), r.count)
+  }
+
+  const items = rawIds.map((id) => ({
+    relatedId: id,
+    count: map.get(id) ?? 0,
+  }))
+
+  return res.json({ data: { items }, error: null })
+})
+
 // GET /api/crm/tasks/:id - debug helper and single-task fetch
 tasksRouter.get('/:id', async (req, res) => {
   const db = await getDb()

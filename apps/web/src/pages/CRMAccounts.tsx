@@ -33,13 +33,18 @@ export default function CRMAccounts() {
     { key: 'primaryContactName', visible: true, label: 'Primary contact' },
     { key: 'primaryContactEmail', visible: true, label: 'Email' },
     { key: 'primaryContactPhone', visible: true, label: 'Phone' },
+    { key: 'tasks', visible: true, label: 'Tasks' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
   function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
-    if (!cols.some((c) => c.key === 'surveyStatus')) {
-      return [...cols, { key: 'surveyStatus', visible: true, label: 'Survey' }]
+    let next = cols
+    if (!next.some((c) => c.key === 'tasks')) {
+      next = [...next, { key: 'tasks', visible: true, label: 'Tasks' }]
     }
-    return cols
+    if (!next.some((c) => c.key === 'surveyStatus')) {
+      next = [...next, { key: 'surveyStatus', visible: true, label: 'Survey' }]
+    }
+    return next
   }
   const [cols, setCols] = React.useState<ColumnDef[]>(ensureSurveyCol(defaultCols))
   const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
@@ -260,6 +265,30 @@ export default function CRMAccounts() {
     return map
   }, [accountSurveyStatusData?.data.items])
 
+  const accountIdsForTasks = React.useMemo(
+    () => (visibleItems.length ? visibleItems.map((a) => a._id).join(',') : ''),
+    [visibleItems],
+  )
+
+  const { data: accountTaskCountsData } = useQuery({
+    queryKey: ['accounts-task-counts', accountIdsForTasks],
+    enabled: !!accountIdsForTasks,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/tasks/counts', {
+        params: { relatedType: 'account', relatedIds: accountIdsForTasks, status: 'open' },
+      })
+      return res.data as { data: { items: Array<{ relatedId: string; count: number }> } }
+    },
+  })
+
+  const accountTaskCountMap = React.useMemo(() => {
+    const map = new Map<string, number>()
+    for (const row of accountTaskCountsData?.data.items ?? []) {
+      map.set(row.relatedId, row.count)
+    }
+    return map
+  }, [accountTaskCountsData?.data.items])
+
   function getColValue(a: Account, key: string) {
     if (key === 'accountNumber') return a.accountNumber ?? '-'
     if (key === 'name') return a.name ?? '-'
@@ -267,6 +296,16 @@ export default function CRMAccounts() {
     if (key === 'primaryContactName') return a.primaryContactName ?? '-'
     if (key === 'primaryContactEmail') return a.primaryContactEmail ?? '-'
     if (key === 'primaryContactPhone') return a.primaryContactPhone ?? '-'
+    if (key === 'tasks') {
+      const count = accountTaskCountMap.get(a._id) ?? 0
+      if (!count) return '-'
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px]">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--color-primary-500)]" />
+          {count} open
+        </span>
+      )
+    }
     if (key === 'surveyStatus') {
       const status = accountSurveyStatusMap.get(a._id)
       if (!status || status.responseCount === 0) {
