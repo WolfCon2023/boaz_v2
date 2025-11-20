@@ -6,6 +6,7 @@ export default function CRMHub() {
     { label: 'Accounts', desc: 'Companies and organizations', href: '/apps/crm/accounts' },
     { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
     { label: 'Tasks & Activities', desc: 'Calls, meetings, and to‑dos tied to CRM records', href: '/apps/crm/tasks' },
+    { label: 'Assets / Installed Base', desc: 'Customer environments, installed products, and licenses', href: '/apps/crm/assets' },
     { label: 'Renewals & Subscriptions', desc: 'Renewal pipeline, health, churn risk, upsell, MRR/ARR', href: '/apps/crm/renewals' },
     { label: 'Products', desc: 'Product catalog, bundles, discounts, and terms', href: '/apps/crm/products' },
     { label: 'Quotes', desc: 'Quotes, proposals, and e-sign', href: '/apps/crm/quotes' },

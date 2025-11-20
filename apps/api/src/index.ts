@@ -36,6 +36,7 @@ import { tasksRouter } from './crm/tasks.js'
 import { getDb } from './db.js'
 import { rolesRouter } from './auth/roles_routes.js'
 import { preferencesRouter } from './auth/preferences.js'
+import { assetsRouter } from './assets.js'
 
 const app = express()
 const normalize = (s: string) => s.trim().replace(/\/$/, '').toLowerCase()
@@ -106,6 +107,7 @@ app.use('/api/marketing', marketingTemplatesRouter)
 app.use('/api/marketing', marketingSendRouter)
 app.use('/api/marketing', marketingUnsubscribeRouter)
 app.use('/api/marketing', marketingImagesRouter)
+app.use('/api/assets', assetsRouter)
 app.use('/api', rolesRouter)
 app.use('/api', preferencesRouter)
 app.use('/api', viewsRouter)
