@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
@@ -22,6 +22,7 @@ export default function CRMAccounts() {
   const qc = useQueryClient()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [query, setQuery] = React.useState('')
   const [sort, setSort] = React.useState<'name'|'companyName'|'accountNumber'>('name')
   const [dir, setDir] = React.useState<'asc'|'desc'>('asc')
@@ -298,12 +299,27 @@ export default function CRMAccounts() {
     if (key === 'primaryContactPhone') return a.primaryContactPhone ?? '-'
     if (key === 'tasks') {
       const count = accountTaskCountMap.get(a._id) ?? 0
-      if (!count) return '-'
       return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px]">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--color-primary-500)]" />
-          {count} open
-        </span>
+        <div className="flex items-center gap-1">
+          {count > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px]">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--color-primary-500)]" />
+              {count} open
+            </span>
+          ) : (
+            <span className="text-[11px] text-[color:var(--color-text-muted)]">No open tasks</span>
+          )}
+          <button
+            type="button"
+            className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/apps/crm/tasks?relatedType=account&relatedId=${encodeURIComponent(a._id)}`)
+            }}
+          >
+            Open
+          </button>
+        </div>
       )
     }
     if (key === 'surveyStatus') {

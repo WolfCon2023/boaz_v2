@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
@@ -41,6 +41,7 @@ export default function CRMDeals() {
   const qc = useQueryClient()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'dealNumber'|'title'|'stage'|'amount'|'closeDate'>('closeDate')
   const [dir, setDir] = React.useState<'asc'|'desc'>('desc')
@@ -575,12 +576,27 @@ export default function CRMDeals() {
     if (key === 'closeDate') return d.closeDate ? formatDate(d.closeDate) : '-'
     if (key === 'tasks') {
       const count = dealTaskCountMap.get(d._id) ?? 0
-      if (!count) return '-'
       return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px]">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--color-primary-500)]" />
-          {count} open
-        </span>
+        <div className="flex items-center gap-1">
+          {count > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text)]">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--color-primary-500)]" />
+              {count} open
+            </span>
+          ) : (
+            <span className="text-[11px] text-[color:var(--color-text-muted)]">No open tasks</span>
+          )}
+          <button
+            type="button"
+            className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/apps/crm/tasks?relatedType=deal&relatedId=${encodeURIComponent(d._id)}`)
+            }}
+          >
+            Open
+          </button>
+        </div>
       )
     }
     if (key === 'surveyStatus') {
