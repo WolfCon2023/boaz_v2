@@ -589,8 +589,28 @@ export default function CRMDeals() {
           <button
             type="button"
             className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation()
+              try {
+                const res = await http.get('/api/crm/tasks', {
+                  params: {
+                    relatedType: 'deal',
+                    relatedId: d._id,
+                    status: 'open',
+                    sort: 'dueAt',
+                    dir: 'asc',
+                    page: 0,
+                    limit: 1,
+                  },
+                })
+                const first = (res.data?.data?.items ?? [])[0] as any
+                if (first && first._id) {
+                  navigate(`/apps/crm/tasks?task=${encodeURIComponent(first._id)}`)
+                  return
+                }
+              } catch {
+                // fall through
+              }
               navigate(`/apps/crm/tasks?relatedType=deal&relatedId=${encodeURIComponent(d._id)}`)
             }}
           >
