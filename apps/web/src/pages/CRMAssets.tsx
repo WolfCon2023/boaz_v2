@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
@@ -74,7 +74,23 @@ type Summary = {
 
 export default function CRMAssets() {
   const toast = useToast()
+  const qc = useQueryClient()
   const [customerId, setCustomerId] = React.useState('')
+
+  const [newEnvName, setNewEnvName] = React.useState('')
+  const [newEnvType, setNewEnvType] = React.useState('Production')
+  const [newEnvLocation, setNewEnvLocation] = React.useState('')
+  const [newEnvStatus, setNewEnvStatus] = React.useState('Active')
+  const [newEnvNotes, setNewEnvNotes] = React.useState('')
+
+  const [newProdEnvId, setNewProdEnvId] = React.useState('')
+  const [newProdName, setNewProdName] = React.useState('')
+  const [newProdType, setNewProdType] = React.useState('Software')
+  const [newProdVendor, setNewProdVendor] = React.useState('')
+  const [newProdVersion, setNewProdVersion] = React.useState('')
+  const [newProdStatus, setNewProdStatus] = React.useState('Active')
+  const [newProdSupport, setNewProdSupport] = React.useState('Standard')
+  const [newProdDeploymentDate, setNewProdDeploymentDate] = React.useState('')
 
   const customersQ = useQuery({
     queryKey: ['assets-customers'],
@@ -132,6 +148,78 @@ export default function CRMAssets() {
       toast.showToast('Failed to load customers for assets.', 'error')
     }
   }, [customersQ.isError, toast])
+
+  const createEnvironment = useMutation({
+    mutationFn: async () => {
+      if (!customerId) throw new Error('Select a customer first.')
+      const payload = {
+        customerId,
+        name: newEnvName.trim(),
+        environmentType: newEnvType as any,
+        location: newEnvLocation.trim() || undefined,
+        status: newEnvStatus as any,
+        notes: newEnvNotes.trim() || undefined,
+      }
+      const res = await http.post('/api/assets/environments', payload)
+      return res.data
+    },
+    onSuccess: () => {
+      setNewEnvName('')
+      setNewEnvLocation('')
+      setNewEnvNotes('')
+      setNewEnvType('Production')
+      setNewEnvStatus('Active')
+      qc.invalidateQueries({ queryKey: ['assets-environments', customerId] })
+      qc.invalidateQueries({ queryKey: ['assets-summary', customerId] })
+      toast.showToast('Environment added.', 'success')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to add environment.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
+  const createProduct = useMutation({
+    mutationFn: async () => {
+      if (!customerId) throw new Error('Select a customer first.')
+      if (!newProdEnvId) throw new Error('Select an environment for this product.')
+      const payload: any = {
+        customerId,
+        environmentId: newProdEnvId,
+        productName: newProdName.trim(),
+        productType: newProdType as any,
+        vendor: newProdVendor.trim() || undefined,
+        version: newProdVersion.trim() || undefined,
+        status: newProdStatus as any,
+        supportLevel: newProdSupport as any,
+      }
+      if (newProdDeploymentDate) {
+        const d = new Date(newProdDeploymentDate)
+        if (!Number.isNaN(d.getTime())) {
+          payload.deploymentDate = d.toISOString()
+        }
+      }
+      const res = await http.post('/api/assets/products', payload)
+      return res.data
+    },
+    onSuccess: () => {
+      setNewProdEnvId('')
+      setNewProdName('')
+      setNewProdType('Software')
+      setNewProdVendor('')
+      setNewProdVersion('')
+      setNewProdStatus('Active')
+      setNewProdSupport('Standard')
+      setNewProdDeploymentDate('')
+      qc.invalidateQueries({ queryKey: ['assets-products', customerId] })
+      qc.invalidateQueries({ queryKey: ['assets-summary', customerId] })
+      toast.showToast('Installed product added.', 'success')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to add installed product.'
+      toast.showToast(msg, 'error')
+    },
+  })
 
   return (
     <div className="space-y-6">
@@ -223,6 +311,73 @@ export default function CRMAssets() {
             <span>Environments</span>
             {environmentsQ.isFetching && <span>Loading…</span>}
           </div>
+          <div className="space-y-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-[11px]">
+            <div className="mb-1 font-semibold text-[color:var(--color-text)]">Add environment</div>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={newEnvName}
+                onChange={(e) => setNewEnvName(e.target.value)}
+                placeholder="Environment name (e.g., Production)"
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
+              <div className="flex gap-2">
+                <select
+                  value={newEnvType}
+                  onChange={(e) => setNewEnvType(e.target.value)}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="Production">Production</option>
+                  <option value="UAT">UAT</option>
+                  <option value="Dev">Dev</option>
+                  <option value="Sandbox">Sandbox</option>
+                  <option value="Retail Store">Retail Store</option>
+                  <option value="Satellite Office">Satellite Office</option>
+                  <option value="Cloud Tenant">Cloud Tenant</option>
+                </select>
+                <select
+                  value={newEnvStatus}
+                  onChange={(e) => setNewEnvStatus(e.target.value)}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                  <option value="Planned">Planned</option>
+                  <option value="Retired">Retired</option>
+                </select>
+              </div>
+              <input
+                type="text"
+                value={newEnvLocation}
+                onChange={(e) => setNewEnvLocation(e.target.value)}
+                placeholder="Location (optional)"
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
+              <textarea
+                value={newEnvNotes}
+                onChange={(e) => setNewEnvNotes(e.target.value)}
+                rows={2}
+                placeholder="Notes (optional)"
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newEnvName.trim()) {
+                      toast.showToast('Environment name is required.', 'error')
+                      return
+                    }
+                    createEnvironment.mutate()
+                  }}
+                  disabled={createEnvironment.isPending || !customerId}
+                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
           {environments.length === 0 ? (
             <div className="text-[11px] text-[color:var(--color-text-muted)]">
               No environments yet for this customer.
@@ -252,10 +407,120 @@ export default function CRMAssets() {
         </div>
 
         {/* Products */}
-        <div className="lg:col-span-2 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-          <div className="mb-2 flex items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
+        <div className="lg:col-span-2 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 space-y-3">
+          <div className="mb-1 flex items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
             <span>Installed products</span>
             {productsQ.isFetching && <span>Loading…</span>}
+          </div>
+          <div className="space-y-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-[11px]">
+            <div className="mb-1 font-semibold text-[color:var(--color-text)]">Add installed product</div>
+            <div className="grid gap-2 md:grid-cols-4">
+              <div className="md:col-span-2">
+                <input
+                  type="text"
+                  value={newProdName}
+                  onChange={(e) => setNewProdName(e.target.value)}
+                  placeholder="Product name"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <select
+                  value={newProdEnvId}
+                  onChange={(e) => setNewProdEnvId(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="">Environment…</option>
+                  {environments.map((env) => (
+                    <option key={env._id} value={env._id}>
+                      {env.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <select
+                  value={newProdType}
+                  onChange={(e) => setNewProdType(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="Software">Software</option>
+                  <option value="Hardware">Hardware</option>
+                  <option value="Cloud Service">Cloud Service</option>
+                  <option value="Integration">Integration</option>
+                  <option value="Subscription">Subscription</option>
+                </select>
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={newProdVendor}
+                  onChange={(e) => setNewProdVendor(e.target.value)}
+                  placeholder="Vendor"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={newProdVersion}
+                  onChange={(e) => setNewProdVersion(e.target.value)}
+                  placeholder="Version"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <select
+                  value={newProdStatus}
+                  onChange={(e) => setNewProdStatus(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Needs Upgrade">Needs Upgrade</option>
+                  <option value="Pending Renewal">Pending Renewal</option>
+                  <option value="Retired">Retired</option>
+                </select>
+              </div>
+              <div>
+                <select
+                  value={newProdSupport}
+                  onChange={(e) => setNewProdSupport(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="Basic">Basic</option>
+                  <option value="Standard">Standard</option>
+                  <option value="Premium">Premium</option>
+                </select>
+              </div>
+              <div>
+                <input
+                  type="date"
+                  value={newProdDeploymentDate}
+                  onChange={(e) => setNewProdDeploymentDate(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newProdName.trim()) {
+                    toast.showToast('Product name is required.', 'error')
+                    return
+                  }
+                  if (!newProdEnvId) {
+                    toast.showToast('Select an environment for this product.', 'error')
+                    return
+                  }
+                  createProduct.mutate()
+                }}
+                disabled={createProduct.isPending || !customerId}
+                className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
           </div>
           {products.length === 0 ? (
             <div className="text-[11px] text-[color:var(--color-text-muted)]">
