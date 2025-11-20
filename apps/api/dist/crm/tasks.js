@@ -1,0 +1,306 @@
+import { Router } from 'express';
+import { getDb } from '../db.js';
+import { z } from 'zod';
+import { ObjectId } from 'mongodb';
+import { requireAuth } from '../auth/rbac.js';
+export const tasksRouter = Router();
+// All task routes require an authenticated user so we can use req.auth safely
+tasksRouter.use(requireAuth);
+const createTaskSchema = z.object({
+    type: z.enum(['call', 'meeting', 'todo', 'email', 'note']).default('todo'),
+    subject: z.string().min(1),
+    description: z.string().optional(),
+    status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
+    priority: z.enum(['low', 'normal', 'high']).optional(),
+    dueAt: z.string().optional(), // ISO string from client
+    relatedType: z.enum(['contact', 'account', 'deal', 'invoice', 'quote']).optional(),
+    relatedId: z.string().optional(),
+});
+const updateTaskSchema = z.object({
+    type: z.enum(['call', 'meeting', 'todo', 'email', 'note']).optional(),
+    subject: z.string().min(1).optional(),
+    description: z.string().optional(),
+    status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
+    priority: z.enum(['low', 'normal', 'high']).optional(),
+    dueAt: z.string().optional().nullable(),
+    relatedType: z.enum(['contact', 'account', 'deal', 'invoice', 'quote']).optional().nullable(),
+    relatedId: z.string().optional().nullable(),
+});
+function serializeTask(doc) {
+    return {
+        ...doc,
+        _id: String(doc._id),
+        dueAt: doc.dueAt ? doc.dueAt.toISOString() : null,
+        completedAt: doc.completedAt ? doc.completedAt.toISOString() : null,
+        createdAt: doc.createdAt ? doc.createdAt.toISOString() : undefined,
+        updatedAt: doc.updatedAt ? doc.updatedAt.toISOString() : undefined,
+    };
+}
+// GET /api/crm/tasks
+// Query params:
+//   q, status, type, priority, mine (1|0), ownerId, relatedType, relatedId, sort, dir, page, limit
+tasksRouter.get('/', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.json({ data: { items: [], total: 0, page: 0, limit: 25 }, error: null });
+    const auth = req.auth;
+    const limit = Math.max(1, Math.min(200, Number(req.query.limit ?? 25)));
+    const page = Math.max(0, Number(req.query.page ?? 0));
+    const skip = page * limit;
+    const filter = {};
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (q) {
+        filter.$or = [
+            { subject: { $regex: q, $options: 'i' } },
+            { description: { $regex: q, $options: 'i' } },
+        ];
+    }
+    const status = typeof req.query.status === 'string' && req.query.status ? req.query.status : undefined;
+    if (status && ['open', 'in_progress', 'completed', 'cancelled'].includes(status)) {
+        filter.status = status;
+    }
+    const type = typeof req.query.type === 'string' && req.query.type ? req.query.type : undefined;
+    if (type && ['call', 'meeting', 'todo', 'email', 'note'].includes(type)) {
+        filter.type = type;
+    }
+    const priority = typeof req.query.priority === 'string' && req.query.priority ? req.query.priority : undefined;
+    if (priority && ['low', 'normal', 'high'].includes(priority)) {
+        filter.priority = priority;
+    }
+    const mine = String(req.query.mine ?? '').trim();
+    const ownerIdParam = String(req.query.ownerId ?? '').trim();
+    if (mine === '1' && auth?.userId) {
+        filter.ownerUserId = auth.userId;
+    }
+    else if (ownerIdParam) {
+        filter.ownerUserId = ownerIdParam;
+    }
+    const relatedType = typeof req.query.relatedType === 'string' && req.query.relatedType ? req.query.relatedType : undefined;
+    if (relatedType && ['contact', 'account', 'deal', 'invoice', 'quote'].includes(relatedType)) {
+        filter.relatedType = relatedType;
+    }
+    const relatedId = typeof req.query.relatedId === 'string' && req.query.relatedId ? req.query.relatedId : undefined;
+    if (relatedId) {
+        filter.relatedId = relatedId;
+    }
+    const sortKeyRaw = req.query.sort || '';
+    const dirRaw = req.query.dir || 'asc';
+    const dir = dirRaw.toLowerCase() === 'desc' ? -1 : 1;
+    const allowedSort = {
+        dueAt: dir,
+        createdAt: dir,
+        priority: dir,
+        status: dir,
+    };
+    const sort = allowedSort[sortKeyRaw] ? { [sortKeyRaw]: allowedSort[sortKeyRaw] } : { dueAt: 1, createdAt: -1 };
+    const coll = db.collection('crm_tasks');
+    const [items, total] = await Promise.all([
+        coll.find(filter).sort(sort).skip(skip).limit(limit).toArray(),
+        coll.countDocuments(filter),
+    ]);
+    res.json({
+        data: {
+            items: items.map(serializeTask),
+            total,
+            page,
+            limit,
+        },
+        error: null,
+    });
+});
+// GET /api/crm/tasks/counts?relatedType=contact&relatedIds=id1,id2,id3&status=open
+tasksRouter.get('/counts', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const relatedType = typeof req.query.relatedType === 'string' ? req.query.relatedType : '';
+    const idsParam = typeof req.query.relatedIds === 'string' ? req.query.relatedIds : '';
+    const status = typeof req.query.status === 'string' ? req.query.status : '';
+    if (!relatedType || !['contact', 'account', 'deal', 'invoice', 'quote'].includes(relatedType)) {
+        return res.status(400).json({ data: null, error: 'invalid_relatedType' });
+    }
+    const rawIds = idsParam
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    if (!rawIds.length) {
+        return res.json({ data: { items: [] }, error: null });
+    }
+    const match = {
+        relatedType,
+        relatedId: { $in: rawIds },
+    };
+    if (status && ['open', 'in_progress', 'completed', 'cancelled'].includes(status)) {
+        match.status = status;
+    }
+    const coll = db.collection('crm_tasks');
+    const rows = await coll
+        .aggregate([
+        { $match: match },
+        { $group: { _id: '$relatedId', count: { $sum: 1 } } },
+    ])
+        .toArray();
+    const map = new Map();
+    for (const r of rows) {
+        map.set(String(r._id), r.count);
+    }
+    const items = rawIds.map((id) => ({
+        relatedId: id,
+        count: map.get(id) ?? 0,
+    }));
+    return res.json({ data: { items }, error: null });
+});
+// GET /api/crm/tasks/:id - debug helper and single-task fetch
+tasksRouter.get('/:id', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const idStr = String(req.params.id);
+    const coll = db.collection('crm_tasks');
+    const doc = await coll.findOne({ _id: idStr });
+    if (!doc) {
+        return res.status(404).json({ data: null, error: 'not_found' });
+    }
+    return res.json({ data: serializeTask(doc), error: null });
+});
+// POST /api/crm/tasks
+tasksRouter.post('/', async (req, res) => {
+    const parsed = createTaskSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    }
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const auth = req.auth;
+    const now = new Date();
+    let dueAt;
+    if (parsed.data.dueAt) {
+        const d = new Date(parsed.data.dueAt);
+        if (!Number.isFinite(d.getTime())) {
+            return res.status(400).json({ data: null, error: 'invalid_dueAt' });
+        }
+        dueAt = d;
+    }
+    const status = parsed.data.status ?? 'open';
+    let ownerName;
+    let ownerUserId = auth?.userId;
+    let ownerEmail = auth?.email;
+    try {
+        if (auth?.userId) {
+            const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+            if (user && typeof user.name === 'string') {
+                ownerName = user.name;
+            }
+        }
+    }
+    catch {
+        // If user lookup fails, we still create the task
+    }
+    const newId = new ObjectId().toHexString();
+    const doc = {
+        _id: newId,
+        type: parsed.data.type,
+        subject: parsed.data.subject,
+        description: parsed.data.description,
+        status,
+        priority: parsed.data.priority ?? 'normal',
+        dueAt: dueAt ?? null,
+        completedAt: status === 'completed' ? now : null,
+        ownerUserId,
+        ownerName,
+        ownerEmail,
+        relatedType: parsed.data.relatedType,
+        relatedId: parsed.data.relatedId,
+        createdAt: now,
+        updatedAt: now,
+    };
+    await db.collection('crm_tasks').insertOne(doc);
+    res.status(201).json({ data: serializeTask(doc), error: null });
+});
+// PUT /api/crm/tasks/:id
+tasksRouter.put('/:id', async (req, res) => {
+    const parsed = updateTaskSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    }
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const idStr = String(req.params.id);
+    const update = {};
+    const body = parsed.data;
+    if (body.type)
+        update.type = body.type;
+    if (body.subject !== undefined)
+        update.subject = body.subject;
+    if (body.description !== undefined)
+        update.description = body.description;
+    if (body.priority)
+        update.priority = body.priority;
+    if (body.relatedType !== undefined)
+        update.relatedType = body.relatedType ?? undefined;
+    if (body.relatedId !== undefined)
+        update.relatedId = body.relatedId ?? undefined;
+    if (body.dueAt !== undefined) {
+        if (body.dueAt === null || body.dueAt === '') {
+            update.dueAt = null;
+        }
+        else {
+            const d = new Date(body.dueAt);
+            if (!Number.isFinite(d.getTime())) {
+                return res.status(400).json({ data: null, error: 'invalid_dueAt' });
+            }
+            update.dueAt = d;
+        }
+    }
+    const now = new Date();
+    if (body.status) {
+        update.status = body.status;
+        if (body.status === 'completed') {
+            update.completedAt = now;
+        }
+        else if (body.status === 'open' || body.status === 'in_progress') {
+            update.completedAt = null;
+        }
+    }
+    update.updatedAt = now;
+    const coll = db.collection('crm_tasks');
+    const filter = { _id: idStr };
+    const existing = await coll.findOne(filter);
+    if (!existing) {
+        return res.status(404).json({ data: null, error: 'not_found' });
+    }
+    await coll.updateOne(filter, { $set: update });
+    const updated = await coll.findOne(filter);
+    res.json({ data: serializeTask(updated), error: null });
+});
+// POST /api/crm/tasks/:id/complete
+tasksRouter.post('/:id/complete', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const idStr = String(req.params.id);
+    const now = new Date();
+    const coll = db.collection('crm_tasks');
+    const filter = { _id: idStr };
+    const existing = await coll.findOne(filter);
+    if (!existing) {
+        return res.status(404).json({ data: null, error: 'not_found' });
+    }
+    await coll.updateOne(filter, { $set: { status: 'completed', completedAt: now, updatedAt: now } });
+    const updated = await coll.findOne(filter);
+    res.json({ data: serializeTask(updated), error: null });
+});
+// DELETE /api/crm/tasks/:id
+tasksRouter.delete('/:id', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const idStr = String(req.params.id);
+    const result = await db.collection('crm_tasks').deleteOne({ _id: idStr });
+    if (!result.deletedCount) {
+        return res.status(404).json({ data: null, error: 'not_found' });
+    }
+    res.json({ data: { ok: true }, error: null });
+});

@@ -32,9 +32,11 @@ import { marketingImagesRouter } from './marketing/images.js';
 import { surveysRouter } from './crm/surveys.js';
 import { renewalsRouter } from './crm/renewals.js';
 import { viewsRouter } from './views.js';
+import { tasksRouter } from './crm/tasks.js';
 import { getDb } from './db.js';
 import { rolesRouter } from './auth/roles_routes.js';
 import { preferencesRouter } from './auth/preferences.js';
+import { assetsRouter } from './assets.js';
 const app = express();
 const normalize = (s) => s.trim().replace(/\/$/, '').toLowerCase();
 const allowedOriginsRaw = env.ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
@@ -97,6 +99,7 @@ app.use('/api/crm/products', (req, res, next) => {
 });
 app.use('/api/crm/products', productsRouter);
 app.use('/api/crm/documents', documentsRouter);
+app.use('/api/crm/tasks', tasksRouter);
 app.use('/api/terms', termsReviewRouter);
 app.use('/api/marketing', marketingSegmentsRouter);
 app.use('/api/marketing', marketingCampaignsRouter);
@@ -106,6 +109,7 @@ app.use('/api/marketing', marketingTemplatesRouter);
 app.use('/api/marketing', marketingSendRouter);
 app.use('/api/marketing', marketingUnsubscribeRouter);
 app.use('/api/marketing', marketingImagesRouter);
+app.use('/api/assets', assetsRouter);
 app.use('/api', rolesRouter);
 app.use('/api', preferencesRouter);
 app.use('/api', viewsRouter);
@@ -124,8 +128,14 @@ app.get('/api/metrics/summary', async (_req, res) => {
         const tomorrow = new Date(today);
         tomorrow.setDate(today.getDate() + 1);
         const appointmentsToday = await db.collection('appointments').countDocuments({ startsAt: { $gte: today, $lt: tomorrow } });
-        const tasksDueToday = await db.collection('tasks').countDocuments({ dueAt: { $gte: today, $lt: tomorrow }, status: { $ne: 'done' } });
-        const tasksCompletedToday = await db.collection('tasks').countDocuments({ status: 'done', completedAt: { $gte: today, $lt: tomorrow } });
+        const tasksDueToday = await db.collection('crm_tasks').countDocuments({
+            dueAt: { $gte: today, $lt: tomorrow },
+            status: { $in: ['open', 'in_progress'] },
+        });
+        const tasksCompletedToday = await db.collection('crm_tasks').countDocuments({
+            status: 'completed',
+            completedAt: { $gte: today, $lt: tomorrow },
+        });
         res.json({ data: { appointmentsToday, tasksDueToday, tasksCompletedToday }, error: null });
     }
     catch (e) {
