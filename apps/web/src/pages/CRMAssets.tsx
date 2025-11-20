@@ -94,6 +94,16 @@ export default function CRMAssets() {
 
   const [editingEnv, setEditingEnv] = React.useState<Environment | null>(null)
   const [editingProd, setEditingProd] = React.useState<InstalledProduct | null>(null)
+  const [licenseProduct, setLicenseProduct] = React.useState<InstalledProduct | null>(null)
+  const [editingLicense, setEditingLicense] = React.useState<License | null>(null)
+  const [licenseType, setLicenseType] = React.useState('Subscription')
+  const [licenseIdentifier, setLicenseIdentifier] = React.useState('')
+  const [licenseKey, setLicenseKey] = React.useState('')
+  const [licenseCount, setLicenseCount] = React.useState('1')
+  const [licenseSeatsAssigned, setLicenseSeatsAssigned] = React.useState('0')
+  const [licenseExpiration, setLicenseExpiration] = React.useState('')
+  const [licenseRenewalStatus, setLicenseRenewalStatus] = React.useState('Active')
+  const [licenseCost, setLicenseCost] = React.useState('')
 
   const customersQ = useQuery({
     queryKey: ['assets-customers'],
@@ -134,6 +144,17 @@ export default function CRMAssets() {
   const environments = environmentsQ.data?.data.items ?? []
   const products = productsQ.data?.data.items ?? []
   const summary = summaryQ.data?.data
+  const productIdForLicenses = licenseProduct?._id ?? ''
+
+  const licensesQ = useQuery({
+    queryKey: ['assets-licenses', productIdForLicenses],
+    enabled: !!productIdForLicenses,
+    queryFn: async () => {
+      const res = await http.get(`/api/assets/licenses/product/${productIdForLicenses}`)
+      return res.data as { data: { items: License[] } }
+    },
+  })
+  const licenses = licensesQ.data?.data.items ?? []
 
   const envById = React.useMemo(() => {
     const map = new Map<string, Environment>()
@@ -256,6 +277,87 @@ export default function CRMAssets() {
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.error || err?.message || 'Failed to update installed product.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
+  const createLicense = useMutation({
+    mutationFn: async () => {
+      if (!licenseProduct) throw new Error('No product selected.')
+      const payload: any = {
+        productId: licenseProduct._id,
+        licenseType: licenseType as any,
+        licenseIdentifier: licenseIdentifier.trim() || undefined,
+        licenseKey: licenseKey.trim() || undefined,
+        licenseCount: Number(licenseCount) || 1,
+        seatsAssigned: Number(licenseSeatsAssigned) || 0,
+        renewalStatus: licenseRenewalStatus as any,
+      }
+      if (licenseExpiration) {
+        const d = new Date(licenseExpiration)
+        if (!Number.isNaN(d.getTime())) {
+          payload.expirationDate = d.toISOString()
+        }
+      }
+      if (licenseCost.trim()) {
+        const c = Number(licenseCost)
+        if (Number.isFinite(c)) payload.cost = c
+      }
+      const res = await http.post('/api/assets/licenses', payload)
+      return res.data
+    },
+    onSuccess: () => {
+      if (licenseProduct) {
+        qc.invalidateQueries({ queryKey: ['assets-licenses', licenseProduct._id] })
+        qc.invalidateQueries({ queryKey: ['assets-summary', customerId] })
+      }
+      setEditingLicense(null)
+      toast.showToast('License added.', 'success')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to add license.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
+  const updateLicense = useMutation({
+    mutationFn: async () => {
+      if (!editingLicense) throw new Error('No license selected.')
+      const payload: any = {
+        licenseType: licenseType as any,
+        licenseIdentifier: licenseIdentifier.trim() || undefined,
+        licenseKey: licenseKey.trim() || undefined,
+        licenseCount: Number(licenseCount) || 1,
+        seatsAssigned: Number(licenseSeatsAssigned) || 0,
+        renewalStatus: licenseRenewalStatus as any,
+      }
+      if (licenseExpiration) {
+        const d = new Date(licenseExpiration)
+        if (!Number.isNaN(d.getTime())) {
+          payload.expirationDate = d.toISOString()
+        }
+      } else {
+        payload.expirationDate = null
+      }
+      if (licenseCost.trim()) {
+        const c = Number(licenseCost)
+        if (Number.isFinite(c)) payload.cost = c
+      } else {
+        payload.cost = undefined
+      }
+      const res = await http.put(`/api/assets/licenses/${editingLicense._id}`, payload)
+      return res.data
+    },
+    onSuccess: () => {
+      if (licenseProduct) {
+        qc.invalidateQueries({ queryKey: ['assets-licenses', licenseProduct._id] })
+        qc.invalidateQueries({ queryKey: ['assets-summary', customerId] })
+      }
+      setEditingLicense(null)
+      toast.showToast('License updated.', 'success')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to update license.'
       toast.showToast(msg, 'error')
     },
   })
@@ -607,6 +709,24 @@ export default function CRMAssets() {
                             >
                               Edit
                             </button>
+                            <button
+                              type="button"
+                              className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+                              onClick={() => {
+                                setLicenseProduct(p)
+                                setEditingLicense(null)
+                                setLicenseType('Subscription')
+                                setLicenseIdentifier('')
+                                setLicenseKey('')
+                                setLicenseCount('1')
+                                setLicenseSeatsAssigned('0')
+                                setLicenseExpiration('')
+                                setLicenseRenewalStatus('Active')
+                                setLicenseCost('')
+                              }}
+                            >
+                              Licenses
+                            </button>
                           </div>
                         </td>
                         <td className="px-2 py-1 align-top">{env ? env.name : '-'}</td>
@@ -873,6 +993,252 @@ export default function CRMAssets() {
                   }}
                 >
                   Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Licenses modal */}
+      {licenseProduct && (
+        <div className="fixed inset-0 z-[2147483647]">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => {
+              setLicenseProduct(null)
+              setEditingLicense(null)
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,40rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl text-xs">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold">Licenses</div>
+                  <div className="text-[11px] text-[color:var(--color-text-muted)]">{licenseProduct.productName}</div>
+                </div>
+                {licensesQ.isFetching && (
+                  <span className="text-[11px] text-[color:var(--color-text-muted)]">Loading…</span>
+                )}
+              </div>
+
+              <div className="mb-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-[color:var(--color-text)]">
+                    {editingLicense ? 'Edit license' : 'Add license'}
+                  </div>
+                  {editingLicense && (
+                    <button
+                      type="button"
+                      className="text-[10px] text-[color:var(--color-text-muted)] underline"
+                      onClick={() => {
+                        setEditingLicense(null)
+                        setLicenseType('Subscription')
+                        setLicenseIdentifier('')
+                        setLicenseKey('')
+                        setLicenseCount('1')
+                        setLicenseSeatsAssigned('0')
+                        setLicenseExpiration('')
+                        setLicenseRenewalStatus('Active')
+                        setLicenseCost('')
+                      }}
+                    >
+                      Switch to add new
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-2 md:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Type</label>
+                    <select
+                      value={licenseType}
+                      onChange={(e) => setLicenseType(e.target.value)}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                    >
+                      <option value="Subscription">Subscription</option>
+                      <option value="Seat-based">Seat-based</option>
+                      <option value="Device-based">Device-based</option>
+                      <option value="Perpetual">Perpetual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                      License identifier
+                    </label>
+                    <input
+                      type="text"
+                      value={licenseIdentifier}
+                      onChange={(e) => setLicenseIdentifier(e.target.value)}
+                      placeholder="Agreement ID, SKU, etc."
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">License key</label>
+                    <input
+                      type="text"
+                      value={licenseKey}
+                      onChange={(e) => setLicenseKey(e.target.value)}
+                      placeholder="XXXX-XXXX-XXXX-XXXX"
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                      Licenses purchased
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={licenseCount}
+                      onChange={(e) => setLicenseCount(e.target.value)}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                      Seats assigned
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={licenseSeatsAssigned}
+                      onChange={(e) => setLicenseSeatsAssigned(e.target.value)}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Expiration</label>
+                    <input
+                      type="date"
+                      value={licenseExpiration}
+                      onChange={(e) => setLicenseExpiration(e.target.value)}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                      Renewal status
+                    </label>
+                    <select
+                      value={licenseRenewalStatus}
+                      onChange={(e) => setLicenseRenewalStatus(e.target.value)}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Pending Renewal">Pending Renewal</option>
+                      <option value="Expired">Expired</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Cost (optional)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={licenseCost}
+                      onChange={(e) => setLicenseCost(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={createLicense.isPending || updateLicense.isPending}
+                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                    onClick={() => {
+                      if (!licenseCount || Number(licenseCount) <= 0) {
+                        toast.showToast('License count must be at least 1.', 'error')
+                        return
+                      }
+                      if (editingLicense) updateLicense.mutate()
+                      else createLicense.mutate()
+                    }}
+                  >
+                    {editingLicense ? 'Save changes' : 'Add license'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[11px] font-semibold text-[color:var(--color-text)]">Existing licenses</div>
+                {licenses.length === 0 ? (
+                  <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                    No licenses recorded for this product yet.
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {licenses.map((lic) => {
+                      const overAllocated = lic.seatsAssigned > lic.licenseCount && lic.licenseCount > 0
+                      const expLabel = lic.expirationDate ? formatDateTime(lic.expirationDate) : 'No expiration'
+                      return (
+                        <li
+                          key={lic._id}
+                          className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-[10px] uppercase">
+                                  {lic.licenseType}
+                                </span>
+                                <span className="text-[11px] font-medium">
+                                  {lic.licenseIdentifier || lic.licenseKey || 'License'}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-3 text-[10px] text-[color:var(--color-text-muted)]">
+                                <span>
+                                  Count: {lic.licenseCount} • Seats assigned:{' '}
+                                  <span className={overAllocated ? 'text-[color:var(--color-danger)] font-semibold' : ''}>
+                                    {lic.seatsAssigned}
+                                  </span>
+                                </span>
+                                <span>Expires: {expLabel}</span>
+                                <span>Status: {lic.renewalStatus}</span>
+                                {typeof lic.cost === 'number' && <span>Cost: {lic.cost.toFixed(2)}</span>}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="h-7 rounded border border-[color:var(--color-border)] px-2 py-0 text-[10px] hover:bg-[color:var(--color-muted)]"
+                              onClick={() => {
+                                setEditingLicense(lic)
+                                setLicenseType(lic.licenseType)
+                                setLicenseIdentifier(lic.licenseIdentifier ?? '')
+                                setLicenseKey(lic.licenseKey ?? '')
+                                setLicenseCount(String(lic.licenseCount ?? 1))
+                                setLicenseSeatsAssigned(String(lic.seatsAssigned ?? 0))
+                                setLicenseExpiration(lic.expirationDate ? lic.expirationDate.slice(0, 10) : '')
+                                setLicenseRenewalStatus(lic.renewalStatus)
+                                setLicenseCost(
+                                  typeof lic.cost === 'number' && Number.isFinite(lic.cost)
+                                    ? String(lic.cost)
+                                    : '',
+                                )
+                              }}
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                  onClick={() => {
+                    setLicenseProduct(null)
+                    setEditingLicense(null)
+                  }}
+                >
+                  Close
                 </button>
               </div>
             </div>
