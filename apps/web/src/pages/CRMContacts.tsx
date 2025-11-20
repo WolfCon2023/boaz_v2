@@ -443,6 +443,33 @@ export default function CRMContacts() {
           >
             Open
           </button>
+          <button
+            type="button"
+            className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+            onClick={async (e) => {
+              e.stopPropagation()
+              const subject = window.prompt('Short description for new task?')?.trim()
+              if (!subject) return
+              try {
+                await http.post('/api/crm/tasks', {
+                  type: 'todo',
+                  subject,
+                  status: 'open',
+                  priority: 'normal',
+                  relatedType: 'contact',
+                  relatedId: c._id,
+                })
+                qc.invalidateQueries({ queryKey: ['contacts-task-counts'] })
+                qc.invalidateQueries({ queryKey: ['tasks'] })
+                toast.showToast('Task created.', 'success')
+              } catch (err: any) {
+                const msg = err?.response?.data?.error || err?.message || 'Failed to create task'
+                toast.showToast(msg, 'error')
+              }
+            }}
+          >
+            Add
+          </button>
         </div>
       )
     }
