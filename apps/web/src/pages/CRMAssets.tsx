@@ -78,6 +78,7 @@ export default function CRMAssets() {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [customerId, setCustomerId] = React.useState('')
+  const initializedFromUrl = React.useRef(false)
 
   const [newEnvName, setNewEnvName] = React.useState('')
   const [newEnvType, setNewEnvType] = React.useState('Production')
@@ -165,16 +166,15 @@ export default function CRMAssets() {
   }, [environments])
 
   React.useEffect(() => {
-    if (!customers.length) return
+    if (!customers.length || initializedFromUrl.current) return
     const fromUrl = searchParams.get('customerId')
     if (fromUrl && customers.some((c) => c.id === fromUrl)) {
       setCustomerId(fromUrl)
-      return
-    }
-    if (!customerId) {
+    } else {
       setCustomerId(customers[0].id)
     }
-  }, [customers, customerId, searchParams])
+    initializedFromUrl.current = true
+  }, [customers, searchParams])
 
   React.useEffect(() => {
     if (customersQ.isError) {
