@@ -334,7 +334,20 @@ export default function CRMAccounts() {
       byCustomer.get(row.customerId)!.push(row)
     }
 
-    const result = new Map<string, { score: number; label: string; className: string }>()
+    const result = new Map<
+      string,
+      {
+        score: number
+        label: string
+        className: string
+        expired: number
+        expiring30: number
+        expiring60: number
+        expiring90: number
+        needsUpgrade: number
+        pendingRenewalProducts: number
+      }
+    >()
     const now = new Date()
     const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
     const in60Days = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
@@ -388,7 +401,17 @@ export default function CRMAccounts() {
           'inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-100'
       }
 
-      result.set(customerId, { score, label, className })
+      result.set(customerId, {
+        score,
+        label,
+        className,
+        expired,
+        expiring30,
+        expiring60,
+        expiring90,
+        needsUpgrade,
+        pendingRenewalProducts,
+      })
     })
 
     return result
@@ -500,12 +523,31 @@ export default function CRMAccounts() {
       const risk = accountAssetsRiskMap.get(a._id)
       if (!risk) {
         return (
-          <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+          <span
+            className="inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]"
+            title="No expiring licenses or upgrade issues detected in the next 90 days."
+          >
             Low
           </span>
         )
       }
-      return <span className={risk.className}>{risk.label}</span>
+      const tooltip = [
+        `Score: ${risk.score}`,
+        risk.expired ? `${risk.expired} expired` : null,
+        risk.expiring30 ? `${risk.expiring30} expiring ≤30d` : null,
+        risk.expiring60 ? `${risk.expiring60} expiring ≤60d` : null,
+        risk.expiring90 ? `${risk.expiring90} expiring ≤90d` : null,
+        risk.needsUpgrade ? `${risk.needsUpgrade} need upgrade` : null,
+        risk.pendingRenewalProducts ? `${risk.pendingRenewalProducts} pending renewal` : null,
+      ]
+        .filter(Boolean)
+        .join(' • ')
+
+      return (
+        <span className={risk.className} title={tooltip}>
+          {risk.label}
+        </span>
+      )
     }
     return ''
   }

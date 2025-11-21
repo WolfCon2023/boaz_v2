@@ -414,8 +414,54 @@ export default function CRMAssets() {
       <CRMNav />
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-1">
-        <div>
-          <h1 className="text-xl font-semibold">Assets &amp; Installed Base</h1>
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold">Assets &amp; Installed Base</h1>
+            {summary && alertBuckets && (
+              (() => {
+                const expSoon =
+                  alertBuckets.within30.length + alertBuckets.within60.length + alertBuckets.within90.length
+                const needsUpgrade = alertBuckets.needsUpgrade.length
+                const pendingRenewalProds = alertBuckets.pendingRenewalProds.length
+
+                let score = 0
+                if (expSoon > 0) score += 30
+                if (needsUpgrade > 0) score += 20
+                if (pendingRenewalProds > 0) score += 20
+                if (summary.productHealth.PendingRenewal > 0) score += 15
+                if (summary.productHealth.NeedsUpgrade > 0) score += 15
+                if (score > 100) score = 100
+
+                let label = 'Low asset risk'
+                let className =
+                  'inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-100'
+                if (score >= 70) {
+                  label = 'High asset risk'
+                  className =
+                    'inline-flex items-center rounded-full border border-red-500/70 bg-red-500/15 px-2 py-0.5 text-[11px] text-red-200'
+                } else if (score >= 30) {
+                  label = 'Medium asset risk'
+                  className =
+                    'inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-100'
+                }
+
+                const tooltipParts = [
+                  `Score: ${score}`,
+                  expSoon ? `${expSoon} licenses expiring ≤90d` : null,
+                  needsUpgrade ? `${needsUpgrade} products need upgrade` : null,
+                  pendingRenewalProds ? `${pendingRenewalProds} products pending renewal` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' • ')
+
+                return (
+                  <span className={className} title={tooltipParts || undefined}>
+                    {label}
+                  </span>
+                )
+              })()
+            )}
+          </div>
           <p className="text-xs text-[color:var(--color-text-muted)]">
             Track customer environments, installed products, and licenses.
           </p>
