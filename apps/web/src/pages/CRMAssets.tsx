@@ -468,6 +468,13 @@ export default function CRMAssets() {
         </div>
         <div className="flex items-center gap-2">
           <a
+            href="/apps/crm/support/kb?tag=crm:assets"
+            className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+          >
+            <span className="text-xs">Help</span>
+            <span className="text-[10px]">?</span>
+          </a>
+          <a
             href="/apps/crm/assets/report"
             className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
           >

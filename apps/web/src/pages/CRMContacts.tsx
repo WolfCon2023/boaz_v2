@@ -525,7 +525,16 @@ export default function CRMContacts() {
   return (
     <div className="space-y-4">
       <CRMNav />
-      <h1 className="text-xl font-semibold">Contacts</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Contacts</h1>
+        <a
+          href="/apps/crm/support/kb?tag=crm:contacts"
+          className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+        >
+          <span className="text-xs">Help</span>
+          <span className="text-[10px]">?</span>
+        </a>
+      </div>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <form className="flex flex-wrap items-center gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ name: String(fd.get('name')||''), email: String(fd.get('email')||'' )|| undefined, company: String(fd.get('company')||'')|| undefined, mobilePhone: String(fd.get('mobilePhone')||'')|| undefined, officePhone: String(fd.get('officePhone')||'')|| undefined, isPrimary: fd.get('isPrimary') === 'on', primaryPhone: (fd.get('primaryPhone') as 'mobile'|'office'|null) || undefined }); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="name" required placeholder="Name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />

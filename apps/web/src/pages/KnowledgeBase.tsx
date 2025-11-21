@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http, apiBaseURL } from '@/lib/http'
 
@@ -7,10 +8,16 @@ type Article = { _id: string; title?: string; body?: string; tags?: string[]; ca
 
 export default function KnowledgeBase() {
   const qc = useQueryClient()
-  const [q, setQ] = React.useState('')
-  const [tag, setTag] = React.useState('')
-  const [dir, setDir] = React.useState<'asc'|'desc'>('desc')
-  const [category, setCategory] = React.useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialQ = searchParams.get('q') ?? ''
+  const initialTag = searchParams.get('tag') ?? ''
+  const initialCategory = searchParams.get('category') ?? ''
+  const initialDir = (searchParams.get('dir') as 'asc' | 'desc') ?? 'desc'
+
+  const [q, setQ] = React.useState(initialQ)
+  const [tag, setTag] = React.useState(initialTag)
+  const [dir, setDir] = React.useState<'asc' | 'desc'>(initialDir)
+  const [category, setCategory] = React.useState(initialCategory)
   const { data, isFetching } = useQuery({
     queryKey: ['kb', q, tag, category, dir],
     queryFn: async () => { const res = await http.get('/api/crm/support/kb', { params: { q, tag, category, sort: 'updatedAt', dir } }); return res.data as { data: { items: Article[] } } },
@@ -71,6 +78,15 @@ export default function KnowledgeBase() {
   ]
 
   const [editing, setEditing] = React.useState<Article | null>(null)
+
+  React.useEffect(() => {
+    const params: Record<string, string> = {}
+    if (q) params.q = q
+    if (tag) params.tag = tag
+    if (category) params.category = category
+    if (dir !== 'desc') params.dir = dir
+    setSearchParams(params, { replace: true })
+  }, [q, tag, category, dir, setSearchParams])
 
   return (
     <div className="space-y-4">

@@ -623,7 +623,16 @@ export default function CRMProducts() {
   return (
     <div className="space-y-4">
       <CRMNav />
-      <h1 className="text-xl font-semibold">Product Catalog & Pricing</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Product Catalog &amp; Pricing</h1>
+        <a
+          href="/apps/crm/support/kb?tag=crm:products"
+          className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+        >
+          <span className="text-xs">Help</span>
+          <span className="text-[10px]">?</span>
+        </a>
+      </div>
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-[color:var(--color-border)]">

@@ -338,10 +338,11 @@ export default function CRMSurveys() {
             </p>
           </div>
           <a
-            href="/apps/crm/surveys/help"
-            className="inline-flex items-center rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+            href="/apps/crm/support/kb?tag=crm:surveys"
+            className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
           >
-            Learn about NPS, CSAT &amp; post‑interaction surveys
+            <span>Help</span>
+            <span className="text-[10px]">?</span>
           </a>
         </div>
 

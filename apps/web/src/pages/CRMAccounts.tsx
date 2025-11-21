@@ -680,7 +680,16 @@ export default function CRMAccounts() {
   return (
     <div className="space-y-4">
       <CRMNav />
-      <h1 className="text-xl font-semibold">Accounts</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Accounts</h1>
+        <a
+          href="/apps/crm/support/kb?tag=crm:accounts"
+          className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+        >
+          <span className="text-xs">Help</span>
+          <span className="text-[10px]">?</span>
+        </a>
+      </div>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search accounts..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />

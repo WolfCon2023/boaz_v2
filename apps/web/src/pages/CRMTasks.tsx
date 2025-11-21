@@ -302,6 +302,15 @@ export default function CRMTasks() {
             Track calls, meetings, and to‑dos tied to your CRM records.
           </p>
         </div>
+        <div className="flex items-center gap-2 px-0.5">
+          <a
+            href="/apps/crm/support/kb?tag=crm:tasks"
+            className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+          >
+            <span className="text-xs">Help</span>
+            <span className="text-[10px]">?</span>
+          </a>
+        </div>
       </header>
 
       {/* Filters */}

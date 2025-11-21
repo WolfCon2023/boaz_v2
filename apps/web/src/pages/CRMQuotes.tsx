@@ -675,19 +675,28 @@ export default function CRMQuotes() {
     <>
       {ConfirmDialog}
       <div className="space-y-4">
-      <CRMNav />
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Quotes</h1>
-        {isManager && (
-          <Link
-            to="/apps/crm/quotes/approval-queue"
-            className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
-          >
-            <Send className="h-4 w-4" />
-            Approval Queue
-          </Link>
-        )}
-      </div>
+        <CRMNav />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold">Quotes</h1>
+            <a
+              href="/apps/crm/support/kb?tag=crm:quotes"
+              className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+            >
+              <span className="text-xs">Help</span>
+              <span className="text-[10px]">?</span>
+            </a>
+          </div>
+          {isManager && (
+            <Link
+              to="/apps/crm/quotes/approval-queue"
+              className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+            >
+              <Send className="h-4 w-4" />
+              Approval Queue
+            </Link>
+          )}
+        </div>
 
       <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
