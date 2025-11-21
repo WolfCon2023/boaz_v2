@@ -148,11 +148,11 @@ export default function CRMProjects() {
       return res.data as { data: Project }
     },
     onSuccess: () => {
-      toast.success('Project created')
+      toast.showToast('Project created', 'success')
       qc.invalidateQueries({ queryKey: ['projects'] })
     },
     onError: () => {
-      toast.error('Failed to create project')
+      toast.showToast('Failed to create project', 'error')
     },
   })
 
@@ -162,11 +162,11 @@ export default function CRMProjects() {
       return res.data as { data: Project }
     },
     onSuccess: () => {
-      toast.success('Project updated')
+      toast.showToast('Project updated', 'success')
       qc.invalidateQueries({ queryKey: ['projects'] })
     },
     onError: () => {
-      toast.error('Failed to update project')
+      toast.showToast('Failed to update project', 'error')
     },
   })
 
@@ -176,11 +176,11 @@ export default function CRMProjects() {
       return res.data as { data: { ok: boolean } }
     },
     onSuccess: () => {
-      toast.success('Project deleted')
+      toast.showToast('Project deleted', 'success')
       qc.invalidateQueries({ queryKey: ['projects'] })
     },
     onError: () => {
-      toast.error('Failed to delete project')
+      toast.showToast('Failed to delete project', 'error')
     },
   })
 
@@ -243,7 +243,7 @@ export default function CRMProjects() {
       actualEndDate: editActualEndDate || undefined,
     }
     if (!payload.name) {
-      toast.error('Name is required')
+      toast.showToast('Name is required', 'error')
       return
     }
     if (!editing || !editing._id) {
