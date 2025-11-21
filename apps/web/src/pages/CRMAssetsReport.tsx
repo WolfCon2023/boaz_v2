@@ -395,6 +395,7 @@ export default function CRMAssetsReport() {
                   <th className="px-2 py-1 text-left">Support</th>
                   <th className="px-2 py-1 text-left">Days left</th>
                   <th className="px-2 py-1 text-left">Cost</th>
+                  <th className="px-2 py-1 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -514,6 +515,32 @@ export default function CRMAssetsReport() {
                       </td>
                       <td className="px-2 py-1 align-top">
                         {typeof r.cost === 'number' ? `$${r.cost.toFixed(2)}` : '-'}
+                      </td>
+                      <td className="px-2 py-1 align-top">
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+                            onClick={() => {
+                              window.location.href = `/apps/crm/accounts?accountId=${encodeURIComponent(
+                                r.customerId,
+                              )}`
+                            }}
+                          >
+                            Open account
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+                            onClick={() => {
+                              window.location.href = `/apps/crm/assets?customerId=${encodeURIComponent(
+                                r.customerId,
+                              )}`
+                            }}
+                          >
+                            Open assets
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )

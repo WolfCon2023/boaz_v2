@@ -53,6 +53,7 @@ export default function CRMAccounts() {
     { key: 'primaryContactPhone', visible: true, label: 'Phone' },
     { key: 'tasks', visible: true, label: 'Tasks' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
+    { key: 'assetRisk', visible: true, label: 'Asset risk' },
   ]
   function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
     let next = cols
@@ -307,6 +308,92 @@ export default function CRMAccounts() {
     return map
   }, [accountTaskCountsData?.data.items])
 
+  type LicenseAlertRow = {
+    customerId: string
+    productStatus?: string
+    renewalStatus: string
+    expirationDate?: string | null
+  }
+
+  const { data: accountAssetsRiskData } = useQuery({
+    queryKey: ['accounts-assets-risk'],
+    queryFn: async () => {
+      const res = await http.get('/api/assets/license-report', {
+        params: { windowDays: 90 },
+      })
+      return res.data as { data: { items: LicenseAlertRow[] } }
+    },
+  })
+
+  const accountAssetsRiskMap = React.useMemo(() => {
+    const rows = accountAssetsRiskData?.data.items ?? []
+    const byCustomer = new Map<string, LicenseAlertRow[]>()
+    for (const row of rows) {
+      if (!row.customerId) continue
+      if (!byCustomer.has(row.customerId)) byCustomer.set(row.customerId, [])
+      byCustomer.get(row.customerId)!.push(row)
+    }
+
+    const result = new Map<string, { score: number; label: string; className: string }>()
+    const now = new Date()
+    const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const in60Days = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
+    const in90Days = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
+
+    byCustomer.forEach((items, customerId) => {
+      let expired = 0
+      let expiring30 = 0
+      let expiring60 = 0
+      let expiring90 = 0
+      let needsUpgrade = 0
+      let pendingRenewalProducts = 0
+
+      for (const row of items) {
+        if (row.productStatus === 'Needs Upgrade') needsUpgrade++
+        if (row.productStatus === 'Pending Renewal') pendingRenewalProducts++
+
+        if (!row.expirationDate) continue
+        const d = new Date(row.expirationDate)
+        if (!Number.isFinite(d.getTime())) continue
+        if (d < now) {
+          expired++
+        } else if (d <= in30Days) {
+          expiring30++
+        } else if (d <= in60Days) {
+          expiring60++
+        } else if (d <= in90Days) {
+          expiring90++
+        }
+      }
+
+      let score = 0
+      if (expired > 0) score += 40
+      if (expiring30 > 0) score += 30
+      if (expiring60 > 0) score += 15
+      if (expiring90 > 0) score += 10
+      if (needsUpgrade > 0) score += 10
+      if (pendingRenewalProducts > 0) score += 10
+      if (score > 100) score = 100
+
+      let label = 'Low'
+      let className =
+        'inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-100'
+      if (score >= 70) {
+        label = 'High'
+        className =
+          'inline-flex items-center rounded-full border border-red-500/70 bg-red-500/15 px-2 py-0.5 text-[11px] text-red-200'
+      } else if (score >= 30) {
+        label = 'Medium'
+        className =
+          'inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-100'
+      }
+
+      result.set(customerId, { score, label, className })
+    })
+
+    return result
+  }, [accountAssetsRiskData?.data.items])
+
   function getColValue(a: Account, key: string) {
     if (key === 'accountNumber') return a.accountNumber ?? '-'
     if (key === 'name') return a.name ?? '-'
@@ -409,6 +496,17 @@ export default function CRMAccounts() {
         </div>
       )
     }
+    if (key === 'assetRisk') {
+      const risk = accountAssetsRiskMap.get(a._id)
+      if (!risk) {
+        return (
+          <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+            Low
+          </span>
+        )
+      }
+      return <span className={risk.className}>{risk.label}</span>
+    }
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
@@ -510,6 +608,24 @@ export default function CRMAccounts() {
       setPortalEl(null)
     }
   }, [editing])
+
+  const [pendingOpenAccountId, setPendingOpenAccountId] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    const openId = searchParams.get('accountId')
+    if (openId) {
+      setPendingOpenAccountId(openId)
+    }
+  }, [searchParams])
+
+  React.useEffect(() => {
+    if (!pendingOpenAccountId || !items.length) return
+    const match = items.find((a) => a._id === pendingOpenAccountId)
+    if (match) {
+      setEditing(match)
+      setPendingOpenAccountId(null)
+    }
+  }, [pendingOpenAccountId, items])
 
   return (
     <div className="space-y-4">
