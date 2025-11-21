@@ -536,4 +536,104 @@ assetsRouter.get('/summary/:customerId', async (req, res) => {
   })
 })
 
+// License report across customers with optional filters
+assetsRouter.get('/license-report', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const licMatch: any = {}
+
+  const licenseStatus = typeof req.query.licenseStatus === 'string' ? req.query.licenseStatus.trim() : ''
+  if (licenseStatus && ['Active', 'Expired', 'Pending Renewal'].includes(licenseStatus)) {
+    licMatch.renewalStatus = licenseStatus
+  }
+
+  const windowDays = Number(req.query.windowDays ?? 0)
+  if (Number.isFinite(windowDays) && windowDays > 0) {
+    const now = new Date()
+    const end = new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000)
+    licMatch.expirationDate = { $gte: now, $lte: end }
+  }
+
+  const productMatch: any = {}
+  const customerId = typeof req.query.customerId === 'string' ? req.query.customerId.trim() : ''
+  if (customerId) productMatch.customerId = customerId
+
+  const environmentId = typeof req.query.environmentId === 'string' ? req.query.environmentId.trim() : ''
+  if (environmentId) productMatch.environmentId = environmentId
+
+  const vendor = typeof req.query.vendor === 'string' ? req.query.vendor.trim() : ''
+  if (vendor) productMatch.vendor = { $regex: vendor, $options: 'i' }
+
+  const productStatus = typeof req.query.productStatus === 'string' ? req.query.productStatus.trim() : ''
+  if (productStatus && ['Active', 'Needs Upgrade', 'Pending Renewal', 'Retired'].includes(productStatus)) {
+    productMatch.status = productStatus
+  }
+
+  const productType = typeof req.query.productType === 'string' ? req.query.productType.trim() : ''
+  if (productType && ['Software', 'Hardware', 'Cloud Service', 'Integration', 'Subscription'].includes(productType)) {
+    productMatch.productType = productType
+  }
+
+  const pipeline: any[] = [
+    { $match: licMatch },
+    {
+      $lookup: {
+        from: 'assets_products',
+        localField: 'productId',
+        foreignField: '_id',
+        as: 'product',
+      },
+    },
+    { $unwind: '$product' },
+  ]
+
+  if (Object.keys(productMatch).length) {
+    pipeline.push({ $match: { 'product.customerId': productMatch.customerId ?? { $exists: true }, ...Object.fromEntries(
+      Object.entries(productMatch)
+        .filter(([k]) => k !== 'customerId')
+        .map(([k, v]) => [`product.${k}`, v])
+    ) } })
+  }
+
+  pipeline.push(
+    {
+      $lookup: {
+        from: 'assets_environments',
+        localField: 'product.environmentId',
+        foreignField: '_id',
+        as: 'env',
+      },
+    },
+    { $unwind: { path: '$env', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 1,
+        productId: '$product._id',
+        customerId: '$product.customerId',
+        environmentId: '$product.environmentId',
+        environmentName: '$env.name',
+        environmentType: '$env.environmentType',
+        productName: '$product.productName',
+        productType: '$product.productType',
+        vendor: '$product.vendor',
+        productStatus: '$product.status',
+        supportLevel: '$product.supportLevel',
+        licenseType: '$licenseType',
+        licenseIdentifier: '$licenseIdentifier',
+        licenseKey: '$licenseKey',
+        licenseCount: '$licenseCount',
+        seatsAssigned: '$seatsAssigned',
+        expirationDate: '$expirationDate',
+        renewalStatus: '$renewalStatus',
+        cost: '$cost',
+      },
+    },
+  )
+
+  const rows = await db.collection<LicenseDoc>('assets_licenses').aggregate(pipeline).toArray()
+
+  res.json({ data: { items: rows }, error: null })
+})
+
 

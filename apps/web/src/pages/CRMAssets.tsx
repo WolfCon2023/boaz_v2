@@ -421,6 +421,12 @@ export default function CRMAssets() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href="/apps/crm/assets/report"
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+          >
+            Licenses report
+          </a>
           <label className="text-xs text-[color:var(--color-text-muted)]">Customer</label>
           <select
             value={customerId}
