@@ -775,9 +775,11 @@ export default function CRMAccounts() {
                   onDragStart={() => handleDragStart(col.key)}
                   onDragOver={handleDragOver}
                   onDrop={() => handleDrop(col.key)}
-                  className={`px-4 py-2 cursor-move ${draggedCol === col.key ? 'opacity-50' : ''}`}
+                  className={`px-4 py-2 cursor-move whitespace-nowrap ${draggedCol === col.key ? 'opacity-50' : ''}`}
                   title="Drag to reorder"
-                >{col.label}</th>
+                >
+                  {col.label}
+                </th>
               ))}
               <th className="px-4 py-2">Actions</th>
             </tr>
