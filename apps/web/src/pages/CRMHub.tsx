@@ -21,6 +21,11 @@ export default function CRMHub() {
       href: '/apps/crm/tasks',
     },
     {
+      label: 'Projects & Delivery',
+      desc: 'Customer implementations, onboarding projects, and delivery work',
+      href: '/apps/crm/projects',
+    },
+    {
       label: 'Assets / Installed Base',
       desc: 'Customer environments, installed products, and licenses',
       href: '/apps/crm/assets',

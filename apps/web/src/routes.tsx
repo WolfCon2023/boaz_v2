@@ -17,6 +17,7 @@ import Workspace from '@/pages/Workspace'
 import CRMContacts from '@/pages/CRMContacts'
 import CRMAccounts from '@/pages/CRMAccounts'
 import CRMDeals from '@/pages/CRMDeals'
+import CRMProjects from '@/pages/CRMProjects'
 import CRMHub from '@/pages/CRMHub'
 import CRMRenewals from '@/pages/CRMRenewals'
 import CRMQuotes from '@/pages/CRMQuotes'
@@ -76,6 +77,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/invoices', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoices /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices/:id/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoicePrint /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/deals', element: <RequireAuth><RequireApplication appKey="crm"><CRMDeals /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/projects', element: <RequireAuth><RequireApplication appKey="crm"><CRMProjects /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/renewals', element: <RequireAuth><RequireApplication appKey="crm"><CRMRenewals /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/products', element: <RequireAuth><RequireApplication appKey="crm"><CRMProducts /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/assets', element: <RequireAuth><RequireApplication appKey="crm"><CRMAssets /></RequireApplication></RequireAuth> },
