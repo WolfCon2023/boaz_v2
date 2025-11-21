@@ -655,75 +655,124 @@ export default function CRMContacts() {
             </div>
           )}
         </div>
-        <table className="w-full text-sm">
-          <thead className="text-left text-[color:var(--color-text-muted)]">
-            <tr>
-              <th className="px-4 py-2">
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={allSelected} onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) visibleItems.forEach((c)=> next.add(c._id)); else visibleItems.forEach((c)=> next.delete(c._id)); setSelectedIds(next) }} />
-                  <span>Select</span>
-                </div>
-              </th>
-              {cols.filter((c) => c.visible).map((col) => (
-                <th
-                  key={col.key}
-                  draggable
-                  onDragStart={() => handleDragStart(col.key)}
-                  onDragOver={handleDragOver}
-                  onDrop={() => handleDrop(col.key)}
-                  className={`px-4 py-2 cursor-move whitespace-nowrap ${draggedCol === col.key ? 'opacity-50' : ''}`}
-                  title="Drag to reorder"
-                >
-                  {col.label}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-[color:var(--color-text-muted)]">
+              <tr>
+                <th className="px-4 py-2 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={(e) => {
+                        const next = new Set(selectedIds)
+                        if (e.target.checked) visibleItems.forEach((c) => next.add(c._id))
+                        else visibleItems.forEach((c) => next.delete(c._id))
+                        setSelectedIds(next)
+                      }}
+                    />
+                    <span>Select</span>
+                  </div>
                 </th>
-              ))}
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleItems.map((c) => (
-              <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
-                <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" checked={selectedIds.has(c._id)} onChange={(e) => { const next = new Set(selectedIds); if (e.target.checked) next.add(c._id); else next.delete(c._id); setSelectedIds(next) }} />
-                </td>
                 {cols.filter((c) => c.visible).map((col) => (
-                  <td key={col.key} className="px-4 py-2">
-                    {inlineEditId === c._id ? (
-                      col.key === 'name' ? (
-                        <input value={inlineName} onChange={(e) => setInlineName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'email' ? (
-                        <input type="email" value={inlineEmail} onChange={(e) => setInlineEmail(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'company' ? (
-                        <input value={inlineCompany} onChange={(e) => setInlineCompany(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'mobilePhone' ? (
-                        <input value={inlineMobilePhone} onChange={(e) => setInlineMobilePhone(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'officePhone' ? (
-                        <input value={inlineOfficePhone} onChange={(e) => setInlineOfficePhone(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                  <th
+                    key={col.key}
+                    draggable
+                    onDragStart={() => handleDragStart(col.key)}
+                    onDragOver={handleDragOver}
+                    onDrop={() => handleDrop(col.key)}
+                    className={`px-4 py-2 cursor-move whitespace-nowrap ${draggedCol === col.key ? 'opacity-50' : ''}`}
+                    title="Drag to reorder"
+                  >
+                    {col.label}
+                  </th>
+                ))}
+                <th className="px-4 py-2 whitespace-nowrap">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleItems.map((c) => (
+                <tr key={c._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+                  <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(c._id)}
+                      onChange={(e) => {
+                        const next = new Set(selectedIds)
+                        if (e.target.checked) next.add(c._id)
+                        else next.delete(c._id)
+                        setSelectedIds(next)
+                      }}
+                    />
+                  </td>
+                  {cols.filter((c) => c.visible).map((col) => (
+                    <td key={col.key} className="px-4 py-2">
+                      {inlineEditId === c._id ? (
+                        col.key === 'name' ? (
+                          <input
+                            value={inlineName}
+                            onChange={(e) => setInlineName(e.target.value)}
+                            className="w-full rounded border bg-transparent px-2 py-1 text-sm"
+                          />
+                        ) : col.key === 'email' ? (
+                          <input
+                            type="email"
+                            value={inlineEmail}
+                            onChange={(e) => setInlineEmail(e.target.value)}
+                            className="w-full rounded border bg-transparent px-2 py-1 text-sm"
+                          />
+                        ) : col.key === 'company' ? (
+                          <input
+                            value={inlineCompany}
+                            onChange={(e) => setInlineCompany(e.target.value)}
+                            className="w-full rounded border bg-transparent px-2 py-1 text-sm"
+                          />
+                        ) : col.key === 'mobilePhone' ? (
+                          <input
+                            value={inlineMobilePhone}
+                            onChange={(e) => setInlineMobilePhone(e.target.value)}
+                            className="w-full rounded border bg-transparent px-2 py-1 text-sm"
+                          />
+                        ) : col.key === 'officePhone' ? (
+                          <input
+                            value={inlineOfficePhone}
+                            onChange={(e) => setInlineOfficePhone(e.target.value)}
+                            className="w-full rounded border bg-transparent px-2 py-1 text-sm"
+                          />
+                        ) : (
+                          getColValue(c, col.key)
+                        )
                       ) : (
                         getColValue(c, col.key)
-                      )
+                      )}
+                    </td>
+                  ))}
+                  <td className="px-4 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {inlineEditId === c._id ? (
+                      <div className="flex items-center gap-2">
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>
+                          Save
+                        </button>
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>
+                          Cancel
+                        </button>
+                      </div>
                     ) : (
-                      getColValue(c, col.key)
+                      <div className="flex items-center gap-2">
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(c)}>
+                          Edit
+                        </button>
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(c)}>
+                          Open
+                        </button>
+                      </div>
                     )}
                   </td>
-                ))}
-                <td className="px-4 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                  {inlineEditId === c._id ? (
-                    <div className="flex items-center gap-2">
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(c)}>Edit</button>
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(c)}>Open</button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="flex items-center justify-between p-4 text-sm">
           <div>
             {typeof total === 'number' ? `Total: ${total}` : ''}
