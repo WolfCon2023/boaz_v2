@@ -758,59 +758,189 @@ export default function CRMProducts() {
           <table className="w-full text-sm">
             <thead className="text-left text-[color:var(--color-text-muted)]">
               <tr>
-                <th 
+                <th
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('sku', productSort, productDir, setProductSort, setProductDir)}
                 >
-                  SKU {getSortIndicator('sku', productSort, productDir)}
+                  <div className="inline-flex items-center gap-1">
+                    <span>SKU {getSortIndicator('sku', productSort, productDir)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Unique SKU or item code used to identify this product."
+                    >
+                      ?
+                    </button>
+                  </div>
                 </th>
-                <th 
+                <th
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('name', productSort, productDir, setProductSort, setProductDir)}
                 >
-                  Name {getSortIndicator('name', productSort, productDir)}
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <span>Name {getSortIndicator('name', productSort, productDir)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Product name shown on quotes, invoices, and reports."
+                    >
+                      ?
+                    </button>
+                  </div>
                 </th>
-                <th 
+                <th
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('type', productSort, productDir, setProductSort, setProductDir)}
                 >
-                  Type {getSortIndicator('type', productSort, productDir)}
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <span>Type {getSortIndicator('type', productSort, productDir)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="High-level product type (e.g., Software, Service, Hardware, Subscription)."
+                    >
+                      ?
+                    </button>
+                  </div>
                 </th>
-                <th className="px-4 py-2">Currency</th>
-                <th 
+                <th className="px-4 py-2 whitespace-nowrap">
+                  <div className="inline-flex items-center gap-1">
+                    <span>Currency</span>
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Currency used for price and cost for this product."
+                    >
+                      ?
+                    </span>
+                  </div>
+                </th>
+                <th
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('basePrice', productSort, productDir, setProductSort, setProductDir)}
                 >
-                  Price {getSortIndicator('basePrice', productSort, productDir)}
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <span>Price {getSortIndicator('basePrice', productSort, productDir)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Standard selling price before discounts or taxes."
+                    >
+                      ?
+                    </button>
+                  </div>
                 </th>
-                <th 
+                <th
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('cost', productSort, productDir, setProductSort, setProductDir)}
                 >
-                  Cost {getSortIndicator('cost', productSort, productDir)}
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <span>Cost {getSortIndicator('cost', productSort, productDir)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Internal cost basis used to calculate margin and profitability."
+                    >
+                      ?
+                    </button>
+                  </div>
                 </th>
-                <th className="px-4 py-2 whitespace-nowrap">Margin</th>
-                <th className="px-4 py-2 whitespace-nowrap">Margin %</th>
-                <th 
+                <th className="px-4 py-2 whitespace-nowrap">
+                  <div className="inline-flex items-center gap-1">
+                    <span>Margin</span>
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Difference between price and cost (Price − Cost)."
+                    >
+                      ?
+                    </span>
+                  </div>
+                </th>
+                <th className="px-4 py-2 whitespace-nowrap">
+                  <div className="inline-flex items-center gap-1">
+                    <span>Margin %</span>
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Margin expressed as a percentage of price ((Price − Cost) ÷ Price)."
+                    >
+                      ?
+                    </span>
+                  </div>
+                </th>
+                <th
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('category', productSort, productDir, setProductSort, setProductDir)}
                 >
-                  Category {getSortIndicator('category', productSort, productDir)}
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <span>Category {getSortIndicator('category', productSort, productDir)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Grouping used for reporting, bundles, and filtering (e.g., Licenses, Hardware)."
+                    >
+                      ?
+                    </button>
+                  </div>
                 </th>
-                <th 
+                <th
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('isActive', productSort, productDir, setProductSort, setProductDir)}
                 >
-                  Status {getSortIndicator('isActive', productSort, productDir)}
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <span>Status {getSortIndicator('isActive', productSort, productDir)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Whether the product is active and available to use on deals, quotes, and invoices."
+                    >
+                      ?
+                    </button>
+                  </div>
                 </th>
-                <th 
+                <th
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('updatedAt', productSort, productDir, setProductSort, setProductDir)}
                 >
-                  Updated {getSortIndicator('updatedAt', productSort, productDir)}
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <span>Updated {getSortIndicator('updatedAt', productSort, productDir)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Last time this product record was modified."
+                    >
+                      ?
+                    </button>
+                  </div>
                 </th>
-                <th className="px-4 py-2">Survey</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2 whitespace-nowrap">
+                  <div className="inline-flex items-center gap-1">
+                    <span>Survey</span>
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Survey or feedback configuration related to this product."
+                    >
+                      ?
+                    </span>
+                  </div>
+                </th>
+                <th className="px-4 py-2 whitespace-nowrap">
+                  <div className="inline-flex items-center gap-1">
+                    <span>Actions</span>
+                    <span
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                      title="Shortcuts to edit, configure, or analyze this product."
+                    >
+                      ?
+                    </span>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
