@@ -1,4 +1,4 @@
-import { getDb } from '../src/db.js'
+import { getDb } from '../db.js'
 
 type ArticleSeed = {
   title: string
@@ -8,6 +8,37 @@ type ArticleSeed = {
 }
 
 const ARTICLES: ArticleSeed[] = [
+  {
+    title: 'Using the Projects & Delivery app in BOAZ‑OS CRM',
+    tags: ['crm', 'crm:projects', 'delivery'],
+    category: 'Sales & Clients',
+    body: `Projects & Delivery – Implementations and onboarding
+
+Purpose
+The Projects & Delivery app tracks customer implementations, onboarding work, and internal delivery projects tied to Accounts and Deals.
+
+Opening the app
+- Go to CRM Hub → Projects & Delivery
+
+Core concepts
+- Project: a delivery engagement or workstream for an account
+- Type: implementation, onboarding, change request, or internal
+- Status: not started, in progress, on hold, completed, or cancelled
+- Health: on track, at risk, or off track
+
+Working with projects
+- Use filters for Status, Type, and Health to focus your view
+- Link projects to Accounts and Deals for context
+- Track start date, target end date, and actual end date for each project
+
+Updating projects
+- Use the New project button to add a project with name, type, dates, and health
+- Edit projects to adjust scope, status, and progress percentage over time
+
+Best practices
+- Keep target end dates and health current so the team can see delivery risk early
+- Link projects to the right Accounts and Deals so reporting and renewals stay accurate.`,
+  },
   {
     title: 'Using the Contacts app in BOAZ‑OS CRM',
     tags: ['crm', 'crm:contacts', 'getting-started'],
@@ -56,7 +87,7 @@ Click **Open** on any row to see the full contact drawer:
 ## Best practices
 - Keep one **primary contact** per account when possible
 - Use **tasks** instead of free‑form notes for anything that requires follow‑up
-- Use **saved views** (e.g. “Key buying committee”) to track high‑value contacts.`
+- Use **saved views** (e.g. “Key buying committee”) to track high‑value contacts.`,
   },
   {
     title: 'Using the Accounts app in BOAZ‑OS CRM',
@@ -107,7 +138,7 @@ Click **Open** on any row to enter the full‑screen account drawer:
 ## Best practices
 - Keep Accounts as the **single source of truth** for company‑level data
 - Use the **Tasks** integration to drive follow‑ups instead of external to‑do lists
-- Use **Installed Base** and **Renewals** views when planning QBRs or renewal conversations.`
+- Use **Installed Base** and **Renewals** views when planning QBRs or renewal conversations.`,
   },
   {
     title: 'Using the Deals app in BOAZ‑OS CRM',
@@ -141,7 +172,7 @@ It supports forecasting, approvals, and links to quotes and invoices.
 
 ## Best practices
 - Keep stage and close date accurate to maintain forecast quality
-- Use **Tasks & Activities** on deals instead of external notes to ensure accountability.`
+- Use **Tasks & Activities** on deals instead of external notes to ensure accountability.`,
   },
   {
     title: 'Using the Tasks & Activities app in BOAZ‑OS CRM',
@@ -186,7 +217,7 @@ calls, meetings, emails, and internal todos tied to Contacts, Accounts, Deals, Q
 
 ## Best practices
 - Keep tasks linked to the right **related record** so work shows up in the right context
-- Use the **Board view** for daily stand‑ups and pipeline reviews.`
+- Use the **Board view** for daily stand‑ups and pipeline reviews.`,
   },
   {
     title: 'Using the Assets / Installed Base app in BOAZ‑OS CRM',
@@ -419,7 +450,6 @@ async function main() {
     })
 
     if (existing) {
-      // eslint-disable-next-line no-console
       console.log('KB article already exists, skipping:', article.title)
       continue
     }
@@ -434,17 +464,14 @@ async function main() {
     }
 
     const result = await db.collection('kb_articles').insertOne(doc)
-    // eslint-disable-next-line no-console
     console.log('Created KB article:', article.title, '→', result.insertedId)
   }
 }
 
 main()
   .catch((err) => {
-    // eslint-disable-next-line no-console
     console.error(err)
     process.exit(1)
   })
   .finally(() => process.exit(0))
-
 

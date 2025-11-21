@@ -1,18 +1,10 @@
-import { getDb } from '../src/db.js'
-
-type ArticleSeed = {
-  title: string
-  body: string
-  tags: string[]
-  category: string
-}
-
-const ARTICLES: ArticleSeed[] = [
-  {
-    title: 'Using the Contacts app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:contacts', 'getting-started'],
-    category: 'Sales & Clients',
-    body: `# Contacts – People and relationships
+import { getDb } from '../db.js';
+const ARTICLES = [
+    {
+        title: 'Using the Contacts app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:contacts', 'getting-started'],
+        category: 'Sales & Clients',
+        body: `# Contacts – People and relationships
 
 ## Purpose
 The **Contacts** app is the system of record for individual people you work with: buyers, end‑users, partners, and internal stakeholders.
@@ -56,13 +48,13 @@ Click **Open** on any row to see the full contact drawer:
 ## Best practices
 - Keep one **primary contact** per account when possible
 - Use **tasks** instead of free‑form notes for anything that requires follow‑up
-- Use **saved views** (e.g. “Key buying committee”) to track high‑value contacts.`
-  },
-  {
-    title: 'Using the Accounts app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:accounts', 'getting-started'],
-    category: 'Sales & Clients',
-    body: `# Accounts – Companies and organizations
+- Use **saved views** (e.g. “Key buying committee”) to track high‑value contacts.`,
+    },
+    {
+        title: 'Using the Accounts app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:accounts', 'getting-started'],
+        category: 'Sales & Clients',
+        body: `# Accounts – Companies and organizations
 
 ## Purpose
 The **Accounts** app tracks companies, organizations, or customers.
@@ -107,13 +99,13 @@ Click **Open** on any row to enter the full‑screen account drawer:
 ## Best practices
 - Keep Accounts as the **single source of truth** for company‑level data
 - Use the **Tasks** integration to drive follow‑ups instead of external to‑do lists
-- Use **Installed Base** and **Renewals** views when planning QBRs or renewal conversations.`
-  },
-  {
-    title: 'Using the Deals app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:deals', 'pipeline'],
-    category: 'Sales & Clients',
-    body: `# Deals – Pipeline and opportunities
+- Use **Installed Base** and **Renewals** views when planning QBRs or renewal conversations.`,
+    },
+    {
+        title: 'Using the Deals app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:deals', 'pipeline'],
+        category: 'Sales & Clients',
+        body: `# Deals – Pipeline and opportunities
 
 ## Purpose
 The **Deals** app tracks sales opportunities from qualification through close.
@@ -141,13 +133,13 @@ It supports forecasting, approvals, and links to quotes and invoices.
 
 ## Best practices
 - Keep stage and close date accurate to maintain forecast quality
-- Use **Tasks & Activities** on deals instead of external notes to ensure accountability.`
-  },
-  {
-    title: 'Using the Tasks & Activities app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:tasks', 'productivity'],
-    category: 'Sales & Clients',
-    body: `# Tasks & Activities – Work management for CRM records
+- Use **Tasks & Activities** on deals instead of external notes to ensure accountability.`,
+    },
+    {
+        title: 'Using the Tasks & Activities app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:tasks', 'productivity'],
+        category: 'Sales & Clients',
+        body: `# Tasks & Activities – Work management for CRM records
 
 ## Purpose
 The **Tasks & Activities** app is a unified to‑do list for CRM work:
@@ -186,13 +178,13 @@ calls, meetings, emails, and internal todos tied to Contacts, Accounts, Deals, Q
 
 ## Best practices
 - Keep tasks linked to the right **related record** so work shows up in the right context
-- Use the **Board view** for daily stand‑ups and pipeline reviews.`
-  },
-  {
-    title: 'Using the Assets / Installed Base app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:assets', 'installed-base'],
-    category: 'Product / Service',
-    body: `# Assets / Installed Base – Customer environments and deployed products
+- Use the **Board view** for daily stand‑ups and pipeline reviews.`,
+    },
+    {
+        title: 'Using the Assets / Installed Base app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:assets', 'installed-base'],
+        category: 'Product / Service',
+        body: `# Assets / Installed Base – Customer environments and deployed products
 
 ## Purpose
 The **Assets / Installed Base** app tracks customer environments, installed products, and licenses.
@@ -247,12 +239,12 @@ It provides visibility into what each customer owns, where it is deployed, and r
 ## Best practices
 - Keep license expiration dates accurate to avoid surprise renewals
 - Use **support level** and **status** to prioritize upgrades and project work.`,
-  },
-  {
-    title: 'Using the Renewals & Subscriptions app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:renewals', 'subscriptions'],
-    category: 'Sales & Clients',
-    body: `# Renewals & Subscriptions – Managing recurring revenue
+    },
+    {
+        title: 'Using the Renewals & Subscriptions app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:renewals', 'subscriptions'],
+        category: 'Sales & Clients',
+        body: `# Renewals & Subscriptions – Managing recurring revenue
 
 ## Purpose
 The **Renewals & Subscriptions** app tracks upcoming renewals, churn risk, and upsell potential.
@@ -266,12 +258,12 @@ It pulls data from Assets, Quotes, Invoices, and CRM Accounts.
 ## Best practices
 - Use the Renewals app in tandem with **Assets / Installed Base** to understand what is renewing
 - Pair renewals with **Tasks & Activities** and **Outreach** to orchestrate campaigns.`,
-  },
-  {
-    title: 'Using the Products app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:products', 'catalog'],
-    category: 'Product / Service',
-    body: `# Products – Catalog, pricing, and margin
+    },
+    {
+        title: 'Using the Products app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:products', 'catalog'],
+        category: 'Product / Service',
+        body: `# Products – Catalog, pricing, and margin
 
 ## Purpose
 The **Products** app is your central catalog for items that appear on quotes and invoices.
@@ -286,12 +278,12 @@ It stores SKU, pricing, cost, margin, category, and status data.
 ## Best practices
 - Keep **Cost** updated so margin reporting is accurate
 - Use **Category** and **Status** to organize active vs. legacy offerings.`,
-  },
-  {
-    title: 'Using the Quotes app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:quotes', 'sales'],
-    category: 'Sales & Clients',
-    body: `# Quotes – Proposals and e‑sign
+    },
+    {
+        title: 'Using the Quotes app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:quotes', 'sales'],
+        category: 'Sales & Clients',
+        body: `# Quotes – Proposals and e‑sign
 
 ## Purpose
 The **Quotes** app manages proposals sent to customers, including approvals and electronic signatures.
@@ -306,12 +298,12 @@ The **Quotes** app manages proposals sent to customers, including approvals and 
 ## Best practices
 - Use standard product bundles and discounts instead of ad‑hoc lines
 - Keep quote statuses and totals accurate to power pipeline and revenue forecasting.`,
-  },
-  {
-    title: 'Using the Invoices app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:invoices', 'billing'],
-    category: 'Finance',
-    body: `# Invoices – Billing, payments, and refunds
+    },
+    {
+        title: 'Using the Invoices app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:invoices', 'billing'],
+        category: 'Finance',
+        body: `# Invoices – Billing, payments, and refunds
 
 ## Purpose
 The **Invoices** app manages billing documents, payment status, and refunds.
@@ -325,12 +317,12 @@ The **Invoices** app manages billing documents, payment status, and refunds.
 ## Best practices
 - Keep invoice statuses and due dates accurate to support AR reporting
 - Use **Documents** to attach supporting files (POs, SOWs, contracts) to invoices.`,
-  },
-  {
-    title: 'Using the Outreach & Sequences apps in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:outreach', 'email', 'sequences'],
-    category: 'Marketing',
-    body: `# Outreach & Sequences – Email/SMS programs
+    },
+    {
+        title: 'Using the Outreach & Sequences apps in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:outreach', 'email', 'sequences'],
+        category: 'Marketing',
+        body: `# Outreach & Sequences – Email/SMS programs
 
 ## Purpose
 The **Outreach Templates** and **Outreach Sequences** apps let you design and run structured email/SMS cadences.
@@ -347,12 +339,12 @@ The **Outreach Templates** and **Outreach Sequences** apps let you design and ru
 ## Best practices
 - Keep templates on‑brand and approved
 - Use survey and ticket data to avoid over‑messaging unhappy customers.`,
-  },
-  {
-    title: 'Using the Surveys & Feedback app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:surveys', 'nps', 'csat'],
-    category: 'Support',
-    body: `# Surveys & Feedback – NPS, CSAT, and post‑interaction
+    },
+    {
+        title: 'Using the Surveys & Feedback app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:surveys', 'nps', 'csat'],
+        category: 'Support',
+        body: `# Surveys & Feedback – NPS, CSAT, and post‑interaction
 
 ## Purpose
 The **Surveys & Feedback** app manages NPS/CSAT programs and post‑interaction feedback.
@@ -366,12 +358,12 @@ The **Surveys & Feedback** app manages NPS/CSAT programs and post‑interaction 
 ## Best practices
 - Use surveys to trigger follow‑up tasks when scores are low
 - Combine survey data with **Renewals** and **Assets** to prioritize retention work.`,
-  },
-  {
-    title: 'Using the Support Tickets app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:tickets', 'support'],
-    category: 'Support',
-    body: `# Tickets – Support cases and SLAs
+    },
+    {
+        title: 'Using the Support Tickets app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:tickets', 'support'],
+        category: 'Support',
+        body: `# Tickets – Support cases and SLAs
 
 ## Purpose
 The **Support Tickets** app tracks customer issues, incidents, and requests.
@@ -385,12 +377,12 @@ The **Support Tickets** app tracks customer issues, incidents, and requests.
 ## Best practices
 - Keep ticket statuses and priorities accurate for triage
 - Use **Knowledge Base** articles to resolve common issues faster.`,
-  },
-  {
-    title: 'Using the Documents app in BOAZ‑OS CRM',
-    tags: ['crm', 'crm:documents', 'files'],
-    category: 'Company & Operations',
-    body: `# Documents – Files and knowledge assets
+    },
+    {
+        title: 'Using the Documents app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:documents', 'files'],
+        category: 'Company & Operations',
+        body: `# Documents – Files and knowledge assets
 
 ## Purpose
 The **Documents** app stores files related to CRM entities (Accounts, Deals, Quotes, Invoices, Projects, etc.).
@@ -403,48 +395,37 @@ The **Documents** app stores files related to CRM entities (Accounts, Deals, Quo
 ## Best practices
 - Use consistent naming conventions so documents are easy to find
 - Prefer linking documents to **Accounts** and **Deals** as the primary anchor.`,
-  },
-]
-
+    },
+];
 async function main() {
-  const db = await getDb()
-  if (!db) {
-    console.error('Database not available')
-    process.exit(1)
-  }
-
-  for (const article of ARTICLES) {
-    const existing = await db.collection('kb_articles').findOne({
-      title: article.title,
-    })
-
-    if (existing) {
-      // eslint-disable-next-line no-console
-      console.log('KB article already exists, skipping:', article.title)
-      continue
+    const db = await getDb();
+    if (!db) {
+        console.error('Database not available');
+        process.exit(1);
     }
-
-    const cleanBody = article.body.replace(/[#*]/g, '')
-    const doc = {
-      ...article,
-      body: cleanBody,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      author: 'system',
+    for (const article of ARTICLES) {
+        const existing = await db.collection('kb_articles').findOne({
+            title: article.title,
+        });
+        if (existing) {
+            console.log('KB article already exists, skipping:', article.title);
+            continue;
+        }
+        const cleanBody = article.body.replace(/[#*]/g, '');
+        const doc = {
+            ...article,
+            body: cleanBody,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            author: 'system',
+        };
+        const result = await db.collection('kb_articles').insertOne(doc);
+        console.log('Created KB article:', article.title, '→', result.insertedId);
     }
-
-    const result = await db.collection('kb_articles').insertOne(doc)
-    // eslint-disable-next-line no-console
-    console.log('Created KB article:', article.title, '→', result.insertedId)
-  }
 }
-
 main()
-  .catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error(err)
-    process.exit(1)
-  })
-  .finally(() => process.exit(0))
-
-
+    .catch((err) => {
+    console.error(err);
+    process.exit(1);
+})
+    .finally(() => process.exit(0));
