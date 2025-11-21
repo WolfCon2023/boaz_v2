@@ -789,8 +789,8 @@ export default function CRMProducts() {
                 >
                   Cost {getSortIndicator('cost', productSort, productDir)}
                 </th>
-                <th className="px-4 py-2">Margin</th>
-                <th className="px-4 py-2">Margin %</th>
+                <th className="px-4 py-2 whitespace-nowrap">Margin</th>
+                <th className="px-4 py-2 whitespace-nowrap">Margin %</th>
                 <th 
                   className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
                   onClick={() => handleSort('category', productSort, productDir, setProductSort, setProductDir)}
