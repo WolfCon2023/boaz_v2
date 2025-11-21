@@ -761,8 +761,21 @@ export default function CRMAccounts() {
                         </div>
                       </div>
                       <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2">
-                        <div className="text-[10px] text-[color:var(--color-text-muted)]">Upcoming renewals (90 days)</div>
-                        <div className="mt-1 text-lg font-semibold">
+                        <div className="flex items-center justify-between gap-1 text-[10px] text-[color:var(--color-text-muted)]">
+                          <span>Upcoming renewals (90 days)</span>
+                          {assetsSummaryQ.data.data.upcomingRenewals.length > 0 && (
+                            <span className="inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/10 px-1.5 py-0.5 text-[9px] text-amber-100">
+                              Attention
+                            </span>
+                          )}
+                        </div>
+                        <div
+                          className={`mt-1 text-lg font-semibold ${
+                            assetsSummaryQ.data.data.upcomingRenewals.length > 0
+                              ? 'text-amber-200'
+                              : ''
+                          }`}
+                        >
                           {assetsSummaryQ.data.data.upcomingRenewals.length}
                         </div>
                       </div>
