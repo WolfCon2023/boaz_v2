@@ -428,7 +428,10 @@ export default function CRMAccounts() {
     if (key === 'companyName') return a.companyName ?? '-'
     if (key === 'primaryContactName') return a.primaryContactName ?? '-'
     if (key === 'primaryContactEmail') return a.primaryContactEmail ?? '-'
-    if (key === 'primaryContactPhone') return a.primaryContactPhone ?? '-'
+    if (key === 'primaryContactPhone') {
+      const value = a.primaryContactPhone ?? '-'
+      return <span className="whitespace-nowrap font-mono text-xs">{value}</span>
+    }
     if (key === 'tasks') {
       const count = accountTaskCountMap.get(a._id) ?? 0
       return (
@@ -765,66 +768,82 @@ export default function CRMAccounts() {
             Add account
           </button>
         </form>
-        <table className="w-full text-sm">
-          <thead className="text-left text-[color:var(--color-text-muted)]">
-            <tr>
-              {cols.filter((c) => c.visible).map((col) => (
-                <th
-                  key={col.key}
-                  draggable
-                  onDragStart={() => handleDragStart(col.key)}
-                  onDragOver={handleDragOver}
-                  onDrop={() => handleDrop(col.key)}
-                  className={`px-4 py-2 cursor-move whitespace-nowrap ${draggedCol === col.key ? 'opacity-50' : ''}`}
-                  title="Drag to reorder"
-                >
-                  {col.label}
-                </th>
-              ))}
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageItems.map((a) => (
-              <tr key={a._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-[color:var(--color-text-muted)]">
+              <tr>
                 {cols.filter((c) => c.visible).map((col) => (
-                  <td key={col.key} className="px-4 py-2">
-                    {inlineEditId === a._id ? (
-                      col.key === 'name' ? (
-                        <input value={inlineName} onChange={(e) => setInlineName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'companyName' ? (
-                        <input value={inlineCompanyName} onChange={(e) => setInlineCompanyName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'primaryContactName' ? (
-                        <input value={inlinePrimaryContactName} onChange={(e) => setInlinePrimaryContactName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'primaryContactEmail' ? (
-                        <input type="email" value={inlinePrimaryContactEmail} onChange={(e) => setInlinePrimaryContactEmail(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'primaryContactPhone' ? (
-                        <input value={inlinePrimaryContactPhone} onChange={(e) => setInlinePrimaryContactPhone(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                  <th
+                    key={col.key}
+                    draggable
+                    onDragStart={() => handleDragStart(col.key)}
+                    onDragOver={handleDragOver}
+                    onDrop={() => handleDrop(col.key)}
+                    className={`px-4 py-2 cursor-move whitespace-nowrap ${draggedCol === col.key ? 'opacity-50' : ''}`}
+                    title="Drag to reorder"
+                  >
+                    {col.key === 'assetRisk' ? (
+                      <div className="inline-flex items-center gap-1">
+                        <span>{col.label}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                          title="Aggregated license and product health risk for this account over the next 90 days."
+                        >
+                          ?
+                        </button>
+                      </div>
+                    ) : (
+                      col.label
+                    )}
+                  </th>
+                ))}
+                <th className="px-4 py-2 whitespace-nowrap">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.map((a) => (
+                <tr key={a._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+                  {cols.filter((c) => c.visible).map((col) => (
+                    <td key={col.key} className="px-4 py-2">
+                      {inlineEditId === a._id ? (
+                        col.key === 'name' ? (
+                          <input value={inlineName} onChange={(e) => setInlineName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                        ) : col.key === 'companyName' ? (
+                          <input value={inlineCompanyName} onChange={(e) => setInlineCompanyName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                        ) : col.key === 'primaryContactName' ? (
+                          <input value={inlinePrimaryContactName} onChange={(e) => setInlinePrimaryContactName(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                        ) : col.key === 'primaryContactEmail' ? (
+                          <input type="email" value={inlinePrimaryContactEmail} onChange={(e) => setInlinePrimaryContactEmail(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                        ) : col.key === 'primaryContactPhone' ? (
+                          <input value={inlinePrimaryContactPhone} onChange={(e) => setInlinePrimaryContactPhone(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                        ) : (
+                          getColValue(a, col.key)
+                        )
                       ) : (
                         getColValue(a, col.key)
-                      )
+                      )}
+                    </td>
+                  ))}
+                  <td className="px-4 py-2 whitespace-nowrap">
+                    {inlineEditId === a._id ? (
+                      <div className="flex items-center gap-2">
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
+                      </div>
                     ) : (
-                      getColValue(a, col.key)
+                      <div className="flex items-center gap-2">
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(a)}>Edit</button>
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(a)}>Open</button>
+                      </div>
                     )}
                   </td>
-                ))}
-                <td className="px-4 py-2 whitespace-nowrap">
-                  {inlineEditId === a._id ? (
-                    <div className="flex items-center gap-2">
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(a)}>Edit</button>
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(a)}>Open</button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="flex items-center justify-between p-4 text-sm">
           <div className="flex items-center gap-2">
             <span>Rows: {visibleItems.length}</span>
