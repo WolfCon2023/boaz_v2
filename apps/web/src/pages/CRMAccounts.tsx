@@ -55,7 +55,7 @@ export default function CRMAccounts() {
     { key: 'surveyStatus', visible: true, label: 'Survey' },
     { key: 'assetRisk', visible: true, label: 'Asset risk' },
   ]
-  function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
+  function ensureCoreCols(cols: ColumnDef[]): ColumnDef[] {
     let next = cols
     if (!next.some((c) => c.key === 'tasks')) {
       next = [...next, { key: 'tasks', visible: true, label: 'Tasks' }]
@@ -63,9 +63,12 @@ export default function CRMAccounts() {
     if (!next.some((c) => c.key === 'surveyStatus')) {
       next = [...next, { key: 'surveyStatus', visible: true, label: 'Survey' }]
     }
+    if (!next.some((c) => c.key === 'assetRisk')) {
+      next = [...next, { key: 'assetRisk', visible: true, label: 'Asset risk' }]
+    }
     return next
   }
-  const [cols, setCols] = React.useState<ColumnDef[]>(ensureSurveyCol(defaultCols))
+  const [cols, setCols] = React.useState<ColumnDef[]>(ensureCoreCols(defaultCols))
   const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
   const [showSaveViewDialog, setShowSaveViewDialog] = React.useState(false)
   const [savingViewName, setSavingViewName] = React.useState('')
@@ -192,7 +195,9 @@ export default function CRMAccounts() {
       const stored = localStorage.getItem('ACCOUNTS_COLS')
       if (stored) {
         const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) setCols(ensureSurveyCol(parsed))
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCols(ensureCoreCols(parsed))
+        }
       }
     } catch {}
     try {
