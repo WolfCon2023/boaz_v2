@@ -1,0 +1,4 @@
+This is a no-op trigger file for CI/CD to pick up recent Assets & Installed Base changes.
+Feel free to delete or ignore this file; it exists solely to force a new deploy.
+
+
