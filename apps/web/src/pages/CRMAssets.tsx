@@ -149,6 +149,37 @@ export default function CRMAssets() {
   const summary = summaryQ.data?.data
   const productIdForLicenses = licenseProduct?._id ?? ''
 
+  const alertBuckets = React.useMemo(() => {
+    if (!summary) return null
+    const within30: License[] = []
+    const within60: License[] = []
+    const within90: License[] = []
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    for (const lic of summary.upcomingRenewals ?? []) {
+      if (!lic.expirationDate) continue
+      const d = new Date(lic.expirationDate)
+      if (Number.isNaN(d.getTime())) continue
+      const diffDays = Math.round((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+      if (diffDays <= 30) within30.push(lic)
+      else if (diffDays <= 60) within60.push(lic)
+      else within90.push(lic)
+    }
+
+    const needsUpgrade = products.filter((p) => p.status === 'Needs Upgrade')
+    const pendingRenewalProds = products.filter((p) => p.status === 'Pending Renewal')
+
+    return {
+      within30,
+      within60,
+      within90,
+      needsUpgrade,
+      pendingRenewalProds,
+    }
+  }, [summary, products])
+
   const licensesQ = useQuery({
     queryKey: ['assets-licenses', productIdForLicenses],
     enabled: !!productIdForLicenses,
@@ -412,47 +443,132 @@ export default function CRMAssets() {
           {summaryQ.isFetching && <span>Loading…</span>}
         </div>
         {summary ? (
-          <div className="grid gap-4 md:grid-cols-4 text-sm">
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Environments</div>
-              <div className="mt-1 text-2xl font-semibold">{summary.totalEnvironments}</div>
-            </div>
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Installed products</div>
-              <div className="mt-1 text-2xl font-semibold">{summary.totalProducts}</div>
-            </div>
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 space-y-1">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Product health</div>
-              <div className="flex flex-wrap gap-2 text-[11px] text-[color:var(--color-text-muted)]">
-                <span>Active: {summary.productHealth.Active}</span>
-                <span>Needs upgrade: {summary.productHealth.NeedsUpgrade}</span>
-                <span>Pending renewal: {summary.productHealth.PendingRenewal}</span>
-                <span>Retired: {summary.productHealth.Retired}</span>
+          <>
+            <div className="grid gap-4 md:grid-cols-4 text-sm">
+              <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Environments</div>
+                <div className="mt-1 text-2xl font-semibold">{summary.totalEnvironments}</div>
+              </div>
+              <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Installed products</div>
+                <div className="mt-1 text-2xl font-semibold">{summary.totalProducts}</div>
+              </div>
+              <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 space-y-1">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Product health</div>
+                <div className="flex flex-wrap gap-2 text-[11px] text-[color:var(--color-text-muted)]">
+                  <span>Active: {summary.productHealth.Active}</span>
+                  <span className={summary.productHealth.NeedsUpgrade ? 'text-[color:var(--color-warning)] font-semibold' : ''}>
+                    Needs upgrade: {summary.productHealth.NeedsUpgrade}
+                  </span>
+                  <span className={summary.productHealth.PendingRenewal ? 'text-[color:var(--color-warning)] font-semibold' : ''}>
+                    Pending renewal: {summary.productHealth.PendingRenewal}
+                  </span>
+                  <span>Retired: {summary.productHealth.Retired}</span>
+                </div>
+              </div>
+              <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 space-y-1">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Upcoming renewals (next 90 days)</div>
+                {summary.upcomingRenewals.length === 0 ? (
+                  <div className="text-[11px] text-[color:var(--color-text-muted)]">No upcoming renewals.</div>
+                ) : (
+                  <ul className="space-y-1 text-[11px]">
+                    {summary.upcomingRenewals.slice(0, 4).map((lic) => (
+                      <li key={lic._id} className="flex items-center justify-between gap-2">
+                        <span>{lic.licenseIdentifier || lic.licenseKey || 'License'} </span>
+                        <span className="text-[color:var(--color-text-muted)]">
+                          {lic.expirationDate ? formatDateTime(lic.expirationDate) : 'No date'}
+                        </span>
+                      </li>
+                    ))}
+                    {summary.upcomingRenewals.length > 4 && (
+                      <li className="text-[11px] text-[color:var(--color-text-muted)]">
+                        +{summary.upcomingRenewals.length - 4} more…
+                      </li>
+                    )}
+                  </ul>
+                )}
               </div>
             </div>
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 space-y-1">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Upcoming renewals (next 90 days)</div>
-              {summary.upcomingRenewals.length === 0 ? (
-                <div className="text-[11px] text-[color:var(--color-text-muted)]">No upcoming renewals.</div>
-              ) : (
-                <ul className="space-y-1 text-[11px]">
-                  {summary.upcomingRenewals.slice(0, 4).map((lic) => (
-                    <li key={lic._id} className="flex items-center justify-between gap-2">
-                      <span>{lic.licenseIdentifier || lic.licenseKey || 'License'} </span>
-                      <span className="text-[color:var(--color-text-muted)]">
-                        {lic.expirationDate ? formatDateTime(lic.expirationDate) : 'No date'}
-                      </span>
-                    </li>
-                  ))}
-                  {summary.upcomingRenewals.length > 4 && (
-                    <li className="text-[11px] text-[color:var(--color-text-muted)]">
-                      +{summary.upcomingRenewals.length - 4} more…
-                    </li>
+
+            {alertBuckets &&
+            (alertBuckets.within30.length ||
+              alertBuckets.within60.length ||
+              alertBuckets.within90.length ||
+              alertBuckets.needsUpgrade.length ||
+              alertBuckets.pendingRenewalProds.length) ? (
+              <div className="mt-4 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 space-y-2 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-[color:var(--color-text)]">Health &amp; renewal alerts</div>
+                  <div className="text-[10px] text-[color:var(--color-text-muted)]">
+                    Licenses expiring soon and products that need attention.
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  {alertBuckets.within30.length > 0 && (
+                    <div className="rounded-lg border border-[color:var(--color-danger)] bg-[color:var(--color-danger)]/10 p-2 space-y-1">
+                      <div className="text-[10px] font-semibold text-[color:var(--color-danger)]">
+                        Expiring in &le; 30 days
+                      </div>
+                      <ul className="space-y-1">
+                        {alertBuckets.within30.slice(0, 3).map((lic) => (
+                          <li key={lic._id} className="flex items-center justify-between gap-2">
+                            <span>{lic.licenseIdentifier || lic.licenseKey || 'License'}</span>
+                            <span>{lic.expirationDate ? formatDateTime(lic.expirationDate) : 'No date'}</span>
+                          </li>
+                        ))}
+                        {alertBuckets.within30.length > 3 && (
+                          <li className="text-[color:var(--color-text-muted)]">
+                            +{alertBuckets.within30.length - 3} more…
+                          </li>
+                        )}
+                      </ul>
+                    </div>
                   )}
-                </ul>
-              )}
-            </div>
-          </div>
+                  {alertBuckets.within60.length > 0 && (
+                    <div className="rounded-lg border border-[color:var(--color-warning)] bg-[color:var(--color-warning)]/10 p-2 space-y-1">
+                      <div className="text-[10px] font-semibold text-[color:var(--color-warning)]">
+                        Expiring in 31–60 days
+                      </div>
+                      <ul className="space-y-1">
+                        {alertBuckets.within60.slice(0, 3).map((lic) => (
+                          <li key={lic._id} className="flex items-center justify-between gap-2">
+                            <span>{lic.licenseIdentifier || lic.licenseKey || 'License'}</span>
+                            <span>{lic.expirationDate ? formatDateTime(lic.expirationDate) : 'No date'}</span>
+                          </li>
+                        ))}
+                        {alertBuckets.within60.length > 3 && (
+                          <li className="text-[color:var(--color-text-muted)]">
+                            +{alertBuckets.within60.length - 3} more…
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                  {alertBuckets.needsUpgrade.length > 0 || alertBuckets.pendingRenewalProds.length > 0 ? (
+                    <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-2 space-y-1">
+                      <div className="text-[10px] font-semibold text-[color:var(--color-text)]">
+                        Products needing attention
+                      </div>
+                      <ul className="space-y-1">
+                        {alertBuckets.needsUpgrade.slice(0, 3).map((p) => (
+                          <li key={p._id} className="flex items-center justify-between gap-2">
+                            <span>{p.productName}</span>
+                            <span className="text-[color:var(--color-warning)]">Needs upgrade</span>
+                          </li>
+                        ))}
+                        {alertBuckets.pendingRenewalProds.slice(0, 3).map((p) => (
+                          <li key={p._id} className="flex items-center justify-between gap-2">
+                            <span>{p.productName}</span>
+                            <span className="text-[color:var(--color-warning)]">Pending renewal</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </>
         ) : (
           <div className="text-xs text-[color:var(--color-text-muted)]">
             Select a customer to see environments, products, and license health.
