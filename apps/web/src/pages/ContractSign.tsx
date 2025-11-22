@@ -74,6 +74,7 @@ export default function ContractSign() {
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const [response, setResponse] = React.useState<ContractSignGetResponse | null>(null)
   const [reloadKey, setReloadKey] = React.useState(0)
+  const [signed, setSigned] = React.useState(false)
 
   React.useEffect(() => {
     if (!token) return
@@ -128,7 +129,7 @@ export default function ContractSign() {
         return
       }
       setBanner('BOAZ says: Contract signed successfully.')
-      setReloadKey((k) => k + 1)
+      setSigned(true)
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || 'sign_failed'
       setBanner(`BOAZ says: ${msg}`)
@@ -146,12 +147,33 @@ export default function ContractSign() {
     )
   }
 
-  if (loadError || !response) {
+  if (!signed && (loadError || !response)) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <div className="max-w-md rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-center">
-          <h1 className="mb-2 text-base font-semibold">Contract link not available</h1>
-          <p className="text-sm text-[color:var(--color-text-muted)]">
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '32px 16px',
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: 640,
+            borderRadius: 16,
+            border: '1px solid rgba(148, 163, 184, 0.4)',
+            backgroundColor: 'var(--color-panel)',
+            padding: 24,
+            boxShadow: '0 20px 50px rgba(15,23,42,0.7)',
+            color: 'var(--color-text)',
+            fontSize: 12,
+            textAlign: 'center',
+          }}
+        >
+          <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Contract link not available</h1>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
             This contract link is invalid, expired, or has already been used. Please contact the sender for a new link.
           </p>
         </div>
@@ -162,6 +184,44 @@ export default function ContractSign() {
   const resp = response.data as any
   const requiresOtp: boolean = !!resp?.requiresOtp && !resp.contract
   const contract: PublicSlaContract | null = resp?.contract ?? null
+
+  if (signed) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '32px 16px',
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: 640,
+            borderRadius: 16,
+            border: '1px solid rgba(148, 163, 184, 0.4)',
+            backgroundColor: 'var(--color-panel)',
+            padding: 24,
+            boxShadow: '0 20px 50px rgba(15,23,42,0.7)',
+            color: 'var(--color-text)',
+            fontSize: 12,
+            textAlign: 'center',
+          }}
+        >
+          <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Thank you for signing</h1>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.5, marginBottom: 8 }}>
+            Your digital signature has been recorded. A copy of this fully executed contract will be sent to you and the
+            provider for your records.
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            You may now close this window, or return to your BOAZ‑OS portal to continue working.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   if (requiresOtp) {
     return (
