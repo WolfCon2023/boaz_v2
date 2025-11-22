@@ -5,6 +5,12 @@ import { getDb } from '../db.js';
 import { requireAuth } from '../auth/rbac.js';
 export const slasRouter = Router();
 slasRouter.use(requireAuth);
+const severityTargetSchema = z.object({
+    key: z.string().min(1),
+    label: z.string().optional(),
+    responseTargetMinutes: z.number().int().positive().nullable().optional(),
+    resolutionTargetMinutes: z.number().int().positive().nullable().optional(),
+});
 const createSchema = z.object({
     accountId: z.string().min(1),
     name: z.string().min(1),
@@ -18,6 +24,7 @@ const createSchema = z.object({
     resolutionTargetMinutes: z.number().int().positive().optional(),
     entitlements: z.string().optional(),
     notes: z.string().optional(),
+    severityTargets: z.array(severityTargetSchema).optional(),
 });
 const updateSchema = createSchema.partial();
 function parseDate(value) {
@@ -107,6 +114,7 @@ slasRouter.post('/', async (req, res) => {
         resolutionTargetMinutes: body.resolutionTargetMinutes ?? null,
         entitlements: body.entitlements,
         notes: body.notes,
+        severityTargets: body.severityTargets,
         createdAt: now,
         updatedAt: now,
     };
@@ -155,13 +163,18 @@ slasRouter.put('/:id', async (req, res) => {
         update.entitlements = body.entitlements;
     if (body.notes !== undefined)
         update.notes = body.notes;
+    if (body.severityTargets !== undefined)
+        update.severityTargets = body.severityTargets;
     update.updatedAt = new Date();
     const coll = db.collection('sla_contracts');
-    const result = await coll.findOneAndUpdate({ _id: new ObjectId(id) }, { $set: update }, { returnDocument: 'after' });
-    const value = result?.value;
-    if (!value)
+    const existing = await coll.findOne({ _id: new ObjectId(id) });
+    if (!existing)
         return res.status(404).json({ data: null, error: 'not_found' });
-    res.json({ data: serialize(value), error: null });
+    await coll.updateOne({ _id: existing._id }, { $set: update });
+    const updated = await coll.findOne({ _id: existing._id });
+    if (!updated)
+        return res.status(500).json({ data: null, error: 'update_failed' });
+    res.json({ data: serialize(updated), error: null });
 });
 // DELETE /api/crm/slas/:id
 slasRouter.delete('/:id', async (req, res) => {
