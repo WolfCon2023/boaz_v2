@@ -278,6 +278,15 @@ export default function CRMProjects() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => {
+              window.location.href = '/apps/crm/projects/report'
+            }}
+            className="inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+          >
+            Report
+          </button>
+          <button
+            type="button"
             onClick={() => openEdit(null)}
             className="inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
           >
