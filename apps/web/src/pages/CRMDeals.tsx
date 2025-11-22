@@ -53,6 +53,15 @@ export default function CRMDeals() {
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
   type ColumnDef = { key: string; visible: boolean; label: string }
+  type DealProjectsSummaryRow = {
+    dealId: string
+    total: number
+    active: number
+    completed: number
+    atRisk: number
+    offTrack: number
+  }
+
   const defaultCols: ColumnDef[] = [
     { key: 'dealNumber', visible: true, label: 'Deal #' },
     { key: 'account', visible: true, label: 'Account' },
@@ -61,6 +70,7 @@ export default function CRMDeals() {
     { key: 'stage', visible: true, label: 'Stage' },
     { key: 'closeDate', visible: true, label: 'Close date' },
     { key: 'tasks', visible: true, label: 'Tasks' },
+    { key: 'projects', visible: true, label: 'Projects' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
   // Ensure Survey and Tasks columns are always present and visible, even for old saved layouts
@@ -482,6 +492,52 @@ export default function CRMDeals() {
     return map
   }, [dealTaskCountsData?.data.items])
 
+  const dealIdsForProjects = React.useMemo(
+    () => (items.length ? items.map((d) => d._id).join(',') : ''),
+    [items],
+  )
+
+  const { data: dealProjectsSummaryData } = useQuery({
+    queryKey: ['deals-projects-summary', dealIdsForProjects],
+    enabled: !!dealIdsForProjects,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/projects/counts', {
+        params: { dealIds: dealIdsForProjects },
+      })
+      return res.data as {
+        data: {
+          items: Array<{
+            kind: 'account' | 'deal'
+            accountId?: string
+            dealId?: string
+            total: number
+            active: number
+            completed: number
+            atRisk: number
+            offTrack: number
+          }>
+        }
+      }
+    },
+  })
+
+  const dealProjectsMap = React.useMemo(() => {
+    const map = new Map<string, DealProjectsSummaryRow>()
+    for (const row of dealProjectsSummaryData?.data.items ?? []) {
+      if ((row as any).kind !== 'deal' || !row.dealId) continue
+      const r = row as any
+      map.set(r.dealId, {
+        dealId: r.dealId,
+        total: r.total ?? 0,
+        active: r.active ?? 0,
+        completed: r.completed ?? 0,
+        atRisk: r.atRisk ?? 0,
+        offTrack: r.offTrack ?? 0,
+      })
+    }
+    return map
+  }, [dealProjectsSummaryData?.data.items])
+
   const [editing, setEditing] = React.useState<Deal | null>(null)
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   const [showHistory, setShowHistory] = React.useState(false)
@@ -494,6 +550,26 @@ export default function CRMDeals() {
         params: { sourceDealId: editing?._id },
       })
       return res.data as { data: { items: LinkedRenewal[] } }
+    },
+  })
+  const { data: dealProjectsForDrawer } = useQuery({
+    queryKey: ['deal-projects', editing?._id],
+    enabled: !!editing?._id,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/projects', {
+        params: { dealId: editing?._id, limit: 50, sort: 'targetEndDate', dir: 'asc' },
+      })
+      return res.data as {
+        data: {
+          items: Array<{
+            _id: string
+            name: string
+            status: string
+            health?: string
+            targetEndDate?: string | null
+          }>
+        }
+      }
     },
   })
   
@@ -644,6 +720,35 @@ export default function CRMDeals() {
             Add
           </button>
         </div>
+      )
+    }
+    if (key === 'projects') {
+      const summary = dealProjectsMap.get(d._id)
+      if (!summary || summary.total === 0) {
+        return (
+          <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+            No projects
+          </span>
+        )
+      }
+      const riskCount = (summary.atRisk ?? 0) + (summary.offTrack ?? 0)
+      const baseClass =
+        riskCount > 0
+          ? 'inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-100'
+          : 'inline-flex items-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-100'
+      const titleParts = [
+        `${summary.total} total`,
+        `${summary.active ?? 0} active`,
+        `${summary.completed ?? 0} completed`,
+        riskCount ? `${riskCount} at risk` : null,
+      ]
+        .filter(Boolean)
+        .join(' • ')
+      return (
+        <span className={baseClass} title={titleParts}>
+          {summary.total} proj • {summary.active ?? 0} active
+          {riskCount ? ` • ${riskCount} at risk` : ''}
+        </span>
       )
     }
     if (key === 'surveyStatus') {
@@ -1074,6 +1179,93 @@ export default function CRMDeals() {
                     >
                       Open renewals for this account
                     </button>
+                  </div>
+                  <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold">Projects &amp; Delivery</div>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                        onClick={() => {
+                          if (!editing?._id) return
+                          window.location.href = `/apps/crm/projects?dealId=${encodeURIComponent(editing._id)}`
+                        }}
+                      >
+                        Open projects
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                      Projects and delivery work tied directly to this deal.
+                    </div>
+                    {dealProjectsForDrawer?.data.items?.length ? (
+                      <>
+                        {(() => {
+                          const rows = dealProjectsForDrawer.data.items
+                          const total = rows.length
+                          const active = rows.filter((p) =>
+                            ['not_started', 'in_progress', 'on_hold'].includes(p.status),
+                          ).length
+                          const completed = rows.filter((p) => p.status === 'completed').length
+                          const atRisk = rows.filter((p) => p.health === 'at_risk').length
+                          const offTrack = rows.filter((p) => p.health === 'off_track').length
+                          const riskCount = atRisk + offTrack
+                          return (
+                            <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]">
+                              <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-0.5">
+                                {total} total
+                              </span>
+                              <span className="inline-flex items-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 text-emerald-100">
+                                {active} active
+                              </span>
+                              <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-0.5">
+                                {completed} completed
+                              </span>
+                              {riskCount > 0 && (
+                                <span className="inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/15 px-2 py-0.5 text-amber-100">
+                                  {riskCount} at risk
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })()}
+                        <div className="mt-2 space-y-1 text-[11px] text-[color:var(--color-text-muted)]">
+                          <div className="font-semibold">Linked projects</div>
+                          <ul className="space-y-1">
+                            {dealProjectsForDrawer.data.items.slice(0, 3).map((p) => (
+                              <li key={p._id} className="flex items-center justify-between gap-2">
+                                <span className="truncate">{p.name}</span>
+                                <span className="flex items-center gap-2">
+                                  {p.health && (
+                                    <span
+                                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] ${
+                                        p.health === 'on_track'
+                                          ? 'border border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
+                                          : p.health === 'at_risk'
+                                          ? 'border border-amber-500/70 bg-amber-500/15 text-amber-100'
+                                          : 'border border-red-500/70 bg-red-500/15 text-red-100'
+                                      }`}
+                                    >
+                                      {p.health === 'on_track'
+                                        ? 'On track'
+                                        : p.health === 'at_risk'
+                                        ? 'At risk'
+                                        : 'Off track'}
+                                    </span>
+                                  )}
+                                  <span className="whitespace-nowrap">
+                                    {p.targetEndDate ? formatDate(p.targetEndDate) : ''}
+                                  </span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        No projects currently linked to this deal.
+                      </div>
+                    )}
                   </div>
                   <div className="text-[11px] text-[color:var(--color-text-muted)]">
                     View renewals tied to this deal&apos;s account in the Renewals app.

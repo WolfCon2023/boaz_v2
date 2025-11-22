@@ -44,6 +44,15 @@ export default function CRMAccounts() {
       Retired: number
     }
   }
+  type AccountProjectSummaryRow = {
+    accountId: string
+    total: number
+    active: number
+    completed: number
+    atRisk: number
+    offTrack: number
+  }
+
   const defaultCols: ColumnDef[] = [
     { key: 'accountNumber', visible: true, label: 'Account #' },
     { key: 'name', visible: true, label: 'Name' },
@@ -52,6 +61,7 @@ export default function CRMAccounts() {
     { key: 'primaryContactEmail', visible: true, label: 'Email' },
     { key: 'primaryContactPhone', visible: true, label: 'Phone' },
     { key: 'tasks', visible: true, label: 'Tasks' },
+    { key: 'projects', visible: true, label: 'Projects' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
     { key: 'assetRisk', visible: true, label: 'Asset risk' },
   ]
@@ -65,6 +75,9 @@ export default function CRMAccounts() {
     }
     if (!next.some((c) => c.key === 'assetRisk')) {
       next = [...next, { key: 'assetRisk', visible: true, label: 'Asset risk' }]
+    }
+    if (!next.some((c) => c.key === 'projects')) {
+      next = [...next, { key: 'projects', visible: true, label: 'Projects' }]
     }
     return next
   }
@@ -422,6 +435,52 @@ export default function CRMAccounts() {
     return result
   }, [accountAssetsRiskData?.data.items])
 
+  const accountIdsForProjects = React.useMemo(
+    () => (visibleItems.length ? visibleItems.map((a) => a._id).join(',') : ''),
+    [visibleItems],
+  )
+
+  const { data: accountProjectsSummaryData } = useQuery({
+    queryKey: ['accounts-projects-summary', accountIdsForProjects],
+    enabled: !!accountIdsForProjects,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/projects/counts', {
+        params: { accountIds: accountIdsForProjects },
+      })
+      return res.data as {
+        data: {
+          items: Array<{
+            kind: 'account' | 'deal'
+            accountId?: string
+            dealId?: string
+            total: number
+            active: number
+            completed: number
+            atRisk: number
+            offTrack: number
+          }>
+        }
+      }
+    },
+  })
+
+  const accountProjectsMap = React.useMemo(() => {
+    const map = new Map<string, AccountProjectSummaryRow>()
+    for (const row of accountProjectsSummaryData?.data.items ?? []) {
+      if ((row as any).kind !== 'account' || !row.accountId) continue
+      const r = row as any
+      map.set(r.accountId, {
+        accountId: r.accountId,
+        total: r.total ?? 0,
+        active: r.active ?? 0,
+        completed: r.completed ?? 0,
+        atRisk: r.atRisk ?? 0,
+        offTrack: r.offTrack ?? 0,
+      })
+    }
+    return map
+  }, [accountProjectsSummaryData?.data.items])
+
   function getColValue(a: Account, key: string) {
     if (key === 'accountNumber') return a.accountNumber ?? '-'
     if (key === 'name') return a.name ?? '-'
@@ -502,6 +561,35 @@ export default function CRMAccounts() {
             Add
           </button>
         </div>
+      )
+    }
+    if (key === 'projects') {
+      const summary = accountProjectsMap.get(a._id)
+      if (!summary || summary.total === 0) {
+        return (
+          <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+            No projects
+          </span>
+        )
+      }
+      const riskCount = (summary.atRisk ?? 0) + (summary.offTrack ?? 0)
+      const baseClass =
+        riskCount > 0
+          ? 'inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-100'
+          : 'inline-flex items-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-100'
+      const titleParts = [
+        `${summary.total} total`,
+        `${summary.active ?? 0} active`,
+        `${summary.completed ?? 0} completed`,
+        riskCount ? `${riskCount} at risk` : null,
+      ]
+        .filter(Boolean)
+        .join(' • ')
+      return (
+        <span className={baseClass} title={titleParts}>
+          {summary.total} proj • {summary.active ?? 0} active
+          {riskCount ? ` • ${riskCount} at risk` : ''}
+        </span>
       )
     }
     if (key === 'surveyStatus') {
@@ -591,6 +679,26 @@ export default function CRMAccounts() {
     queryFn: async () => {
       const res = await http.get(`/api/assets/summary/${editing?._id}`)
       return res.data as { data: AssetsSummary }
+    },
+  })
+  const { data: accountProjectsForDrawer } = useQuery({
+    queryKey: ['account-projects', editing?._id],
+    enabled: !!editing?._id,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/projects', {
+        params: { accountId: editing?._id, limit: 50, sort: 'targetEndDate', dir: 'asc' },
+      })
+      return res.data as {
+        data: {
+          items: Array<{
+            _id: string
+            name: string
+            status: string
+            health?: string
+            targetEndDate?: string | null
+          }>
+        }
+      }
     },
   })
   const historyQ = useQuery({
@@ -916,6 +1024,101 @@ export default function CRMAccounts() {
                       Open renewals for this account
                     </button>
                   </div>
+                </div>
+                <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold">Projects &amp; Delivery</div>
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Implementations and delivery projects linked to this account.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                      onClick={() => {
+                        if (!editing?._id) return
+                        window.location.href = `/apps/crm/projects?accountId=${encodeURIComponent(editing._id)}`
+                      }}
+                    >
+                      Open projects
+                    </button>
+                  </div>
+                  {accountProjectsForDrawer?.data.items == null && accountProjectsForDrawer == null && (
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                      No project data loaded for this account yet.
+                    </div>
+                  )}
+                  {accountProjectsForDrawer && accountProjectsForDrawer.data.items.length === 0 && (
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                      No projects are currently linked to this account.
+                    </div>
+                  )}
+                  {accountProjectsForDrawer?.data.items?.length ? (
+                    <>
+                      {(() => {
+                        const rows = accountProjectsForDrawer.data.items
+                        const total = rows.length
+                        const active = rows.filter((p) =>
+                          ['not_started', 'in_progress', 'on_hold'].includes(p.status),
+                        ).length
+                        const completed = rows.filter((p) => p.status === 'completed').length
+                        const atRisk = rows.filter((p) => p.health === 'at_risk').length
+                        const offTrack = rows.filter((p) => p.health === 'off_track').length
+                        const riskCount = atRisk + offTrack
+                        return (
+                          <div className="flex flex-wrap gap-1.5 text-[10px]">
+                            <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-0.5">
+                              {total} total
+                            </span>
+                            <span className="inline-flex items-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 text-emerald-100">
+                              {active} active
+                            </span>
+                            <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-0.5">
+                              {completed} completed
+                            </span>
+                            {riskCount > 0 && (
+                              <span className="inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/15 px-2 py-0.5 text-amber-100">
+                                {riskCount} at risk
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
+                      <div className="mt-2 space-y-1 text-[11px] text-[color:var(--color-text-muted)]">
+                        <div className="font-semibold">Top projects</div>
+                        <ul className="space-y-1">
+                          {accountProjectsForDrawer.data.items.slice(0, 3).map((p) => (
+                            <li key={p._id} className="flex items-center justify-between gap-2">
+                              <span className="truncate">{p.name}</span>
+                              <span className="flex items-center gap-2">
+                                {p.health && (
+                                  <span
+                                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] ${
+                                      p.health === 'on_track'
+                                        ? 'border border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
+                                        : p.health === 'at_risk'
+                                        ? 'border border-amber-500/70 bg-amber-500/15 text-amber-100'
+                                        : 'border border-red-500/70 bg-red-500/15 text-red-100'
+                                    }`}
+                                  >
+                                    {p.health === 'on_track'
+                                      ? 'On track'
+                                      : p.health === 'at_risk'
+                                      ? 'At risk'
+                                      : 'Off track'}
+                                  </span>
+                                )}
+                                <span className="whitespace-nowrap">
+                                  {p.targetEndDate ? formatDate(p.targetEndDate) : ''}
+                                </span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  ) : null}
                 </div>
                 <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">

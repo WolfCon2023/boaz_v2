@@ -33,6 +33,26 @@ type ProjectDoc = {
   updatedAt: Date
 }
 
+type ProjectCountsByAccount = {
+  kind: 'account'
+  accountId: string
+  total: number
+  active: number
+  completed: number
+  atRisk: number
+  offTrack: number
+}
+
+type ProjectCountsByDeal = {
+  kind: 'deal'
+  dealId: string
+  total: number
+  active: number
+  completed: number
+  atRisk: number
+  offTrack: number
+}
+
 const createProjectSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -140,6 +160,147 @@ projectsRouter.get('/', async (req, res) => {
     },
     error: null,
   })
+})
+
+// GET /api/crm/projects/counts?accountIds=id1,id2&dealIds=id3,id4
+projectsRouter.get('/counts', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const accountIdsParam = typeof req.query.accountIds === 'string' ? req.query.accountIds : ''
+  const dealIdsParam = typeof req.query.dealIds === 'string' ? req.query.dealIds : ''
+
+  const accountIds = accountIdsParam
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const dealIds = dealIdsParam
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  if (!accountIds.length && !dealIds.length) {
+    return res.json({ data: { items: [] as Array<ProjectCountsByAccount | ProjectCountsByDeal> }, error: null })
+  }
+
+  const coll = db.collection<ProjectDoc>('crm_projects')
+  const items: Array<ProjectCountsByAccount | ProjectCountsByDeal> = []
+
+  if (accountIds.length) {
+    const rows = await coll
+      .aggregate<{
+        _id: string
+        total: number
+        active: number
+        completed: number
+        atRisk: number
+        offTrack: number
+      }>([
+        { $match: { accountId: { $in: accountIds } } },
+        {
+          $group: {
+            _id: '$accountId',
+            total: { $sum: 1 },
+            active: {
+              $sum: {
+                $cond: [
+                  { $in: ['$status', ['not_started', 'in_progress', 'on_hold']] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            completed: {
+              $sum: {
+                $cond: [{ $eq: ['$status', 'completed'] }, 1, 0],
+              },
+            },
+            atRisk: {
+              $sum: {
+                $cond: [{ $eq: ['$health', 'at_risk'] }, 1, 0],
+              },
+            },
+            offTrack: {
+              $sum: {
+                $cond: [{ $eq: ['$health', 'off_track'] }, 1, 0],
+              },
+            },
+          },
+        },
+      ])
+      .toArray()
+
+    for (const r of rows) {
+      items.push({
+        kind: 'account',
+        accountId: r._id,
+        total: r.total ?? 0,
+        active: r.active ?? 0,
+        completed: r.completed ?? 0,
+        atRisk: r.atRisk ?? 0,
+        offTrack: r.offTrack ?? 0,
+      })
+    }
+  }
+
+  if (dealIds.length) {
+    const rows = await coll
+      .aggregate<{
+        _id: string
+        total: number
+        active: number
+        completed: number
+        atRisk: number
+        offTrack: number
+      }>([
+        { $match: { dealId: { $in: dealIds } } },
+        {
+          $group: {
+            _id: '$dealId',
+            total: { $sum: 1 },
+            active: {
+              $sum: {
+                $cond: [
+                  { $in: ['$status', ['not_started', 'in_progress', 'on_hold']] },
+                  1,
+                  0,
+                ],
+              },
+            },
+            completed: {
+              $sum: {
+                $cond: [{ $eq: ['$status', 'completed'] }, 1, 0],
+              },
+            },
+            atRisk: {
+              $sum: {
+                $cond: [{ $eq: ['$health', 'at_risk'] }, 1, 0],
+              },
+            },
+            offTrack: {
+              $sum: {
+                $cond: [{ $eq: ['$health', 'off_track'] }, 1, 0],
+              },
+            },
+          },
+        },
+      ])
+      .toArray()
+
+    for (const r of rows) {
+      items.push({
+        kind: 'deal',
+        dealId: r._id,
+        total: r.total ?? 0,
+        active: r.active ?? 0,
+        completed: r.completed ?? 0,
+        atRisk: r.atRisk ?? 0,
+        offTrack: r.offTrack ?? 0,
+      })
+    }
+  }
+
+  return res.json({ data: { items }, error: null })
 })
 
 // GET /api/crm/projects/:id
