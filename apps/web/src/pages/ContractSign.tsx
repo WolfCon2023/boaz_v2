@@ -470,9 +470,8 @@ export default function ContractSign() {
                 <button
                   type="submit"
                   className="rounded-xl bg-[color:var(--color-primary)] px-4 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-soft)]"
-                  disabled={signMutation.isPending}
                 >
-                  {signMutation.isPending ? 'Signing…' : 'Sign contract'}
+                  Sign contract
                 </button>
               </div>
             </form>
