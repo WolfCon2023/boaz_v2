@@ -38,6 +38,7 @@ import { rolesRouter } from './auth/roles_routes.js'
 import { preferencesRouter } from './auth/preferences.js'
 import { assetsRouter } from './assets.js'
 import { slasRouter } from './crm/slas.js'
+import { contractTemplatesRouter } from './crm/contract_templates.js'
 import { projectsRouter } from './crm/projects.js'
 
 const app = express()
@@ -111,6 +112,7 @@ app.use('/api/marketing', marketingUnsubscribeRouter)
 app.use('/api/marketing', marketingImagesRouter)
 app.use('/api/assets', assetsRouter)
 app.use('/api/crm/slas', slasRouter)
+app.use('/api/crm/contract-templates', contractTemplatesRouter)
 app.use('/api/crm/projects', projectsRouter)
 app.use('/api', rolesRouter)
 app.use('/api', preferencesRouter)
