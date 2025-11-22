@@ -269,7 +269,7 @@ export default function CRMAccounts() {
     if (c.query !== undefined) setQuery(c.query)
     if (c.sort) setSort(c.sort)
     if (c.dir) setDir(c.dir)
-    if (c.cols) setCols(c.cols)
+    if (c.cols) setCols(ensureCoreCols(c.cols))
     if (c.pageSize) setPageSize(c.pageSize)
     setPage(0)
   }
