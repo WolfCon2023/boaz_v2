@@ -187,10 +187,15 @@ slasRouter.put('/:id', async (req, res) => {
   update.updatedAt = new Date()
 
   const coll = db.collection<SlaContractDoc>('sla_contracts')
-  const result = await coll.findOneAndUpdate({ _id: new ObjectId(id) }, { $set: update }, { returnDocument: 'after' })
-  if (!result.value) return res.status(404).json({ data: null, error: 'not_found' })
+  const result = await coll.findOneAndUpdate(
+    { _id: new ObjectId(id) },
+    { $set: update },
+    { returnDocument: 'after' } as any
+  )
+  const value = (result as any)?.value as SlaContractDoc | null
+  if (!value) return res.status(404).json({ data: null, error: 'not_found' })
 
-  res.json({ data: serialize(result.value), error: null })
+  res.json({ data: serialize(value), error: null })
 })
 
 // DELETE /api/crm/slas/:id
