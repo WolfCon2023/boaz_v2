@@ -53,6 +53,20 @@ export default function CRMAccounts() {
     offTrack: number
   }
 
+  type AccountTicketSummaryRow = {
+    accountId: string
+    open: number
+    high: number
+    breached: number
+  }
+
+  type AccountSuccessHealthRow = {
+    score: number
+    label: 'Low' | 'Medium' | 'High'
+    className: string
+    tooltip: string
+  }
+
   const defaultCols: ColumnDef[] = [
     { key: 'accountNumber', visible: true, label: 'Account #' },
     { key: 'name', visible: true, label: 'Name' },
@@ -64,12 +78,14 @@ export default function CRMAccounts() {
     { key: 'projects', visible: true, label: 'Projects' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
     { key: 'assetRisk', visible: true, label: 'Asset risk' },
+    { key: 'successHealth', visible: true, label: 'Success' },
   ]
   function ensureCoreCols(cols: ColumnDef[]): ColumnDef[] {
     let hasTasks = false
     let hasSurvey = false
     let hasAssetRisk = false
     let hasProjects = false
+    let hasSuccess = false
 
     const next = cols.map((c) => {
       if (c.key === 'tasks') {
@@ -88,6 +104,10 @@ export default function CRMAccounts() {
         hasProjects = true
         return { ...c, visible: true, label: 'Projects' }
       }
+      if (c.key === 'successHealth') {
+        hasSuccess = true
+        return { ...c, visible: true, label: 'Success' }
+      }
       return c
     })
 
@@ -96,6 +116,7 @@ export default function CRMAccounts() {
     if (!hasSurvey) out.push({ key: 'surveyStatus', visible: true, label: 'Survey' })
     if (!hasAssetRisk) out.push({ key: 'assetRisk', visible: true, label: 'Asset risk' })
     if (!hasProjects) out.push({ key: 'projects', visible: true, label: 'Projects' })
+    if (!hasSuccess) out.push({ key: 'successHealth', visible: true, label: 'Success' })
     return out
   }
   const [cols, setCols] = React.useState<ColumnDef[]>(ensureCoreCols(defaultCols))
@@ -452,6 +473,30 @@ export default function CRMAccounts() {
     return result
   }, [accountAssetsRiskData?.data.items])
 
+  const accountIdsForTickets = React.useMemo(
+    () => (visibleItems.length ? visibleItems.map((a) => a._id).join(',') : ''),
+    [visibleItems],
+  )
+
+  const { data: accountTicketsData } = useQuery({
+    queryKey: ['accounts-tickets-summary', accountIdsForTickets],
+    enabled: !!accountIdsForTickets,
+    queryFn: async () => {
+      const res = await http.get('/api/crm/support/tickets/by-account', {
+        params: { accountIds: accountIdsForTickets },
+      })
+      return res.data as { data: { items: AccountTicketSummaryRow[] } }
+    },
+  })
+
+  const accountTicketsMap = React.useMemo(() => {
+    const map = new Map<string, AccountTicketSummaryRow>()
+    for (const row of accountTicketsData?.data.items ?? []) {
+      map.set(row.accountId, row)
+    }
+    return map
+  }, [accountTicketsData?.data.items])
+
   const accountIdsForProjects = React.useMemo(
     () => (visibleItems.length ? visibleItems.map((a) => a._id).join(',') : ''),
     [visibleItems],
@@ -497,6 +542,87 @@ export default function CRMAccounts() {
     }
     return map
   }, [accountProjectsSummaryData?.data.items])
+
+  const accountSuccessMap = React.useMemo(() => {
+    const map = new Map<string, AccountSuccessHealthRow>()
+
+    for (const a of items) {
+      const id = a._id
+      const survey = accountSurveyStatusMap.get(id)
+      const assets = accountAssetsRiskMap.get(id)
+      const tickets = accountTicketsMap.get(id)
+      const projects = accountProjectsMap.get(id)
+
+      let score = 0
+      const parts: string[] = []
+
+      // Surveys (NPS/CSAT)
+      if (survey && survey.responseCount > 0) {
+        const last = survey.lastScore ?? 0
+        parts.push(`Surveys: ${survey.responseCount} responses, last score ${last.toFixed(1)}`)
+        if (last <= 6) score += 35
+        else if (last <= 7.5) score += 20
+        else if (last <= 8.5) score += 10
+      } else {
+        parts.push('Surveys: no recent responses')
+      }
+
+      // Support tickets
+      if (tickets) {
+        const { open, high, breached } = tickets
+        parts.push(
+          `Support: ${open} open (${high} high/urgent), ${breached} breached SLA`,
+        )
+        score += Math.min(open * 4, 24)
+        score += Math.min(high * 6, 18)
+        score += Math.min(breached * 10, 30)
+      } else {
+        parts.push('Support: no open tickets')
+      }
+
+      // Assets / Installed base risk
+      if (assets) {
+        parts.push(`Assets: ${assets.label} asset risk (score ${assets.score})`)
+        score += Math.round(assets.score * 0.4)
+      } else {
+        parts.push('Assets: low visible risk')
+      }
+
+      // Projects risk
+      if (projects) {
+        const riskCount = (projects.atRisk ?? 0) + (projects.offTrack ?? 0)
+        parts.push(
+          `Projects: ${projects.total} total, ${projects.active ?? 0} active, ${riskCount} at risk`,
+        )
+        if (riskCount > 0) {
+          score += Math.min(30, riskCount * 10)
+        }
+      } else {
+        parts.push('Projects: none tracked')
+      }
+
+      if (score > 100) score = 100
+
+      let label: AccountSuccessHealthRow['label'] = 'Low'
+      let className =
+        'inline-flex items-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-100'
+      if (score >= 70) {
+        label = 'High'
+        className =
+          'inline-flex items-center rounded-full border border-red-500/70 bg-red-500/15 px-2 py-0.5 text-[11px] text-red-200'
+      } else if (score >= 35) {
+        label = 'Medium'
+        className =
+          'inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-100'
+      }
+
+      const tooltip = [`Success health score: ${score}`, ...parts].join(' • ')
+
+      map.set(id, { score, label, className, tooltip })
+    }
+
+    return map
+  }, [items, accountSurveyStatusMap, accountAssetsRiskMap, accountTicketsMap, accountProjectsMap])
 
   function getColValue(a: Account, key: string) {
     if (key === 'accountNumber') return a.accountNumber ?? '-'
@@ -659,6 +785,21 @@ export default function CRMAccounts() {
       return (
         <span className={risk.className} title={tooltip}>
           {risk.label}
+        </span>
+      )
+    }
+    if (key === 'successHealth') {
+      const row = accountSuccessMap.get(a._id)
+      if (!row) {
+        return (
+          <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+            OK
+          </span>
+        )
+      }
+      return (
+        <span className={row.className} title={row.tooltip}>
+          {row.label}
         </span>
       )
     }
@@ -1040,6 +1181,84 @@ export default function CRMAccounts() {
                     >
                       Open renewals for this account
                     </button>
+                  </div>
+                </div>
+                <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold">Customer success health</div>
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Combined view of surveys, support load, asset risk, and projects.
+                      </div>
+                    </div>
+                    <div>
+                      {(() => {
+                        const row = accountSuccessMap.get(editing._id)
+                        if (!row) {
+                          return (
+                            <span className="inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+                              OK
+                            </span>
+                          )
+                        }
+                        return (
+                          <span className={row.className} title={row.tooltip}>
+                            {row.label}
+                          </span>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                  <div className="grid gap-2 text-[11px] text-[color:var(--color-text-muted)] md:grid-cols-2">
+                    <div>
+                      <div className="font-semibold text-[color:var(--color-text)]">Signals</div>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                        <li>
+                          Surveys:{' '}
+                          {(() => {
+                            const s = accountSurveyStatusMap.get(editing._id)
+                            if (!s || s.responseCount === 0) return 'no recent responses'
+                            return `${s.responseCount} responses, last score ${
+                              s.lastScore != null ? s.lastScore.toFixed(1) : '-'
+                            }`
+                          })()}
+                        </li>
+                        <li>
+                          Support:{' '}
+                          {(() => {
+                            const t = accountTicketsMap.get(editing._id)
+                            if (!t) return 'no open tickets'
+                            return `${t.open} open (${t.high} high/urgent), ${t.breached} breached SLA`
+                          })()}
+                        </li>
+                        <li>
+                          Assets:{' '}
+                          {(() => {
+                            const r = accountAssetsRiskMap.get(editing._id)
+                            if (!r) return 'low visible risk'
+                            return `${r.label} risk (score ${r.score})`
+                          })()}
+                        </li>
+                        <li>
+                          Projects:{' '}
+                          {(() => {
+                            const p = accountProjectsMap.get(editing._id)
+                            if (!p) return 'none tracked'
+                            const riskCount = (p.atRisk ?? 0) + (p.offTrack ?? 0)
+                            return `${p.total} total, ${p.active ?? 0} active, ${riskCount} at risk`
+                          })()}
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-[color:var(--color-text)]">Suggested playbooks</div>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                        <li>Run a health check call when surveys trend low or tickets spike.</li>
+                        <li>Pair upcoming renewals with an Assets / Installed Base review.</li>
+                        <li>Align in‑flight projects with renewal timelines and success metrics.</li>
+                        <li>Trigger outreach sequences for champions when health is High.</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
                 <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
