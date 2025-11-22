@@ -1,6 +1,37 @@
 import { getDb } from '../db.js';
 const ARTICLES = [
     {
+        title: 'Using the Projects & Delivery app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:projects', 'delivery'],
+        category: 'Sales & Clients',
+        body: `Projects & Delivery – Implementations and onboarding
+
+Purpose
+The Projects & Delivery app tracks customer implementations, onboarding work, and internal delivery projects tied to Accounts and Deals.
+
+Opening the app
+- Go to CRM Hub → Projects & Delivery
+
+Core concepts
+- Project: a delivery engagement or workstream for an account
+- Type: implementation, onboarding, change request, or internal
+- Status: not started, in progress, on hold, completed, or cancelled
+- Health: on track, at risk, or off track
+
+Working with projects
+- Use filters for Status, Type, and Health to focus your view
+- Link projects to Accounts and Deals for context
+- Track start date, target end date, and actual end date for each project
+
+Updating projects
+- Use the New project button to add a project with name, type, dates, and health
+- Edit projects to adjust scope, status, and progress percentage over time
+
+Best practices
+- Keep target end dates and health current so the team can see delivery risk early
+- Link projects to the right Accounts and Deals so reporting and renewals stay accurate.`,
+    },
+    {
         title: 'Using the Contacts app in BOAZ‑OS CRM',
         tags: ['crm', 'crm:contacts', 'getting-started'],
         category: 'Sales & Clients',
