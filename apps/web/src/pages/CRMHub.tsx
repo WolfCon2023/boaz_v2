@@ -14,6 +14,11 @@ export default function CRMHub() {
   const items: { label: string; desc: string; href: string }[] = [
     { label: 'Contacts', desc: 'People and relationships', href: '/apps/crm/contacts' },
     { label: 'Accounts', desc: 'Companies and organizations', href: '/apps/crm/accounts' },
+    {
+      label: 'Customer Success',
+      desc: 'Health scores, risk, and success playbooks across accounts',
+      href: '/apps/crm/success',
+    },
     { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
     {
       label: 'Tasks & Activities',
