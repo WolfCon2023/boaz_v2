@@ -40,6 +40,7 @@ type SlaContract = {
     | 'archived'
     | 'scheduled'
     | 'cancelled'
+  effectiveDate?: string | null
   startDate?: string | null
   endDate?: string | null
   autoRenew: boolean
