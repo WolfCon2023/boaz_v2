@@ -172,9 +172,16 @@ projectsRouter.post('/', async (req, res) => {
 
   const parseDate = (value?: string) => {
     if (!value) return null
-    const d = new Date(value)
-    if (!Number.isFinite(d.getTime())) return null
-    return d
+    // Handle YYYY-MM-DD (date-only) strings in a timezone-safe way by anchoring at midday UTC
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [y, m, d] = value.split('-').map((v) => Number(v))
+      const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+      if (!Number.isFinite(dt.getTime())) return null
+      return dt
+    }
+    const dt = new Date(value)
+    if (!Number.isFinite(dt.getTime())) return null
+    return dt
   }
 
   const body = parsed.data
@@ -243,9 +250,16 @@ projectsRouter.put('/:id', async (req, res) => {
   const parseDate = (value?: string) => {
     if (!value) return undefined
     if (value === '') return null
-    const d = new Date(value)
-    if (!Number.isFinite(d.getTime())) return undefined
-    return d
+    // Handle YYYY-MM-DD (date-only) strings in a timezone-safe way by anchoring at midday UTC
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [y, m, d] = value.split('-').map((v) => Number(v))
+      const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+      if (!Number.isFinite(dt.getTime())) return undefined
+      return dt
+    }
+    const dt = new Date(value)
+    if (!Number.isFinite(dt.getTime())) return undefined
+    return dt
   }
 
   const update: Partial<ProjectDoc> = {}
