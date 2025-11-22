@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { formatDate } from '@/lib/dateFormat'
 
@@ -62,7 +61,6 @@ type ContractSignGetResponse =
 
 export default function ContractSign() {
   const { token } = useParams<{ token: string }>()
-  const qc = useQueryClient()
 
   const [otpCode, setOtpCode] = React.useState('')
   const [loginId, setLoginId] = React.useState('')
@@ -72,58 +70,70 @@ export default function ContractSign() {
   const [signerEmail, setSignerEmail] = React.useState('')
   const [agreedTerms, setAgreedTerms] = React.useState(false)
   const [authorized, setAuthorized] = React.useState(false)
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [loadError, setLoadError] = React.useState<string | null>(null)
+  const [response, setResponse] = React.useState<ContractSignGetResponse | null>(null)
+  const [reloadKey, setReloadKey] = React.useState(0)
 
-  const { data, isLoading, error } = useQuery<ContractSignGetResponse>({
-    queryKey: ['contract-sign', token],
-    enabled: !!token,
-    queryFn: async () => {
-      const res = await http.get(`/api/public/contracts/sign/${token}`)
-      return res.data as ContractSignGetResponse
-    },
-  })
+  React.useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    setIsLoading(true)
+    setLoadError(null)
+    ;(async () => {
+      try {
+        const res = await http.get(`/api/public/contracts/sign/${token}`)
+        if (cancelled) return
+        setResponse(res.data as ContractSignGetResponse)
+      } catch (err: any) {
+        if (cancelled) return
+        const msg = err?.response?.data?.error || err?.message || 'failed_to_load_contract'
+        setLoadError(msg)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [token, reloadKey])
 
-  const otpMutation = useMutation({
-    mutationFn: async () => {
+  async function handleVerifyOtp() {
+    try {
       const res = await http.post(`/api/public/contracts/sign/${token}/otp`, { loginId, otpCode })
-      return res.data as { data: { ok: boolean }; error: string | null }
-    },
-    onSuccess: (res) => {
-      if (res.error) {
-        setBanner(`BOAZ says: ${res.error}`)
+      const payload = res.data as { data: { ok: boolean }; error: string | null }
+      if (payload.error) {
+        setBanner(`BOAZ says: ${payload.error}`)
         return
       }
       setBanner('BOAZ says: Security code verified.')
-      qc.invalidateQueries({ queryKey: ['contract-sign', token] })
-    },
-    onError: (err: any) => {
+      setReloadKey((k) => k + 1)
+    } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || 'otp_failed'
       setBanner(`BOAZ says: ${msg}`)
-    },
-  })
+    }
+  }
 
-  const signMutation = useMutation({
-    mutationFn: async () => {
+  async function handleSign() {
+    try {
       const payload = {
         name: signerName.trim(),
         title: signerTitle.trim() || undefined,
         email: signerEmail.trim(),
       }
       const res = await http.post(`/api/public/contracts/sign/${token}`, payload)
-      return res.data as { data: { contract: PublicSlaContract; role: string } | null; error: string | null }
-    },
-    onSuccess: (res) => {
-      if (res.error) {
-        setBanner(`BOAZ says: ${res.error}`)
+      const data = res.data as { data: { contract: PublicSlaContract; role: string } | null; error: string | null }
+      if (data.error) {
+        setBanner(`BOAZ says: ${data.error}`)
         return
       }
       setBanner('BOAZ says: Contract signed successfully.')
-      qc.invalidateQueries({ queryKey: ['contract-sign', token] })
-    },
-    onError: (err: any) => {
+      setReloadKey((k) => k + 1)
+    } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || 'sign_failed'
       setBanner(`BOAZ says: ${msg}`)
-    },
-  })
+    }
+  }
 
   if (isLoading) {
     return (
@@ -136,7 +146,7 @@ export default function ContractSign() {
     )
   }
 
-  if (error || !data) {
+  if (loadError || !response) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
         <div className="max-w-md rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-center">
@@ -149,7 +159,7 @@ export default function ContractSign() {
     )
   }
 
-  const resp = data.data as any
+  const resp = response.data as any
   const requiresOtp: boolean = !!resp?.requiresOtp && !resp.contract
   const contract: PublicSlaContract | null = resp?.contract ?? null
   const signer: SignerInfo | null = resp?.signer ?? null
@@ -188,7 +198,7 @@ export default function ContractSign() {
                 setBanner('BOAZ says: Please enter your security code.')
                 return
               }
-              otpMutation.mutate()
+              handleVerifyOtp()
             }}
           >
             <div className="space-y-1">
@@ -395,7 +405,7 @@ export default function ContractSign() {
                   setBanner('BOAZ says: Please confirm the checkboxes before signing.')
                   return
                 }
-                signMutation.mutate()
+                handleSign()
               }}
             >
               <div className="space-y-1">
