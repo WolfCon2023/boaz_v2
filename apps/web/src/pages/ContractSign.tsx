@@ -168,9 +168,9 @@ export default function ContractSign() {
       <div className="min-h-[70vh] flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
           <div className="mb-4">
-            <div className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</div>
-            <h1 className="text-base font-semibold">Enter your signing username &amp; security code</h1>
-            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+            <div className="mb-1 text-xs font-semibold text-[color:var(--color-primary)] text-center">BOAZ says</div>
+            <h1 className="text-center text-base font-semibold">Enter your signing username &amp; security code</h1>
+            <p className="mt-2 text-center text-xs text-[color:var(--color-text-muted)]">
               We&apos;ve emailed you a temporary signing username and a one‑time security code for this contract. Enter
               both below to unlock the contract details and continue to signing.
             </p>
@@ -202,7 +202,7 @@ export default function ContractSign() {
             <div className="space-y-1">
               <label className="block text-xs font-medium">Security code</label>
               <input
-                className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm tracking-[0.3em] font-mono"
+                className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm font-mono tracking-[0.5em] text-center"
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value)}
                 placeholder="••••••"
