@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { formatDate } from '@/lib/dateFormat'
-import { useToast } from '@/components/Toast'
 
 type PublicSlaContract = {
   _id: string
@@ -63,11 +62,11 @@ type ContractSignGetResponse =
 
 export default function ContractSign() {
   const { token } = useParams<{ token: string }>()
-  const toast = useToast()
   const qc = useQueryClient()
 
   const [otpCode, setOtpCode] = React.useState('')
   const [loginId, setLoginId] = React.useState('')
+  const [banner, setBanner] = React.useState<string | null>(null)
   const [signerName, setSignerName] = React.useState('')
   const [signerTitle, setSignerTitle] = React.useState('')
   const [signerEmail, setSignerEmail] = React.useState('')
@@ -90,15 +89,15 @@ export default function ContractSign() {
     },
     onSuccess: (res) => {
       if (res.error) {
-        toast.showToast(`BOAZ says: ${res.error}`, 'error')
+        setBanner(`BOAZ says: ${res.error}`)
         return
       }
-      toast.showToast('BOAZ says: Security code verified.', 'success')
+      setBanner('BOAZ says: Security code verified.')
       qc.invalidateQueries({ queryKey: ['contract-sign', token] })
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.error || err?.message || 'otp_failed'
-      toast.showToast(`BOAZ says: ${msg}`, 'error')
+      setBanner(`BOAZ says: ${msg}`)
     },
   })
 
@@ -114,15 +113,15 @@ export default function ContractSign() {
     },
     onSuccess: (res) => {
       if (res.error) {
-        toast.showToast(`BOAZ says: ${res.error}`, 'error')
+        setBanner(`BOAZ says: ${res.error}`)
         return
       }
-      toast.showToast('BOAZ says: Contract signed successfully.', 'success')
+      setBanner('BOAZ says: Contract signed successfully.')
       qc.invalidateQueries({ queryKey: ['contract-sign', token] })
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.error || err?.message || 'sign_failed'
-      toast.showToast(`BOAZ says: ${msg}`, 'error')
+      setBanner(`BOAZ says: ${msg}`)
     },
   })
 
@@ -182,11 +181,11 @@ export default function ContractSign() {
             onSubmit={(e) => {
               e.preventDefault()
               if (!loginId.trim()) {
-                toast.showToast('BOAZ says: Please enter your signing username.', 'error')
+                setBanner('BOAZ says: Please enter your signing username.')
                 return
               }
               if (!otpCode.trim()) {
-                toast.showToast('BOAZ says: Please enter your security code.', 'error')
+                setBanner('BOAZ says: Please enter your security code.')
                 return
               }
               otpMutation.mutate()
@@ -242,6 +241,11 @@ export default function ContractSign() {
 
   return (
     <div className="mx-auto max-w-5xl py-8 space-y-6">
+      {banner && (
+        <div className="rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] px-4 py-2 text-xs text-[color:var(--color-text)]">
+          {banner}
+        </div>
+      )}
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
