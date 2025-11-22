@@ -73,10 +73,11 @@ export default function CRMDeals() {
     { key: 'projects', visible: true, label: 'Projects' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
   ]
-  // Ensure Survey and Tasks columns are always present and visible, even for old saved layouts
+  // Ensure Survey, Tasks, and Projects columns are always present and visible, even for old saved layouts
   function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
     let hasSurvey = false
     let hasTasks = false
+    let hasProjects = false
     const next = cols.map((c) => {
       if (c.key === 'surveyStatus') {
         hasSurvey = true
@@ -86,6 +87,10 @@ export default function CRMDeals() {
         hasTasks = true
         return { ...c, visible: true, label: 'Tasks' }
       }
+      if (c.key === 'projects') {
+        hasProjects = true
+        return { ...c, visible: true, label: 'Projects' }
+      }
       return c
     })
     if (!hasTasks) {
@@ -93,6 +98,9 @@ export default function CRMDeals() {
     }
     if (!hasSurvey) {
       next.push({ key: 'surveyStatus', visible: true, label: 'Survey' })
+    }
+    if (!hasProjects) {
+      next.push({ key: 'projects', visible: true, label: 'Projects' })
     }
     return next
   }
