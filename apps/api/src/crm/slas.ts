@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb'
 import { getDb, getNextSequence } from '../db.js'
 import { sendEmail } from '../alerts/mail.js'
 import crypto from 'crypto'
+import { env } from '../env.js'
 import { requireAuth } from '../auth/rbac.js'
 
 export const slasRouter = Router()
@@ -1096,14 +1097,8 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
     return res.json({ data: { invites: [] }, error: null })
   }
 
-  // Build base URL from request for deep links
-  const proto =
-    (req.headers['x-forwarded-proto'] as string) ||
-    (req.secure ? 'https' : 'http')
-  const host =
-    (req.headers['x-forwarded-host'] as string) ||
-    (req.headers.host as string | undefined)
-  const baseUrl = host ? `${proto}://${host}` : ''
+  // Build base URL from env.ORIGIN (same pattern as quotes/deals public links)
+  const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
 
   const ctxBase = buildContractContext(contract)
 
