@@ -66,20 +66,37 @@ export default function CRMAccounts() {
     { key: 'assetRisk', visible: true, label: 'Asset risk' },
   ]
   function ensureCoreCols(cols: ColumnDef[]): ColumnDef[] {
-    let next = cols
-    if (!next.some((c) => c.key === 'tasks')) {
-      next = [...next, { key: 'tasks', visible: true, label: 'Tasks' }]
-    }
-    if (!next.some((c) => c.key === 'surveyStatus')) {
-      next = [...next, { key: 'surveyStatus', visible: true, label: 'Survey' }]
-    }
-    if (!next.some((c) => c.key === 'assetRisk')) {
-      next = [...next, { key: 'assetRisk', visible: true, label: 'Asset risk' }]
-    }
-    if (!next.some((c) => c.key === 'projects')) {
-      next = [...next, { key: 'projects', visible: true, label: 'Projects' }]
-    }
-    return next
+    let hasTasks = false
+    let hasSurvey = false
+    let hasAssetRisk = false
+    let hasProjects = false
+
+    const next = cols.map((c) => {
+      if (c.key === 'tasks') {
+        hasTasks = true
+        return { ...c, visible: true, label: 'Tasks' }
+      }
+      if (c.key === 'surveyStatus') {
+        hasSurvey = true
+        return { ...c, visible: true, label: 'Survey' }
+      }
+      if (c.key === 'assetRisk') {
+        hasAssetRisk = true
+        return { ...c, visible: true, label: 'Asset risk' }
+      }
+      if (c.key === 'projects') {
+        hasProjects = true
+        return { ...c, visible: true, label: 'Projects' }
+      }
+      return c
+    })
+
+    const out = [...next]
+    if (!hasTasks) out.push({ key: 'tasks', visible: true, label: 'Tasks' })
+    if (!hasSurvey) out.push({ key: 'surveyStatus', visible: true, label: 'Survey' })
+    if (!hasAssetRisk) out.push({ key: 'assetRisk', visible: true, label: 'Asset risk' })
+    if (!hasProjects) out.push({ key: 'projects', visible: true, label: 'Projects' })
+    return out
   }
   const [cols, setCols] = React.useState<ColumnDef[]>(ensureCoreCols(defaultCols))
   const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
