@@ -327,14 +327,21 @@ export default function CRMSLAs() {
 
   const sendEmailMutation = useMutation({
     mutationFn: async (payload: { id: string; to: string; subject: string }) => {
-      const res = await http.post(`/api/crm/slas/${payload.id}/send`, {
-        to: payload.to,
-        subject: payload.subject,
+      // Treat this as a "send for signature" flow using signature invites,
+      // which will generate a secure signing link and a separate OTP email.
+      const res = await http.post(`/api/crm/slas/${payload.id}/signature-invites`, {
+        emailSubject: payload.subject,
+        invites: [
+          {
+            role: 'customerSigner',
+            email: payload.to,
+          },
+        ],
       })
-      return res.data as { data: { ok: boolean } }
+      return res.data as { data: { invites: any[] }; error: string | null }
     },
     onSuccess: () => {
-      toast.showToast('Contract email sent.', 'success')
+      toast.showToast('BOAZ says: Signature invite and OTP email sent.', 'success')
       qc.invalidateQueries({ queryKey: ['slas'] })
     },
     onError: (err: any) => {
