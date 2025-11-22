@@ -21,6 +21,11 @@ type SignatureInviteDoc = {
   usedAt: Date | null
   createdAt: Date
   createdByUserId?: ObjectId
+  // OTP / security metadata (set by createSignatureInvites in slas.ts)
+  otpHash?: string | null
+  otpExpiresAt?: Date | null
+  otpVerifiedAt?: Date | null
+  lastOtpSentAt?: Date | null
 }
 
 function serializeContractForSigning(doc: SlaContractDoc) {
@@ -55,6 +60,24 @@ contractsPublicRouter.get('/sign/:token', async (req, res) => {
     return res.status(410).json({ data: null, error: 'expired' })
   }
 
+  const requiresOtp = !!invite.otpHash
+
+  // If OTP is required and not yet verified, only return minimal metadata
+  if (requiresOtp && !invite.otpVerifiedAt) {
+    return res.json({
+      data: {
+        requiresOtp: true,
+        role: invite.role,
+        signer: {
+          email: invite.email,
+          name: invite.name ?? '',
+          title: invite.title ?? '',
+        },
+      },
+      error: null,
+    })
+  }
+
   const contract = await db
     .collection<SlaContractDoc>('sla_contracts')
     .findOne({ _id: invite.contractId })
@@ -65,6 +88,7 @@ contractsPublicRouter.get('/sign/:token', async (req, res) => {
 
   res.json({
     data: {
+      requiresOtp: requiresOtp && !invite.otpVerifiedAt ? true : false,
       contract: safeContract,
       role: invite.role,
       signer: {
@@ -75,6 +99,58 @@ contractsPublicRouter.get('/sign/:token', async (req, res) => {
     },
     error: null,
   })
+})
+
+const otpSchema = z.object({
+  otpCode: z.string().min(4).max(64),
+})
+
+// POST /api/public/contracts/sign/:token/otp - verify one-time security code
+contractsPublicRouter.post('/sign/:token/otp', async (req, res) => {
+  const parsed = otpSchema.safeParse(req.body ?? {})
+  if (!parsed.success) {
+    return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  }
+
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const { token } = req.params
+  const coll = db.collection<SignatureInviteDoc>('sla_signature_invites')
+
+  const invite = await coll.findOne({ token })
+  if (!invite) return res.status(404).json({ data: null, error: 'invalid_or_expired' })
+
+  if (invite.status !== 'pending') {
+    return res.status(410).json({ data: null, error: 'already_used' })
+  }
+
+  if (!invite.otpHash || !invite.otpExpiresAt) {
+    return res.status(400).json({ data: null, error: 'otp_not_configured' })
+  }
+
+  const now = new Date()
+  if (invite.otpExpiresAt < now) {
+    return res.status(410).json({ data: null, error: 'otp_expired' })
+  }
+
+  const body = parsed.data
+  const candidateHash = require('crypto').createHash('sha256').update(body.otpCode).digest('hex')
+
+  if (candidateHash !== invite.otpHash) {
+    return res.status(401).json({ data: null, error: 'otp_invalid' })
+  }
+
+  await coll.updateOne(
+    { _id: invite._id },
+    {
+      $set: {
+        otpVerifiedAt: now,
+      },
+    },
+  )
+
+  return res.json({ data: { ok: true }, error: null })
 })
 
 const signSchema = z.object({

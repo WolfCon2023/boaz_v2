@@ -41,6 +41,7 @@ import CRMSurveysHelp from '@/pages/CRMSurveysHelp'
 import SupportTickets from '@/pages/SupportTickets'
 import KnowledgeBase from '@/pages/KnowledgeBase'
 import SupportPortal from '@/pages/SupportPortal'
+import ContractSign from '@/pages/ContractSign'
 import { PublicShell } from '@/components/PublicShell'
 import AboutBoazOs from '@/pages/AboutBoazOs'
 import LegalEula from '@/pages/legal/Eula'
@@ -150,6 +151,10 @@ export const router = createBrowserRouter([
   {
     path: '/quotes/view/:token',
     element: <PublicShell><QuoteView /></PublicShell>,
+  },
+  {
+    path: '/contracts/sign/:token',
+    element: <PublicShell><ContractSign /></PublicShell>,
   },
   {
     path: '/surveys/respond/:token',

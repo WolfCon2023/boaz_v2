@@ -211,6 +211,12 @@ export default function CRMSLAs() {
     })),
   )
 
+  // Email dialog state
+  const [emailDialogOpen, setEmailDialogOpen] = React.useState(false)
+  const [emailTo, setEmailTo] = React.useState('')
+  const [emailSubject, setEmailSubject] = React.useState('')
+  const [emailContract, setEmailContract] = React.useState<SlaContract | null>(null)
+
   const accountsQ = useQuery({
     queryKey: ['accounts-pick'],
     queryFn: async () => {
@@ -693,19 +699,11 @@ export default function CRMSLAs() {
                         <button
                           type="button"
                           className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]"
-                          onClick={async () => {
-                            const to = window.prompt('BOAZ says: Who should receive this contract email? (enter email address)')
-                            if (!to) return
-                            const subjectPrompt = window.prompt(
-                              'BOAZ says: What subject should we use for this contract email?',
-                              `Contract ${s.contractNumber ?? ''} – ${s.name}`
-                            )
-                            const subject = subjectPrompt || `Contract ${s.contractNumber ?? ''} – ${s.name}`
-                            try {
-                              await sendEmailMutation.mutateAsync({ id: s._id, to, subject })
-                            } catch {
-                              // handled by mutation
-                            }
+                          onClick={() => {
+                            setEmailContract(s)
+                            setEmailTo('')
+                            setEmailSubject(`Contract ${s.contractNumber ?? ''} – ${s.name}`.trim())
+                            setEmailDialogOpen(true)
                           }}
                         >
                           Email
@@ -1422,6 +1420,111 @@ export default function CRMSLAs() {
                       className="rounded-xl bg-[color:var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-soft)]"
                     >
                       Save
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {emailDialogOpen && emailContract && (
+        <div className="fixed inset-0 z-[2147483647]">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => {
+              setEmailDialogOpen(false)
+              setEmailContract(null)
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,26rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</div>
+                  <div className="text-sm text-[color:var(--color-text-muted)]">
+                    Send this contract for review or signature.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailDialogOpen(false)
+                    setEmailContract(null)
+                  }}
+                  className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                >
+                  Close
+                </button>
+              </div>
+              <form
+                className="space-y-3 text-sm"
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  if (!emailContract) return
+                  if (!emailTo.trim()) {
+                    toast.showToast('BOAZ says: Please enter an email address.', 'error')
+                    return
+                  }
+                  const subject =
+                    emailSubject.trim() ||
+                    `Contract ${emailContract.contractNumber ?? ''} – ${emailContract.name}`.trim()
+                  try {
+                    await sendEmailMutation.mutateAsync({
+                      id: emailContract._id,
+                      to: emailTo.trim(),
+                      subject,
+                    })
+                    setEmailDialogOpen(false)
+                    setEmailContract(null)
+                  } catch {
+                    // handled in mutation
+                  }
+                }}
+              >
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium">To</label>
+                  <input
+                    type="email"
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                    placeholder="name@example.com"
+                    value={emailTo}
+                    onChange={(e) => setEmailTo(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium">Subject</label>
+                  <input
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[color:var(--color-text-muted)]">
+                  <div>
+                    Contract:&nbsp;
+                    <span className="font-medium text-[color:var(--color-text)]">
+                      {emailContract.contractNumber != null ? `#${emailContract.contractNumber} · ` : ''}
+                      {emailContract.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmailDialogOpen(false)
+                        setEmailContract(null)
+                      }}
+                      className="rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-[color:var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-soft)]"
+                    >
+                      Send email
                     </button>
                   </div>
                 </div>

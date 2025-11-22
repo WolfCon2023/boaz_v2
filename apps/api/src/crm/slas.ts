@@ -1001,27 +1001,49 @@ export async function createSignatureInvites({
 
   const coll = db.collection<any>('sla_signature_invites')
   const now = new Date()
-  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days for link
 
-  const docs = invites.map((inv) => ({
-    _id: new ObjectId(),
-    contractId,
-    role: inv.role,
-    email: inv.email,
-    name: inv.name,
-    title: inv.title,
-    token: crypto.randomBytes(24).toString('hex'),
-    status: 'pending',
-    createdAt: now,
-    expiresAt,
-    usedAt: null,
-    createdByUserId,
-  }))
+  // OTP expiry is shorter-lived than the invite link itself
+  const otpExpiryMinutes = 15
+  const otpExpiresAt = new Date(now.getTime() + otpExpiryMinutes * 60 * 1000)
+
+  const docs: any[] = []
+  const augmented: any[] = []
+
+  for (const inv of invites) {
+    // 6-digit numeric OTP
+    const otpCode = crypto.randomInt(100000, 1000000).toString()
+    const otpHash = crypto.createHash('sha256').update(otpCode).digest('hex')
+
+    const baseDoc = {
+      _id: new ObjectId(),
+      contractId,
+      role: inv.role,
+      email: inv.email,
+      name: inv.name,
+      title: inv.title,
+      token: crypto.randomBytes(24).toString('hex'),
+      status: 'pending',
+      createdAt: now,
+      expiresAt,
+      usedAt: null,
+      createdByUserId,
+      // OTP metadata
+      otpHash,
+      otpExpiresAt,
+      otpVerifiedAt: null,
+      lastOtpSentAt: now,
+    }
+
+    docs.push(baseDoc)
+    augmented.push({ ...baseDoc, otpCode })
+  }
 
   if (!docs.length) return []
 
   await coll.insertMany(docs)
-  return docs
+  // Return documents augmented with plaintext otpCode for email purposes (not stored separately)
+  return augmented
 }
 
 
@@ -1104,7 +1126,13 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
     url: string
   }[] = []
 
-  for (const inv of created) {
+  // We know createSignatureInvites returns augmented docs that include otpCode
+  const createdInvites: any[] = created as any[]
+
+  // Keep OTP expiry consistent with helper
+  const otpExpiryMinutes = 15
+
+  for (const inv of createdInvites) {
     const url = `${baseUrl}/contracts/sign/${inv.token}`
     invitesWithUrls.push({
       role: inv.role,
@@ -1122,21 +1150,151 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
       signerName: inv.name ?? '',
     }
 
+    // Rich legal-style HTML email summarising key contract terms
+    const defaultHtml = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Contract {{contractNumber}} – {{name}}</title>
+    <style>
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#0b1020; color:#f9fafb; padding:24px; }
+      .card { max-width:720px; margin:0 auto; background:#0f172a; border-radius:16px; padding:24px; border:1px solid #1f2937; box-shadow:0 18px 45px rgba(15,23,42,0.7); }
+      .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#111827; border:1px solid #1f2937; color:#e5e7eb; }
+      .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; background:#0f172a; border:1px solid #1f2937; margin-right:4px; }
+      h1 { font-size:20px; margin:0 0 4px 0; }
+      h2 { font-size:14px; text-transform:uppercase; letter-spacing:0.08em; color:#9ca3af; margin:20px 0 6px; }
+      p, li { font-size:13px; line-height:1.6; color:#d1d5db; }
+      table { width:100%; border-collapse:collapse; margin-top:4px; font-size:12px; }
+      th, td { padding:6px 8px; border-bottom:1px solid #1f2937; text-align:left; }
+      th { color:#9ca3af; font-weight:500; }
+      a.button { display:inline-block; margin-top:16px; padding:10px 18px; background:#2563eb; color:#ffffff; text-decoration:none; border-radius:999px; font-size:13px; }
+      .meta { margin-top:4px; font-size:11px; color:#9ca3af; }
+      .footer { margin-top:24px; font-size:11px; color:#6b7280; border-top:1px solid #1f2937; padding-top:12px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div>
+          <div class="badge">BOAZ‑OS Contract</div>
+          <h1>Contract {{contractNumber}} – {{name}}</h1>
+          <div class="meta">
+            Type: {{type}} · Status: {{status}}
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="meta">Customer</div>
+          <div style="font-size:13px;">{{customerLegalName}}</div>
+        </div>
+      </div>
+
+      <h2>Parties</h2>
+      <p>
+        <strong>Customer:</strong> {{customerLegalName}}<br/>
+        <strong>Provider:</strong> {{providerLegalName}}<br/>
+        <span class="meta">Governing law: {{governingLaw}} · Jurisdiction: {{jurisdiction}}</span>
+      </p>
+
+      <h2>Term &amp; renewal</h2>
+      <table>
+        <tr>
+          <th style="width:28%;">Effective date</th>
+          <td>{{effectiveDate}}</td>
+        </tr>
+        <tr>
+          <th>Service term</th>
+          <td>{{startDate}} – {{endDate}}</td>
+        </tr>
+        <tr>
+          <th>Renewal</th>
+          <td>Renewal date {{renewalDate}} · Auto‑renew: {{autoRenew}}</td>
+        </tr>
+        <tr>
+          <th>Billing &amp; invoicing</th>
+          <td>Frequency: {{billingFrequency}} · Currency: {{currency}} · Invoice due: {{invoiceDueDays}} days</td>
+        </tr>
+      </table>
+
+      <h2>SLA &amp; service scope</h2>
+      <p>
+        <span class="pill">Response: {{responseTargetMinutes}} minutes</span>
+        <span class="pill">Resolution: {{resolutionTargetMinutes}} minutes</span>
+        <span class="pill">Uptime: {{uptimeTargetPercent}}%</span>
+        <span class="pill">Support hours: {{supportHours}}</span>
+      </p>
+      <p><strong>Scope summary:</strong> {{serviceScopeSummary}}</p>
+      <p><strong>SLA exclusions:</strong> {{slaExclusionsSummary}}</p>
+
+      <h2>Key legal summaries</h2>
+      <ul>
+        <li><strong>Liability:</strong> {{limitationOfLiability}}</li>
+        <li><strong>Indemnification:</strong> {{indemnificationSummary}}</li>
+        <li><strong>Confidentiality:</strong> {{confidentialitySummary}}</li>
+        <li><strong>Data protection:</strong> {{dataProtectionSummary}}</li>
+        <li><strong>IP ownership:</strong> {{ipOwnershipSummary}}</li>
+        <li><strong>Termination conditions:</strong> {{terminationConditions}}</li>
+      </ul>
+
+      <h2>Next step</h2>
+      <p>
+        To review the full legal contract and complete your digital signature, open the secure link below.
+        You will be asked for a one‑time security code sent in a separate email before the contract is displayed.
+      </p>
+
+      <p>
+        <a class="button" href="{{signUrl}}">Review &amp; sign contract</a>
+      </p>
+
+      <div class="footer">
+        This email was generated by BOAZ‑OS on behalf of {{providerLegalName}} for {{customerLegalName}}.
+        If you were not expecting this contract, please contact your account manager and do not forward this email.
+      </div>
+    </div>
+  </body>
+</html>
+`
+
     const html =
       emailTplHtml != null
         ? renderTemplateString(emailTplHtml, ctx)
-        : renderTemplateString(
-            `<p>You have a contract awaiting your signature.</p>
-<p>Contract {{contractNumber}} – {{name}}</p>
-<p><a href="{{signUrl}}">Review and sign contract</a></p>`,
-            ctx,
-          )
+        : renderTemplateString(defaultHtml, ctx)
 
+    // Main contract email with signing link
     await sendEmail({
       to: inv.email,
       subject: body.emailSubject,
       html,
     })
+
+    // Separate OTP email with one-time code
+    if (inv.otpCode) {
+      const otpHtml = `
+<!DOCTYPE html>
+<html>
+  <body style="font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#020617;color:#e5e7eb;padding:24px;">
+    <div style="max-width:480px;margin:0 auto;background:#020617;border-radius:16px;border:1px solid #1f2937;padding:20px;">
+      <div style="font-size:12px;color:#60a5fa;margin-bottom:4px;">BOAZ says</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px;">Your one‑time security code for contract {{contractNumber}}</div>
+      <p style="font-size:13px;line-height:1.5;">
+        Use the code below to unlock the contract details before signing. For your security, this code will expire in ${otpExpiryMinutes} minutes.
+      </p>
+      <div style="margin:12px 0;padding:10px 14px;border-radius:999px;border:1px dashed #4b5563;font-size:18px;letter-spacing:0.3em;text-align:center;background:#020617;">
+        <span style="font-family:'SF Mono',ui-monospace,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;color:#f9fafb;">${inv.otpCode}</span>
+      </div>
+      <p style="font-size:12px;color:#9ca3af;margin-top:8px;">
+        Do not share this code. BOAZ‑OS will never ask you to reply with this code.
+      </p>
+    </div>
+  </body>
+</html>
+`
+      await sendEmail({
+        to: inv.email,
+        subject: `Your BOAZ‑OS contract security code`,
+        html: renderTemplateString(otpHtml, ctx),
+      })
+    }
   }
 
   // Log audit on the contract
