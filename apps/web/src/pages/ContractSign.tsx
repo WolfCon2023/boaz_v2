@@ -165,8 +165,8 @@ export default function ContractSign() {
 
   if (requiresOtp) {
     return (
-      <div className="mx-auto max-w-lg py-10">
-        <div className="w-full rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
+      <div className="min-h-[70vh] flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
           <div className="mb-4">
             <div className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</div>
             <h1 className="text-base font-semibold">Enter your signing username &amp; security code</h1>
