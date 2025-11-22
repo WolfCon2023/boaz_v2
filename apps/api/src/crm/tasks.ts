@@ -12,7 +12,7 @@ tasksRouter.use(requireAuth)
 type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
 type TaskType = 'call' | 'meeting' | 'todo' | 'email' | 'note'
 type TaskPriority = 'low' | 'normal' | 'high'
-type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote'
+type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote' | 'project'
 
 type TaskDoc = {
   _id: string
@@ -39,7 +39,7 @@ const createTaskSchema = z.object({
   status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
   priority: z.enum(['low', 'normal', 'high']).optional(),
   dueAt: z.string().optional(), // ISO string from client
-  relatedType: z.enum(['contact', 'account', 'deal', 'invoice', 'quote']).optional(),
+  relatedType: z.enum(['contact', 'account', 'deal', 'invoice', 'quote', 'project']).optional(),
   relatedId: z.string().optional(),
 })
 
@@ -50,7 +50,7 @@ const updateTaskSchema = z.object({
   status: z.enum(['open', 'in_progress', 'completed', 'cancelled']).optional(),
   priority: z.enum(['low', 'normal', 'high']).optional(),
   dueAt: z.string().optional().nullable(),
-  relatedType: z.enum(['contact', 'account', 'deal', 'invoice', 'quote']).optional().nullable(),
+  relatedType: z.enum(['contact', 'account', 'deal', 'invoice', 'quote', 'project']).optional().nullable(),
   relatedId: z.string().optional().nullable(),
 })
 
@@ -111,7 +111,7 @@ tasksRouter.get('/', async (req, res) => {
   }
 
   const relatedType = typeof req.query.relatedType === 'string' && req.query.relatedType ? req.query.relatedType : undefined
-  if (relatedType && ['contact', 'account', 'deal', 'invoice', 'quote'].includes(relatedType)) {
+  if (relatedType && ['contact', 'account', 'deal', 'invoice', 'quote', 'project'].includes(relatedType)) {
     filter.relatedType = relatedType
   }
   const relatedId = typeof req.query.relatedId === 'string' && req.query.relatedId ? req.query.relatedId : undefined
@@ -157,7 +157,7 @@ tasksRouter.get('/counts', async (req, res) => {
   const idsParam = typeof req.query.relatedIds === 'string' ? req.query.relatedIds : ''
   const status = typeof req.query.status === 'string' ? req.query.status : ''
 
-  if (!relatedType || !['contact', 'account', 'deal', 'invoice', 'quote'].includes(relatedType)) {
+  if (!relatedType || !['contact', 'account', 'deal', 'invoice', 'quote', 'project'].includes(relatedType)) {
     return res.status(400).json({ data: null, error: 'invalid_relatedType' })
   }
   const rawIds = idsParam

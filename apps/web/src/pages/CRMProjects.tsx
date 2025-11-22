@@ -5,6 +5,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { formatDate } from '@/lib/dateFormat'
+import { RelatedTasks } from '@/components/RelatedTasks'
 
 type Project = {
   _id: string
@@ -704,6 +705,11 @@ export default function CRMProjects() {
                   </div>
                 </div>
               </form>
+              {editing?._id && (
+                <div className="mt-4 border-t border-[color:var(--color-border)] pt-3">
+                  <RelatedTasks relatedType="project" relatedId={editing._id} />
+                </div>
+              )}
             </div>
           </div>
         </div>

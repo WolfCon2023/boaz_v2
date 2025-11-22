@@ -5,7 +5,7 @@ import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 
-type RelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote'
+type RelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote' | 'project'
 
 type RelatedTask = {
   _id: string
