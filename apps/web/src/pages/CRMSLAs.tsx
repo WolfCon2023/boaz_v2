@@ -70,6 +70,20 @@ type SlaContract = {
   changeOrderProcess?: string | null
   dataClassification?: string | null
   hasDataProcessingAddendum?: boolean | null
+  changeControlRequiredFor?: string | null
+  negotiationStatus?: string | null
+  redlineSummary?: string | null
+  auditRightsSummary?: string | null
+  usageRestrictionsSummary?: string | null
+  subprocessorUseSummary?: string | null
+  autoIncreasePercentOnRenewal?: number | null
+  earlyTerminationFeeModel?: string | null
+  upsellCrossSellRights?: string | null
+  primaryQuoteId?: string | null
+  primaryDealId?: string | null
+  coveredAssetTags?: string[] | null
+  coveredServiceTags?: string[] | null
+  successPlaybookConstraints?: string | null
   signedByCustomer?: string | null
   signedByProvider?: string | null
   signedAtCustomer?: string | null
@@ -170,6 +184,20 @@ export default function CRMSLAs() {
   const [editServiceScope, setEditServiceScope] = React.useState('')
   const [editTerminationConditions, setEditTerminationConditions] = React.useState('')
   const [editChangeOrderProcess, setEditChangeOrderProcess] = React.useState('')
+  const [editChangeControlRequiredFor, setEditChangeControlRequiredFor] = React.useState('')
+  const [editNegotiationStatus, setEditNegotiationStatus] = React.useState('')
+  const [editRedlineSummary, setEditRedlineSummary] = React.useState('')
+  const [editAuditRightsSummary, setEditAuditRightsSummary] = React.useState('')
+  const [editUsageRestrictionsSummary, setEditUsageRestrictionsSummary] = React.useState('')
+  const [editSubprocessorUseSummary, setEditSubprocessorUseSummary] = React.useState('')
+  const [editAutoIncreasePercent, setEditAutoIncreasePercent] = React.useState('')
+  const [editEarlyTerminationFeeModel, setEditEarlyTerminationFeeModel] = React.useState('')
+  const [editUpsellCrossSellRights, setEditUpsellCrossSellRights] = React.useState('')
+  const [editPrimaryQuoteId, setEditPrimaryQuoteId] = React.useState('')
+  const [editPrimaryDealId, setEditPrimaryDealId] = React.useState('')
+  const [editCoveredAssetTags, setEditCoveredAssetTags] = React.useState('')
+  const [editCoveredServiceTags, setEditCoveredServiceTags] = React.useState('')
+  const [editSuccessPlaybookConstraints, setEditSuccessPlaybookConstraints] = React.useState('')
   const [severityRows, setSeverityRows] = React.useState<SeverityRow[]>(
     severityTemplate.map((tpl) => ({
       key: tpl.key,
@@ -372,6 +400,22 @@ export default function CRMSLAs() {
     setEditServiceScope(s.serviceScopeSummary ?? '')
     setEditTerminationConditions(s.terminationConditions ?? '')
     setEditChangeOrderProcess(s.changeOrderProcess ?? '')
+    setEditChangeControlRequiredFor(s.changeControlRequiredFor ?? '')
+    setEditNegotiationStatus(s.negotiationStatus ?? '')
+    setEditRedlineSummary(s.redlineSummary ?? '')
+    setEditAuditRightsSummary(s.auditRightsSummary ?? '')
+    setEditUsageRestrictionsSummary(s.usageRestrictionsSummary ?? '')
+    setEditSubprocessorUseSummary(s.subprocessorUseSummary ?? '')
+    setEditAutoIncreasePercent(
+      s.autoIncreasePercentOnRenewal != null ? String(s.autoIncreasePercentOnRenewal) : '',
+    )
+    setEditEarlyTerminationFeeModel(s.earlyTerminationFeeModel ?? '')
+    setEditUpsellCrossSellRights(s.upsellCrossSellRights ?? '')
+    setEditPrimaryQuoteId(s.primaryQuoteId ?? '')
+    setEditPrimaryDealId(s.primaryDealId ?? '')
+    setEditCoveredAssetTags((s.coveredAssetTags ?? []).join(', '))
+    setEditCoveredServiceTags((s.coveredServiceTags ?? []).join(', '))
+    setEditSuccessPlaybookConstraints(s.successPlaybookConstraints ?? '')
   }
 
   function closeModal() {
@@ -428,6 +472,26 @@ export default function CRMSLAs() {
       serviceScopeSummary: editServiceScope.trim() || undefined,
       terminationConditions: editTerminationConditions.trim() || undefined,
       changeOrderProcess: editChangeOrderProcess.trim() || undefined,
+      changeControlRequiredFor: editChangeControlRequiredFor.trim() || undefined,
+      negotiationStatus: editNegotiationStatus.trim() || undefined,
+      redlineSummary: editRedlineSummary.trim() || undefined,
+      auditRightsSummary: editAuditRightsSummary.trim() || undefined,
+      usageRestrictionsSummary: editUsageRestrictionsSummary.trim() || undefined,
+      subprocessorUseSummary: editSubprocessorUseSummary.trim() || undefined,
+      autoIncreasePercentOnRenewal: editAutoIncreasePercent
+        ? Number(editAutoIncreasePercent)
+        : undefined,
+      earlyTerminationFeeModel: editEarlyTerminationFeeModel.trim() || undefined,
+      upsellCrossSellRights: editUpsellCrossSellRights.trim() || undefined,
+      primaryQuoteId: editPrimaryQuoteId.trim() || undefined,
+      primaryDealId: editPrimaryDealId.trim() || undefined,
+      coveredAssetTags: editCoveredAssetTags
+        ? editCoveredAssetTags.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      coveredServiceTags: editCoveredServiceTags
+        ? editCoveredServiceTags.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      successPlaybookConstraints: editSuccessPlaybookConstraints.trim() || undefined,
       severityTargets: severityTargets.length ? severityTargets : undefined,
     }
     try {

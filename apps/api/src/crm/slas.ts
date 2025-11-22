@@ -136,6 +136,28 @@ export type SlaContractDoc = {
   dataClassification?: string
   hasDataProcessingAddendum?: boolean
 
+  // Change control & negotiations
+  changeControlRequiredFor?: string
+  negotiationStatus?: string
+  redlineSummary?: string
+
+  // Audit, rights, and restrictions
+  auditRightsSummary?: string
+  usageRestrictionsSummary?: string
+  subprocessorUseSummary?: string
+
+  // Renewals & commercial levers
+  autoIncreasePercentOnRenewal?: number | null
+  earlyTerminationFeeModel?: string
+  upsellCrossSellRights?: string
+
+  // Linkage to other records
+  primaryQuoteId?: ObjectId | null
+  primaryDealId?: ObjectId | null
+  coveredAssetTags?: string[]
+  coveredServiceTags?: string[]
+  successPlaybookConstraints?: string
+
   // Versioning / lifecycle
   version: number
   parentContractId?: ObjectId | null
@@ -238,6 +260,28 @@ const createSchema = z.object({
   dataClassification: z.string().optional(),
   hasDataProcessingAddendum: z.boolean().optional(),
 
+  // Change control & negotiations
+  changeControlRequiredFor: z.string().optional(),
+  negotiationStatus: z.string().optional(),
+  redlineSummary: z.string().optional(),
+
+  // Audit / rights
+  auditRightsSummary: z.string().optional(),
+  usageRestrictionsSummary: z.string().optional(),
+  subprocessorUseSummary: z.string().optional(),
+
+  // Renewals / commercial levers
+  autoIncreasePercentOnRenewal: z.number().min(0).max(100).optional(),
+  earlyTerminationFeeModel: z.string().optional(),
+  upsellCrossSellRights: z.string().optional(),
+
+  // Links to CRM artifacts and assets
+  primaryQuoteId: z.string().optional(),
+  primaryDealId: z.string().optional(),
+  coveredAssetTags: z.array(z.string()).optional(),
+  coveredServiceTags: z.array(z.string()).optional(),
+  successPlaybookConstraints: z.string().optional(),
+
   // Versioning / lifecycle metadata (can be provided explicitly, but usually inferred)
   version: z.number().int().positive().optional(),
   parentContractId: z.string().optional(),
@@ -271,6 +315,8 @@ export function serialize(doc: SlaContractDoc) {
     _id: String(doc._id),
     accountId: String(doc.accountId),
     parentContractId: doc.parentContractId ? String(doc.parentContractId) : null,
+    primaryQuoteId: doc.primaryQuoteId ? String(doc.primaryQuoteId) : null,
+    primaryDealId: doc.primaryDealId ? String(doc.primaryDealId) : null,
     counterpartyContactId: doc.counterpartyContactId ? String(doc.counterpartyContactId) : null,
     internalOwnerUserId: doc.internalOwnerUserId ? String(doc.internalOwnerUserId) : null,
     effectiveDate: doc.effectiveDate ? doc.effectiveDate.toISOString() : null,
@@ -433,6 +479,34 @@ slasRouter.post('/', async (req, res) => {
     dataClassification: body.dataClassification,
     hasDataProcessingAddendum: body.hasDataProcessingAddendum ?? false,
 
+    // Change control & negotiations
+    changeControlRequiredFor: body.changeControlRequiredFor,
+    negotiationStatus: body.negotiationStatus,
+    redlineSummary: body.redlineSummary,
+
+    // Audit / rights
+    auditRightsSummary: body.auditRightsSummary,
+    usageRestrictionsSummary: body.usageRestrictionsSummary,
+    subprocessorUseSummary: body.subprocessorUseSummary,
+
+    // Renewals / levers
+    autoIncreasePercentOnRenewal: body.autoIncreasePercentOnRenewal ?? null,
+    earlyTerminationFeeModel: body.earlyTerminationFeeModel,
+    upsellCrossSellRights: body.upsellCrossSellRights,
+
+    // Links
+    primaryQuoteId:
+      body.primaryQuoteId && ObjectId.isValid(body.primaryQuoteId)
+        ? new ObjectId(body.primaryQuoteId)
+        : null,
+    primaryDealId:
+      body.primaryDealId && ObjectId.isValid(body.primaryDealId)
+        ? new ObjectId(body.primaryDealId)
+        : null,
+    coveredAssetTags: body.coveredAssetTags ?? [],
+    coveredServiceTags: body.coveredServiceTags ?? [],
+    successPlaybookConstraints: body.successPlaybookConstraints,
+
     // Versioning / lifecycle
     version: body.version ?? 1,
     parentContractId:
@@ -543,6 +617,42 @@ slasRouter.put('/:id', async (req, res) => {
   if (body.changeOrderProcess !== undefined) update.changeOrderProcess = body.changeOrderProcess
   if (body.dataClassification !== undefined) update.dataClassification = body.dataClassification
   if (body.hasDataProcessingAddendum !== undefined) update.hasDataProcessingAddendum = body.hasDataProcessingAddendum
+
+  // Change control & negotiations
+  if (body.changeControlRequiredFor !== undefined) update.changeControlRequiredFor = body.changeControlRequiredFor
+  if (body.negotiationStatus !== undefined) update.negotiationStatus = body.negotiationStatus
+  if (body.redlineSummary !== undefined) update.redlineSummary = body.redlineSummary
+
+  // Audit / rights
+  if (body.auditRightsSummary !== undefined) update.auditRightsSummary = body.auditRightsSummary
+  if (body.usageRestrictionsSummary !== undefined) update.usageRestrictionsSummary = body.usageRestrictionsSummary
+  if (body.subprocessorUseSummary !== undefined) update.subprocessorUseSummary = body.subprocessorUseSummary
+
+  // Renewals / levers
+  if (body.autoIncreasePercentOnRenewal !== undefined) {
+    update.autoIncreasePercentOnRenewal = body.autoIncreasePercentOnRenewal ?? null
+  }
+  if (body.earlyTerminationFeeModel !== undefined) update.earlyTerminationFeeModel = body.earlyTerminationFeeModel
+  if (body.upsellCrossSellRights !== undefined) update.upsellCrossSellRights = body.upsellCrossSellRights
+
+  // Links
+  if (body.primaryQuoteId !== undefined) {
+    update.primaryQuoteId =
+      body.primaryQuoteId && ObjectId.isValid(body.primaryQuoteId)
+        ? new ObjectId(body.primaryQuoteId)
+        : null
+  }
+  if (body.primaryDealId !== undefined) {
+    update.primaryDealId =
+      body.primaryDealId && ObjectId.isValid(body.primaryDealId)
+        ? new ObjectId(body.primaryDealId)
+        : null
+  }
+  if (body.coveredAssetTags !== undefined) update.coveredAssetTags = body.coveredAssetTags ?? []
+  if (body.coveredServiceTags !== undefined) update.coveredServiceTags = body.coveredServiceTags ?? []
+  if (body.successPlaybookConstraints !== undefined) {
+    update.successPlaybookConstraints = body.successPlaybookConstraints
+  }
 
   // Versioning / lifecycle
   if (body.version !== undefined) update.version = body.version
