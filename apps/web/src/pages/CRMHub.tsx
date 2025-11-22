@@ -33,6 +33,11 @@ export default function CRMHub() {
     { label: 'Deal Approval Queue', desc: 'Review and approve deal requests', href: '/apps/crm/deals/approval-queue' },
     { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
     { label: 'Documents', desc: 'File attachments, version control, and permissions', href: '/apps/crm/documents' },
+    {
+      label: 'Contracts & SLAs',
+      desc: 'Customer contracts, entitlements, and SLA targets',
+      href: '/apps/crm/slas',
+    },
     { label: 'Invoices', desc: 'Billing, payments, and refunds', href: '/apps/crm/invoices' },
     { label: 'Knowledge Base', desc: 'Articles and self‑service help', href: '/apps/crm/support/kb' },
     { label: 'Marketing', desc: 'Campaigns, segments, analytics', href: '/apps/crm/marketing' },
