@@ -251,6 +251,12 @@ export default function CRMProjects() {
     } else {
       await updateMutation.mutateAsync({ id: editing._id, data: payload })
     }
+    // Ensure table reflects latest data from the server
+    try {
+      await projectsQ.refetch()
+    } catch {
+      // ignore refetch errors; query will refresh on next invalidate or navigation
+    }
     closeEdit()
   }
 
