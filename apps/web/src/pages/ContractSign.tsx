@@ -165,18 +165,46 @@ export default function ContractSign() {
 
   if (requiresOtp) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="w-full max-w-lg rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-8 shadow-2xl">
-          <div className="mb-6 text-center space-y-1">
-            <div className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</div>
-            <h1 className="text-base font-semibold">Enter your signing username &amp; security code</h1>
-            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '32px 16px',
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: 640,
+            borderRadius: 16,
+            border: '1px solid rgba(148, 163, 184, 0.4)',
+            backgroundColor: 'var(--color-panel)',
+            padding: 24,
+            boxShadow: '0 20px 50px rgba(15,23,42,0.7)',
+            color: 'var(--color-text)',
+            fontSize: 12,
+          }}
+        >
+          <div style={{ marginBottom: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-primary)' }}>BOAZ says</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
+              Enter your signing username &amp; security code
+            </div>
+            <p
+              style={{
+                marginTop: 8,
+                fontSize: 11,
+                color: 'var(--color-text-muted)',
+                lineHeight: 1.5,
+              }}
+            >
               We&apos;ve emailed you a temporary signing username and a one‑time security code for this contract. Enter
               both below to unlock the contract details and continue to signing.
             </p>
           </div>
           <form
-            className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
               if (!loginId.trim()) {
@@ -190,29 +218,71 @@ export default function ContractSign() {
               handleVerifyOtp()
             }}
           >
-            <div className="space-y-1">
-              <label className="block text-xs font-medium">Signing username</label>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 4 }}>
+                Signing username
+              </label>
               <input
-                className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm font-mono"
+                style={{
+                  width: '100%',
+                  borderRadius: 10,
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-bg)',
+                  padding: '8px 10px',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  fontSize: 12,
+                  color: 'var(--color-text)',
+                }}
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
                 placeholder="Paste the username from your email"
               />
             </div>
-            <div className="space-y-1">
-              <label className="block text-xs font-medium">Security code</label>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, marginBottom: 4 }}>
+                Security code
+              </label>
               <input
-                className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm font-mono tracking-[0.5em] text-center"
+                style={{
+                  width: '100%',
+                  borderRadius: 10,
+                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--color-bg)',
+                  padding: '8px 10px',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  fontSize: 14,
+                  letterSpacing: '0.3em',
+                  textAlign: 'center',
+                  color: 'var(--color-text)',
+                }}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value)}
                 placeholder="••••••"
               />
             </div>
-            <div className="flex items-center justify-between text-[11px] text-[color:var(--color-text-muted)]">
+            <div
+              style={{
+                marginTop: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: 11,
+                color: 'var(--color-text-muted)',
+              }}
+            >
               <span>Codes expire after a short time for your security.</span>
               <button
                 type="submit"
-                className="rounded-xl bg-[color:var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-soft)]"
+                style={{
+                  borderRadius: 999,
+                  backgroundColor: 'var(--color-primary)',
+                  padding: '6px 12px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: '#fff',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 Verify code
               </button>
