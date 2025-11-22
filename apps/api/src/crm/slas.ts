@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { ObjectId } from 'mongodb'
 import { getDb, getNextSequence } from '../db.js'
 import { sendEmail } from '../alerts/mail.js'
+import crypto from 'crypto'
 import { requireAuth } from '../auth/rbac.js'
 
 export const slasRouter = Router()
@@ -235,7 +236,7 @@ function parseDate(value?: string): Date | null {
   return dt
 }
 
-function serialize(doc: SlaContractDoc) {
+export function serialize(doc: SlaContractDoc) {
   return {
     ...doc,
     _id: String(doc._id),
@@ -796,6 +797,45 @@ slasRouter.post('/:id/send', async (req, res) => {
 
   res.json({ data: { ok: true }, error: null })
 })
+
+// Internal helper to create signature invites; used from authenticated area
+export async function createSignatureInvites({
+  contractId,
+  invites,
+  createdByUserId,
+}: {
+  contractId: ObjectId
+  invites: { role: 'customerSigner' | 'providerSigner'; email: string; name?: string; title?: string }[]
+  createdByUserId?: ObjectId
+}) {
+  const db = await getDb()
+  if (!db) throw new Error('db_unavailable')
+
+  const coll = db.collection<any>('sla_signature_invites')
+  const now = new Date()
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days
+
+  const docs = invites.map((inv) => ({
+    _id: new ObjectId(),
+    contractId,
+    role: inv.role,
+    email: inv.email,
+    name: inv.name,
+    title: inv.title,
+    token: crypto.randomBytes(24).toString('hex'),
+    status: 'pending',
+    createdAt: now,
+    expiresAt,
+    usedAt: null,
+    createdByUserId,
+  }))
+
+  if (!docs.length) return []
+
+  await coll.insertMany(docs)
+  return docs
+}
+
 
 // GET /api/crm/slas/by-account?accountIds=id1,id2
 slasRouter.get('/by-account', async (req, res) => {
