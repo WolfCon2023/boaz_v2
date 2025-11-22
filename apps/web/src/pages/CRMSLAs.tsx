@@ -6,6 +6,8 @@ import { useToast } from '@/components/Toast'
 import { formatDate } from '@/lib/dateFormat'
 
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
+type QuotePick = { _id: string; quoteNumber?: number; title?: string; accountId?: string }
+type DealPick = { _id: string; dealNumber?: number; title?: string; accountId?: string }
 
 type SlaSeverityTarget = {
   key: string
@@ -154,10 +156,20 @@ export default function CRMSLAs() {
   const [editType, setEditType] = React.useState<SlaContract['type']>('support')
   const [editStatus, setEditStatus] = React.useState<SlaContract['status']>('active')
   const [editAccountId, setEditAccountId] = React.useState('')
+  const [editEffectiveDate, setEditEffectiveDate] = React.useState('')
   const [editStartDate, setEditStartDate] = React.useState('')
   const [editEndDate, setEditEndDate] = React.useState('')
   const [editAutoRenew, setEditAutoRenew] = React.useState(false)
   const [editRenewalDate, setEditRenewalDate] = React.useState('')
+  const [editBillingFrequency, setEditBillingFrequency] = React.useState('')
+  const [editCurrency, setEditCurrency] = React.useState('')
+  const [editBaseAmount, setEditBaseAmount] = React.useState('')
+  const [editInvoiceDueDays, setEditInvoiceDueDays] = React.useState('')
+  const [editUptimeTarget, setEditUptimeTarget] = React.useState('')
+  const [editSupportHours, setEditSupportHours] = React.useState('')
+  const [editSlaExclusions, setEditSlaExclusions] = React.useState('')
+  const [editDataClassification, setEditDataClassification] = React.useState('')
+  const [editHasDpa, setEditHasDpa] = React.useState(false)
   const [editResponseDays, setEditResponseDays] = React.useState('')
   const [editResponseHours, setEditResponseHours] = React.useState('')
   const [editResolutionDays, setEditResolutionDays] = React.useState('')
@@ -215,6 +227,39 @@ export default function CRMSLAs() {
     }
     return map
   }, [accounts])
+
+  // Quotes and deals for primary linkage dropdowns
+  const quotesQ = useQuery<{ data: { items: QuotePick[] } }>({
+    queryKey: ['quotes-for-slas'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/quotes', {
+        params: { sort: 'updatedAt', dir: 'desc' },
+      })
+      return res.data as { data: { items: QuotePick[] } }
+    },
+  })
+  const allQuotes: QuotePick[] = quotesQ.data?.data.items ?? []
+
+  const dealsQ = useQuery<{ data: { items: DealPick[]; total: number } }>({
+    queryKey: ['deals-for-slas'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/deals', {
+        params: { limit: 200, sort: 'closeDate', dir: 'desc' },
+      })
+      return res.data as { data: { items: DealPick[]; total: number } }
+    },
+  })
+  const allDeals: DealPick[] = dealsQ.data?.data.items ?? []
+
+  const quotesForAccount = React.useMemo(() => {
+    if (!editAccountId) return allQuotes
+    return allQuotes.filter((q) => q.accountId === editAccountId)
+  }, [allQuotes, editAccountId])
+
+  const dealsForAccount = React.useMemo(() => {
+    if (!editAccountId) return allDeals
+    return allDeals.filter((d) => d.accountId === editAccountId)
+  }, [allDeals, editAccountId])
 
   const slasQ = useQuery<{ data: { items: SlaContract[] } }>({
     queryKey: ['slas', accountFilter, statusFilter, typeFilter],
@@ -315,10 +360,20 @@ export default function CRMSLAs() {
     setEditCustomerAddress('')
     setEditProviderLegalName('')
     setEditProviderAddress('')
+    setEditEffectiveDate('')
     setEditStartDate('')
     setEditEndDate('')
     setEditAutoRenew(false)
     setEditRenewalDate('')
+    setEditBillingFrequency('')
+    setEditCurrency('')
+    setEditBaseAmount('')
+    setEditInvoiceDueDays('')
+    setEditUptimeTarget('')
+    setEditSupportHours('')
+    setEditSlaExclusions('')
+    setEditDataClassification('')
+    setEditHasDpa(false)
     setEditResponseDays('')
     setEditResponseHours('')
     setEditResolutionDays('')
@@ -353,10 +408,20 @@ export default function CRMSLAs() {
     setEditCustomerAddress(s.customerAddress ?? '')
     setEditProviderLegalName(s.providerLegalName ?? '')
     setEditProviderAddress(s.providerAddress ?? '')
+    setEditEffectiveDate(s.effectiveDate ? s.effectiveDate.slice(0, 10) : '')
     setEditStartDate(s.startDate ? s.startDate.slice(0, 10) : '')
     setEditEndDate(s.endDate ? s.endDate.slice(0, 10) : '')
     setEditAutoRenew(Boolean(s.autoRenew))
     setEditRenewalDate(s.renewalDate ? s.renewalDate.slice(0, 10) : '')
+    setEditBillingFrequency(s.billingFrequency ?? '')
+    setEditCurrency(s.currency ?? '')
+    setEditBaseAmount(s.baseAmountCents != null ? String(s.baseAmountCents / 100) : '')
+    setEditInvoiceDueDays(s.invoiceDueDays != null ? String(s.invoiceDueDays) : '')
+    setEditUptimeTarget(s.uptimeTargetPercent != null ? String(s.uptimeTargetPercent) : '')
+    setEditSupportHours(s.supportHours ?? '')
+    setEditSlaExclusions(s.slaExclusionsSummary ?? '')
+    setEditDataClassification(s.dataClassification ?? '')
+    setEditHasDpa(Boolean(s.hasDataProcessingAddendum))
     const respParts = minutesToParts(s.responseTargetMinutes ?? null)
     setEditResponseDays(respParts.days)
     setEditResponseHours(respParts.hours)
@@ -444,10 +509,20 @@ export default function CRMSLAs() {
       name: editName.trim(),
       type: editType,
       status: editStatus,
+      effectiveDate: editEffectiveDate || undefined,
       startDate: editStartDate || undefined,
       endDate: editEndDate || undefined,
       autoRenew: editAutoRenew,
       renewalDate: editRenewalDate || undefined,
+      billingFrequency: editBillingFrequency.trim() || undefined,
+      currency: editCurrency.trim() || undefined,
+      baseAmountCents: editBaseAmount ? Math.round(Number(editBaseAmount) * 100) : undefined,
+      invoiceDueDays: editInvoiceDueDays ? Number(editInvoiceDueDays) : undefined,
+      uptimeTargetPercent: editUptimeTarget ? Number(editUptimeTarget) : undefined,
+      supportHours: editSupportHours.trim() || undefined,
+      slaExclusionsSummary: editSlaExclusions.trim() || undefined,
+      dataClassification: editDataClassification.trim() || undefined,
+      hasDataProcessingAddendum: editHasDpa || undefined,
       responseTargetMinutes: responseMinutes,
       resolutionTargetMinutes: resolutionMinutes,
       entitlements: editEntitlements.trim() || undefined,
@@ -765,6 +840,15 @@ export default function CRMSLAs() {
                     </select>
                   </div>
                   <div className="space-y-1">
+                    <label className="block text-xs font-medium">Effective date</label>
+                    <input
+                      type="date"
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                      value={editEffectiveDate}
+                      onChange={(e) => setEditEffectiveDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
                     <label className="block text-xs font-medium">Start date</label>
                     <input
                       type="date"
@@ -948,6 +1032,320 @@ export default function CRMSLAs() {
                     placeholder="Additional context, special terms, or internal comments."
                   />
                 </div>
+
+                <div className="space-y-3 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
+                  <div className="text-xs font-semibold">Legal terms &amp; specs</div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Governing law</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editGoverningLaw}
+                        onChange={(e) => setEditGoverningLaw(e.target.value)}
+                        placeholder="e.g., State of North Carolina"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Jurisdiction</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editJurisdiction}
+                        onChange={(e) => setEditJurisdiction(e.target.value)}
+                        placeholder="e.g., Wake County, NC"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Payment terms</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editPaymentTerms}
+                        onChange={(e) => setEditPaymentTerms(e.target.value)}
+                        placeholder="e.g., Net 30"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Service scope summary</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editServiceScope}
+                        onChange={(e) => setEditServiceScope(e.target.value)}
+                        placeholder="Summary of services covered"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Termination conditions</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editTerminationConditions}
+                        onChange={(e) => setEditTerminationConditions(e.target.value)}
+                        placeholder="Conditions for contract termination"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Change order process</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editChangeOrderProcess}
+                        onChange={(e) => setEditChangeOrderProcess(e.target.value)}
+                        placeholder="Process for change orders"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Change control required for</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editChangeControlRequiredFor}
+                        onChange={(e) => setEditChangeControlRequiredFor(e.target.value)}
+                        placeholder="e.g., Changes > $10k"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Negotiation status</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editNegotiationStatus}
+                        onChange={(e) => setEditNegotiationStatus(e.target.value)}
+                        placeholder="e.g., In negotiation, Finalized"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="block text-xs font-medium">Redline summary</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editRedlineSummary}
+                        onChange={(e) => setEditRedlineSummary(e.target.value)}
+                        placeholder="Summary of redline changes"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
+                  <div className="text-xs font-semibold">Commercial &amp; renewal levers</div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Billing frequency</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editBillingFrequency}
+                        onChange={(e) => setEditBillingFrequency(e.target.value)}
+                        placeholder="e.g., Monthly, Quarterly, Annually"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Currency</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editCurrency}
+                        onChange={(e) => setEditCurrency(e.target.value)}
+                        placeholder="e.g., USD"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Base amount</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editBaseAmount}
+                        onChange={(e) => setEditBaseAmount(e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Invoice due (days)</label>
+                      <input
+                        type="number"
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editInvoiceDueDays}
+                        onChange={(e) => setEditInvoiceDueDays(e.target.value)}
+                        placeholder="e.g., 30"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Auto increase on renewal (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editAutoIncreasePercent}
+                        onChange={(e) => setEditAutoIncreasePercent(e.target.value)}
+                        placeholder="e.g., 3.0"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Early termination fee model</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editEarlyTerminationFeeModel}
+                        onChange={(e) => setEditEarlyTerminationFeeModel(e.target.value)}
+                        placeholder="e.g., 50% of remaining value"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="block text-xs font-medium">Upsell / cross-sell rights</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editUpsellCrossSellRights}
+                        onChange={(e) => setEditUpsellCrossSellRights(e.target.value)}
+                        placeholder="Rights and restrictions for upsell/cross-sell"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
+                  <div className="text-xs font-semibold">Audit, rights &amp; compliance</div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Uptime target (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        max={100}
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editUptimeTarget}
+                        onChange={(e) => setEditUptimeTarget(e.target.value)}
+                        placeholder="e.g., 99.9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Support hours</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editSupportHours}
+                        onChange={(e) => setEditSupportHours(e.target.value)}
+                        placeholder="e.g., 24/7, Business hours"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="block text-xs font-medium">SLA exclusions summary</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editSlaExclusions}
+                        onChange={(e) => setEditSlaExclusions(e.target.value)}
+                        placeholder="Summary of SLA exclusions"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Data classification</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editDataClassification}
+                        onChange={(e) => setEditDataClassification(e.target.value)}
+                        placeholder="e.g., Public, Internal, Confidential"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">DPA in place?</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="sla-has-dpa"
+                          type="checkbox"
+                          checked={editHasDpa}
+                          onChange={(e) => setEditHasDpa(e.target.checked)}
+                        />
+                        <label htmlFor="sla-has-dpa" className="text-xs">
+                          Data Processing Addendum attached
+                        </label>
+                      </div>
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="block text-xs font-medium">Audit rights summary</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editAuditRightsSummary}
+                        onChange={(e) => setEditAuditRightsSummary(e.target.value)}
+                        placeholder="Summary of audit rights"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="block text-xs font-medium">Usage restrictions summary</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editUsageRestrictionsSummary}
+                        onChange={(e) => setEditUsageRestrictionsSummary(e.target.value)}
+                        placeholder="Summary of usage restrictions"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="block text-xs font-medium">Subprocessor use summary</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editSubprocessorUseSummary}
+                        onChange={(e) => setEditSubprocessorUseSummary(e.target.value)}
+                        placeholder="Summary of subprocessor usage"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
+                  <div className="text-xs font-semibold">Links &amp; playbooks</div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Primary quote</label>
+                      <select
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editPrimaryQuoteId}
+                        onChange={(e) => setEditPrimaryQuoteId(e.target.value)}
+                      >
+                        <option value="">No primary quote</option>
+                        {quotesForAccount.map((q) => (
+                          <option key={q._id} value={q._id}>
+                            {q.quoteNumber ? `#${q.quoteNumber} – ` : ''}
+                            {q.title || '(untitled)'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Primary deal</label>
+                      <select
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editPrimaryDealId}
+                        onChange={(e) => setEditPrimaryDealId(e.target.value)}
+                      >
+                        <option value="">No primary deal</option>
+                        {dealsForAccount.map((d) => (
+                          <option key={d._id} value={d._id}>
+                            {d.dealNumber ? `#${d.dealNumber} – ` : ''}
+                            {d.title || '(untitled)'}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Covered asset tags</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editCoveredAssetTags}
+                        onChange={(e) => setEditCoveredAssetTags(e.target.value)}
+                        placeholder="Comma-separated tags"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-medium">Covered service tags</label>
+                      <input
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editCoveredServiceTags}
+                        onChange={(e) => setEditCoveredServiceTags(e.target.value)}
+                        placeholder="Comma-separated tags"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="block text-xs font-medium">Success playbook constraints</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editSuccessPlaybookConstraints}
+                        onChange={(e) => setEditSuccessPlaybookConstraints(e.target.value)}
+                        placeholder="Constraints for success playbooks"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-2 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3 text-[11px]">
                   <div className="font-semibold">Signatures &amp; history</div>
                   {editing._id ? (
