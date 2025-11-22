@@ -7,6 +7,13 @@ import { formatDate } from '@/lib/dateFormat'
 
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
 
+type SlaSeverityTarget = {
+  key: string
+  label?: string
+  responseTargetMinutes?: number | null
+  resolutionTargetMinutes?: number | null
+}
+
 type SlaContract = {
   _id: string
   accountId: string
@@ -21,6 +28,54 @@ type SlaContract = {
   resolutionTargetMinutes?: number | null
   entitlements?: string
   notes?: string
+  severityTargets?: SlaSeverityTarget[]
+}
+
+type SeverityRow = {
+  key: string
+  label: string
+  responseDays: string
+  responseHours: string
+  resolutionDays: string
+  resolutionHours: string
+}
+
+const severityTemplate: { key: string; label: string }[] = [
+  { key: 'P1', label: 'P1 – Critical / Sev 1' },
+  { key: 'P2', label: 'P2 – High / Sev 2' },
+  { key: 'P3', label: 'P3 – Medium / Sev 3' },
+  { key: 'P4', label: 'P4 – Low / Sev 4' },
+]
+
+function minutesToParts(total?: number | null): { days: string; hours: string } {
+  if (total == null || isNaN(total)) return { days: '', hours: '' }
+  const d = Math.floor(total / (60 * 24))
+  const h = Math.floor((total % (60 * 24)) / 60)
+  return {
+    days: d ? String(d) : '',
+    hours: h ? String(h) : '',
+  }
+}
+
+function partsToMinutes(days: string, hours: string): number | undefined {
+  const d = days ? Number(days) : 0
+  const h = hours ? Number(hours) : 0
+  if (!d && !h) return undefined
+  return d * 24 * 60 + h * 60
+}
+
+function formatTargetLabel(total?: number | null): string {
+  if (total == null || isNaN(total)) return ''
+  const mins = total
+  const d = Math.floor(mins / (60 * 24))
+  const h = Math.floor((mins % (60 * 24)) / 60)
+  const m = mins % 60
+  const parts: string[] = []
+  if (d) parts.push(`${d}d`)
+  if (h) parts.push(`${h}h`)
+  if (!d && !h && m) parts.push(`${m}m`)
+  if (!parts.length) return '0m'
+  return parts.join(' ')
 }
 
 export default function CRMSLAs() {
@@ -42,10 +97,22 @@ export default function CRMSLAs() {
   const [editEndDate, setEditEndDate] = React.useState('')
   const [editAutoRenew, setEditAutoRenew] = React.useState(false)
   const [editRenewalDate, setEditRenewalDate] = React.useState('')
-  const [editResponseMinutes, setEditResponseMinutes] = React.useState('')
-  const [editResolutionMinutes, setEditResolutionMinutes] = React.useState('')
+  const [editResponseDays, setEditResponseDays] = React.useState('')
+  const [editResponseHours, setEditResponseHours] = React.useState('')
+  const [editResolutionDays, setEditResolutionDays] = React.useState('')
+  const [editResolutionHours, setEditResolutionHours] = React.useState('')
   const [editEntitlements, setEditEntitlements] = React.useState('')
   const [editNotes, setEditNotes] = React.useState('')
+  const [severityRows, setSeverityRows] = React.useState<SeverityRow[]>(
+    severityTemplate.map((tpl) => ({
+      key: tpl.key,
+      label: tpl.label,
+      responseDays: '',
+      responseHours: '',
+      resolutionDays: '',
+      resolutionHours: '',
+    })),
+  )
 
   const accountsQ = useQuery({
     queryKey: ['accounts-pick'],
@@ -145,10 +212,22 @@ export default function CRMSLAs() {
     setEditEndDate('')
     setEditAutoRenew(false)
     setEditRenewalDate('')
-    setEditResponseMinutes('')
-    setEditResolutionMinutes('')
+    setEditResponseDays('')
+    setEditResponseHours('')
+    setEditResolutionDays('')
+    setEditResolutionHours('')
     setEditEntitlements('')
     setEditNotes('')
+    setSeverityRows(
+      severityTemplate.map((tpl) => ({
+        key: tpl.key,
+        label: tpl.label,
+        responseDays: '',
+        responseHours: '',
+        resolutionDays: '',
+        resolutionHours: '',
+      })),
+    )
   }
 
   function openEdit(s: SlaContract) {
@@ -161,11 +240,30 @@ export default function CRMSLAs() {
     setEditEndDate(s.endDate ? s.endDate.slice(0, 10) : '')
     setEditAutoRenew(Boolean(s.autoRenew))
     setEditRenewalDate(s.renewalDate ? s.renewalDate.slice(0, 10) : '')
-    setEditResponseMinutes(
-      s.responseTargetMinutes != null ? String(s.responseTargetMinutes) : '',
-    )
-    setEditResolutionMinutes(
-      s.resolutionTargetMinutes != null ? String(s.resolutionTargetMinutes) : '',
+    const respParts = minutesToParts(s.responseTargetMinutes ?? null)
+    setEditResponseDays(respParts.days)
+    setEditResponseHours(respParts.hours)
+    const resParts = minutesToParts(s.resolutionTargetMinutes ?? null)
+    setEditResolutionDays(resParts.days)
+    setEditResolutionHours(resParts.hours)
+    const byKey = new Map<string, SlaSeverityTarget>()
+    ;(s.severityTargets ?? []).forEach((t) => {
+      if (t.key) byKey.set(t.key, t)
+    })
+    setSeverityRows(
+      severityTemplate.map((tpl) => {
+        const existing = byKey.get(tpl.key)
+        const resp = minutesToParts(existing?.responseTargetMinutes ?? null)
+        const res = minutesToParts(existing?.resolutionTargetMinutes ?? null)
+        return {
+          key: tpl.key,
+          label: tpl.label,
+          responseDays: resp.days,
+          responseHours: resp.hours,
+          resolutionDays: res.days,
+          resolutionHours: res.hours,
+        }
+      }),
     )
     setEditEntitlements(s.entitlements ?? '')
     setEditNotes(s.notes ?? '')
@@ -185,6 +283,23 @@ export default function CRMSLAs() {
       toast.showToast('Name is required.', 'error')
       return
     }
+    const responseMinutes = partsToMinutes(editResponseDays, editResponseHours)
+    const resolutionMinutes = partsToMinutes(editResolutionDays, editResolutionHours)
+
+    const severityTargets = severityRows
+      .map((row) => {
+        const resp = partsToMinutes(row.responseDays, row.responseHours)
+        const res = partsToMinutes(row.resolutionDays, row.resolutionHours)
+        if (resp == null && res == null) return null
+        return {
+          key: row.key,
+          label: row.label,
+          responseTargetMinutes: resp,
+          resolutionTargetMinutes: res,
+        } as SlaSeverityTarget
+      })
+      .filter((x): x is SlaSeverityTarget => Boolean(x))
+
     const payload: Partial<SlaContract> = {
       accountId: editAccountId,
       name: editName.trim(),
@@ -194,14 +309,11 @@ export default function CRMSLAs() {
       endDate: editEndDate || undefined,
       autoRenew: editAutoRenew,
       renewalDate: editRenewalDate || undefined,
-      responseTargetMinutes: editResponseMinutes
-        ? Number(editResponseMinutes)
-        : undefined,
-      resolutionTargetMinutes: editResolutionMinutes
-        ? Number(editResolutionMinutes)
-        : undefined,
+      responseTargetMinutes: responseMinutes,
+      resolutionTargetMinutes: resolutionMinutes,
       entitlements: editEntitlements.trim() || undefined,
       notes: editNotes.trim() || undefined,
+      severityTargets: severityTargets.length ? severityTargets : undefined,
     }
     try {
       if (!editing || !editing._id) {
@@ -320,10 +432,10 @@ export default function CRMSLAs() {
                       {s.endDate ? formatDate(s.endDate) : ''}
                     </td>
                     <td className="px-3 py-2 align-top text-xs whitespace-nowrap">
-                      {s.responseTargetMinutes != null ? `${s.responseTargetMinutes} min` : ''}
+                      {s.responseTargetMinutes != null ? formatTargetLabel(s.responseTargetMinutes) : ''}
                     </td>
                     <td className="px-3 py-2 align-top text-xs whitespace-nowrap">
-                      {s.resolutionTargetMinutes != null ? `${s.resolutionTargetMinutes} min` : ''}
+                      {s.resolutionTargetMinutes != null ? formatTargetLabel(s.resolutionTargetMinutes) : ''}
                     </td>
                     <td className="px-3 py-2 align-top text-right text-xs">
                       <div className="flex justify-end gap-1">
@@ -466,24 +578,128 @@ export default function CRMSLAs() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-xs font-medium">Response target (minutes)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
-                      value={editResponseMinutes}
-                      onChange={(e) => setEditResponseMinutes(e.target.value)}
-                    />
+                    <label className="block text-xs font-medium">Default response target</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        placeholder="Days"
+                        value={editResponseDays}
+                        onChange={(e) => setEditResponseDays(e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        placeholder="Hours"
+                        value={editResponseHours}
+                        onChange={(e) => setEditResponseHours(e.target.value)}
+                      />
+                    </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-xs font-medium">Resolution target (minutes)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
-                      value={editResolutionMinutes}
-                      onChange={(e) => setEditResolutionMinutes(e.target.value)}
-                    />
+                    <label className="block text-xs font-medium">Default resolution target</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        placeholder="Days"
+                        value={editResolutionDays}
+                        onChange={(e) => setEditResolutionDays(e.target.value)}
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        placeholder="Hours"
+                        value={editResolutionHours}
+                        onChange={(e) => setEditResolutionHours(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-xs font-medium">Per-priority targets (optional)</label>
+                    <span className="text-[10px] text-[color:var(--color-text-muted)]">
+                      Override by severity (P1/P2/P3/P4) where needed.
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg)]">
+                    <table className="min-w-full text-[11px]">
+                      <thead className="bg-[color:var(--color-muted)] text-[10px] text-[color:var(--color-text-muted)]">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Priority</th>
+                          <th className="px-2 py-1 text-left whitespace-nowrap">Response (d / h)</th>
+                          <th className="px-2 py-1 text-left whitespace-nowrap">Resolution (d / h)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {severityRows.map((row, idx) => (
+                          <tr key={row.key} className="border-t border-[color:var(--color-border-soft)]">
+                            <td className="px-2 py-1 align-top">{row.label}</td>
+                            <td className="px-2 py-1 align-top">
+                              <div className="flex gap-1">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-16 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-1 py-0.5 text-[11px]"
+                                  placeholder="d"
+                                  value={row.responseDays}
+                                  onChange={(e) => {
+                                    const next = [...severityRows]
+                                    next[idx] = { ...next[idx], responseDays: e.target.value }
+                                    setSeverityRows(next)
+                                  }}
+                                />
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-16 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-1 py-0.5 text-[11px]"
+                                  placeholder="h"
+                                  value={row.responseHours}
+                                  onChange={(e) => {
+                                    const next = [...severityRows]
+                                    next[idx] = { ...next[idx], responseHours: e.target.value }
+                                    setSeverityRows(next)
+                                  }}
+                                />
+                              </div>
+                            </td>
+                            <td className="px-2 py-1 align-top">
+                              <div className="flex gap-1">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-16 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-1 py-0.5 text-[11px]"
+                                  placeholder="d"
+                                  value={row.resolutionDays}
+                                  onChange={(e) => {
+                                    const next = [...severityRows]
+                                    next[idx] = { ...next[idx], resolutionDays: e.target.value }
+                                    setSeverityRows(next)
+                                  }}
+                                />
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-16 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-1 py-0.5 text-[11px]"
+                                  placeholder="h"
+                                  value={row.resolutionHours}
+                                  onChange={(e) => {
+                                    const next = [...severityRows]
+                                    next[idx] = { ...next[idx], resolutionHours: e.target.value }
+                                    setSeverityRows(next)
+                                  }}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
                 <div className="space-y-1">

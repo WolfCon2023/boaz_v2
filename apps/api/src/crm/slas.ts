@@ -11,6 +11,13 @@ slasRouter.use(requireAuth)
 type SlaStatus = 'active' | 'expired' | 'scheduled' | 'cancelled'
 type SlaType = 'support' | 'subscription' | 'project' | 'other'
 
+type SlaSeverityTarget = {
+  key: string // e.g. P1, P2, Sev1
+  label?: string
+  responseTargetMinutes?: number | null
+  resolutionTargetMinutes?: number | null
+}
+
 type SlaContractDoc = {
   _id: ObjectId
   accountId: ObjectId
@@ -25,9 +32,18 @@ type SlaContractDoc = {
   resolutionTargetMinutes: number | null
   entitlements?: string
   notes?: string
+  // Optional per-priority overrides (P1/P2, Sev1/Sev2, etc.)
+  severityTargets?: SlaSeverityTarget[]
   createdAt: Date
   updatedAt: Date
 }
+
+const severityTargetSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().optional(),
+  responseTargetMinutes: z.number().int().positive().nullable().optional(),
+  resolutionTargetMinutes: z.number().int().positive().nullable().optional(),
+})
 
 const createSchema = z.object({
   accountId: z.string().min(1),
@@ -42,6 +58,7 @@ const createSchema = z.object({
   resolutionTargetMinutes: z.number().int().positive().optional(),
   entitlements: z.string().optional(),
   notes: z.string().optional(),
+  severityTargets: z.array(severityTargetSchema).optional(),
 })
 
 const updateSchema = createSchema.partial()
@@ -142,6 +159,7 @@ slasRouter.post('/', async (req, res) => {
     resolutionTargetMinutes: body.resolutionTargetMinutes ?? null,
     entitlements: body.entitlements,
     notes: body.notes,
+    severityTargets: body.severityTargets,
     createdAt: now,
     updatedAt: now,
   }
@@ -183,19 +201,19 @@ slasRouter.put('/:id', async (req, res) => {
   if (body.resolutionTargetMinutes !== undefined) update.resolutionTargetMinutes = body.resolutionTargetMinutes ?? null
   if (body.entitlements !== undefined) update.entitlements = body.entitlements
   if (body.notes !== undefined) update.notes = body.notes
+  if (body.severityTargets !== undefined) update.severityTargets = body.severityTargets
 
   update.updatedAt = new Date()
 
   const coll = db.collection<SlaContractDoc>('sla_contracts')
-  const result = await coll.findOneAndUpdate(
-    { _id: new ObjectId(id) },
-    { $set: update },
-    { returnDocument: 'after' } as any
-  )
-  const value = (result as any)?.value as SlaContractDoc | null
-  if (!value) return res.status(404).json({ data: null, error: 'not_found' })
+  const existing = await coll.findOne({ _id: new ObjectId(id) })
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
 
-  res.json({ data: serialize(value), error: null })
+  await coll.updateOne({ _id: existing._id }, { $set: update })
+  const updated = await coll.findOne({ _id: existing._id })
+  if (!updated) return res.status(500).json({ data: null, error: 'update_failed' })
+
+  res.json({ data: serialize(updated), error: null })
 })
 
 // DELETE /api/crm/slas/:id
