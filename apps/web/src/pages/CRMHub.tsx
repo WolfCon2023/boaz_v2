@@ -12,46 +12,50 @@ type LicenseAlertRow = {
 
 export default function CRMHub() {
   const items: { label: string; desc: string; href: string }[] = [
-    { label: 'Contacts', desc: 'People and relationships', href: '/apps/crm/contacts' },
+    { label: 'Acceptance Queue', desc: 'View quotes accepted by signers', href: '/apps/crm/quotes/acceptance-queue' },
     { label: 'Accounts', desc: 'Companies and organizations', href: '/apps/crm/accounts' },
     {
-      label: 'Customer Success',
-      desc: 'Health scores, risk, and success playbooks across accounts',
-      href: '/apps/crm/success',
-    },
-    { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
-    {
-      label: 'Tasks & Activities',
-      desc: 'Calls, meetings, and to‑dos tied to CRM records',
-      href: '/apps/crm/tasks',
-    },
-    {
-      label: 'Projects & Delivery',
-      desc: 'Customer implementations, onboarding projects, and delivery work',
-      href: '/apps/crm/projects',
+      label: 'Approval Queue',
+      desc: 'Review and approve quote requests',
+      href: '/apps/crm/quotes/approval-queue',
     },
     {
       label: 'Assets / Installed Base',
       desc: 'Customer environments, installed products, and licenses',
       href: '/apps/crm/assets',
     },
+    { label: 'Contacts', desc: 'People and relationships', href: '/apps/crm/contacts' },
+    {
+      label: 'Customer Success',
+      desc: 'Health scores, risk, and success playbooks across accounts',
+      href: '/apps/crm/success',
+    },
+    { label: 'Deal Approval Queue', desc: 'Review and approve deal requests', href: '/apps/crm/deals/approval-queue' },
+    { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
+    { label: 'Documents', desc: 'File attachments, version control, and permissions', href: '/apps/crm/documents' },
+    { label: 'Invoices', desc: 'Billing, payments, and refunds', href: '/apps/crm/invoices' },
+    { label: 'Knowledge Base', desc: 'Articles and self‑service help', href: '/apps/crm/support/kb' },
+    { label: 'Marketing', desc: 'Campaigns, segments, analytics', href: '/apps/crm/marketing' },
+    { label: 'Outreach', desc: 'Email/SMS templates, sequences, events', href: '/apps/crm/outreach/templates' },
+    { label: 'Products', desc: 'Product catalog, bundles, discounts, and terms', href: '/apps/crm/products' },
+    {
+      label: 'Projects & Delivery',
+      desc: 'Customer implementations, onboarding projects, and delivery work',
+      href: '/apps/crm/projects',
+    },
+    { label: 'Quotes', desc: 'Quotes, proposals, and e-sign', href: '/apps/crm/quotes' },
     {
       label: 'Renewals & Subscriptions',
       desc: 'Renewal pipeline, health, churn risk, upsell, MRR/ARR',
       href: '/apps/crm/renewals',
     },
-    { label: 'Products', desc: 'Product catalog, bundles, discounts, and terms', href: '/apps/crm/products' },
-    { label: 'Quotes', desc: 'Quotes, proposals, and e-sign', href: '/apps/crm/quotes' },
-    { label: 'Approval Queue', desc: 'Review and approve quote requests', href: '/apps/crm/quotes/approval-queue' },
-    { label: 'Deal Approval Queue', desc: 'Review and approve deal requests', href: '/apps/crm/deals/approval-queue' },
-    { label: 'Acceptance Queue', desc: 'View quotes accepted by signers', href: '/apps/crm/quotes/acceptance-queue' },
-    { label: 'Invoices', desc: 'Billing, payments, and refunds', href: '/apps/crm/invoices' },
-    { label: 'Outreach', desc: 'Email/SMS templates, sequences, events', href: '/apps/crm/outreach/templates' },
-    { label: 'Marketing', desc: 'Campaigns, segments, analytics', href: '/apps/crm/marketing' },
     { label: 'Surveys & Feedback', desc: 'NPS/CSAT and post‑interaction surveys', href: '/apps/crm/surveys' },
+    {
+      label: 'Tasks & Activities',
+      desc: 'Calls, meetings, and to‑dos tied to CRM records',
+      href: '/apps/crm/tasks',
+    },
     { label: 'Tickets', desc: 'Support tickets and SLAs', href: '/apps/crm/support/tickets' },
-    { label: 'Knowledge Base', desc: 'Articles and self‑service help', href: '/apps/crm/support/kb' },
-    { label: 'Documents', desc: 'File attachments, version control, and permissions', href: '/apps/crm/documents' },
   ]
 
   const assetsAlertsQ = useQuery({
