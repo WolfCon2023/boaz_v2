@@ -46,6 +46,78 @@ supportTicketsRouter.get('/tickets', async (req, res) => {
     const items = await db.collection('support_tickets').find(filter).sort(sort).limit(200).toArray();
     res.json({ data: { items }, error: null });
 });
+// GET /api/crm/support/tickets/by-account?accountIds=id1,id2
+supportTicketsRouter.get('/tickets/by-account', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const rawIds = String(req.query.accountIds ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    if (!rawIds.length) {
+        return res.json({ data: { items: [] }, error: null });
+    }
+    const idMap = new Map();
+    for (const id of rawIds) {
+        if (ObjectId.isValid(id)) {
+            idMap.set(id, new ObjectId(id));
+        }
+    }
+    if (!idMap.size) {
+        return res.json({ data: { items: [] }, error: null });
+    }
+    const now = new Date();
+    const coll = db.collection('support_tickets');
+    const rows = await coll
+        .aggregate([
+        {
+            $match: {
+                accountId: { $in: Array.from(idMap.values()) },
+                status: { $in: ['open', 'pending'] },
+            },
+        },
+        {
+            $group: {
+                _id: '$accountId',
+                open: { $sum: 1 },
+                high: {
+                    $sum: {
+                        $cond: [
+                            { $in: ['$priority', ['high', 'urgent', 'p1']] },
+                            1,
+                            0,
+                        ],
+                    },
+                },
+                breached: {
+                    $sum: {
+                        $cond: [
+                            {
+                                $and: [
+                                    { $ne: ['$slaDueAt', null] },
+                                    { $lt: ['$slaDueAt', now] },
+                                ],
+                            },
+                            1,
+                            0,
+                        ],
+                    },
+                },
+            },
+        },
+    ])
+        .toArray();
+    const items = rows
+        .filter((r) => r._id)
+        .map((r) => ({
+        accountId: String(r._id),
+        open: r.open ?? 0,
+        high: r.high ?? 0,
+        breached: r.breached ?? 0,
+    }));
+    return res.json({ data: { items }, error: null });
+});
 // GET /api/crm/support/tickets/metrics
 supportTicketsRouter.get('/tickets/metrics', async (_req, res) => {
     const db = await getDb();
