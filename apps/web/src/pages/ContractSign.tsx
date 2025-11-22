@@ -162,17 +162,6 @@ export default function ContractSign() {
   const resp = response.data as any
   const requiresOtp: boolean = !!resp?.requiresOtp && !resp.contract
   const contract: PublicSlaContract | null = resp?.contract ?? null
-  const signer: SignerInfo | null = resp?.signer ?? null
-
-  // Pre-fill signer email/name/title from invite metadata
-  React.useEffect(() => {
-    if (signer) {
-      if (!signerEmail) setSignerEmail(signer.email)
-      if (!signerName && signer.name) setSignerName(signer.name)
-      if (!signerTitle && signer.title) setSignerTitle(signer.title)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signer?.email, signer?.name, signer?.title])
 
   if (requiresOtp) {
     return (
