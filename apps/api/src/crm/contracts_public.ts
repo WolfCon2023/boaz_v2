@@ -26,6 +26,8 @@ type SignatureInviteDoc = {
   otpExpiresAt?: Date | null
   otpVerifiedAt?: Date | null
   lastOtpSentAt?: Date | null
+  // Ephemeral login identifier shown to signer in a separate email
+  loginId?: string | null
 }
 
 function serializeContractForSigning(doc: SlaContractDoc) {
@@ -102,6 +104,7 @@ contractsPublicRouter.get('/sign/:token', async (req, res) => {
 })
 
 const otpSchema = z.object({
+  loginId: z.string().min(3).max(100),
   otpCode: z.string().min(4).max(64),
 })
 
@@ -135,6 +138,11 @@ contractsPublicRouter.post('/sign/:token/otp', async (req, res) => {
   }
 
   const body = parsed.data
+
+  if (!invite.loginId || invite.loginId !== body.loginId) {
+    return res.status(401).json({ data: null, error: 'login_invalid' })
+  }
+
   const candidateHash = require('crypto').createHash('sha256').update(body.otpCode).digest('hex')
 
   if (candidateHash !== invite.otpHash) {

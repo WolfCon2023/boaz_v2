@@ -1012,6 +1012,9 @@ export async function createSignatureInvites({
   const augmented: any[] = []
 
   for (const inv of invites) {
+    // Short-lived signing username for this invite
+    const loginId = `C-${crypto.randomBytes(4).toString('hex')}`
+
     // 6-digit numeric OTP
     const otpCode = crypto.randomInt(100000, 1000000).toString()
     const otpHash = crypto.createHash('sha256').update(otpCode).digest('hex')
@@ -1034,6 +1037,7 @@ export async function createSignatureInvites({
       otpExpiresAt,
       otpVerifiedAt: null,
       lastOtpSentAt: now,
+      loginId,
     }
 
     docs.push(baseDoc)
@@ -1145,124 +1149,36 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
       signerName: inv.name ?? '',
     }
 
-    // Rich legal-style HTML email summarising key contract terms
-    const defaultHtml = `
+    // 1) Username email (ephemeral signing username, no contract details)
+    const usernameHtml = `
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Contract {{contractNumber}} – {{name}}</title>
-    <style>
-      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#0b1020; color:#f9fafb; padding:24px; }
-      .card { max-width:720px; margin:0 auto; background:#0f172a; border-radius:16px; padding:24px; border:1px solid #1f2937; box-shadow:0 18px 45px rgba(15,23,42,0.7); }
-      .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#111827; border:1px solid #1f2937; color:#e5e7eb; }
-      .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; background:#0f172a; border:1px solid #1f2937; margin-right:4px; }
-      h1 { font-size:20px; margin:0 0 4px 0; }
-      h2 { font-size:14px; text-transform:uppercase; letter-spacing:0.08em; color:#9ca3af; margin:20px 0 6px; }
-      p, li { font-size:13px; line-height:1.6; color:#d1d5db; }
-      table { width:100%; border-collapse:collapse; margin-top:4px; font-size:12px; }
-      th, td { padding:6px 8px; border-bottom:1px solid #1f2937; text-align:left; }
-      th { color:#9ca3af; font-weight:500; }
-      a.button { display:inline-block; margin-top:16px; padding:10px 18px; background:#2563eb; color:#ffffff; text-decoration:none; border-radius:999px; font-size:13px; }
-      .meta { margin-top:4px; font-size:11px; color:#9ca3af; }
-      .footer { margin-top:24px; font-size:11px; color:#6b7280; border-top:1px solid #1f2937; padding-top:12px; }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-        <div>
-          <div class="badge">BOAZ‑OS Contract</div>
-          <h1>Contract {{contractNumber}} – {{name}}</h1>
-          <div class="meta">
-            Type: {{type}} · Status: {{status}}
-          </div>
-        </div>
-        <div style="text-align:right;">
-          <div class="meta">Customer</div>
-          <div style="font-size:13px;">{{customerLegalName}}</div>
-        </div>
+  <body style="font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#020617;color:#e5e7eb;padding:24px;">
+    <div style="max-width:480px;margin:0 auto;background:#020617;border-radius:16px;border:1px solid #1f2937;padding:20px;">
+      <div style="font-size:12px;color:#60a5fa;margin-bottom:4px;">BOAZ says</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px;">Your temporary contract signing username</div>
+      <p style="font-size:13px;line-height:1.5;">
+        Use the username below together with the one‑time code we will send in a separate email. Both are required to
+        unlock the contract details before you sign.
+      </p>
+      <div style="margin:12px 0;padding:10px 14px;border-radius:999px;border:1px dashed #4b5563;font-size:16px;text-align:center;background:#020617;">
+        <span style="font-family:'SF Mono',ui-monospace,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;color:#f9fafb;">${inv.loginId}</span>
       </div>
-
-      <h2>Parties</h2>
-      <p>
-        <strong>Customer:</strong> {{customerLegalName}}<br/>
-        <strong>Provider:</strong> {{providerLegalName}}<br/>
-        <span class="meta">Governing law: {{governingLaw}} · Jurisdiction: {{jurisdiction}}</span>
+      <p style="font-size:12px;color:#9ca3af;margin-top:8px;">
+        This username is only for this contract and may expire. Keep it private and do not forward this email.
       </p>
-
-      <h2>Term &amp; renewal</h2>
-      <table>
-        <tr>
-          <th style="width:28%;">Effective date</th>
-          <td>{{effectiveDate}}</td>
-        </tr>
-        <tr>
-          <th>Service term</th>
-          <td>{{startDate}} – {{endDate}}</td>
-        </tr>
-        <tr>
-          <th>Renewal</th>
-          <td>Renewal date {{renewalDate}} · Auto‑renew: {{autoRenew}}</td>
-        </tr>
-        <tr>
-          <th>Billing &amp; invoicing</th>
-          <td>Frequency: {{billingFrequency}} · Currency: {{currency}} · Invoice due: {{invoiceDueDays}} days</td>
-        </tr>
-      </table>
-
-      <h2>SLA &amp; service scope</h2>
-      <p>
-        <span class="pill">Response: {{responseTargetMinutes}} minutes</span>
-        <span class="pill">Resolution: {{resolutionTargetMinutes}} minutes</span>
-        <span class="pill">Uptime: {{uptimeTargetPercent}}%</span>
-        <span class="pill">Support hours: {{supportHours}}</span>
-      </p>
-      <p><strong>Scope summary:</strong> {{serviceScopeSummary}}</p>
-      <p><strong>SLA exclusions:</strong> {{slaExclusionsSummary}}</p>
-
-      <h2>Key legal summaries</h2>
-      <ul>
-        <li><strong>Liability:</strong> {{limitationOfLiability}}</li>
-        <li><strong>Indemnification:</strong> {{indemnificationSummary}}</li>
-        <li><strong>Confidentiality:</strong> {{confidentialitySummary}}</li>
-        <li><strong>Data protection:</strong> {{dataProtectionSummary}}</li>
-        <li><strong>IP ownership:</strong> {{ipOwnershipSummary}}</li>
-        <li><strong>Termination conditions:</strong> {{terminationConditions}}</li>
-      </ul>
-
-      <h2>Next step</h2>
-      <p>
-        To review the full legal contract and complete your digital signature, open the secure link below.
-        You will be asked for a one‑time security code sent in a separate email before the contract is displayed.
-      </p>
-
-      <p>
-        <a class="button" href="{{signUrl}}">Review &amp; sign contract</a>
-      </p>
-
-      <div class="footer">
-        This email was generated by BOAZ‑OS on behalf of {{providerLegalName}} for {{customerLegalName}}.
-        If you were not expecting this contract, please contact your account manager and do not forward this email.
-      </div>
     </div>
   </body>
 </html>
 `
 
-    const html =
-      emailTplHtml != null
-        ? renderTemplateString(emailTplHtml, ctx)
-        : renderTemplateString(defaultHtml, ctx)
-
-    // Main contract email with signing link
     await sendEmail({
       to: inv.email,
-      subject: body.emailSubject,
-      html,
+      subject: 'Your BOAZ‑OS contract signing username',
+      html: renderTemplateString(usernameHtml, ctx),
     })
 
-    // Separate OTP email with one-time code
+    // 2) OTP email with one-time code (no contract details)
     if (inv.otpCode) {
       const otpHtml = `
 <!DOCTYPE html>
@@ -1272,7 +1188,8 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
       <div style="font-size:12px;color:#60a5fa;margin-bottom:4px;">BOAZ says</div>
       <div style="font-size:14px;font-weight:600;margin-bottom:8px;">Your one‑time security code for contract {{contractNumber}}</div>
       <p style="font-size:13px;line-height:1.5;">
-        Use the code below to unlock the contract details before signing. For your security, this code will expire in ${otpExpiryMinutes} minutes.
+        Use the code below together with your BOAZ‑OS signing username to unlock the contract details before signing.
+        For your security, this code will expire in ${otpExpiryMinutes} minutes.
       </p>
       <div style="margin:12px 0;padding:10px 14px;border-radius:999px;border:1px dashed #4b5563;font-size:18px;letter-spacing:0.3em;text-align:center;background:#020617;">
         <span style="font-family:'SF Mono',ui-monospace,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;color:#f9fafb;">${inv.otpCode}</span>
@@ -1290,6 +1207,57 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
         html: renderTemplateString(otpHtml, ctx),
       })
     }
+
+    // 3) Link email – generic, no contract details in body
+    const linkHtml = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>BOAZ‑OS contract ready for review</title>
+    <style>
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#020617; color:#f9fafb; padding:24px; }
+      .card { max-width:640px; margin:0 auto; background:#020617; border-radius:16px; padding:24px; border:1px solid #1f2937; box-shadow:0 18px 45px rgba(15,23,42,0.7); }
+      .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#111827; border:1px solid #1f2937; color:#e5e7eb; }
+      h1 { font-size:18px; margin:8px 0; }
+      p { font-size:13px; line-height:1.6; color:#d1d5db; }
+      a.button { display:inline-block; margin-top:16px; padding:10px 18px; background:#2563eb; color:#ffffff; text-decoration:none; border-radius:999px; font-size:13px; }
+      .footer { margin-top:24px; font-size:11px; color:#6b7280; border-top:1px solid #1f2937; padding-top:12px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="badge">BOAZ‑OS Contract</div>
+      <h1>Agreement ready for review and digital signature</h1>
+      <p>
+        A contract has been prepared for you in BOAZ‑OS. To protect confidentiality, the contract details are not shown
+        in this email.
+      </p>
+      <p>
+        Step 1: Use the signing username we emailed you.<br/>
+        Step 2: Use the one‑time security code we emailed you.<br/>
+        Step 3: Click the button below and enter both to view and sign the agreement.
+      </p>
+      <p>
+        <a class="button" href="{{signUrl}}">Open BOAZ‑OS contract signing page</a>
+      </p>
+      <div class="footer">
+        This link is unique to you. If you were not expecting this contract, please contact the sender or your account
+        representative and do not forward this email.
+      </div>
+    </div>
+  </body>
+</html>
+`
+
+    const linkHtmlRendered =
+      emailTplHtml != null ? renderTemplateString(emailTplHtml, ctx) : renderTemplateString(linkHtml, ctx)
+
+    await sendEmail({
+      to: inv.email,
+      subject: body.emailSubject,
+      html: linkHtmlRendered,
+    })
   }
 
   // Log audit on the contract

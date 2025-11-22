@@ -67,6 +67,7 @@ export default function ContractSign() {
   const qc = useQueryClient()
 
   const [otpCode, setOtpCode] = React.useState('')
+  const [loginId, setLoginId] = React.useState('')
   const [signerName, setSignerName] = React.useState('')
   const [signerTitle, setSignerTitle] = React.useState('')
   const [signerEmail, setSignerEmail] = React.useState('')
@@ -84,7 +85,7 @@ export default function ContractSign() {
 
   const otpMutation = useMutation({
     mutationFn: async () => {
-      const res = await http.post(`/api/public/contracts/sign/${token}/otp`, { otpCode })
+      const res = await http.post(`/api/public/contracts/sign/${token}/otp`, { loginId, otpCode })
       return res.data as { data: { ok: boolean }; error: string | null }
     },
     onSuccess: (res) => {
@@ -170,16 +171,20 @@ export default function ContractSign() {
         <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
           <div className="mb-4">
             <div className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</div>
-            <h1 className="text-base font-semibold">Enter your one‑time security code</h1>
+            <h1 className="text-base font-semibold">Enter your signing username &amp; security code</h1>
             <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-              We&apos;ve emailed you a one‑time security code for this contract. Enter it below to unlock the contract
-              details and continue to signing.
+              We&apos;ve emailed you a temporary signing username and a one‑time security code for this contract. Enter
+              both below to unlock the contract details and continue to signing.
             </p>
           </div>
           <form
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
+              if (!loginId.trim()) {
+                toast.showToast('BOAZ says: Please enter your signing username.', 'error')
+                return
+              }
               if (!otpCode.trim()) {
                 toast.showToast('BOAZ says: Please enter your security code.', 'error')
                 return
@@ -187,6 +192,15 @@ export default function ContractSign() {
               otpMutation.mutate()
             }}
           >
+            <div className="space-y-1">
+              <label className="block text-xs font-medium">Signing username</label>
+              <input
+                className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm font-mono"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                placeholder="Paste the username from your email"
+              />
+            </div>
             <div className="space-y-1">
               <label className="block text-xs font-medium">Security code</label>
               <input
