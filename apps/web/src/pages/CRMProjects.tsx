@@ -297,7 +297,7 @@ export default function CRMProjects() {
             }}
           />
           <select
-            className="rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
+            className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
             value={status}
             onChange={(e) => {
               setStatus(e.target.value)
@@ -312,7 +312,7 @@ export default function CRMProjects() {
             <option value="cancelled">Cancelled</option>
           </select>
           <select
-            className="rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
+            className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
             value={type}
             onChange={(e) => {
               setType(e.target.value)
@@ -326,7 +326,7 @@ export default function CRMProjects() {
             <option value="internal">Internal</option>
           </select>
           <select
-            className="rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
+            className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
             value={health}
             onChange={(e) => {
               setHealth(e.target.value)
@@ -339,7 +339,7 @@ export default function CRMProjects() {
             <option value="off_track">Off track</option>
           </select>
           <select
-            className="rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
+            className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
             value={sort}
             onChange={(e) => {
               setSort(e.target.value as any)
@@ -353,7 +353,7 @@ export default function CRMProjects() {
             <option value="health">Sort by health</option>
           </select>
           <select
-            className="rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
+            className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
             value={dir}
             onChange={(e) => {
               setDir(e.target.value as any)
@@ -532,170 +532,173 @@ export default function CRMProjects() {
       </div>
 
       {editing && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-xl">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold">
-                {editing._id ? 'Edit project' : 'New project'}
-              </h2>
-              <button
-                type="button"
-                onClick={closeEdit}
-                className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-              >
-                Close
-              </button>
+        <div className="fixed inset-0 z-[2147483647]">
+          <div className="absolute inset-0 bg-black/60" onClick={closeEdit} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="text-base font-semibold">
+                  {editing._id ? 'Edit project' : 'New project'}
+                </h2>
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                >
+                  Close
+                </button>
+              </div>
+              <form onSubmit={handleSave} className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Name</label>
+                    <input
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)] placeholder:text-[color:var(--color-text-muted)]"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Type</label>
+                  <select
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
+                      value={editType}
+                      onChange={(e) => setEditType(e.target.value as any)}
+                    >
+                      <option value="implementation">Implementation</option>
+                      <option value="onboarding">Onboarding</option>
+                      <option value="change_request">Change request</option>
+                      <option value="internal">Internal</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Status</label>
+                  <select
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value as any)}
+                    >
+                      <option value="not_started">Not started</option>
+                      <option value="in_progress">In progress</option>
+                      <option value="on_hold">On hold</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Health</label>
+                  <select
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
+                      value={editHealth}
+                      onChange={(e) => setEditHealth(e.target.value as any)}
+                    >
+                      <option value="on_track">On track</option>
+                      <option value="at_risk">At risk</option>
+                      <option value="off_track">Off track</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Account</label>
+                    <select
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
+                      value={editAccountId}
+                      onChange={(e) => setEditAccountId(e.target.value)}
+                    >
+                      <option value="">(none)</option>
+                      {accounts.map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {a.accountNumber ? `#${a.accountNumber} – ` : ''}
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Deal</label>
+                    <select
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)]"
+                      value={editDealId}
+                      onChange={(e) => setEditDealId(e.target.value)}
+                    >
+                      <option value="">(none)</option>
+                      {deals.map((d) => (
+                        <option key={d._id} value={d._id}>
+                          {d.dealNumber ? `#${d.dealNumber} – ` : ''}
+                          {d.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Start date</label>
+                    <input
+                      type="date"
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)] placeholder:text-[color:var(--color-text-muted)]"
+                      value={editStartDate}
+                      onChange={(e) => setEditStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Target end date</label>
+                    <input
+                      type="date"
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)] placeholder:text-[color:var(--color-text-muted)]"
+                      value={editTargetEndDate}
+                      onChange={(e) => setEditTargetEndDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Actual end date</label>
+                    <input
+                      type="date"
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)] placeholder:text-[color:var(--color-text-muted)]"
+                      value={editActualEndDate}
+                      onChange={(e) => setEditActualEndDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Progress %</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)] placeholder:text-[color:var(--color-text-muted)]"
+                      value={editProgress}
+                      onChange={(e) => setEditProgress(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium">Description</label>
+                  <textarea
+                    className="min-h-[80px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm text-[color:var(--color-text)] placeholder:text-[color:var(--color-text-muted)]"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                  />
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                    Projects can be linked to Accounts, Deals, Tasks, and Documents elsewhere in the CRM.
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={closeEdit}
+                      className="rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-[color:var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-soft)]"
+                    >
+                      Save project
+                    </button>
+                  </div>
+                </div>
+              </form>
             </div>
-            <form onSubmit={handleSave} className="space-y-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Name</label>
-                  <input
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Type</label>
-                  <select
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editType}
-                    onChange={(e) => setEditType(e.target.value as any)}
-                  >
-                    <option value="implementation">Implementation</option>
-                    <option value="onboarding">Onboarding</option>
-                    <option value="change_request">Change request</option>
-                    <option value="internal">Internal</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Status</label>
-                  <select
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value as any)}
-                  >
-                    <option value="not_started">Not started</option>
-                    <option value="in_progress">In progress</option>
-                    <option value="on_hold">On hold</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Health</label>
-                  <select
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editHealth}
-                    onChange={(e) => setEditHealth(e.target.value as any)}
-                  >
-                    <option value="on_track">On track</option>
-                    <option value="at_risk">At risk</option>
-                    <option value="off_track">Off track</option>
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Account</label>
-                  <select
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editAccountId}
-                    onChange={(e) => setEditAccountId(e.target.value)}
-                  >
-                    <option value="">(none)</option>
-                    {accounts.map((a) => (
-                      <option key={a._id} value={a._id}>
-                        {a.accountNumber ? `#${a.accountNumber} – ` : ''}
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Deal</label>
-                  <select
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editDealId}
-                    onChange={(e) => setEditDealId(e.target.value)}
-                  >
-                    <option value="">(none)</option>
-                    {deals.map((d) => (
-                      <option key={d._id} value={d._id}>
-                        {d.dealNumber ? `#${d.dealNumber} – ` : ''}
-                        {d.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Start date</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editStartDate}
-                    onChange={(e) => setEditStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Target end date</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editTargetEndDate}
-                    onChange={(e) => setEditTargetEndDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Actual end date</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editActualEndDate}
-                    onChange={(e) => setEditActualEndDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Progress %</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    className="w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                    value={editProgress}
-                    onChange={(e) => setEditProgress(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="block text-xs font-medium">Description</label>
-                <textarea
-                  className="min-h-[80px] w-full rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-sm"
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                />
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                  Projects can be linked to Accounts, Deals, Tasks, and Documents elsewhere in the CRM.
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={closeEdit}
-                    className="rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="rounded-xl bg-[color:var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-soft)]"
-                  >
-                    Save project
-                  </button>
-                </div>
-              </div>
-            </form>
           </div>
         </div>
       )}
