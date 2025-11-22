@@ -26,17 +26,50 @@ type SlaContract = {
   accountId: string
   contractNumber?: number | null
   name: string
-  type: 'support' | 'subscription' | 'project' | 'other'
-  status: 'active' | 'expired' | 'scheduled' | 'cancelled' | 'draft' | 'in_review' | 'sent' | 'partially_signed' | 'terminated' | 'archived'
+  type: 'msa' | 'sow' | 'subscription' | 'nda' | 'support' | 'project' | 'other'
+  status:
+    | 'draft'
+    | 'in_review'
+    | 'sent'
+    | 'partially_signed'
+    | 'active'
+    | 'expired'
+    | 'terminated'
+    | 'archived'
+    | 'scheduled'
+    | 'cancelled'
   startDate?: string | null
   endDate?: string | null
   autoRenew: boolean
   renewalDate?: string | null
+  billingFrequency?: string | null
+  currency?: string | null
+  baseAmountCents?: number | null
+  invoiceDueDays?: number | null
+  uptimeTargetPercent?: number | null
+  supportHours?: string | null
+  slaExclusionsSummary?: string | null
   responseTargetMinutes?: number | null
   resolutionTargetMinutes?: number | null
   entitlements?: string
   notes?: string
   severityTargets?: SlaSeverityTarget[]
+  customerLegalName?: string | null
+  customerAddress?: string | null
+  customerExecSponsor?: string | null
+  customerTechContact?: string | null
+  providerLegalName?: string | null
+  providerAddress?: string | null
+  providerAccountManager?: string | null
+  providerCsm?: string | null
+  governingLaw?: string | null
+  jurisdiction?: string | null
+  paymentTerms?: string | null
+  serviceScopeSummary?: string | null
+  terminationConditions?: string | null
+  changeOrderProcess?: string | null
+  dataClassification?: string | null
+  hasDataProcessingAddendum?: boolean | null
   signedByCustomer?: string | null
   signedByProvider?: string | null
   signedAtCustomer?: string | null
@@ -107,16 +140,36 @@ export default function CRMSLAs() {
   const [editType, setEditType] = React.useState<SlaContract['type']>('support')
   const [editStatus, setEditStatus] = React.useState<SlaContract['status']>('active')
   const [editAccountId, setEditAccountId] = React.useState('')
+  const [editEffectiveDate, setEditEffectiveDate] = React.useState('')
   const [editStartDate, setEditStartDate] = React.useState('')
   const [editEndDate, setEditEndDate] = React.useState('')
   const [editAutoRenew, setEditAutoRenew] = React.useState(false)
   const [editRenewalDate, setEditRenewalDate] = React.useState('')
+  const [editBillingFrequency, setEditBillingFrequency] = React.useState('')
+  const [editCurrency, setEditCurrency] = React.useState('')
+  const [editBaseAmount, setEditBaseAmount] = React.useState('')
+  const [editInvoiceDueDays, setEditInvoiceDueDays] = React.useState('')
   const [editResponseDays, setEditResponseDays] = React.useState('')
   const [editResponseHours, setEditResponseHours] = React.useState('')
   const [editResolutionDays, setEditResolutionDays] = React.useState('')
   const [editResolutionHours, setEditResolutionHours] = React.useState('')
   const [editEntitlements, setEditEntitlements] = React.useState('')
   const [editNotes, setEditNotes] = React.useState('')
+  const [editCustomerLegalName, setEditCustomerLegalName] = React.useState('')
+  const [editCustomerAddress, setEditCustomerAddress] = React.useState('')
+  const [editProviderLegalName, setEditProviderLegalName] = React.useState('')
+  const [editProviderAddress, setEditProviderAddress] = React.useState('')
+  const [editGoverningLaw, setEditGoverningLaw] = React.useState('')
+  const [editUptimeTarget, setEditUptimeTarget] = React.useState('')
+  const [editSupportHours, setEditSupportHours] = React.useState('')
+  const [editSlaExclusions, setEditSlaExclusions] = React.useState('')
+  const [editDataClassification, setEditDataClassification] = React.useState('')
+  const [editHasDpa, setEditHasDpa] = React.useState(false)
+  const [editJurisdiction, setEditJurisdiction] = React.useState('')
+  const [editPaymentTerms, setEditPaymentTerms] = React.useState('')
+  const [editServiceScope, setEditServiceScope] = React.useState('')
+  const [editTerminationConditions, setEditTerminationConditions] = React.useState('')
+  const [editChangeOrderProcess, setEditChangeOrderProcess] = React.useState('')
   const [severityRows, setSeverityRows] = React.useState<SeverityRow[]>(
     severityTemplate.map((tpl) => ({
       key: tpl.key,
@@ -240,6 +293,10 @@ export default function CRMSLAs() {
     setEditName('')
     setEditType('support')
     setEditStatus('active')
+    setEditCustomerLegalName('')
+    setEditCustomerAddress('')
+    setEditProviderLegalName('')
+    setEditProviderAddress('')
     setEditStartDate('')
     setEditEndDate('')
     setEditAutoRenew(false)
@@ -250,6 +307,12 @@ export default function CRMSLAs() {
     setEditResolutionHours('')
     setEditEntitlements('')
     setEditNotes('')
+    setEditGoverningLaw('')
+    setEditJurisdiction('')
+    setEditPaymentTerms('')
+    setEditServiceScope('')
+    setEditTerminationConditions('')
+    setEditChangeOrderProcess('')
     setSeverityRows(
       severityTemplate.map((tpl) => ({
         key: tpl.key,
@@ -268,6 +331,10 @@ export default function CRMSLAs() {
     setEditName(s.name)
     setEditType(s.type)
     setEditStatus(s.status)
+    setEditCustomerLegalName(s.customerLegalName ?? '')
+    setEditCustomerAddress(s.customerAddress ?? '')
+    setEditProviderLegalName(s.providerLegalName ?? '')
+    setEditProviderAddress(s.providerAddress ?? '')
     setEditStartDate(s.startDate ? s.startDate.slice(0, 10) : '')
     setEditEndDate(s.endDate ? s.endDate.slice(0, 10) : '')
     setEditAutoRenew(Boolean(s.autoRenew))
@@ -299,6 +366,12 @@ export default function CRMSLAs() {
     )
     setEditEntitlements(s.entitlements ?? '')
     setEditNotes(s.notes ?? '')
+    setEditGoverningLaw(s.governingLaw ?? '')
+    setEditJurisdiction(s.jurisdiction ?? '')
+    setEditPaymentTerms(s.paymentTerms ?? '')
+    setEditServiceScope(s.serviceScopeSummary ?? '')
+    setEditTerminationConditions(s.terminationConditions ?? '')
+    setEditChangeOrderProcess(s.changeOrderProcess ?? '')
   }
 
   function closeModal() {
@@ -345,6 +418,16 @@ export default function CRMSLAs() {
       resolutionTargetMinutes: resolutionMinutes,
       entitlements: editEntitlements.trim() || undefined,
       notes: editNotes.trim() || undefined,
+      customerLegalName: editCustomerLegalName.trim() || undefined,
+      customerAddress: editCustomerAddress.trim() || undefined,
+      providerLegalName: editProviderLegalName.trim() || undefined,
+      providerAddress: editProviderAddress.trim() || undefined,
+      governingLaw: editGoverningLaw.trim() || undefined,
+      jurisdiction: editJurisdiction.trim() || undefined,
+      paymentTerms: editPaymentTerms.trim() || undefined,
+      serviceScopeSummary: editServiceScope.trim() || undefined,
+      terminationConditions: editTerminationConditions.trim() || undefined,
+      changeOrderProcess: editChangeOrderProcess.trim() || undefined,
       severityTargets: severityTargets.length ? severityTargets : undefined,
     }
     try {
@@ -482,11 +565,13 @@ export default function CRMSLAs() {
                           type="button"
                           className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]"
                           onClick={async () => {
-                            const to = window.prompt('Send contract email to (email address):')
+                            const to = window.prompt('BOAZ says: Who should receive this contract email? (enter email address)')
                             if (!to) return
-                            const subject =
-                              window.prompt('Email subject:', `Contract ${s.contractNumber ?? ''} – ${s.name}`) ||
+                            const subjectPrompt = window.prompt(
+                              'BOAZ says: What subject should we use for this contract email?',
                               `Contract ${s.contractNumber ?? ''} – ${s.name}`
+                            )
+                            const subject = subjectPrompt || `Contract ${s.contractNumber ?? ''} – ${s.name}`
                             try {
                               await sendEmailMutation.mutateAsync({ id: s._id, to, subject })
                             } catch {
@@ -557,6 +642,38 @@ export default function CRMSLAs() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Customer legal name</label>
+                    <input
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                      value={editCustomerLegalName}
+                      onChange={(e) => setEditCustomerLegalName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Customer address</label>
+                    <textarea
+                      className="min-h-[40px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                      value={editCustomerAddress}
+                      onChange={(e) => setEditCustomerAddress(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Provider legal name</label>
+                    <input
+                      className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                      value={editProviderLegalName}
+                      onChange={(e) => setEditProviderLegalName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-medium">Provider address</label>
+                    <textarea
+                      className="min-h-[40px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                      value={editProviderAddress}
+                      onChange={(e) => setEditProviderAddress(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1">
                     <label className="block text-xs font-medium">Name</label>
@@ -784,7 +901,7 @@ export default function CRMSLAs() {
                       <div className="space-y-0.5">
                         <div>
                           <span className="text-[color:var(--color-text-muted)]">Customer:</span>{' '}
-                          {editing.signedByCustomer || '-'}
+                          {editing.signedByCustomer || editing.customerLegalName || '-'}
                           {editing.signedAtCustomer && (
                             <span className="text-[color:var(--color-text-muted)]">
                               {' '}
@@ -794,7 +911,7 @@ export default function CRMSLAs() {
                         </div>
                         <div>
                           <span className="text-[color:var(--color-text-muted)]">Provider:</span>{' '}
-                          {editing.signedByProvider || '-'}
+                          {editing.signedByProvider || editing.providerLegalName || '-'}
                           {editing.signedAtProvider && (
                             <span className="text-[color:var(--color-text-muted)]">
                               {' '}

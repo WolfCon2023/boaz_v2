@@ -90,6 +90,15 @@ export type SlaContractDoc = {
   renewalDate: Date | null
   renewalTermMonths: number | null
   noticePeriodDays: number | null
+  // Commercial / financial
+  billingFrequency?: string
+  currency?: string
+  baseAmountCents?: number | null
+  invoiceDueDays?: number | null
+  // SLO / SLA rollups
+  uptimeTargetPercent?: number | null
+  supportHours?: string
+  slaExclusionsSummary?: string
   responseTargetMinutes: number | null
   resolutionTargetMinutes: number | null
   entitlements?: string
@@ -102,8 +111,12 @@ export type SlaContractDoc = {
   // Party & ownership metadata
   customerLegalName?: string
   customerAddress?: string
+  customerExecSponsor?: string
+  customerTechContact?: string
   providerLegalName?: string
   providerAddress?: string
+  providerAccountManager?: string
+  providerCsm?: string
   counterpartyContactId?: ObjectId | null
   internalOwnerUserId?: ObjectId | null
 
@@ -119,6 +132,9 @@ export type SlaContractDoc = {
   ipOwnershipSummary?: string
   terminationConditions?: string
   changeOrderProcess?: string
+  // Compliance / data protection
+  dataClassification?: string
+  hasDataProcessingAddendum?: boolean
 
   // Versioning / lifecycle
   version: number
@@ -181,6 +197,13 @@ const createSchema = z.object({
   renewalDate: z.string().optional(),
   renewalTermMonths: z.number().int().positive().optional(),
   noticePeriodDays: z.number().int().nonnegative().optional(),
+  billingFrequency: z.string().optional(),
+  currency: z.string().optional(),
+  baseAmountCents: z.number().int().nonnegative().optional(),
+  invoiceDueDays: z.number().int().nonnegative().optional(),
+  uptimeTargetPercent: z.number().min(0).max(100).optional(),
+  supportHours: z.string().optional(),
+  slaExclusionsSummary: z.string().optional(),
   responseTargetMinutes: z.number().int().positive().optional(),
   resolutionTargetMinutes: z.number().int().positive().optional(),
   entitlements: z.string().optional(),
@@ -191,8 +214,12 @@ const createSchema = z.object({
   // Parties & ownership
   customerLegalName: z.string().optional(),
   customerAddress: z.string().optional(),
+  customerExecSponsor: z.string().optional(),
+  customerTechContact: z.string().optional(),
   providerLegalName: z.string().optional(),
   providerAddress: z.string().optional(),
+  providerAccountManager: z.string().optional(),
+  providerCsm: z.string().optional(),
   counterpartyContactId: z.string().optional(),
   internalOwnerUserId: z.string().optional(),
 
@@ -208,6 +235,8 @@ const createSchema = z.object({
   ipOwnershipSummary: z.string().optional(),
   terminationConditions: z.string().optional(),
   changeOrderProcess: z.string().optional(),
+  dataClassification: z.string().optional(),
+  hasDataProcessingAddendum: z.boolean().optional(),
 
   // Versioning / lifecycle metadata (can be provided explicitly, but usually inferred)
   version: z.number().int().positive().optional(),
@@ -359,6 +388,13 @@ slasRouter.post('/', async (req, res) => {
     renewalDate: parseDate(body.renewalDate),
     renewalTermMonths: body.renewalTermMonths ?? null,
     noticePeriodDays: body.noticePeriodDays ?? null,
+    billingFrequency: body.billingFrequency,
+    currency: body.currency,
+    baseAmountCents: body.baseAmountCents ?? null,
+    invoiceDueDays: body.invoiceDueDays ?? null,
+    uptimeTargetPercent: body.uptimeTargetPercent ?? null,
+    supportHours: body.supportHours,
+    slaExclusionsSummary: body.slaExclusionsSummary,
     responseTargetMinutes: body.responseTargetMinutes ?? null,
     resolutionTargetMinutes: body.resolutionTargetMinutes ?? null,
     entitlements: body.entitlements,
@@ -369,8 +405,12 @@ slasRouter.post('/', async (req, res) => {
     // Parties & ownership
     customerLegalName: body.customerLegalName,
     customerAddress: body.customerAddress,
+    customerExecSponsor: body.customerExecSponsor,
+    customerTechContact: body.customerTechContact,
     providerLegalName: body.providerLegalName,
     providerAddress: body.providerAddress,
+    providerAccountManager: body.providerAccountManager,
+    providerCsm: body.providerCsm,
     counterpartyContactId: body.counterpartyContactId && ObjectId.isValid(body.counterpartyContactId)
       ? new ObjectId(body.counterpartyContactId)
       : null,
@@ -390,6 +430,8 @@ slasRouter.post('/', async (req, res) => {
     ipOwnershipSummary: body.ipOwnershipSummary,
     terminationConditions: body.terminationConditions,
     changeOrderProcess: body.changeOrderProcess,
+    dataClassification: body.dataClassification,
+    hasDataProcessingAddendum: body.hasDataProcessingAddendum ?? false,
 
     // Versioning / lifecycle
     version: body.version ?? 1,
@@ -451,6 +493,13 @@ slasRouter.put('/:id', async (req, res) => {
   if (body.renewalDate !== undefined) update.renewalDate = parseDate(body.renewalDate)
   if (body.renewalTermMonths !== undefined) update.renewalTermMonths = body.renewalTermMonths ?? null
   if (body.noticePeriodDays !== undefined) update.noticePeriodDays = body.noticePeriodDays ?? null
+  if (body.billingFrequency !== undefined) update.billingFrequency = body.billingFrequency
+  if (body.currency !== undefined) update.currency = body.currency
+  if (body.baseAmountCents !== undefined) update.baseAmountCents = body.baseAmountCents ?? null
+  if (body.invoiceDueDays !== undefined) update.invoiceDueDays = body.invoiceDueDays ?? null
+  if (body.uptimeTargetPercent !== undefined) update.uptimeTargetPercent = body.uptimeTargetPercent ?? null
+  if (body.supportHours !== undefined) update.supportHours = body.supportHours
+  if (body.slaExclusionsSummary !== undefined) update.slaExclusionsSummary = body.slaExclusionsSummary
   if (body.responseTargetMinutes !== undefined) update.responseTargetMinutes = body.responseTargetMinutes ?? null
   if (body.resolutionTargetMinutes !== undefined) update.resolutionTargetMinutes = body.resolutionTargetMinutes ?? null
   if (body.entitlements !== undefined) update.entitlements = body.entitlements
@@ -461,8 +510,12 @@ slasRouter.put('/:id', async (req, res) => {
   // Parties & ownership
   if (body.customerLegalName !== undefined) update.customerLegalName = body.customerLegalName
   if (body.customerAddress !== undefined) update.customerAddress = body.customerAddress
+  if (body.customerExecSponsor !== undefined) update.customerExecSponsor = body.customerExecSponsor
+  if (body.customerTechContact !== undefined) update.customerTechContact = body.customerTechContact
   if (body.providerLegalName !== undefined) update.providerLegalName = body.providerLegalName
   if (body.providerAddress !== undefined) update.providerAddress = body.providerAddress
+  if (body.providerAccountManager !== undefined) update.providerAccountManager = body.providerAccountManager
+  if (body.providerCsm !== undefined) update.providerCsm = body.providerCsm
   if (body.counterpartyContactId !== undefined) {
     update.counterpartyContactId =
       body.counterpartyContactId && ObjectId.isValid(body.counterpartyContactId)
@@ -488,6 +541,8 @@ slasRouter.put('/:id', async (req, res) => {
   if (body.ipOwnershipSummary !== undefined) update.ipOwnershipSummary = body.ipOwnershipSummary
   if (body.terminationConditions !== undefined) update.terminationConditions = body.terminationConditions
   if (body.changeOrderProcess !== undefined) update.changeOrderProcess = body.changeOrderProcess
+  if (body.dataClassification !== undefined) update.dataClassification = body.dataClassification
+  if (body.hasDataProcessingAddendum !== undefined) update.hasDataProcessingAddendum = body.hasDataProcessingAddendum
 
   // Versioning / lifecycle
   if (body.version !== undefined) update.version = body.version
@@ -762,9 +817,32 @@ slasRouter.post('/:id/send', async (req, res) => {
     if (!tpl) return res.status(404).json({ data: null, error: 'template_not_found' })
     html = renderTemplateString(tpl.htmlBody || '', buildContractContext(doc))
   } else if (!html) {
-    // Fallback minimal HTML summary
+    // Fallback HTML summary with key contract details
     const ctx = buildContractContext(doc)
-    html = `<p>Contract ${ctx.contractNumber ?? ''} – ${ctx.name ?? ''}</p>`
+    const parts: string[] = []
+    if (ctx.effectiveDate) parts.push(`Effective: ${new Date(ctx.effectiveDate).toLocaleDateString()}`)
+    if (ctx.startDate || ctx.endDate) {
+      const start = ctx.startDate ? new Date(ctx.startDate).toLocaleDateString() : 'N/A'
+      const end = ctx.endDate ? new Date(ctx.endDate).toLocaleDateString() : 'N/A'
+      parts.push(`Term: ${start} – ${end}`)
+    }
+    if (ctx.renewalDate) {
+      parts.push(`Renewal date: ${new Date(ctx.renewalDate).toLocaleDateString()}`)
+    }
+    if (ctx.responseTargetMinutes || ctx.resolutionTargetMinutes) {
+      const resp = ctx.responseTargetMinutes ? `${ctx.responseTargetMinutes} min response` : ''
+      const res = ctx.resolutionTargetMinutes ? `${ctx.resolutionTargetMinutes} min resolution` : ''
+      parts.push(`SLA: ${[resp, res].filter(Boolean).join(' · ')}`)
+    }
+    const meta = parts.length ? `<p>${parts.join(' · ')}</p>` : ''
+    html = `
+      <p><strong>Contract ${ctx.contractNumber ?? ''} – ${ctx.name ?? ''}</strong></p>
+      <p>Type: ${ctx.type ?? ''} · Status: ${ctx.status ?? ''}</p>
+      ${meta}
+      <p>Customer: ${ctx.customerLegalName ?? ''}</p>
+      <p>Provider: ${ctx.providerLegalName ?? ''}</p>
+      <p>You are receiving this email from BOAZ-OS because this contract is being reviewed or executed.</p>
+    `
   }
 
   const to = body.to
