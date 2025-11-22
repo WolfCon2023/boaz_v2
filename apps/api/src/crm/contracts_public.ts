@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { ObjectId } from 'mongodb'
 import { z } from 'zod'
+import crypto from 'crypto'
 import { getDb } from '../db.js'
 import { serialize as serializeSlaInternal, SlaContractDoc } from './slas.js'
 
@@ -115,50 +116,55 @@ contractsPublicRouter.post('/sign/:token/otp', async (req, res) => {
     return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
   }
 
-  const db = await getDb()
-  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
-  const { token } = req.params
-  const coll = db.collection<SignatureInviteDoc>('sla_signature_invites')
+    const { token } = req.params
+    const coll = db.collection<SignatureInviteDoc>('sla_signature_invites')
 
-  const invite = await coll.findOne({ token })
-  if (!invite) return res.status(404).json({ data: null, error: 'invalid_or_expired' })
+    const invite = await coll.findOne({ token })
+    if (!invite) return res.status(404).json({ data: null, error: 'invalid_or_expired' })
 
-  if (invite.status !== 'pending') {
-    return res.status(410).json({ data: null, error: 'already_used' })
-  }
+    if (invite.status !== 'pending') {
+      return res.status(410).json({ data: null, error: 'already_used' })
+    }
 
-  if (!invite.otpHash || !invite.otpExpiresAt) {
-    return res.status(400).json({ data: null, error: 'otp_not_configured' })
-  }
+    if (!invite.otpHash || !invite.otpExpiresAt) {
+      return res.status(400).json({ data: null, error: 'otp_not_configured' })
+    }
 
-  const now = new Date()
-  if (invite.otpExpiresAt < now) {
-    return res.status(410).json({ data: null, error: 'otp_expired' })
-  }
+    const now = new Date()
+    if (invite.otpExpiresAt < now) {
+      return res.status(410).json({ data: null, error: 'otp_expired' })
+    }
 
-  const body = parsed.data
+    const body = parsed.data
 
-  if (!invite.loginId || invite.loginId !== body.loginId) {
-    return res.status(401).json({ data: null, error: 'login_invalid' })
-  }
+    if (!invite.loginId || invite.loginId !== body.loginId) {
+      return res.status(401).json({ data: null, error: 'login_invalid' })
+    }
 
-  const candidateHash = require('crypto').createHash('sha256').update(body.otpCode).digest('hex')
+    const candidateHash = crypto.createHash('sha256').update(body.otpCode).digest('hex')
 
-  if (candidateHash !== invite.otpHash) {
-    return res.status(401).json({ data: null, error: 'otp_invalid' })
-  }
+    if (candidateHash !== invite.otpHash) {
+      return res.status(401).json({ data: null, error: 'otp_invalid' })
+    }
 
-  await coll.updateOne(
-    { _id: invite._id },
-    {
-      $set: {
-        otpVerifiedAt: now,
+    await coll.updateOne(
+      { _id: invite._id },
+      {
+        $set: {
+          otpVerifiedAt: now,
+        },
       },
-    },
-  )
+    )
 
-  return res.json({ data: { ok: true }, error: null })
+    return res.json({ data: { ok: true }, error: null })
+  } catch (err) {
+    console.error('OTP verification error:', err)
+    return res.status(500).json({ data: null, error: 'internal_error' })
+  }
 })
 
 const signSchema = z.object({
