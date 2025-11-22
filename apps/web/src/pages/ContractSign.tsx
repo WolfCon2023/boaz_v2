@@ -181,9 +181,9 @@ export default function ContractSign() {
     )
   }
 
-  const resp = response.data as any
-  const requiresOtp: boolean = !!resp?.requiresOtp && !resp.contract
-  const contract: PublicSlaContract | null = resp?.contract ?? null
+  const respData = (response?.data ?? {}) as any
+  const requiresOtp: boolean = !!respData?.requiresOtp && !respData.contract
+  const contract: PublicSlaContract | null = (respData?.contract ?? null) as PublicSlaContract | null
 
   if (signed) {
     return (
