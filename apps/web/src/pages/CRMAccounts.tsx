@@ -1069,6 +1069,18 @@ export default function CRMAccounts() {
                           ?
                         </button>
                       </div>
+                    ) : col.key === 'successHealth' ? (
+                      <div className="inline-flex items-center gap-1">
+                        <span>{col.label}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                          title="Customer success health score combines surveys, support tickets, asset risk, and project risk into a single Low/Medium/High signal. Higher scores indicate more risk and need for proactive success playbooks."
+                        >
+                          ?
+                        </button>
+                      </div>
                     ) : (
                       col.label
                     )}
@@ -1186,7 +1198,16 @@ export default function CRMAccounts() {
                 <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <div className="text-sm font-semibold">Customer success health</div>
+                      <div className="inline-flex items-center gap-1">
+                        <div className="text-sm font-semibold">Customer success health</div>
+                        <button
+                          type="button"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                          title="Customer success health combines surveys, support tickets, asset risk, and project risk into a single signal. Use it to prioritize QBRs, adoption reviews, and proactive outreach."
+                        >
+                          ?
+                        </button>
+                      </div>
                       <div className="text-[11px] text-[color:var(--color-text-muted)]">
                         Combined view of surveys, support load, asset risk, and projects.
                       </div>
