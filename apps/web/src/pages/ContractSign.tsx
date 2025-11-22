@@ -384,15 +384,15 @@ export default function ContractSign() {
               onSubmit={(e) => {
                 e.preventDefault()
                 if (!signerName.trim()) {
-                  toast.showToast('BOAZ says: Please enter your full name.', 'error')
+                  setBanner('BOAZ says: Please enter your full name.')
                   return
                 }
                 if (!signerEmail.trim()) {
-                  toast.showToast('BOAZ says: Please enter your email address.', 'error')
+                  setBanner('BOAZ says: Please enter your email address.')
                   return
                 }
                 if (!agreedTerms || !authorized) {
-                  toast.showToast('BOAZ says: Please confirm the checkboxes before signing.', 'error')
+                  setBanner('BOAZ says: Please confirm the checkboxes before signing.')
                   return
                 }
                 signMutation.mutate()
