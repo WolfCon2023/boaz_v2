@@ -55,13 +55,41 @@ export default function CRMSuccess() {
 
   const [q, setQ] = React.useState(searchParams.get('q') ?? '')
   const [healthFilter, setHealthFilter] = React.useState(searchParams.get('health') ?? 'high')
+  const [savedViews, setSavedViews] = React.useState<Array<{ id: string; name: string; config: any }>>([])
 
   React.useEffect(() => {
     const params = new URLSearchParams()
     if (q.trim()) params.set('q', q.trim())
     if (healthFilter && healthFilter !== 'all') params.set('health', healthFilter)
     setSearchParams(params, { replace: true })
-  }, [q, healthFilter, setSearchParams])
+    try {
+      localStorage.setItem('SUCCESS_SAVED_VIEWS', JSON.stringify(savedViews))
+    } catch {}
+  }, [q, healthFilter, savedViews, setSearchParams])
+
+  // Load saved views once on mount
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem('SUCCESS_SAVED_VIEWS')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) setSavedViews(parsed)
+      }
+    } catch {}
+    ;(async () => {
+      try {
+        const res = await http.get('/api/views', { params: { viewKey: 'success' } })
+        const items = (res.data?.data?.items ?? []).map((v: any) => ({
+          id: String(v._id),
+          name: v.name,
+          config: v.config,
+        }))
+        if (Array.isArray(items) && items.length > 0) {
+          setSavedViews(items)
+        }
+      } catch {}
+    })()
+  }, [])
 
   const accountsQ = useQuery({
     queryKey: ['success-accounts'],
@@ -331,6 +359,80 @@ export default function CRMSuccess() {
   const highCount = rows.filter((r) => r.success?.label === 'High').length
   const medCount = rows.filter((r) => r.success?.label === 'Medium').length
 
+  async function saveCurrentView() {
+    const name = window.prompt('Name for this view?')?.trim()
+    if (!name) return
+    const viewConfig = { q, healthFilter }
+    try {
+      const res = await http.post('/api/views', { viewKey: 'success', name, config: viewConfig })
+      const doc = res.data?.data
+      const newItem =
+        doc && doc._id
+          ? { id: String(doc._id), name: doc.name, config: doc.config }
+          : { id: Date.now().toString(), name, config: viewConfig }
+      setSavedViews((prev) => [...prev, newItem])
+    } catch {
+      setSavedViews((prev) => [...prev, { id: Date.now().toString(), name, config: viewConfig }])
+    }
+  }
+
+  function loadView(view: { id: string; name: string; config: any }) {
+    const c = view.config ?? {}
+    if (c.q !== undefined) setQ(c.q)
+    if (c.healthFilter !== undefined) setHealthFilter(c.healthFilter)
+  }
+
+  function exportCsv() {
+    const headers = [
+      'Account',
+      'Company',
+      'Success label',
+      'Success score',
+      'Survey responses',
+      'Last survey score',
+      'Open tickets',
+      'High tickets',
+      'Breached SLAs',
+      'Asset risk label',
+      'Asset risk score',
+      'Projects total',
+      'Projects active',
+      'Projects at risk',
+    ]
+    const lines = rows.map(({ account, success }) => {
+      const survey = accountSurveyStatusMap.get(account._id)
+      const tickets = accountTicketsMap.get(account._id)
+      const assets = accountAssetsRiskMap.get(account._id)
+      const projects = accountProjectsMap.get(account._id)
+      const projectsRisk = projects ? (projects.atRisk ?? 0) + (projects.offTrack ?? 0) : 0
+      const cells = [
+        account.accountNumber ? `#${account.accountNumber} – ${account.name ?? ''}` : account.name ?? '',
+        account.companyName ?? '',
+        success?.label ?? 'OK',
+        String(success?.score ?? 0),
+        String(survey?.responseCount ?? 0),
+        survey?.lastScore != null ? survey.lastScore.toFixed(1) : '',
+        String(tickets?.open ?? 0),
+        String(tickets?.high ?? 0),
+        String(tickets?.breached ?? 0),
+        assets?.label ?? '',
+        assets ? String(assets.score) : '',
+        String(projects?.total ?? 0),
+        String(projects?.active ?? 0),
+        String(projectsRisk),
+      ]
+      return cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')
+    })
+    const csv = [headers.join(','), ...lines].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'customer_success_accounts.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-4">
       <CRMNav />
@@ -348,6 +450,35 @@ export default function CRMSuccess() {
           <div className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--color-border)] px-2 py-1">
             <span className="h-2 w-2 rounded-full bg-amber-500" /> <span>{medCount} medium‑risk</span>
           </div>
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={saveCurrentView}
+            className="inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+          >
+            Save view
+          </button>
+          <select
+            className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-[11px] text-[color:var(--color-text)]"
+            onChange={(e) => {
+              const selected = savedViews.find((v) => v.id === e.target.value)
+              if (selected) loadView(selected)
+              e.target.value = ''
+            }}
+          >
+            <option value="">Saved views</option>
+            {savedViews.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
         </div>
       </header>
 
