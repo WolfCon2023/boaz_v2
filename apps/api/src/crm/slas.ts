@@ -837,6 +837,140 @@ export async function createSignatureInvites({
 }
 
 
+// POST /api/crm/slas/:id/signature-invites - create signer invites and email links
+const signatureInvitesSchema = z.object({
+  invites: z
+    .array(
+      z.object({
+        role: z.enum(['customerSigner', 'providerSigner']),
+        email: z.string().email(),
+        name: z.string().optional(),
+        title: z.string().optional(),
+      }),
+    )
+    .min(1),
+  emailSubject: z.string().min(1),
+  emailBodyTemplateId: z.string().optional(),
+})
+
+slasRouter.post('/:id/signature-invites', async (req, res) => {
+  const parsed = signatureInvitesSchema.safeParse(req.body ?? {})
+  if (!parsed.success) {
+    return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  }
+
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const { id } = req.params
+  if (!ObjectId.isValid(id)) return res.status(400).json({ data: null, error: 'invalid_id' })
+
+  const coll = db.collection<SlaContractDoc>('sla_contracts')
+  const contract = await coll.findOne({ _id: new ObjectId(id) })
+  if (!contract) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const body = parsed.data
+  const user = (req as any).user
+  const creatorId =
+    user?.sub && ObjectId.isValid(user.sub)
+      ? new ObjectId(user.sub)
+      : undefined
+
+  const created = await createSignatureInvites({
+    contractId: contract._id,
+    invites: body.invites,
+    createdByUserId: creatorId,
+  })
+
+  if (!created.length) {
+    return res.json({ data: { invites: [] }, error: null })
+  }
+
+  // Build base URL from request for deep links
+  const proto =
+    (req.headers['x-forwarded-proto'] as string) ||
+    (req.secure ? 'https' : 'http')
+  const host =
+    (req.headers['x-forwarded-host'] as string) ||
+    (req.headers.host as string | undefined)
+  const baseUrl = host ? `${proto}://${host}` : ''
+
+  const ctxBase = buildContractContext(contract)
+
+  // Optional email body template for invites
+  let emailTplHtml: string | null = null
+  if (body.emailBodyTemplateId) {
+    const tplColl = db.collection<any>('contract_templates')
+    const tpl = await tplColl.findOne({ _id: new ObjectId(body.emailBodyTemplateId) })
+    if (!tpl) {
+      return res.status(404).json({ data: null, error: 'email_template_not_found' })
+    }
+    emailTplHtml = tpl.htmlBody || ''
+  }
+
+  const invitesWithUrls: {
+    role: 'customerSigner' | 'providerSigner'
+    email: string
+    name?: string
+    title?: string
+    url: string
+  }[] = []
+
+  for (const inv of created) {
+    const url = `${baseUrl}/contracts/sign/${inv.token}`
+    invitesWithUrls.push({
+      role: inv.role,
+      email: inv.email,
+      name: inv.name,
+      title: inv.title,
+      url,
+    })
+
+    const ctx = {
+      ...ctxBase,
+      signUrl: url,
+      signerEmail: inv.email,
+      signerRole: inv.role,
+      signerName: inv.name ?? '',
+    }
+
+    const html =
+      emailTplHtml != null
+        ? renderTemplateString(emailTplHtml, ctx)
+        : renderTemplateString(
+            `<p>You have a contract awaiting your signature.</p>
+<p>Contract {{contractNumber}} – {{name}}</p>
+<p><a href="{{signUrl}}">Review and sign contract</a></p>`,
+            ctx,
+          )
+
+    await sendEmail({
+      to: inv.email,
+      subject: body.emailSubject,
+      html,
+    })
+  }
+
+  // Log audit on the contract
+  await coll.updateOne(
+    { _id: contract._id },
+    {
+      $set: { updatedAt: new Date() },
+      $push: {
+        signatureAudit: {
+          at: new Date(),
+          actorId: creatorId,
+          event: 'signature_invites_sent',
+          details: `Invites sent to ${body.invites.map((i) => i.email).join(', ')}`,
+        },
+      },
+    },
+  )
+
+  res.json({ data: { invites: invitesWithUrls }, error: null })
+})
+
+
 // GET /api/crm/slas/by-account?accountIds=id1,id2
 slasRouter.get('/by-account', async (req, res) => {
   const db = await getDb()

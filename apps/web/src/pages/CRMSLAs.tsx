@@ -14,12 +14,20 @@ type SlaSeverityTarget = {
   resolutionTargetMinutes?: number | null
 }
 
+type SlaEmailSend = {
+  to: string
+  subject: string
+  sentAt: string
+  status?: string
+}
+
 type SlaContract = {
   _id: string
   accountId: string
+  contractNumber?: number | null
   name: string
   type: 'support' | 'subscription' | 'project' | 'other'
-  status: 'active' | 'expired' | 'scheduled' | 'cancelled'
+  status: 'active' | 'expired' | 'scheduled' | 'cancelled' | 'draft' | 'in_review' | 'sent' | 'partially_signed' | 'terminated' | 'archived'
   startDate?: string | null
   endDate?: string | null
   autoRenew: boolean
@@ -29,6 +37,12 @@ type SlaContract = {
   entitlements?: string
   notes?: string
   severityTargets?: SlaSeverityTarget[]
+  signedByCustomer?: string | null
+  signedByProvider?: string | null
+  signedAtCustomer?: string | null
+  signedAtProvider?: string | null
+  executedDate?: string | null
+  emailSends?: SlaEmailSend[]
 }
 
 type SeverityRow = {
@@ -83,9 +97,9 @@ export default function CRMSLAs() {
   const qc = useQueryClient()
 
   const [accountFilter, setAccountFilter] = React.useState('')
-  const [statusFilter, setStatusFilter] = React.useState<'all' | 'active' | 'expired' | 'scheduled' | 'cancelled'>(
-    'all',
-  )
+  const [statusFilter, setStatusFilter] = React.useState<
+    'all' | SlaContract['status']
+  >('all')
   const [typeFilter, setTypeFilter] = React.useState<'all' | 'support' | 'subscription' | 'project' | 'other'>('all')
 
   const [editing, setEditing] = React.useState<SlaContract | null>(null)
@@ -184,6 +198,24 @@ export default function CRMSLAs() {
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.error || err?.message || 'Failed to delete SLA.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
+  const sendEmailMutation = useMutation({
+    mutationFn: async (payload: { id: string; to: string; subject: string }) => {
+      const res = await http.post(`/api/crm/slas/${payload.id}/send`, {
+        to: payload.to,
+        subject: payload.subject,
+      })
+      return res.data as { data: { ok: boolean } }
+    },
+    onSuccess: () => {
+      toast.showToast('Contract email sent.', 'success')
+      qc.invalidateQueries({ queryKey: ['slas'] })
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to send contract email.'
       toast.showToast(msg, 'error')
     },
   })
@@ -448,6 +480,24 @@ export default function CRMSLAs() {
                         </button>
                         <button
                           type="button"
+                          className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]"
+                          onClick={async () => {
+                            const to = window.prompt('Send contract email to (email address):')
+                            if (!to) return
+                            const subject =
+                              window.prompt('Email subject:', `Contract ${s.contractNumber ?? ''} – ${s.name}`) ||
+                              `Contract ${s.contractNumber ?? ''} – ${s.name}`
+                            try {
+                              await sendEmailMutation.mutateAsync({ id: s._id, to, subject })
+                            } catch {
+                              // handled by mutation
+                            }
+                          }}
+                        >
+                          Email
+                        </button>
+                        <button
+                          type="button"
                           className="rounded-lg border border-red-500/60 px-2 py-1 text-red-200 hover:bg-red-500/15"
                           onClick={async () => {
                             if (!window.confirm('Delete this SLA / contract?')) return
@@ -472,9 +522,16 @@ export default function CRMSLAs() {
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-base font-semibold">
-                  {editing._id ? 'Edit contract / SLA' : 'New contract / SLA'}
-                </h2>
+                <div className="space-y-0.5">
+                  <h2 className="text-base font-semibold">
+                    {editing._id ? 'Edit contract / SLA' : 'New contract / SLA'}
+                  </h2>
+                  {editing.contractNumber != null && (
+                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                      Contract #{editing.contractNumber} · Status: {editing.status}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={closeModal}
@@ -720,6 +777,65 @@ export default function CRMSLAs() {
                     placeholder="Additional context, special terms, or internal comments."
                   />
                 </div>
+                <div className="space-y-2 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3 text-[11px]">
+                  <div className="font-semibold">Signatures &amp; history</div>
+                  {editing._id ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-0.5">
+                        <div>
+                          <span className="text-[color:var(--color-text-muted)]">Customer:</span>{' '}
+                          {editing.signedByCustomer || '-'}
+                          {editing.signedAtCustomer && (
+                            <span className="text-[color:var(--color-text-muted)]">
+                              {' '}
+                              · {formatDate(editing.signedAtCustomer)}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-[color:var(--color-text-muted)]">Provider:</span>{' '}
+                          {editing.signedByProvider || '-'}
+                          {editing.signedAtProvider && (
+                            <span className="text-[color:var(--color-text-muted)]">
+                              {' '}
+                              · {formatDate(editing.signedAtProvider)}
+                            </span>
+                          )}
+                        </div>
+                        {editing.executedDate && (
+                          <div>
+                            <span className="text-[color:var(--color-text-muted)]">Executed:</span>{' '}
+                            {formatDate(editing.executedDate)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="text-[color:var(--color-text-muted)]">Emails sent:</div>
+                        {(editing.emailSends ?? []).length === 0 && (
+                          <div className="text-[color:var(--color-text-muted)]">
+                            No contract emails sent yet.
+                          </div>
+                        )}
+                        {(editing.emailSends ?? []).map((e, i) => (
+                          <div key={`${e.sentAt}-${i}`} className="flex items-center justify-between gap-2">
+                            <div className="truncate">
+                              <span className="font-medium">{e.subject}</span>{' '}
+                              <span className="text-[color:var(--color-text-muted)]">→ {e.to}</span>
+                            </div>
+                            <span className="whitespace-nowrap text-[color:var(--color-text-muted)]">
+                              {formatDate(e.sentAt)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[color:var(--color-text-muted)]">
+                      Save the contract to start tracking signatures and email history.
+                    </div>
+                  )}
+                </div>
+
                 <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-[color:var(--color-text-muted)]">
                   <div>
                     Link SLAs to Accounts to guide support priorities and renewal conversations.
