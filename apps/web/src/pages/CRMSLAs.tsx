@@ -715,18 +715,40 @@ export default function CRMSLAs() {
                 const accountLabel = accountLabelById.get(s.accountId) ?? s.accountId
                 return (
                   <tr key={s._id} className="border-t border-[color:var(--color-border-soft)]">
-                    <td className="px-3 py-2 align-top text-xs">{accountLabel}</td>
-                    <td className="px-3 py-2 align-top text-xs">
+                    <td className="max-w-[200px] px-3 py-2 align-top text-xs">
+                      <div className="truncate" title={accountLabel}>
+                        {accountLabel}
+                      </div>
+                    </td>
+                    <td className="max-w-[260px] px-3 py-2 align-top text-xs">
                       <button
                         type="button"
-                        className="text-left text-[color:var(--color-primary)] hover:underline"
+                        className="max-w-full truncate text-left text-[color:var(--color-primary)] hover:underline"
                         onClick={() => openEdit(s)}
                       >
-                        {s.name}
+                        <span title={s.name}>{s.name}</span>
                       </button>
                     </td>
-                    <td className="px-3 py-2 align-top text-xs capitalize">{s.type}</td>
-                    <td className="px-3 py-2 align-top text-xs capitalize">{s.status}</td>
+                    <td className="px-3 py-2 align-top text-xs capitalize whitespace-nowrap">
+                      {s.type}
+                    </td>
+                    <td className="px-3 py-2 align-top text-xs">
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] px-2 py-0.5 text-[10px] capitalize"
+                        title={s.status}
+                      >
+                        <span
+                          className={
+                            s.status === 'active'
+                              ? 'h-1.5 w-1.5 rounded-full bg-emerald-400'
+                              : s.status === 'expired' || s.status === 'cancelled'
+                                ? 'h-1.5 w-1.5 rounded-full bg-rose-400'
+                                : 'h-1.5 w-1.5 rounded-full bg-amber-300'
+                          }
+                        />
+                        <span>{s.status}</span>
+                      </span>
+                    </td>
                     <td className="px-3 py-2 align-top text-xs whitespace-nowrap">
                       {s.startDate ? formatDate(s.startDate) : ''}
                     </td>
@@ -822,8 +844,12 @@ export default function CRMSLAs() {
                   Close
                 </button>
               </div>
-              <form onSubmit={handleSave} className="space-y-3 text-sm">
-                <div className="grid gap-3 md:grid-cols-2">
+              <form onSubmit={handleSave} className="space-y-4 text-sm">
+                <div className="space-y-2 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                    Summary &amp; parties
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <label className="block text-xs font-medium">Account</label>
                     <select
@@ -1000,7 +1026,7 @@ export default function CRMSLAs() {
                     </div>
                   </div>
                 </div>
-                <div className="space-y-1">
+                  <div className="space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <label className="block text-xs font-medium">Per-priority targets (optional)</label>
                     <span className="text-[10px] text-[color:var(--color-text-muted)]">
@@ -1081,8 +1107,13 @@ export default function CRMSLAs() {
                       </tbody>
                     </table>
                   </div>
+                  </div>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-2 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                    SLA &amp; support
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
                   <label className="block text-xs font-medium">Entitlements</label>
                   <textarea
                     className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
@@ -1568,7 +1599,9 @@ export default function CRMSLAs() {
                 <div>
                   <div className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</div>
                   <div className="text-sm text-[color:var(--color-text-muted)]">
-                    Send this contract for review or signature.
+                    {emailMode === 'signed'
+                      ? 'Email a copy of the fully signed contract PDF.'
+                      : 'Send this contract for secure review and digital signature.'}
                   </div>
                 </div>
                 <button
