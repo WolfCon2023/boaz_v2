@@ -544,11 +544,7 @@ export function buildSignedHtml(contract: SlaContractDoc): string {
           <p><strong>Data protection summary:</strong> {{dataProtectionSummary}}</p>
         </div>
       </div>
-      <h2>Covered scope &amp; links</h2>
-      <p>
-        <span class="pill">Primary quote: {{primaryQuoteId}}</span>
-        <span class="pill">Primary deal: {{primaryDealId}}</span>
-      </p>
+      <h2>Covered scope</h2>
       <p>
         <strong>Covered assets:</strong> {{coveredAssetsSummary}}<br/>
         <strong>Covered services:</strong> {{coveredServicesSummary}}<br/>
@@ -571,15 +567,15 @@ function sanitizeForPdf(text: string): string {
 // Build a simple PDF representation of the signed contract using pdf-lib
 export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
-  const page = doc.addPage()
-  const { width, height } = page.getSize()
+  let page = doc.addPage()
+  let { width, height } = page.getSize()
   const margin = 50
   const font = await doc.embedFont(StandardFonts.Helvetica)
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
   const lineHeight = 14
 
   let y = height - margin
-  const maxWidth = width - margin * 2
+  let maxWidth = width - margin * 2
 
   function drawText(text: string, options?: { bold?: boolean }) {
     const safe = sanitizeForPdf(text)
@@ -611,10 +607,12 @@ export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Arr
               const candidate = chunk + ch
               const candidateWidth = targetFont.widthOfTextAtSize(candidate, 11)
               if (candidateWidth > maxWidth && chunk) {
-                if (y < margin) {
-                  y = height - margin
-                  doc.addPage()
-                }
+          if (y < margin) {
+            page = doc.addPage()
+            ;({ width, height } = page.getSize())
+            maxWidth = width - margin * 2
+            y = height - margin
+          }
                 page.drawText(chunk, {
                   x: margin,
                   y,
@@ -633,10 +631,12 @@ export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Arr
           } else {
             // Flush current line and start a new one with this word
             if (current) {
-              if (y < margin) {
-                y = height - margin
-                doc.addPage()
-              }
+                if (y < margin) {
+                  page = doc.addPage()
+                  ;({ width, height } = page.getSize())
+                  maxWidth = width - margin * 2
+                  y = height - margin
+                }
               page.drawText(current, {
                 x: margin,
                 y,
@@ -650,10 +650,18 @@ export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Arr
         }
       }
 
-      if (current) {
+            if (current) {
+              if (y < margin) {
+                page = doc.addPage()
+                ;({ width, height } = page.getSize())
+                maxWidth = width - margin * 2
+                y = height - margin
+              }
         if (y < margin) {
+          page = doc.addPage()
+          ;({ width, height } = page.getSize())
+          maxWidth = width - margin * 2
           y = height - margin
-          doc.addPage()
         }
         page.drawText(current, {
           x: margin,
