@@ -603,19 +603,50 @@ export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Arr
         if (testWidth <= maxWidth) {
           current = testLine
         } else {
-          // Flush current line
-          if (y < margin) {
-            y = height - margin
-            doc.addPage()
+          // If the single word itself is longer than the line width, hard-wrap it
+          const wordWidth = targetFont.widthOfTextAtSize(word, 11)
+          if (!current && wordWidth > maxWidth) {
+            let chunk = ''
+            for (const ch of word) {
+              const candidate = chunk + ch
+              const candidateWidth = targetFont.widthOfTextAtSize(candidate, 11)
+              if (candidateWidth > maxWidth && chunk) {
+                if (y < margin) {
+                  y = height - margin
+                  doc.addPage()
+                }
+                page.drawText(chunk, {
+                  x: margin,
+                  y,
+                  size: 11,
+                  font: targetFont,
+                })
+                y -= lineHeight
+                chunk = ch
+              } else {
+                chunk = candidate
+              }
+            }
+            if (chunk) {
+              current = chunk
+            }
+          } else {
+            // Flush current line and start a new one with this word
+            if (current) {
+              if (y < margin) {
+                y = height - margin
+                doc.addPage()
+              }
+              page.drawText(current, {
+                x: margin,
+                y,
+                size: 11,
+                font: targetFont,
+              })
+              y -= lineHeight
+            }
+            current = word
           }
-          page.drawText(current, {
-            x: margin,
-            y,
-            size: 11,
-            font: targetFont,
-          })
-          y -= lineHeight
-          current = word
         }
       }
 
