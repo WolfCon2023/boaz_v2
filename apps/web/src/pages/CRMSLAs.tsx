@@ -102,6 +102,8 @@ type SlaContract = {
   }[]
 }
 
+type SlaAttachmentView = NonNullable<SlaContract['attachments']>[number]
+
 type SeverityRow = {
   key: string
   label: string
@@ -1430,7 +1432,7 @@ export default function CRMSLAs() {
                   <div className="space-y-1 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3 text-[11px]">
                     <div className="font-semibold">Documents</div>
                     <ul className="space-y-1">
-                      {editing.attachments.map((att: SlaContract['attachments'][number], idx: number) => (
+                      {editing.attachments!.map((att: SlaAttachmentView, idx: number) => (
                         <li key={att._id ?? idx}>
                           <a
                             href={att.url}
