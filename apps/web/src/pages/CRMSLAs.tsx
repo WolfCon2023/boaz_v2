@@ -680,7 +680,15 @@ export default function CRMSLAs() {
                 return (
                   <tr key={s._id} className="border-t border-[color:var(--color-border-soft)]">
                     <td className="px-3 py-2 align-top text-xs">{accountLabel}</td>
-                    <td className="px-3 py-2 align-top text-xs">{s.name}</td>
+                    <td className="px-3 py-2 align-top text-xs">
+                      <button
+                        type="button"
+                        className="text-left text-[color:var(--color-primary)] hover:underline"
+                        onClick={() => openEdit(s)}
+                      >
+                        {s.name}
+                      </button>
+                    </td>
                     <td className="px-3 py-2 align-top text-xs capitalize">{s.type}</td>
                     <td className="px-3 py-2 align-top text-xs capitalize">{s.status}</td>
                     <td className="px-3 py-2 align-top text-xs whitespace-nowrap">
