@@ -246,11 +246,13 @@ contractsPublicRouter.post('/sign/:token', async (req, res) => {
     },
   )
 
-  // Check if both sides have signed
+  // Check if contract should be considered fully executed
   const refreshed = await contractColl.findOne({ _id: contract._id })
   if (!refreshed) return res.status(500).json({ data: null, error: 'update_failed' })
 
-  if (refreshed.signedAtCustomer && refreshed.signedAtProvider && refreshed.status !== 'active') {
+  // For now, treat the contract as executed once at least one signer has completed,
+  // so that single-signer workflows still get a final copy and status transition.
+  if ((refreshed.signedAtCustomer || refreshed.signedAtProvider) && refreshed.status !== 'active') {
     await contractColl.updateOne(
       { _id: refreshed._id },
       {
