@@ -1369,7 +1369,7 @@ export default function CRMSLAs() {
                   </div>
                 </div>
 
-                <div className="space-y-2 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3 text-[11px]">
+                  <div className="space-y-2 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3 text-[11px]">
                   <div className="font-semibold">Signatures &amp; history</div>
                   {editing._id ? (
                     <div className="grid gap-3 md:grid-cols-2">
@@ -1403,22 +1403,45 @@ export default function CRMSLAs() {
                       </div>
                       <div className="space-y-0.5">
                         <div className="text-[color:var(--color-text-muted)]">Emails sent:</div>
-                        {(editing.emailSends ?? []).length === 0 && (
-                          <div className="text-[color:var(--color-text-muted)]">
-                            No contract emails sent yet.
-                          </div>
-                        )}
-                        {(editing.emailSends ?? []).map((e, i) => (
-                          <div key={`${e.sentAt}-${i}`} className="flex items-center justify-between gap-2">
-                            <div className="truncate">
-                              <span className="font-medium">{e.subject}</span>{' '}
-                              <span className="text-[color:var(--color-text-muted)]">→ {e.to}</span>
+                        {(() => {
+                          const sends = editing.emailSends ?? []
+                          const inviteAudit = (editing as any).signatureAudit as
+                            | { at: string; event: string; details?: string }[]
+                            | undefined
+                          if (sends.length === 0 && inviteAudit && inviteAudit.length > 0) {
+                            const first = inviteAudit[0]
+                            return (
+                              <div className="text-[color:var(--color-text-muted)]">
+                                Signature invites sent
+                                {first.at && (
+                                  <>
+                                    {' '}
+                                    on <span className="font-medium">{formatDate(first.at)}</span>
+                                  </>
+                                )}
+                                {first.details && <> · {first.details}</>}
+                              </div>
+                            )
+                          }
+                          if (sends.length === 0) {
+                            return (
+                              <div className="text-[color:var(--color-text-muted)]">
+                                No contract emails sent yet.
+                              </div>
+                            )
+                          }
+                          return sends.map((e, i) => (
+                            <div key={`${e.sentAt}-${i}`} className="flex items-center justify-between gap-2">
+                              <div className="truncate">
+                                <span className="font-medium">{e.subject}</span>{' '}
+                                <span className="text-[color:var(--color-text-muted)]">→ {e.to}</span>
+                              </div>
+                              <span className="whitespace-nowrap text-[color:var(--color-text-muted)]">
+                                {formatDate(e.sentAt)}
+                              </span>
                             </div>
-                            <span className="whitespace-nowrap text-[color:var(--color-text-muted)]">
-                              {formatDate(e.sentAt)}
-                            </span>
-                          </div>
-                        ))}
+                          ))
+                        })()}
                       </div>
                     </div>
                   ) : (
