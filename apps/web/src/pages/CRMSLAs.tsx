@@ -1653,6 +1653,9 @@ export default function CRMSLAs() {
                         const href = isInlineData
                           ? getApiUrl(`/api/public/contracts/attachments/${editing._id}/${att._id}`)
                           : att.url
+                        const isPdf =
+                          (att.mimeType && att.mimeType.toLowerCase() === 'application/pdf') ||
+                          (!!att.name && att.name.toLowerCase().endsWith('.pdf'))
                         return (
                           <li key={att._id ?? idx}>
                             <a
@@ -1668,20 +1671,22 @@ export default function CRMSLAs() {
                                 final
                               </span>
                             )}
-                            <button
-                              type="button"
-                              className="ml-2 inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                              onClick={() => {
-                                setEmailMode('attachment')
-                                setEmailAttachmentId(att._id || null)
-                                setEmailContract(editing)
-                                setEmailTo('')
-                                setEmailSubject(att.name || `Contract document – ${editing.name}`)
-                                setEmailDialogOpen(true)
-                              }}
-                            >
-                              Email
-                            </button>
+                            {isPdf && (
+                              <button
+                                type="button"
+                                className="ml-2 inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                                onClick={() => {
+                                  setEmailMode('attachment')
+                                  setEmailAttachmentId(att._id || null)
+                                  setEmailContract(editing)
+                                  setEmailTo('')
+                                  setEmailSubject(att.name || `Contract document – ${editing.name}`)
+                                  setEmailDialogOpen(true)
+                                }}
+                              >
+                                Email
+                              </button>
+                            )}
                           </li>
                         )
                       })}
