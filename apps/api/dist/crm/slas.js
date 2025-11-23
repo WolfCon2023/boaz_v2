@@ -366,11 +366,7 @@ export function buildSignedHtml(contract) {
           <p><strong>Data protection summary:</strong> {{dataProtectionSummary}}</p>
         </div>
       </div>
-      <h2>Covered scope &amp; links</h2>
-      <p>
-        <span class="pill">Primary quote: {{primaryQuoteId}}</span>
-        <span class="pill">Primary deal: {{primaryDealId}}</span>
-      </p>
+      <h2>Covered scope</h2>
       <p>
         <strong>Covered assets:</strong> {{coveredAssetsSummary}}<br/>
         <strong>Covered services:</strong> {{coveredServicesSummary}}<br/>
@@ -390,28 +386,106 @@ function sanitizeForPdf(text) {
 // Build a simple PDF representation of the signed contract using pdf-lib
 export async function buildSignedPdf(contract) {
     const doc = await PDFDocument.create();
-    const page = doc.addPage();
-    const { width, height } = page.getSize();
+    let page = doc.addPage();
+    let { width, height } = page.getSize();
     const margin = 50;
     const font = await doc.embedFont(StandardFonts.Helvetica);
     const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
     const lineHeight = 14;
     let y = height - margin;
+    let maxWidth = width - margin * 2;
     function drawText(text, options) {
         const safe = sanitizeForPdf(text);
-        const lines = safe.split(/\r?\n/);
-        for (const line of lines) {
-            if (y < margin) {
-                y = height - margin;
-                doc.addPage();
+        const targetFont = options?.bold ? fontBold : font;
+        const paragraphs = safe.split(/\r?\n/);
+        for (const para of paragraphs) {
+            if (!para) {
+                // Blank line – just move down
+                y -= lineHeight;
+                continue;
             }
-            page.drawText(line, {
-                x: margin,
-                y,
-                size: 11,
-                font: options?.bold ? fontBold : font,
-            });
-            y -= lineHeight;
+            const words = para.split(/\s+/);
+            let current = '';
+            for (const word of words) {
+                const testLine = current ? `${current} ${word}` : word;
+                const testWidth = targetFont.widthOfTextAtSize(testLine, 11);
+                if (testWidth <= maxWidth) {
+                    current = testLine;
+                }
+                else {
+                    // If the single word itself is longer than the line width, hard-wrap it
+                    const wordWidth = targetFont.widthOfTextAtSize(word, 11);
+                    if (!current && wordWidth > maxWidth) {
+                        let chunk = '';
+                        for (const ch of word) {
+                            const candidate = chunk + ch;
+                            const candidateWidth = targetFont.widthOfTextAtSize(candidate, 11);
+                            if (candidateWidth > maxWidth && chunk) {
+                                if (y < margin) {
+                                    page = doc.addPage();
+                                    ({ width, height } = page.getSize());
+                                    maxWidth = width - margin * 2;
+                                    y = height - margin;
+                                }
+                                page.drawText(chunk, {
+                                    x: margin,
+                                    y,
+                                    size: 11,
+                                    font: targetFont,
+                                });
+                                y -= lineHeight;
+                                chunk = ch;
+                            }
+                            else {
+                                chunk = candidate;
+                            }
+                        }
+                        if (chunk) {
+                            current = chunk;
+                        }
+                    }
+                    else {
+                        // Flush current line and start a new one with this word
+                        if (current) {
+                            if (y < margin) {
+                                page = doc.addPage();
+                                ({ width, height } = page.getSize());
+                                maxWidth = width - margin * 2;
+                                y = height - margin;
+                            }
+                            page.drawText(current, {
+                                x: margin,
+                                y,
+                                size: 11,
+                                font: targetFont,
+                            });
+                            y -= lineHeight;
+                        }
+                        current = word;
+                    }
+                }
+            }
+            if (current) {
+                if (y < margin) {
+                    page = doc.addPage();
+                    ({ width, height } = page.getSize());
+                    maxWidth = width - margin * 2;
+                    y = height - margin;
+                }
+                if (y < margin) {
+                    page = doc.addPage();
+                    ({ width, height } = page.getSize());
+                    maxWidth = width - margin * 2;
+                    y = height - margin;
+                }
+                page.drawText(current, {
+                    x: margin,
+                    y,
+                    size: 11,
+                    font: targetFont,
+                });
+                y -= lineHeight;
+            }
         }
     }
     const ctx = buildContractContext(contract);
