@@ -333,10 +333,26 @@ export function serialize(doc: SlaContractDoc) {
   }
 }
 
+// Helper to express SLA minutes as a compact human label, e.g. "4h", "1d 4h"
+function minutesToHumanLabel(minutes: number | null | undefined): string {
+  if (!minutes || minutes <= 0) return ''
+  const total = Math.floor(minutes)
+  const minutesPerDay = 60 * 24
+  const days = Math.floor(total / minutesPerDay)
+  const hours = Math.floor((total % minutesPerDay) / 60)
+  const mins = total % 60
+  const parts: string[] = []
+  if (days) parts.push(`${days}d`)
+  if (hours) parts.push(`${hours}h`)
+  if (mins) parts.push(`${mins}m`)
+  return parts.join(' ')
+}
+
 // Build a plain-object context for template rendering
 export function buildContractContext(doc: SlaContractDoc) {
+  const base = serialize(doc)
   const ctx: any = {
-    ...serialize(doc),
+    ...base,
   }
   // Flatten some commonly-used aliases
   ctx.contractId = ctx._id
@@ -344,6 +360,52 @@ export function buildContractContext(doc: SlaContractDoc) {
   ctx.contractNumber = ctx.contractNumber
   ctx.status = ctx.status
   ctx.type = ctx.type
+
+  // Commercial formatting
+  const amountCents = typeof doc.baseAmountCents === 'number' ? doc.baseAmountCents : null
+  if (amountCents != null) {
+    const amount = amountCents / 100
+    ctx.baseAmountFormatted = `${doc.currency || 'USD'} ${amount.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
+  } else {
+    ctx.baseAmountFormatted = ''
+  }
+
+  // Renewal & notice summary
+  const renewalBits: string[] = []
+  if (doc.autoRenew) renewalBits.push('Auto‑renew: enabled')
+  if (doc.renewalTermMonths != null) renewalBits.push(`Term: ${doc.renewalTermMonths} month(s)`)
+  if (doc.noticePeriodDays != null) renewalBits.push(`Notice: ${doc.noticePeriodDays} days`)
+  if (doc.autoIncreasePercentOnRenewal != null) {
+    renewalBits.push(`Auto increase: ${doc.autoIncreasePercentOnRenewal}%`)
+  }
+  if (doc.earlyTerminationFeeModel) renewalBits.push(`Early termination: ${doc.earlyTerminationFeeModel}`)
+  ctx.renewalSummary = renewalBits.join(' · ')
+
+  // Severity/SLA summary
+  if (Array.isArray(doc.severityTargets) && doc.severityTargets.length) {
+    ctx.severitySummary = doc.severityTargets
+      .map((s) => {
+        const label = s.label || s.key
+        const resp = minutesToHumanLabel(s.responseTargetMinutes ?? null)
+        const res = minutesToHumanLabel(s.resolutionTargetMinutes ?? null)
+        const bits: string[] = []
+        if (resp) bits.push(`resp ${resp}`)
+        if (res) bits.push(`res ${res}`)
+        const suffix = bits.length ? ` (${bits.join(' / ')})` : ''
+        return `${label}${suffix}`
+      })
+      .join(' • ')
+  } else {
+    ctx.severitySummary = ''
+  }
+
+  // Linked assets / services
+  ctx.coveredAssetsSummary = Array.isArray(doc.coveredAssetTags) ? doc.coveredAssetTags.join(', ') : ''
+  ctx.coveredServicesSummary = Array.isArray(doc.coveredServiceTags) ? doc.coveredServiceTags.join(', ') : ''
+
   return ctx
 }
 
@@ -375,10 +437,13 @@ export function buildSignedHtml(contract: SlaContractDoc): string {
       .card { max-width:720px; margin:0 auto; background:#020617; border-radius:16px; padding:24px; border:1px solid #1f2937; }
       h1 { font-size:20px; margin:0 0 4px 0; }
       h2 { font-size:14px; text-transform:uppercase; letter-spacing:0.08em; color:#9ca3af; margin:20px 0 6px; }
+      h3 { font-size:13px; margin:10px 0 4px; color:#e5e7eb; }
       p, li { font-size:13px; line-height:1.6; color:#d1d5db; }
       table { width:100%; border-collapse:collapse; margin-top:4px; font-size:12px; }
-      th, td { padding:6px 8px; border-bottom:1px solid #1f2937; text-align:left; }
+      th, td { padding:6px 8px; border-bottom:1px solid #1f2937; text-align:left; vertical-align:top; }
       th { color:#9ca3af; font-weight:500; }
+      .grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px 24px; margin-top:6px; }
+      .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #1f2937; background:#020617; font-size:11px; color:#e5e7eb; margin-right:6px; margin-top:4px; }
     </style>
   </head>
   <body>
@@ -396,6 +461,30 @@ export function buildSignedHtml(contract: SlaContractDoc): string {
         <tr><th>Service term</th><td>{{startDate}} – {{endDate}}</td></tr>
         <tr><th>Renewal date</th><td>{{renewalDate}}</td></tr>
       </table>
+      <div class="grid-2">
+        <div>
+          <h3>Commercial &amp; billing</h3>
+          <table>
+            <tr><th>Billing frequency</th><td>{{billingFrequency}}</td></tr>
+            <tr><th>Base amount</th><td>{{baseAmountFormatted}}</td></tr>
+            <tr><th>Currency</th><td>{{currency}}</td></tr>
+            <tr><th>Invoice due</th><td>{{invoiceDueDays}} days</td></tr>
+            <tr><th>Renewal</th><td>{{renewalSummary}}</td></tr>
+            <tr><th>Upsell / cross‑sell</th><td>{{upsellCrossSellRights}}</td></tr>
+          </table>
+        </div>
+        <div>
+          <h3>Governance &amp; ownership</h3>
+          <table>
+            <tr><th>Customer exec sponsor</th><td>{{customerExecSponsor}}</td></tr>
+            <tr><th>Customer tech contact</th><td>{{customerTechContact}}</td></tr>
+            <tr><th>Provider account manager</th><td>{{providerAccountManager}}</td></tr>
+            <tr><th>Provider CSM</th><td>{{providerCsm}}</td></tr>
+            <tr><th>Governing law</th><td>{{governingLaw}}</td></tr>
+            <tr><th>Jurisdiction</th><td>{{jurisdiction}}</td></tr>
+          </table>
+        </div>
+      </div>
       <h2>Signatures</h2>
       <table>
         <tr>
@@ -411,6 +500,57 @@ export function buildSignedHtml(contract: SlaContractDoc): string {
           <td>{{executedDate}}</td>
         </tr>
       </table>
+      <h2>Service scope &amp; SLAs</h2>
+      <div class="grid-2">
+        <div>
+          <h3>Scope &amp; entitlements</h3>
+          <p>{{serviceScopeSummary}}</p>
+          <p><strong>Entitlements:</strong> {{entitlements}}</p>
+          <p><strong>Notes:</strong> {{notes}}</p>
+        </div>
+        <div>
+          <h3>SLA metrics</h3>
+          <table>
+            <tr><th>Uptime target</th><td>{{uptimeTargetPercent}}%</td></tr>
+            <tr><th>Support hours</th><td>{{supportHours}}</td></tr>
+            <tr><th>Default response target</th><td>{{responseTargetMinutes}} minutes</td></tr>
+            <tr><th>Default resolution target</th><td>{{resolutionTargetMinutes}} minutes</td></tr>
+            <tr><th>SLA exclusions</th><td>{{slaExclusionsSummary}}</td></tr>
+          </table>
+          <p><strong>Per‑priority targets:</strong> {{severitySummary}}</p>
+        </div>
+      </div>
+      <h2>Legal &amp; risk</h2>
+      <div class="grid-2">
+        <div>
+          <h3>Key legal terms</h3>
+          <p><strong>Limitation of liability:</strong> {{limitationOfLiability}}</p>
+          <p><strong>Indemnification:</strong> {{indemnificationSummary}}</p>
+          <p><strong>Confidentiality:</strong> {{confidentialitySummary}}</p>
+          <p><strong>IP ownership:</strong> {{ipOwnershipSummary}}</p>
+          <p><strong>Termination:</strong> {{terminationConditions}}</p>
+          <p><strong>Change orders:</strong> {{changeOrderProcess}}</p>
+        </div>
+        <div>
+          <h3>Compliance &amp; data protection</h3>
+          <p><strong>Data classification:</strong> {{dataClassification}}</p>
+          <p><strong>DPA in place:</strong> {{hasDataProcessingAddendum}}</p>
+          <p><strong>Audit rights:</strong> {{auditRightsSummary}}</p>
+          <p><strong>Usage restrictions:</strong> {{usageRestrictionsSummary}}</p>
+          <p><strong>Subprocessor use:</strong> {{subprocessorUseSummary}}</p>
+          <p><strong>Data protection summary:</strong> {{dataProtectionSummary}}</p>
+        </div>
+      </div>
+      <h2>Covered scope &amp; links</h2>
+      <p>
+        <span class="pill">Primary quote: {{primaryQuoteId}}</span>
+        <span class="pill">Primary deal: {{primaryDealId}}</span>
+      </p>
+      <p>
+        <strong>Covered assets:</strong> {{coveredAssetsSummary}}<br/>
+        <strong>Covered services:</strong> {{coveredServicesSummary}}<br/>
+        <strong>Success playbook constraints:</strong> {{successPlaybookConstraints}}
+      </p>
     </div>
   </body>
 </html>`,
@@ -509,6 +649,56 @@ export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Arr
     drawText('Compliance', { bold: true })
     if (ctx.dataClassification) drawText(`Data classification: ${ctx.dataClassification}`)
     if (ctx.hasDataProcessingAddendum) drawText(`Data Processing Addendum: in place`)
+    y -= lineHeight
+  }
+
+  if (
+    ctx.billingFrequency ||
+    ctx.baseAmountFormatted ||
+    ctx.invoiceDueDays ||
+    ctx.renewalSummary ||
+    ctx.upsellCrossSellRights
+  ) {
+    drawText('Commercial & billing', { bold: true })
+    if (ctx.billingFrequency) drawText(`Billing frequency: ${ctx.billingFrequency}`)
+    if (ctx.baseAmountFormatted) drawText(`Base amount: ${ctx.baseAmountFormatted}`)
+    if (ctx.invoiceDueDays) drawText(`Invoice due: ${ctx.invoiceDueDays} days`)
+    if (ctx.renewalSummary) drawText(`Renewal: ${ctx.renewalSummary}`)
+    if (ctx.upsellCrossSellRights) drawText(`Upsell / cross‑sell: ${ctx.upsellCrossSellRights}`)
+    y -= lineHeight
+  }
+
+  if (
+    ctx.customerExecSponsor ||
+    ctx.customerTechContact ||
+    ctx.providerAccountManager ||
+    ctx.providerCsm ||
+    ctx.changeControlRequiredFor ||
+    ctx.negotiationStatus ||
+    ctx.redlineSummary
+  ) {
+    drawText('Governance & change control', { bold: true })
+    if (ctx.customerExecSponsor) drawText(`Customer exec sponsor: ${ctx.customerExecSponsor}`)
+    if (ctx.customerTechContact) drawText(`Customer tech contact: ${ctx.customerTechContact}`)
+    if (ctx.providerAccountManager) drawText(`Provider account manager: ${ctx.providerAccountManager}`)
+    if (ctx.providerCsm) drawText(`Provider CSM: ${ctx.providerCsm}`)
+    if (ctx.changeControlRequiredFor) drawText(`Change control required for: ${ctx.changeControlRequiredFor}`)
+    if (ctx.negotiationStatus) drawText(`Negotiation status: ${ctx.negotiationStatus}`)
+    if (ctx.redlineSummary) drawText(`Redline summary: ${ctx.redlineSummary}`)
+    y -= lineHeight
+  }
+
+  if (ctx.coveredAssetsSummary || ctx.coveredServicesSummary || ctx.successPlaybookConstraints) {
+    drawText('Covered scope & links', { bold: true })
+    if (ctx.coveredAssetsSummary) drawText(`Covered assets: ${ctx.coveredAssetsSummary}`)
+    if (ctx.coveredServicesSummary) drawText(`Covered services: ${ctx.coveredServicesSummary}`)
+    if (ctx.successPlaybookConstraints) drawText(`Success playbook constraints: ${ctx.successPlaybookConstraints}`)
+    y -= lineHeight
+  }
+
+  if (ctx.notes) {
+    drawText('Notes', { bold: true })
+    drawText(ctx.notes)
     y -= lineHeight
   }
 
