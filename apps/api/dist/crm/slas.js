@@ -1743,6 +1743,107 @@ slasRouter.post('/:id/send-signed', async (req, res) => {
     });
     res.json({ data: { ok: true }, error: null });
 });
+// POST /api/crm/slas/:id/send-attachment - email a specific attachment to a recipient
+const sendAttachmentSchema = z.object({
+    to: z.string().email(),
+    subject: z.string().optional(),
+    attachmentId: z.string().min(1),
+});
+slasRouter.post('/:id/send-attachment', async (req, res) => {
+    const parsed = sendAttachmentSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    }
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const { id } = req.params;
+    if (!ObjectId.isValid(id))
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    const body = parsed.data;
+    const contractId = new ObjectId(id);
+    const coll = db.collection('sla_contracts');
+    const contract = await coll.findOne({ _id: contractId });
+    if (!contract || !Array.isArray(contract.attachments)) {
+        return res.status(404).json({ data: null, error: 'not_found' });
+    }
+    const attId = body.attachmentId;
+    const attachment = contract.attachments.find((a) => a._id && String(a._id) === attId);
+    if (!attachment || !attachment.url) {
+        return res.status(404).json({ data: null, error: 'attachment_not_found' });
+    }
+    let mailAttachments = [];
+    if (attachment.url.startsWith('data:')) {
+        try {
+            const firstComma = attachment.url.indexOf(',');
+            if (firstComma === -1)
+                throw new Error('malformed_data_url');
+            const meta = attachment.url.substring(5, firstComma);
+            const dataPart = attachment.url.substring(firstComma + 1);
+            const isBase64 = meta.includes(';base64');
+            const mimeType = (meta.split(';')[0] || 'application/octet-stream').trim();
+            const buf = isBase64 ? Buffer.from(dataPart, 'base64') : Buffer.from(decodeURIComponent(dataPart), 'utf8');
+            mailAttachments = [
+                {
+                    filename: attachment.name || 'contract-attachment',
+                    content: buf,
+                    contentType: mimeType,
+                },
+            ];
+        }
+        catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to prepare attachment for email', err);
+            return res.status(500).json({ data: null, error: 'attachment_decode_failed' });
+        }
+    }
+    const subject = body.subject && body.subject.trim().length > 0
+        ? body.subject.trim()
+        : `Contract attachment – ${contract.name}`.trim();
+    await sendEmail({
+        to: body.to,
+        subject,
+        html: `Attached is the requested contract document for ${contract.name}.`,
+        attachments: mailAttachments.length ? mailAttachments : undefined,
+    });
+    const emailEntry = {
+        to: body.to,
+        subject,
+        sentAt: new Date(),
+        sentByUserId: undefined,
+        messageId: undefined,
+        status: 'Sent',
+    };
+    await coll.updateOne({ _id: contract._id }, {
+        $set: { updatedAt: new Date() },
+        $push: { emailSends: emailEntry },
+    });
+    res.json({ data: { ok: true }, error: null });
+});
+// GET /api/crm/slas/:id/pdf - on-demand PDF preview of current contract
+slasRouter.get('/:id/pdf', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const { id } = req.params;
+    if (!ObjectId.isValid(id))
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    const coll = db.collection('sla_contracts');
+    const contract = await coll.findOne({ _id: new ObjectId(id) });
+    if (!contract)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    try {
+        const pdfBytes = await buildSignedPdf(contract);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="Contract-${contract.contractNumber ?? ''}-${(contract.name || 'contract').replace(/[^a-z0-9_-]+/gi, '-')}.pdf"`);
+        return res.send(Buffer.from(pdfBytes));
+    }
+    catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to generate on-demand contract PDF', err);
+        return res.status(500).json({ data: null, error: 'pdf_generation_failed' });
+    }
+});
 // GET /api/crm/slas/by-account?accountIds=id1,id2
 slasRouter.get('/by-account', async (req, res) => {
     const db = await getDb();

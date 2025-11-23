@@ -399,6 +399,11 @@ export default function CRMSLAs() {
   const [emailMode, setEmailMode] = React.useState<'invite' | 'signed' | 'attachment'>('invite')
   const [emailAttachmentId, setEmailAttachmentId] = React.useState<string | null>(null)
 
+  const [page, setPage] = React.useState(0)
+  const pageSize = 20
+  const [sortKey, setSortKey] = React.useState<'account' | 'name' | 'status' | 'start' | 'end'>('end')
+  const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc')
+
   function openNew() {
     setEditing({
       _id: '',
@@ -636,6 +641,38 @@ export default function CRMSLAs() {
 
   const rows = slasQ.data?.data.items ?? []
 
+  const sortedRows = React.useMemo(() => {
+    const base = [...rows]
+    base.sort((a, b) => {
+      let av: any
+      let bv: any
+      if (sortKey === 'account') {
+        av = accountLabelById.get(a.accountId) ?? a.accountId
+        bv = accountLabelById.get(b.accountId) ?? b.accountId
+      } else if (sortKey === 'name') {
+        av = a.name || ''
+        bv = b.name || ''
+      } else if (sortKey === 'status') {
+        av = a.status || ''
+        bv = b.status || ''
+      } else if (sortKey === 'start') {
+        av = a.startDate ? new Date(a.startDate).getTime() : 0
+        bv = b.startDate ? new Date(b.startDate).getTime() : 0
+      } else {
+        av = a.endDate ? new Date(a.endDate).getTime() : 0
+        bv = b.endDate ? new Date(b.endDate).getTime() : 0
+      }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+    return base
+  }, [rows, sortKey, sortDir, accountLabelById])
+
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize))
+  const currentPage = Math.min(page, pageCount - 1)
+  const pagedRows = sortedRows.slice(currentPage * pageSize, currentPage * pageSize + pageSize)
+
   return (
     <div className="space-y-4">
       <CRMNav />
@@ -692,7 +729,10 @@ export default function CRMSLAs() {
           </select>
           <select
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as any)}
+            onChange={(e) => {
+              setTypeFilter(e.target.value as any)
+              setPage(0)
+            }}
             className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
           >
             <option value="all">Type (all)</option>
@@ -702,11 +742,36 @@ export default function CRMSLAs() {
             <option value="project">Project</option>
             <option value="other">Other</option>
           </select>
+          <select
+            value={sortKey}
+            onChange={(e) => {
+              setSortKey(e.target.value as any)
+              setPage(0)
+            }}
+            className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs"
+          >
+            <option value="end">Sort by: End date</option>
+            <option value="start">Sort by: Start date</option>
+            <option value="name">Sort by: Name</option>
+            <option value="account">Sort by: Account</option>
+            <option value="status">Sort by: Status</option>
+          </select>
+          <select
+            value={sortDir}
+            onChange={(e) => {
+              setSortDir(e.target.value as any)
+              setPage(0)
+            }}
+            className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs"
+          >
+            <option value="asc">Asc</option>
+            <option value="desc">Desc</option>
+          </select>
         </div>
       </section>
 
       <section className="px-4">
-        <div className="overflow-x-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+        <div className="max-h-[60vh] overflow-x-auto overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
           <table className="min-w-full text-sm">
             <thead className="bg-[color:var(--color-muted)] text-xs text-[color:var(--color-text-muted)]">
               <tr>
@@ -722,7 +787,7 @@ export default function CRMSLAs() {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && (
+              {pagedRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={9}
@@ -732,7 +797,7 @@ export default function CRMSLAs() {
                   </td>
                 </tr>
               )}
-              {rows.map((s) => {
+              {pagedRows.map((s) => {
                 const accountLabel = accountLabelById.get(s.accountId) ?? s.accountId
                 return (
                   <tr key={s._id} className="border-t border-[color:var(--color-border-soft)]">
@@ -838,6 +903,33 @@ export default function CRMSLAs() {
               })}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="px-4 pb-4">
+        <div className="flex items-center justify-between gap-3 text-xs text-[color:var(--color-text-muted)]">
+          <div>
+            Page {pageCount === 0 ? 0 : currentPage + 1} of {pageCount} · {sortedRows.length} contract
+            {sortedRows.length === 1 ? '' : 's'}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              className="rounded-full border border-[color:var(--color-border)] px-3 py-1 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              disabled={currentPage >= pageCount - 1}
+              className="rounded-full border border-[color:var(--color-border)] px-3 py-1 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </section>
 
