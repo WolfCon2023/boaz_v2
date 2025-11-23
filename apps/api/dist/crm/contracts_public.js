@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { getDb } from '../db.js';
-import { serialize as serializeSlaInternal } from './slas.js';
+import { serialize as serializeSlaInternal, finalizeExecutedContract } from './slas.js';
 export const contractsPublicRouter = Router();
 function serializeContractForSigning(doc) {
     // Reuse internal serialize but drop sensitive history fields
@@ -173,11 +173,13 @@ contractsPublicRouter.post('/sign/:token', async (req, res) => {
             title: body.title ?? invite.title,
         },
     });
-    // Check if both sides have signed
+    // Check if contract should be considered fully executed
     const refreshed = await contractColl.findOne({ _id: contract._id });
     if (!refreshed)
         return res.status(500).json({ data: null, error: 'update_failed' });
-    if (refreshed.signedAtCustomer && refreshed.signedAtProvider && refreshed.status !== 'active') {
+    // For now, treat the contract as executed once at least one signer has completed,
+    // so that single-signer workflows still get a final copy and status transition.
+    if ((refreshed.signedAtCustomer || refreshed.signedAtProvider) && refreshed.status !== 'active') {
         await contractColl.updateOne({ _id: refreshed._id }, {
             $set: {
                 status: 'active',
@@ -192,6 +194,13 @@ contractsPublicRouter.post('/sign/:token', async (req, res) => {
                 },
             },
         });
+        // Generate and attach a final signed copy, and email to signers
+        try {
+            await finalizeExecutedContract(refreshed._id);
+        }
+        catch (err) {
+            console.error('Failed to finalize executed contract', err);
+        }
     }
     const safeContract = serializeContractForSigning(refreshed);
     res.json({
