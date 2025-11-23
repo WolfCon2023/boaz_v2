@@ -1496,7 +1496,7 @@ export default function CRMSLAs() {
                       {editing.attachments!.map((att: SlaAttachmentView, idx: number) => {
                         const isInlineData = att.url.startsWith('data:')
                         const href = isInlineData
-                          ? getApiUrl(`/api/crm/slas/${editing._id}/attachments/${att._id}`)
+                          ? getApiUrl(`/api/public/contracts/attachments/${editing._id}/${att._id}`)
                           : att.url
                         return (
                           <li key={att._id ?? idx}>
