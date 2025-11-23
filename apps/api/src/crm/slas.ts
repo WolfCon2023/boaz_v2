@@ -464,6 +464,20 @@ export async function finalizeExecutedContract(contractId: ObjectId) {
         subject,
         html: signedHtml,
       })
+      const emailEntry: SlaEmailSend = {
+        to: email,
+        subject,
+        sentAt: new Date(),
+        sentByUserId: undefined,
+        messageId: undefined,
+        status: 'Sent',
+      }
+      await coll.updateOne(
+        { _id: contract._id },
+        {
+          $push: { emailSends: emailEntry },
+        },
+      )
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('Failed to email signed contract copy to', email, err)

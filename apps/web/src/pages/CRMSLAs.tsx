@@ -1419,6 +1419,31 @@ export default function CRMSLAs() {
                   )}
                 </div>
 
+                {editing.attachments && editing.attachments.length > 0 && (
+                  <div className="space-y-1 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3 text-[11px]">
+                    <div className="font-semibold">Documents</div>
+                    <ul className="space-y-1">
+                      {editing.attachments.map((att, idx) => (
+                        <li key={att._id ?? idx}>
+                          <a
+                            href={att.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[color:var(--color-primary)] hover:underline"
+                          >
+                            {att.name || 'Attachment'}
+                          </a>
+                          {att.kind === 'final' && (
+                            <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">
+                              final
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-[color:var(--color-text-muted)]">
                   <div>
                     Link SLAs to Accounts to guide support priorities and renewal conversations.
