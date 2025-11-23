@@ -1964,6 +1964,7 @@ slasRouter.post('/:id/send-signed', async (req, res) => {
   const effectiveContract = refreshed ?? contract
 
   const signedHtml = buildSignedHtml(effectiveContract)
+  const signedPdf = await buildSignedPdf(effectiveContract)
 
   const subject =
     body.subject && body.subject.trim().length > 0
@@ -1974,6 +1975,13 @@ slasRouter.post('/:id/send-signed', async (req, res) => {
     to: body.to,
     subject,
     html: signedHtml,
+    attachments: [
+      {
+        filename: `Contract-${effectiveContract.contractNumber ?? ''}-signed.pdf`,
+        content: Buffer.from(signedPdf),
+        contentType: 'application/pdf',
+      },
+    ],
   })
 
   const emailEntry: SlaEmailSend = {
