@@ -1116,22 +1116,25 @@ export default function CRMSLAs() {
                     SLA &amp; support
                   </div>
                   <div className="grid gap-3 md:grid-cols-2">
-                  <label className="block text-xs font-medium">Entitlements</label>
-                  <textarea
-                    className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
-                    value={editEntitlements}
-                    onChange={(e) => setEditEntitlements(e.target.value)}
-                    placeholder="Included services, hours, channels, or product entitlements."
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium">Notes</label>
-                  <textarea
-                    className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
-                    value={editNotes}
-                    onChange={(e) => setEditNotes(e.target.value)}
-                    placeholder="Additional context, special terms, or internal comments."
-                  />
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="block text-xs font-medium">Entitlements</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editEntitlements}
+                        onChange={(e) => setEditEntitlements(e.target.value)}
+                        placeholder="Included services, hours, channels, or product entitlements."
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="block text-xs font-medium">Notes</label>
+                      <textarea
+                        className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                        value={editNotes}
+                        onChange={(e) => setEditNotes(e.target.value)}
+                        placeholder="Additional context, special terms, or internal comments."
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-3 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
