@@ -40,7 +40,8 @@ async function main() {
       _id: new ObjectId(),
       accountId,
       contractNumber,
-      name: `Managed Services & Cloud SLA – ${account.name ?? 'Customer'}`,
+      // Mark clearly as test data so it’s not confused with production contracts
+      name: `Test Managed Services & Cloud SLA – ${account.name ?? 'Customer'}`,
       type: 'msa',
       status: 'active',
       effectiveDate: now,

@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CRMNav } from '@/components/CRMNav'
-import { http } from '@/lib/http'
+import { http, getApiUrl } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { formatDate } from '@/lib/dateFormat'
 
@@ -1493,23 +1493,29 @@ export default function CRMSLAs() {
                   <div className="space-y-1 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3 text-[11px]">
                     <div className="font-semibold">Documents</div>
                     <ul className="space-y-1">
-                      {editing.attachments!.map((att: SlaAttachmentView, idx: number) => (
-                        <li key={att._id ?? idx}>
-                          <a
-                            href={att.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[color:var(--color-primary)] hover:underline"
-                          >
-                            {att.name || 'Attachment'}
-                          </a>
-                          {att.kind === 'final' && (
-                            <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">
-                              final
-                            </span>
-                          )}
-                        </li>
-                      ))}
+                      {editing.attachments!.map((att: SlaAttachmentView, idx: number) => {
+                        const isInlineData = att.url.startsWith('data:')
+                        const href = isInlineData
+                          ? getApiUrl(`/api/crm/slas/${editing._id}/attachments/${att._id}`)
+                          : att.url
+                        return (
+                          <li key={att._id ?? idx}>
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[color:var(--color-primary)] hover:underline"
+                            >
+                              {att.name || 'Attachment'}
+                            </a>
+                            {att.kind === 'final' && (
+                              <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">
+                                final
+                              </span>
+                            )}
+                          </li>
+                        )
+                      })}
                     </ul>
                   </div>
                 )}
