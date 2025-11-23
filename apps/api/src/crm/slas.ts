@@ -561,6 +561,13 @@ export function buildSignedHtml(contract: SlaContractDoc): string {
   )
 }
 
+// pdf-lib with standard fonts only supports WinAnsi; normalise unsupported chars (e.g. Unicode dashes)
+function sanitizeForPdf(text: string): string {
+  if (!text) return ''
+  // Replace various dash-like Unicode characters with a plain ASCII hyphen
+  return text.replace(/[\u2010-\u2015\u2212]/g, '-')
+}
+
 // Build a simple PDF representation of the signed contract using pdf-lib
 export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
@@ -574,7 +581,8 @@ export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Arr
   let y = height - margin
 
   function drawText(text: string, options?: { bold?: boolean }) {
-    const lines = text.split(/\r?\n/)
+    const safe = sanitizeForPdf(text)
+    const lines = safe.split(/\r?\n/)
     for (const line of lines) {
       if (y < margin) {
         y = height - margin
