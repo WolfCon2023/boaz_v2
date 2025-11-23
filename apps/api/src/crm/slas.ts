@@ -893,7 +893,7 @@ export async function finalizeExecutedContract(contractId: ObjectId) {
             contentType: 'application/pdf',
           },
         ],
-      } as any)
+      })
       const emailEntry: SlaEmailSend = {
         to: email,
         subject,
@@ -2065,7 +2065,7 @@ slasRouter.post('/:id/send-attachment', async (req, res) => {
     subject,
     html: `Attached is the requested contract document for ${contract.name}.`,
     attachments: mailAttachments.length ? mailAttachments : undefined,
-  } as any)
+  })
 
   const emailEntry: SlaEmailSend = {
     to: body.to,

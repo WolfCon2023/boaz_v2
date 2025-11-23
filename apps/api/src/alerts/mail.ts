@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer'
+import nodemailer, { type SendMailOptions } from 'nodemailer'
 import { env } from '../env.js'
 
 let transporter: nodemailer.Transporter | null = null
@@ -17,10 +17,19 @@ export function getTransporter() {
   return transporter
 }
 
-export async function sendEmail({ to, subject, text, html, from }: { to: string; subject: string; text?: string; html?: string; from?: string }) {
+type SendEmailArgs = {
+  to: string
+  subject: string
+  text?: string
+  html?: string
+  from?: string
+  attachments?: SendMailOptions['attachments']
+}
+
+export async function sendEmail({ to, subject, text, html, from, attachments }: SendEmailArgs) {
   const t = getTransporter()
   const fromAddr = from || env.ALERT_FROM || env.SMTP_USER || 'no-reply@example.com'
-  await t.sendMail({ from: fromAddr, to, subject, text, html })
+  await t.sendMail({ from: fromAddr, to, subject, text, html, attachments })
 }
 
 
