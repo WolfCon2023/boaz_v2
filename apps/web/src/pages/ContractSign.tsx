@@ -15,14 +15,19 @@ type PublicSlaContract = {
   endDate?: string | null
   autoRenew?: boolean
   renewalDate?: string | null
+  renewalTermMonths?: number | null
+  noticePeriodDays?: number | null
   billingFrequency?: string | null
   currency?: string | null
+  baseAmountCents?: number | null
   invoiceDueDays?: number | null
   uptimeTargetPercent?: number | null
   supportHours?: string | null
   slaExclusionsSummary?: string | null
   responseTargetMinutes?: number | null
   resolutionTargetMinutes?: number | null
+  entitlements?: string | null
+  notes?: string | null
   serviceScopeSummary?: string | null
   limitationOfLiability?: string | null
   indemnificationSummary?: string | null
@@ -30,8 +35,27 @@ type PublicSlaContract = {
   dataProtectionSummary?: string | null
   ipOwnershipSummary?: string | null
   terminationConditions?: string | null
+  paymentTerms?: string | null
   customerLegalName?: string | null
   providerLegalName?: string | null
+  customerExecSponsor?: string | null
+  customerTechContact?: string | null
+  providerAccountManager?: string | null
+  providerCsm?: string | null
+  dataClassification?: string | null
+  hasDataProcessingAddendum?: boolean | null
+  auditRightsSummary?: string | null
+  usageRestrictionsSummary?: string | null
+  subprocessorUseSummary?: string | null
+  changeControlRequiredFor?: string | null
+  negotiationStatus?: string | null
+  redlineSummary?: string | null
+  autoIncreasePercentOnRenewal?: number | null
+  earlyTerminationFeeModel?: string | null
+  upsellCrossSellRights?: string | null
+  coveredAssetTags?: string[] | null
+  coveredServiceTags?: string[] | null
+  successPlaybookConstraints?: string | null
 }
 
 type SignerInfo = {
@@ -367,6 +391,15 @@ export default function ContractSign() {
   }
 
   const fmtDate = (d?: string | null) => (d ? formatDate(d) : 'N/A')
+  const fmtAmount = (c: PublicSlaContract) => {
+    if (c.baseAmountCents == null) return 'N/A'
+    const amount = c.baseAmountCents / 100
+    const currency = c.currency || 'USD'
+    return `${currency} ${amount.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
+  }
 
   return (
     <div className="mx-auto max-w-5xl py-8 space-y-6">
@@ -418,12 +451,22 @@ export default function ContractSign() {
           <div className="space-y-1 rounded-xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
             <div className="text-[color:var(--color-text-muted)]">Renewal</div>
             <div className="font-medium text-[color:var(--color-text)]">
-              {fmtDate(contract.renewalDate)}{' '}
-              {contract.autoRenew ? '· Auto‑renew' : ''}
+              {fmtDate(contract.renewalDate)} {contract.autoRenew ? '· Auto‑renew' : ''}
+            </div>
+            <div className="mt-2 text-[color:var(--color-text-muted)]">Renewal term</div>
+            <div className="font-medium text-[color:var(--color-text)]">
+              {contract.renewalTermMonths != null ? `${contract.renewalTermMonths} month(s)` : 'N/A'}{' '}
+              {contract.noticePeriodDays != null ? `· ${contract.noticePeriodDays} days notice` : ''}
             </div>
             <div className="mt-2 text-[color:var(--color-text-muted)]">Billing</div>
             <div className="font-medium text-[color:var(--color-text)]">
               {contract.billingFrequency || 'N/A'} {contract.currency ? `· ${contract.currency}` : ''}
+            </div>
+            <div className="mt-2 text-[color:var(--color-text-muted)]">Base amount</div>
+            <div className="font-medium text-[color:var(--color-text)]">{fmtAmount(contract)}</div>
+            <div className="mt-2 text-[color:var(--color-text-muted)]">Invoice due</div>
+            <div className="font-medium text-[color:var(--color-text)]">
+              {contract.invoiceDueDays != null ? `${contract.invoiceDueDays} days` : 'N/A'}
             </div>
           </div>
           <div className="space-y-1 rounded-xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
@@ -458,6 +501,16 @@ export default function ContractSign() {
             <p className="mb-2 text-[color:var(--color-text)]">
               {contract.serviceScopeSummary || 'No service scope summary provided.'}
             </p>
+            {contract.entitlements && (
+              <p className="mt-1 text-[color:var(--color-text)]">
+                <span className="font-medium">Entitlements:</span> {contract.entitlements}
+              </p>
+            )}
+            {contract.notes && (
+              <p className="mt-1 text-[color:var(--color-text-muted)]">
+                <span className="font-medium text-[color:var(--color-text)]">Notes:</span> {contract.notes}
+              </p>
+            )}
             {contract.slaExclusionsSummary && (
               <p className="mt-2 text-[color:var(--color-text-muted)]">
                 <span className="font-medium text-[color:var(--color-text)]">SLA exclusions:</span>{' '}
@@ -471,6 +524,12 @@ export default function ContractSign() {
               Key legal summaries
             </h2>
             <ul className="space-y-1">
+              {contract.paymentTerms && (
+                <li>
+                  <span className="font-medium text-[color:var(--color-text)]">Payment terms:</span>{' '}
+                  {contract.paymentTerms}
+                </li>
+              )}
               <li>
                 <span className="font-medium text-[color:var(--color-text)]">Liability:</span>{' '}
                 {contract.limitationOfLiability || 'Not specified.'}
@@ -497,9 +556,97 @@ export default function ContractSign() {
               </li>
             </ul>
           </div>
+
+          <div className="rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-panel)] p-4 text-xs">
+            <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
+              Compliance &amp; governance
+            </h2>
+            <ul className="space-y-1">
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Data classification:</span>{' '}
+                {contract.dataClassification || 'Not specified.'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">DPA in place:</span>{' '}
+                {contract.hasDataProcessingAddendum ? 'Yes' : 'No / not specified'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Audit rights:</span>{' '}
+                {contract.auditRightsSummary || 'Not specified.'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Usage restrictions:</span>{' '}
+                {contract.usageRestrictionsSummary || 'Not specified.'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Subprocessors:</span>{' '}
+                {contract.subprocessorUseSummary || 'Not specified.'}
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-panel)] p-4 text-xs">
+            <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
+              Governance &amp; change control
+            </h2>
+            <ul className="space-y-1">
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Customer exec sponsor:</span>{' '}
+                {contract.customerExecSponsor || 'Not specified.'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Customer tech contact:</span>{' '}
+                {contract.customerTechContact || 'Not specified.'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Provider account manager:</span>{' '}
+                {contract.providerAccountManager || 'Not specified.'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Provider CSM:</span>{' '}
+                {contract.providerCsm || 'Not specified.'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Change control required for:</span>{' '}
+                {contract.changeControlRequiredFor || 'Not specified.'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Negotiation status:</span>{' '}
+                {contract.negotiationStatus || 'Not specified.'}
+              </li>
+              <li>
+                <span className="font-medium text-[color:var(--color-text)]">Redline summary:</span>{' '}
+                {contract.redlineSummary || 'Not specified.'}
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div className="space-y-4">
+          <div className="rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-panel)] p-4 text-xs">
+            <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
+              Covered scope &amp; links
+            </h2>
+            <p className="text-[color:var(--color-text)]">
+              <span className="font-medium">Covered assets:</span>{' '}
+              {contract.coveredAssetTags && contract.coveredAssetTags.length
+                ? contract.coveredAssetTags.join(', ')
+                : 'Not specified.'}
+            </p>
+            <p className="mt-1 text-[color:var(--color-text)]">
+              <span className="font-medium">Covered services:</span>{' '}
+              {contract.coveredServiceTags && contract.coveredServiceTags.length
+                ? contract.coveredServiceTags.join(', ')
+                : 'Not specified.'}
+            </p>
+            {contract.successPlaybookConstraints && (
+              <p className="mt-1 text-[color:var(--color-text-muted)]">
+                <span className="font-medium text-[color:var(--color-text)]">Success playbook constraints:</span>{' '}
+                {contract.successPlaybookConstraints}
+              </p>
+            )}
+          </div>
+
           <div className="rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-panel)] p-4 text-xs">
             <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
               Digital signature

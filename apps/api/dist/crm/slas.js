@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { ObjectId } from 'mongodb';
 import { getDb, getNextSequence } from '../db.js';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { sendEmail } from '../alerts/mail.js';
 import crypto from 'crypto';
 import { env } from '../env.js';
@@ -149,10 +150,29 @@ export function serialize(doc) {
         updatedAt: doc.updatedAt.toISOString(),
     };
 }
+// Helper to express SLA minutes as a compact human label, e.g. "4h", "1d 4h"
+function minutesToHumanLabel(minutes) {
+    if (!minutes || minutes <= 0)
+        return '';
+    const total = Math.floor(minutes);
+    const minutesPerDay = 60 * 24;
+    const days = Math.floor(total / minutesPerDay);
+    const hours = Math.floor((total % minutesPerDay) / 60);
+    const mins = total % 60;
+    const parts = [];
+    if (days)
+        parts.push(`${days}d`);
+    if (hours)
+        parts.push(`${hours}h`);
+    if (mins)
+        parts.push(`${mins}m`);
+    return parts.join(' ');
+}
 // Build a plain-object context for template rendering
 export function buildContractContext(doc) {
+    const base = serialize(doc);
     const ctx = {
-        ...serialize(doc),
+        ...base,
     };
     // Flatten some commonly-used aliases
     ctx.contractId = ctx._id;
@@ -160,6 +180,55 @@ export function buildContractContext(doc) {
     ctx.contractNumber = ctx.contractNumber;
     ctx.status = ctx.status;
     ctx.type = ctx.type;
+    // Commercial formatting
+    const amountCents = typeof doc.baseAmountCents === 'number' ? doc.baseAmountCents : null;
+    if (amountCents != null) {
+        const amount = amountCents / 100;
+        ctx.baseAmountFormatted = `${doc.currency || 'USD'} ${amount.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        })}`;
+    }
+    else {
+        ctx.baseAmountFormatted = '';
+    }
+    // Renewal & notice summary
+    const renewalBits = [];
+    if (doc.autoRenew)
+        renewalBits.push('Auto‑renew: enabled');
+    if (doc.renewalTermMonths != null)
+        renewalBits.push(`Term: ${doc.renewalTermMonths} month(s)`);
+    if (doc.noticePeriodDays != null)
+        renewalBits.push(`Notice: ${doc.noticePeriodDays} days`);
+    if (doc.autoIncreasePercentOnRenewal != null) {
+        renewalBits.push(`Auto increase: ${doc.autoIncreasePercentOnRenewal}%`);
+    }
+    if (doc.earlyTerminationFeeModel)
+        renewalBits.push(`Early termination: ${doc.earlyTerminationFeeModel}`);
+    ctx.renewalSummary = renewalBits.join(' · ');
+    // Severity/SLA summary
+    if (Array.isArray(doc.severityTargets) && doc.severityTargets.length) {
+        ctx.severitySummary = doc.severityTargets
+            .map((s) => {
+            const label = s.label || s.key;
+            const resp = minutesToHumanLabel(s.responseTargetMinutes ?? null);
+            const res = minutesToHumanLabel(s.resolutionTargetMinutes ?? null);
+            const bits = [];
+            if (resp)
+                bits.push(`resp ${resp}`);
+            if (res)
+                bits.push(`res ${res}`);
+            const suffix = bits.length ? ` (${bits.join(' / ')})` : '';
+            return `${label}${suffix}`;
+        })
+            .join(' • ');
+    }
+    else {
+        ctx.severitySummary = '';
+    }
+    // Linked assets / services
+    ctx.coveredAssetsSummary = Array.isArray(doc.coveredAssetTags) ? doc.coveredAssetTags.join(', ') : '';
+    ctx.coveredServicesSummary = Array.isArray(doc.coveredServiceTags) ? doc.coveredServiceTags.join(', ') : '';
     return ctx;
 }
 // Very small mustache-style renderer: {{ field }} supports dotted paths
@@ -190,10 +259,13 @@ export function buildSignedHtml(contract) {
       .card { max-width:720px; margin:0 auto; background:#020617; border-radius:16px; padding:24px; border:1px solid #1f2937; }
       h1 { font-size:20px; margin:0 0 4px 0; }
       h2 { font-size:14px; text-transform:uppercase; letter-spacing:0.08em; color:#9ca3af; margin:20px 0 6px; }
+      h3 { font-size:13px; margin:10px 0 4px; color:#e5e7eb; }
       p, li { font-size:13px; line-height:1.6; color:#d1d5db; }
       table { width:100%; border-collapse:collapse; margin-top:4px; font-size:12px; }
-      th, td { padding:6px 8px; border-bottom:1px solid #1f2937; text-align:left; }
+      th, td { padding:6px 8px; border-bottom:1px solid #1f2937; text-align:left; vertical-align:top; }
       th { color:#9ca3af; font-weight:500; }
+      .grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px 24px; margin-top:6px; }
+      .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #1f2937; background:#020617; font-size:11px; color:#e5e7eb; margin-right:6px; margin-top:4px; }
     </style>
   </head>
   <body>
@@ -211,6 +283,33 @@ export function buildSignedHtml(contract) {
         <tr><th>Service term</th><td>{{startDate}} – {{endDate}}</td></tr>
         <tr><th>Renewal date</th><td>{{renewalDate}}</td></tr>
       </table>
+      <div class="grid-2">
+        <div>
+          <h3>Commercial &amp; billing</h3>
+          <table>
+            <tr><th>Billing frequency</th><td>{{billingFrequency}}</td></tr>
+            <tr><th>Base amount</th><td>{{baseAmountFormatted}}</td></tr>
+            <tr><th>Currency</th><td>{{currency}}</td></tr>
+            <tr><th>Invoice due</th><td>{{invoiceDueDays}} days</td></tr>
+            <tr><th>Renewal</th><td>{{renewalSummary}}</td></tr>
+            <tr><th>Upsell / cross‑sell</th><td>{{upsellCrossSellRights}}</td></tr>
+          </table>
+        </div>
+        <div>
+          <h3>Governance &amp; change control</h3>
+          <table>
+            <tr><th>Customer exec sponsor</th><td>{{customerExecSponsor}}</td></tr>
+            <tr><th>Customer tech contact</th><td>{{customerTechContact}}</td></tr>
+            <tr><th>Provider account manager</th><td>{{providerAccountManager}}</td></tr>
+            <tr><th>Provider CSM</th><td>{{providerCsm}}</td></tr>
+            <tr><th>Governing law</th><td>{{governingLaw}}</td></tr>
+            <tr><th>Jurisdiction</th><td>{{jurisdiction}}</td></tr>
+            <tr><th>Change control required for</th><td>{{changeControlRequiredFor}}</td></tr>
+            <tr><th>Negotiation status</th><td>{{negotiationStatus}}</td></tr>
+            <tr><th>Redline summary</th><td>{{redlineSummary}}</td></tr>
+          </table>
+        </div>
+      </div>
       <h2>Signatures</h2>
       <table>
         <tr>
@@ -226,9 +325,214 @@ export function buildSignedHtml(contract) {
           <td>{{executedDate}}</td>
         </tr>
       </table>
+      <h2>Service scope &amp; SLAs</h2>
+      <div class="grid-2">
+        <div>
+          <h3>Scope &amp; entitlements</h3>
+          <p>{{serviceScopeSummary}}</p>
+          <p><strong>Entitlements:</strong> {{entitlements}}</p>
+          <p><strong>Notes:</strong> {{notes}}</p>
+        </div>
+        <div>
+          <h3>SLA metrics</h3>
+          <table>
+            <tr><th>Uptime target</th><td>{{uptimeTargetPercent}}%</td></tr>
+            <tr><th>Support hours</th><td>{{supportHours}}</td></tr>
+            <tr><th>Default response target</th><td>{{responseTargetMinutes}} minutes</td></tr>
+            <tr><th>Default resolution target</th><td>{{resolutionTargetMinutes}} minutes</td></tr>
+            <tr><th>SLA exclusions</th><td>{{slaExclusionsSummary}}</td></tr>
+          </table>
+          <p><strong>Per‑priority targets:</strong> {{severitySummary}}</p>
+        </div>
+      </div>
+      <h2>Legal &amp; risk</h2>
+      <div class="grid-2">
+        <div>
+          <h3>Key legal terms</h3>
+          <p><strong>Limitation of liability:</strong> {{limitationOfLiability}}</p>
+          <p><strong>Indemnification:</strong> {{indemnificationSummary}}</p>
+          <p><strong>Confidentiality:</strong> {{confidentialitySummary}}</p>
+          <p><strong>IP ownership:</strong> {{ipOwnershipSummary}}</p>
+          <p><strong>Termination:</strong> {{terminationConditions}}</p>
+          <p><strong>Change orders:</strong> {{changeOrderProcess}}</p>
+        </div>
+        <div>
+          <h3>Compliance &amp; data protection</h3>
+          <p><strong>Data classification:</strong> {{dataClassification}}</p>
+          <p><strong>DPA in place:</strong> {{hasDataProcessingAddendum}}</p>
+          <p><strong>Audit rights:</strong> {{auditRightsSummary}}</p>
+          <p><strong>Usage restrictions:</strong> {{usageRestrictionsSummary}}</p>
+          <p><strong>Subprocessor use:</strong> {{subprocessorUseSummary}}</p>
+          <p><strong>Data protection summary:</strong> {{dataProtectionSummary}}</p>
+        </div>
+      </div>
+      <h2>Covered scope &amp; links</h2>
+      <p>
+        <span class="pill">Primary quote: {{primaryQuoteId}}</span>
+        <span class="pill">Primary deal: {{primaryDealId}}</span>
+      </p>
+      <p>
+        <strong>Covered assets:</strong> {{coveredAssetsSummary}}<br/>
+        <strong>Covered services:</strong> {{coveredServicesSummary}}<br/>
+        <strong>Success playbook constraints:</strong> {{successPlaybookConstraints}}
+      </p>
     </div>
   </body>
 </html>`, ctx);
+}
+// Build a simple PDF representation of the signed contract using pdf-lib
+export async function buildSignedPdf(contract) {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage();
+    const { width, height } = page.getSize();
+    const margin = 50;
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+    const lineHeight = 14;
+    let y = height - margin;
+    function drawText(text, options) {
+        const lines = text.split(/\r?\n/);
+        for (const line of lines) {
+            if (y < margin) {
+                y = height - margin;
+                doc.addPage();
+            }
+            page.drawText(line, {
+                x: margin,
+                y,
+                size: 11,
+                font: options?.bold ? fontBold : font,
+            });
+            y -= lineHeight;
+        }
+    }
+    const ctx = buildContractContext(contract);
+    drawText(`Signed contract ${ctx.contractNumber ?? ''} – ${ctx.name ?? ''}`, { bold: true });
+    drawText(`Type: ${ctx.type ?? ''}    Status: ${ctx.status ?? ''}`);
+    y -= lineHeight;
+    drawText('Parties', { bold: true });
+    drawText(`Customer: ${ctx.customerLegalName ?? ''}`);
+    drawText(`Provider: ${ctx.providerLegalName ?? ''}`);
+    y -= lineHeight;
+    drawText('Term', { bold: true });
+    drawText(`Effective date: ${ctx.effectiveDate ?? ''}`);
+    drawText(`Service term: ${ctx.startDate ?? ''} – ${ctx.endDate ?? ''}`);
+    drawText(`Renewal date: ${ctx.renewalDate ?? ''}`);
+    y -= lineHeight;
+    drawText('Signatures', { bold: true });
+    drawText(`Customer signer: ${ctx.signedByCustomer ?? ''} ${ctx.signedAtCustomer ?? ''}`);
+    drawText(`Provider signer: ${ctx.signedByProvider ?? ''} ${ctx.signedAtProvider ?? ''}`);
+    drawText(`Executed date: ${ctx.executedDate ?? ''}`);
+    y -= lineHeight;
+    if (ctx.serviceScopeSummary || ctx.paymentTerms) {
+        drawText('Commercial & scope', { bold: true });
+        if (ctx.serviceScopeSummary)
+            drawText(`Service scope: ${ctx.serviceScopeSummary}`);
+        if (ctx.paymentTerms)
+            drawText(`Payment terms: ${ctx.paymentTerms}`);
+        y -= lineHeight;
+    }
+    if (ctx.limitationOfLiability ||
+        ctx.indemnificationSummary ||
+        ctx.confidentialitySummary ||
+        ctx.dataProtectionSummary ||
+        ctx.ipOwnershipSummary ||
+        ctx.terminationConditions ||
+        ctx.changeOrderProcess) {
+        drawText('Key legal terms', { bold: true });
+        if (ctx.limitationOfLiability)
+            drawText(`Limitation of liability: ${ctx.limitationOfLiability}`);
+        if (ctx.indemnificationSummary)
+            drawText(`Indemnification: ${ctx.indemnificationSummary}`);
+        if (ctx.confidentialitySummary)
+            drawText(`Confidentiality: ${ctx.confidentialitySummary}`);
+        if (ctx.dataProtectionSummary)
+            drawText(`Data protection: ${ctx.dataProtectionSummary}`);
+        if (ctx.ipOwnershipSummary)
+            drawText(`IP ownership: ${ctx.ipOwnershipSummary}`);
+        if (ctx.terminationConditions)
+            drawText(`Termination: ${ctx.terminationConditions}`);
+        if (ctx.changeOrderProcess)
+            drawText(`Change orders: ${ctx.changeOrderProcess}`);
+        y -= lineHeight;
+    }
+    if (ctx.slaExclusionsSummary || ctx.uptimeTargetPercent || ctx.supportHours) {
+        drawText('SLA / SLO', { bold: true });
+        if (ctx.uptimeTargetPercent)
+            drawText(`Uptime target: ${ctx.uptimeTargetPercent}%`);
+        if (ctx.supportHours)
+            drawText(`Support hours: ${ctx.supportHours}`);
+        if (ctx.slaExclusionsSummary)
+            drawText(`SLA exclusions: ${ctx.slaExclusionsSummary}`);
+        y -= lineHeight;
+    }
+    if (ctx.dataClassification || ctx.hasDataProcessingAddendum) {
+        drawText('Compliance', { bold: true });
+        if (ctx.dataClassification)
+            drawText(`Data classification: ${ctx.dataClassification}`);
+        if (ctx.hasDataProcessingAddendum)
+            drawText(`Data Processing Addendum: in place`);
+        y -= lineHeight;
+    }
+    if (ctx.billingFrequency ||
+        ctx.baseAmountFormatted ||
+        ctx.invoiceDueDays ||
+        ctx.renewalSummary ||
+        ctx.upsellCrossSellRights) {
+        drawText('Commercial & billing', { bold: true });
+        if (ctx.billingFrequency)
+            drawText(`Billing frequency: ${ctx.billingFrequency}`);
+        if (ctx.baseAmountFormatted)
+            drawText(`Base amount: ${ctx.baseAmountFormatted}`);
+        if (ctx.invoiceDueDays)
+            drawText(`Invoice due: ${ctx.invoiceDueDays} days`);
+        if (ctx.renewalSummary)
+            drawText(`Renewal: ${ctx.renewalSummary}`);
+        if (ctx.upsellCrossSellRights)
+            drawText(`Upsell / cross‑sell: ${ctx.upsellCrossSellRights}`);
+        y -= lineHeight;
+    }
+    if (ctx.customerExecSponsor ||
+        ctx.customerTechContact ||
+        ctx.providerAccountManager ||
+        ctx.providerCsm ||
+        ctx.changeControlRequiredFor ||
+        ctx.negotiationStatus ||
+        ctx.redlineSummary) {
+        drawText('Governance & change control', { bold: true });
+        if (ctx.customerExecSponsor)
+            drawText(`Customer exec sponsor: ${ctx.customerExecSponsor}`);
+        if (ctx.customerTechContact)
+            drawText(`Customer tech contact: ${ctx.customerTechContact}`);
+        if (ctx.providerAccountManager)
+            drawText(`Provider account manager: ${ctx.providerAccountManager}`);
+        if (ctx.providerCsm)
+            drawText(`Provider CSM: ${ctx.providerCsm}`);
+        if (ctx.changeControlRequiredFor)
+            drawText(`Change control required for: ${ctx.changeControlRequiredFor}`);
+        if (ctx.negotiationStatus)
+            drawText(`Negotiation status: ${ctx.negotiationStatus}`);
+        if (ctx.redlineSummary)
+            drawText(`Redline summary: ${ctx.redlineSummary}`);
+        y -= lineHeight;
+    }
+    if (ctx.coveredAssetsSummary || ctx.coveredServicesSummary || ctx.successPlaybookConstraints) {
+        drawText('Covered scope & links', { bold: true });
+        if (ctx.coveredAssetsSummary)
+            drawText(`Covered assets: ${ctx.coveredAssetsSummary}`);
+        if (ctx.coveredServicesSummary)
+            drawText(`Covered services: ${ctx.coveredServicesSummary}`);
+        if (ctx.successPlaybookConstraints)
+            drawText(`Success playbook constraints: ${ctx.successPlaybookConstraints}`);
+        y -= lineHeight;
+    }
+    if (ctx.notes) {
+        drawText('Notes', { bold: true });
+        drawText(ctx.notes);
+        y -= lineHeight;
+    }
+    const pdfBytes = await doc.save();
+    return pdfBytes;
 }
 // Generate a final signed HTML snapshot, attach it to the contract, and email copies
 export async function finalizeExecutedContract(contractId) {
@@ -236,25 +540,61 @@ export async function finalizeExecutedContract(contractId) {
     if (!db)
         return;
     const coll = db.collection('sla_contracts');
-    const contract = await coll.findOne({ _id: contractId });
+    let contract = await coll.findOne({ _id: contractId });
     if (!contract)
         return;
+    const now = new Date();
+    // Ensure provider signature is populated before generating the final documents
+    if (!contract.signedByProvider) {
+        const providerName = contract.providerLegalName || 'Wolf Consulting Group, LLC';
+        await coll.updateOne({ _id: contract._id }, {
+            $set: {
+                signedByProvider: providerName,
+                signedAtProvider: now,
+                updatedAt: now,
+            },
+            $push: {
+                signatureAudit: {
+                    at: now,
+                    event: 'provider_auto_signed',
+                    details: `Provider signature auto-applied as ${providerName}`,
+                },
+            },
+        });
+        contract = await coll.findOne({ _id: contract._id });
+        if (!contract)
+            return;
+    }
     const signedHtml = buildSignedHtml(contract);
-    // Store as a simple data URL attachment so it's retrievable from the contract
-    const dataUrl = 'data:text/html;base64,' + Buffer.from(signedHtml, 'utf8').toString('base64');
-    const attachment = {
+    const signedPdf = await buildSignedPdf(contract);
+    // Store HTML as data URL attachment
+    const htmlDataUrl = 'data:text/html;base64,' + Buffer.from(signedHtml, 'utf8').toString('base64');
+    const htmlAttachment = {
         _id: new ObjectId(),
         name: `Contract-${contract.contractNumber ?? ''}-signed.html`,
-        url: dataUrl,
+        url: htmlDataUrl,
         mimeType: 'text/html',
         sizeBytes: Buffer.byteLength(signedHtml, 'utf8'),
-        uploadedAt: new Date(),
+        uploadedAt: now,
+        isFinal: true,
+        kind: 'final',
+    };
+    // Store PDF as data URL attachment
+    const pdfBase64 = Buffer.from(signedPdf).toString('base64');
+    const pdfDataUrl = `data:application/pdf;base64,${pdfBase64}`;
+    const pdfAttachment = {
+        _id: new ObjectId(),
+        name: `Contract-${contract.contractNumber ?? ''}-signed.pdf`,
+        url: pdfDataUrl,
+        mimeType: 'application/pdf',
+        sizeBytes: signedPdf.byteLength,
+        uploadedAt: now,
         isFinal: true,
         kind: 'final',
     };
     await coll.updateOne({ _id: contract._id }, {
-        $set: { updatedAt: new Date() },
-        $push: { attachments: attachment },
+        $set: { updatedAt: now },
+        $push: { attachments: { $each: [htmlAttachment, pdfAttachment] } },
     });
     // Email signed HTML copy to all signed invitees
     const invitesColl = db.collection('sla_signature_invites');
@@ -268,10 +608,18 @@ export async function finalizeExecutedContract(contractId) {
         if (!email)
             continue;
         try {
+            // Send PDF as primary content with HTML as fallback
             await sendEmail({
                 to: email,
                 subject,
                 html: signedHtml,
+                attachments: [
+                    {
+                        filename: `Contract-${contract.contractNumber ?? ''}-signed.pdf`,
+                        content: Buffer.from(signedPdf),
+                        contentType: 'application/pdf',
+                    },
+                ],
             });
             const emailEntry = {
                 to: email,

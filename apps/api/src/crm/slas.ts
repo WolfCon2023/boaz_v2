@@ -474,7 +474,7 @@ export function buildSignedHtml(contract: SlaContractDoc): string {
           </table>
         </div>
         <div>
-          <h3>Governance &amp; ownership</h3>
+          <h3>Governance &amp; change control</h3>
           <table>
             <tr><th>Customer exec sponsor</th><td>{{customerExecSponsor}}</td></tr>
             <tr><th>Customer tech contact</th><td>{{customerTechContact}}</td></tr>
@@ -482,6 +482,9 @@ export function buildSignedHtml(contract: SlaContractDoc): string {
             <tr><th>Provider CSM</th><td>{{providerCsm}}</td></tr>
             <tr><th>Governing law</th><td>{{governingLaw}}</td></tr>
             <tr><th>Jurisdiction</th><td>{{jurisdiction}}</td></tr>
+            <tr><th>Change control required for</th><td>{{changeControlRequiredFor}}</td></tr>
+            <tr><th>Negotiation status</th><td>{{negotiationStatus}}</td></tr>
+            <tr><th>Redline summary</th><td>{{redlineSummary}}</td></tr>
           </table>
         </div>
       </div>
