@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { ObjectId } from 'mongodb'
 import { getDb, getNextSequence } from '../db.js'
+import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { sendEmail } from '../alerts/mail.js'
 import crypto from 'crypto'
 import { env } from '../env.js'
@@ -417,27 +418,167 @@ export function buildSignedHtml(contract: SlaContractDoc): string {
   )
 }
 
+// Build a simple PDF representation of the signed contract using pdf-lib
+export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Array> {
+  const doc = await PDFDocument.create()
+  const page = doc.addPage()
+  const { width, height } = page.getSize()
+  const margin = 50
+  const font = await doc.embedFont(StandardFonts.Helvetica)
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
+  const lineHeight = 14
+
+  let y = height - margin
+
+  function drawText(text: string, options?: { bold?: boolean }) {
+    const lines = text.split(/\r?\n/)
+    for (const line of lines) {
+      if (y < margin) {
+        y = height - margin
+        doc.addPage()
+      }
+      page.drawText(line, {
+        x: margin,
+        y,
+        size: 11,
+        font: options?.bold ? fontBold : font,
+      })
+      y -= lineHeight
+    }
+  }
+
+  const ctx = buildContractContext(contract) as any
+
+  drawText(`Signed contract ${ctx.contractNumber ?? ''} – ${ctx.name ?? ''}`, { bold: true })
+  drawText(`Type: ${ctx.type ?? ''}    Status: ${ctx.status ?? ''}`)
+  y -= lineHeight
+
+  drawText('Parties', { bold: true })
+  drawText(`Customer: ${ctx.customerLegalName ?? ''}`)
+  drawText(`Provider: ${ctx.providerLegalName ?? ''}`)
+  y -= lineHeight
+
+  drawText('Term', { bold: true })
+  drawText(`Effective date: ${ctx.effectiveDate ?? ''}`)
+  drawText(`Service term: ${ctx.startDate ?? ''} – ${ctx.endDate ?? ''}`)
+  drawText(`Renewal date: ${ctx.renewalDate ?? ''}`)
+  y -= lineHeight
+
+  drawText('Signatures', { bold: true })
+  drawText(`Customer signer: ${ctx.signedByCustomer ?? ''} ${ctx.signedAtCustomer ?? ''}`)
+  drawText(`Provider signer: ${ctx.signedByProvider ?? ''} ${ctx.signedAtProvider ?? ''}`)
+  drawText(`Executed date: ${ctx.executedDate ?? ''}`)
+  y -= lineHeight
+
+  if (ctx.serviceScopeSummary || ctx.paymentTerms) {
+    drawText('Commercial & scope', { bold: true })
+    if (ctx.serviceScopeSummary) drawText(`Service scope: ${ctx.serviceScopeSummary}`)
+    if (ctx.paymentTerms) drawText(`Payment terms: ${ctx.paymentTerms}`)
+    y -= lineHeight
+  }
+
+  if (
+    ctx.limitationOfLiability ||
+    ctx.indemnificationSummary ||
+    ctx.confidentialitySummary ||
+    ctx.dataProtectionSummary ||
+    ctx.ipOwnershipSummary ||
+    ctx.terminationConditions ||
+    ctx.changeOrderProcess
+  ) {
+    drawText('Key legal terms', { bold: true })
+    if (ctx.limitationOfLiability) drawText(`Limitation of liability: ${ctx.limitationOfLiability}`)
+    if (ctx.indemnificationSummary) drawText(`Indemnification: ${ctx.indemnificationSummary}`)
+    if (ctx.confidentialitySummary) drawText(`Confidentiality: ${ctx.confidentialitySummary}`)
+    if (ctx.dataProtectionSummary) drawText(`Data protection: ${ctx.dataProtectionSummary}`)
+    if (ctx.ipOwnershipSummary) drawText(`IP ownership: ${ctx.ipOwnershipSummary}`)
+    if (ctx.terminationConditions) drawText(`Termination: ${ctx.terminationConditions}`)
+    if (ctx.changeOrderProcess) drawText(`Change orders: ${ctx.changeOrderProcess}`)
+    y -= lineHeight
+  }
+
+  if (ctx.slaExclusionsSummary || ctx.uptimeTargetPercent || ctx.supportHours) {
+    drawText('SLA / SLO', { bold: true })
+    if (ctx.uptimeTargetPercent) drawText(`Uptime target: ${ctx.uptimeTargetPercent}%`)
+    if (ctx.supportHours) drawText(`Support hours: ${ctx.supportHours}`)
+    if (ctx.slaExclusionsSummary) drawText(`SLA exclusions: ${ctx.slaExclusionsSummary}`)
+    y -= lineHeight
+  }
+
+  if (ctx.dataClassification || ctx.hasDataProcessingAddendum) {
+    drawText('Compliance', { bold: true })
+    if (ctx.dataClassification) drawText(`Data classification: ${ctx.dataClassification}`)
+    if (ctx.hasDataProcessingAddendum) drawText(`Data Processing Addendum: in place`)
+    y -= lineHeight
+  }
+
+  const pdfBytes = await doc.save()
+  return pdfBytes
+}
+
 // Generate a final signed HTML snapshot, attach it to the contract, and email copies
 export async function finalizeExecutedContract(contractId: ObjectId) {
   const db = await getDb()
   if (!db) return
 
   const coll = db.collection<SlaContractDoc>('sla_contracts')
-  const contract = await coll.findOne({ _id: contractId })
+  let contract = await coll.findOne({ _id: contractId })
   if (!contract) return
 
+  const now = new Date()
+
+  // Ensure provider signature is populated before generating the final documents
+  if (!contract.signedByProvider) {
+    const providerName = contract.providerLegalName || 'Wolf Consulting Group, LLC'
+    await coll.updateOne(
+      { _id: contract._id },
+      {
+        $set: {
+          signedByProvider: providerName,
+          signedAtProvider: now,
+          updatedAt: now,
+        },
+        $push: {
+          signatureAudit: {
+            at: now,
+            event: 'provider_auto_signed',
+            details: `Provider signature auto-applied as ${providerName}`,
+          },
+        },
+      },
+    )
+    contract = await coll.findOne({ _id: contract._id })
+    if (!contract) return
+  }
+
   const signedHtml = buildSignedHtml(contract)
+  const signedPdf = await buildSignedPdf(contract)
 
-  // Store as a simple data URL attachment so it's retrievable from the contract
-  const dataUrl = 'data:text/html;base64,' + Buffer.from(signedHtml, 'utf8').toString('base64')
+  // Store HTML as data URL attachment
+  const htmlDataUrl = 'data:text/html;base64,' + Buffer.from(signedHtml, 'utf8').toString('base64')
 
-  const attachment: SlaAttachment = {
+  const htmlAttachment: SlaAttachment = {
     _id: new ObjectId(),
     name: `Contract-${contract.contractNumber ?? ''}-signed.html`,
-    url: dataUrl,
+    url: htmlDataUrl,
     mimeType: 'text/html',
     sizeBytes: Buffer.byteLength(signedHtml, 'utf8'),
-    uploadedAt: new Date(),
+    uploadedAt: now,
+    isFinal: true,
+    kind: 'final',
+  }
+
+  // Store PDF as data URL attachment
+  const pdfBase64 = Buffer.from(signedPdf).toString('base64')
+  const pdfDataUrl = `data:application/pdf;base64,${pdfBase64}`
+
+  const pdfAttachment: SlaAttachment = {
+    _id: new ObjectId(),
+    name: `Contract-${contract.contractNumber ?? ''}-signed.pdf`,
+    url: pdfDataUrl,
+    mimeType: 'application/pdf',
+    sizeBytes: signedPdf.byteLength,
+    uploadedAt: now,
     isFinal: true,
     kind: 'final',
   }
@@ -445,8 +586,8 @@ export async function finalizeExecutedContract(contractId: ObjectId) {
   await coll.updateOne(
     { _id: contract._id },
     {
-      $set: { updatedAt: new Date() },
-      $push: { attachments: attachment },
+      $set: { updatedAt: now },
+      $push: { attachments: { $each: [htmlAttachment, pdfAttachment] } as any },
     },
   )
 
@@ -463,11 +604,19 @@ export async function finalizeExecutedContract(contractId: ObjectId) {
     const email = inv.email as string | undefined
     if (!email) continue
     try {
+      // Send PDF as primary content with HTML as fallback
       await sendEmail({
         to: email,
         subject,
         html: signedHtml,
-      })
+        attachments: [
+          {
+            filename: `Contract-${contract.contractNumber ?? ''}-signed.pdf`,
+            content: Buffer.from(signedPdf),
+            contentType: 'application/pdf',
+          },
+        ],
+      } as any)
       const emailEntry: SlaEmailSend = {
         to: email,
         subject,
