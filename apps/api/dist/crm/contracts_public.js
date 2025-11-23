@@ -173,33 +173,48 @@ contractsPublicRouter.post('/sign/:token', async (req, res) => {
             title: body.title ?? invite.title,
         },
     });
-    // Check if contract should be considered fully executed
+    // Reload contract with latest signatures
     const refreshed = await contractColl.findOne({ _id: contract._id });
     if (!refreshed)
         return res.status(500).json({ data: null, error: 'update_failed' });
-    // For now, treat the contract as executed once at least one signer has completed,
-    // so that single-signer workflows still get a final copy and status transition.
-    if ((refreshed.signedAtCustomer || refreshed.signedAtProvider) && refreshed.status !== 'active') {
-        await contractColl.updateOne({ _id: refreshed._id }, {
-            $set: {
-                status: 'active',
-                executedDate: refreshed.executedDate ?? now,
-                updatedAt: new Date(),
-            },
-            $push: {
-                signatureAudit: {
-                    at: new Date(),
-                    event: 'fully_executed',
-                    details: 'Both parties have signed',
+    // Treat the contract as executed once at least one signer has completed.
+    // Only write the "fully_executed" event the first time we set executedDate.
+    if (refreshed.signedAtCustomer || refreshed.signedAtProvider) {
+        if (!refreshed.executedDate) {
+            await contractColl.updateOne({ _id: refreshed._id }, {
+                $set: {
+                    status: 'active',
+                    executedDate: now,
+                    updatedAt: new Date(),
                 },
-            },
-        });
-        // Generate and attach a final signed copy, and email to signers
-        try {
-            await finalizeExecutedContract(refreshed._id);
+                $push: {
+                    signatureAudit: {
+                        at: new Date(),
+                        event: 'fully_executed',
+                        details: 'Contract executed via public signing flow',
+                    },
+                },
+            });
+            // Refresh again so executedDate is present in the serialized view
+            const again = await contractColl.findOne({ _id: contract._id });
+            if (again) {
+                // Generate and attach a final signed copy, and email to signers
+                try {
+                    await finalizeExecutedContract(again._id);
+                }
+                catch (err) {
+                    console.error('Failed to finalize executed contract', err);
+                }
+            }
         }
-        catch (err) {
-            console.error('Failed to finalize executed contract', err);
+        else {
+            // Executed date already set: still (re)generate final copy to capture new signatures
+            try {
+                await finalizeExecutedContract(refreshed._id);
+            }
+            catch (err) {
+                console.error('Failed to finalize executed contract', err);
+            }
         }
     }
     const safeContract = serializeContractForSigning(refreshed);

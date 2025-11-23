@@ -1036,6 +1036,8 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
     const invitesWithUrls = [];
     // We know createSignatureInvites returns augmented docs that include otpCode
     const createdInvites = created;
+    // Collect email log entries for username, OTP, and link emails
+    const emailLogs = [];
     // Keep OTP expiry consistent with helper
     const otpExpiryMinutes = 15;
     for (const inv of createdInvites) {
@@ -1076,11 +1078,22 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
   </body>
 </html>
 `;
-        await sendEmail({
-            to: inv.email,
-            subject: 'Your BOAZ‑OS contract signing username',
-            html: renderTemplateString(usernameHtml, ctx),
-        });
+        {
+            const subject = 'Your BOAZ‑OS contract signing username';
+            await sendEmail({
+                to: inv.email,
+                subject,
+                html: renderTemplateString(usernameHtml, ctx),
+            });
+            emailLogs.push({
+                to: inv.email,
+                subject,
+                sentAt: new Date(),
+                sentByUserId: creatorId,
+                messageId: undefined,
+                status: 'Sent',
+            });
+        }
         // 2) OTP email with one-time code (no contract details)
         if (inv.otpCode) {
             const otpHtml = `
@@ -1104,11 +1117,22 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
   </body>
 </html>
 `;
-            await sendEmail({
-                to: inv.email,
-                subject: `Your BOAZ‑OS contract security code`,
-                html: renderTemplateString(otpHtml, ctx),
-            });
+            {
+                const subject = `Your BOAZ‑OS contract security code`;
+                await sendEmail({
+                    to: inv.email,
+                    subject,
+                    html: renderTemplateString(otpHtml, ctx),
+                });
+                emailLogs.push({
+                    to: inv.email,
+                    subject,
+                    sentAt: new Date(),
+                    sentByUserId: creatorId,
+                    messageId: undefined,
+                    status: 'Sent',
+                });
+            }
         }
         // 3) Link email – generic, no contract details in body
         const linkHtml = `
@@ -1152,14 +1176,25 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
 </html>
 `;
         const linkHtmlRendered = emailTplHtml != null ? renderTemplateString(emailTplHtml, ctx) : renderTemplateString(linkHtml, ctx);
-        await sendEmail({
-            to: inv.email,
-            subject: body.emailSubject,
-            html: linkHtmlRendered,
-        });
+        {
+            const subject = body.emailSubject;
+            await sendEmail({
+                to: inv.email,
+                subject,
+                html: linkHtmlRendered,
+            });
+            emailLogs.push({
+                to: inv.email,
+                subject,
+                sentAt: new Date(),
+                sentByUserId: creatorId,
+                messageId: undefined,
+                status: 'Sent',
+            });
+        }
     }
-    // Log audit on the contract
-    await coll.updateOne({ _id: contract._id }, {
+    // Log audit and append email history on the contract
+    const update = {
         $set: { updatedAt: new Date() },
         $push: {
             signatureAudit: {
@@ -1169,7 +1204,11 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
                 details: `Invites sent to ${body.invites.map((i) => i.email).join(', ')}`,
             },
         },
-    });
+    };
+    if (emailLogs.length) {
+        update.$push.emailSends = { $each: emailLogs };
+    }
+    await coll.updateOne({ _id: contract._id }, update);
     res.json({ data: { invites: invitesWithUrls }, error: null });
 });
 // GET /api/crm/slas/by-account?accountIds=id1,id2
