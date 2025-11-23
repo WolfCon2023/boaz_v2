@@ -579,22 +579,59 @@ export async function buildSignedPdf(contract: SlaContractDoc): Promise<Uint8Arr
   const lineHeight = 14
 
   let y = height - margin
+  const maxWidth = width - margin * 2
 
   function drawText(text: string, options?: { bold?: boolean }) {
     const safe = sanitizeForPdf(text)
-    const lines = safe.split(/\r?\n/)
-    for (const line of lines) {
-      if (y < margin) {
-        y = height - margin
-        doc.addPage()
+    const targetFont = options?.bold ? fontBold : font
+    const paragraphs = safe.split(/\r?\n/)
+
+    for (const para of paragraphs) {
+      if (!para) {
+        // Blank line – just move down
+        y -= lineHeight
+        continue
       }
-      page.drawText(line, {
-        x: margin,
-        y,
-        size: 11,
-        font: options?.bold ? fontBold : font,
-      })
-      y -= lineHeight
+
+      const words = para.split(/\s+/)
+      let current = ''
+
+      for (const word of words) {
+        const testLine = current ? `${current} ${word}` : word
+        const testWidth = targetFont.widthOfTextAtSize(testLine, 11)
+
+        if (testWidth <= maxWidth) {
+          current = testLine
+        } else {
+          // Flush current line
+          if (y < margin) {
+            y = height - margin
+            doc.addPage()
+          }
+          page.drawText(current, {
+            x: margin,
+            y,
+            size: 11,
+            font: targetFont,
+          })
+          y -= lineHeight
+          current = word
+        }
+      }
+
+      if (current) {
+        if (y < margin) {
+          y = height - margin
+          doc.addPage()
+        }
+        page.drawText(current, {
+          x: margin,
+          y,
+          size: 11,
+          font: targetFont,
+        })
+        y -= lineHeight
+      }
     }
   }
 
