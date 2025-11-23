@@ -377,7 +377,27 @@ export default function CRMSLAs() {
     },
   })
 
-  const [emailMode, setEmailMode] = React.useState<'invite' | 'signed'>('invite')
+  const sendAttachmentMutation = useMutation({
+    mutationFn: async (payload: { id: string; to: string; subject: string; attachmentId: string }) => {
+      const res = await http.post(`/api/crm/slas/${payload.id}/send-attachment`, {
+        to: payload.to,
+        subject: payload.subject,
+        attachmentId: payload.attachmentId,
+      })
+      return res.data as { data: { ok: boolean }; error: string | null }
+    },
+    onSuccess: () => {
+      toast.showToast('BOAZ says: Contract document emailed.', 'success')
+      qc.invalidateQueries({ queryKey: ['slas'] })
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to email contract document.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
+  const [emailMode, setEmailMode] = React.useState<'invite' | 'signed' | 'attachment'>('invite')
+  const [emailAttachmentId, setEmailAttachmentId] = React.useState<string | null>(null)
 
   function openNew() {
     setEditing({
@@ -735,8 +755,8 @@ export default function CRMSLAs() {
                     </td>
                     <td className="px-3 py-2 align-top text-xs">
                       <span
-                        className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] px-2 py-0.5 text-[10px] capitalize"
-                        title={s.status}
+                        className="inline-flex items-center gap-1 rounded-full border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] px-2 py-0.5 text-[10px] capitalize cursor-help"
+                        title={`Status: ${s.status}`}
                       >
                         <span
                           className={
@@ -1556,6 +1576,20 @@ export default function CRMSLAs() {
                                 final
                               </span>
                             )}
+                            <button
+                              type="button"
+                              className="ml-2 inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                              onClick={() => {
+                                setEmailMode('attachment')
+                                setEmailAttachmentId(att._id || null)
+                                setEmailContract(editing)
+                                setEmailTo('')
+                                setEmailSubject(att.name || `Contract document – ${editing.name}`)
+                                setEmailDialogOpen(true)
+                              }}
+                            >
+                              Email
+                            </button>
                           </li>
                         )
                       })}
@@ -1606,7 +1640,9 @@ export default function CRMSLAs() {
                   <div className="text-sm text-[color:var(--color-text-muted)]">
                     {emailMode === 'signed'
                       ? 'Email a copy of the fully signed contract PDF.'
-                      : 'Send this contract for secure review and digital signature.'}
+                      : emailMode === 'attachment'
+                        ? 'Email this attached contract document.'
+                        : 'Send this contract for secure review and digital signature.'}
                   </div>
                 </div>
                 <button
@@ -1641,6 +1677,13 @@ export default function CRMSLAs() {
                         to: emailTo.trim(),
                         subject,
                       })
+                    } else if (emailMode === 'attachment' && emailAttachmentId) {
+                      await sendAttachmentMutation.mutateAsync({
+                        id: emailContract._id,
+                        to: emailTo.trim(),
+                        subject,
+                        attachmentId: emailAttachmentId,
+                      })
                     } else {
                       await sendEmailMutation.mutateAsync({
                         id: emailContract._id,
@@ -1650,6 +1693,7 @@ export default function CRMSLAs() {
                     }
                     setEmailDialogOpen(false)
                     setEmailContract(null)
+                    setEmailAttachmentId(null)
                   } catch {
                     // handled in mutation
                   }
