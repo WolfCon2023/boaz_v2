@@ -310,6 +310,50 @@ slasRouter.get('/', async (req, res) => {
     const items = await db.collection('sla_contracts').find(filter).sort({ endDate: 1 }).limit(500).toArray();
     res.json({ data: { items: items.map(serialize) }, error: null });
 });
+// GET /api/crm/slas/:id/attachments/:attachmentId - serve stored attachment (including inline HTML finals)
+slasRouter.get('/:id/attachments/:attachmentId', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const { id, attachmentId } = req.params;
+    if (!ObjectId.isValid(id) || !ObjectId.isValid(attachmentId)) {
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+    const coll = db.collection('sla_contracts');
+    const contract = await coll.findOne({ _id: new ObjectId(id) });
+    if (!contract || !Array.isArray(contract.attachments)) {
+        return res.status(404).json({ data: null, error: 'not_found' });
+    }
+    const attId = new ObjectId(attachmentId);
+    const att = contract.attachments.find((a) => a && a._id && String(a._id) === String(attId));
+    if (!att || !att.url) {
+        return res.status(404).json({ data: null, error: 'attachment_not_found' });
+    }
+    const url = att.url;
+    // If this is a data: URL (how final HTML copies are stored), decode and stream it
+    if (url.startsWith('data:')) {
+        try {
+            const firstComma = url.indexOf(',');
+            if (firstComma === -1)
+                throw new Error('malformed_data_url');
+            const meta = url.substring(5, firstComma); // strip "data:"
+            const dataPart = url.substring(firstComma + 1);
+            const isBase64 = meta.includes(';base64');
+            const mimeType = meta.split(';')[0] || 'application/octet-stream';
+            const buf = isBase64 ? Buffer.from(dataPart, 'base64') : Buffer.from(decodeURIComponent(dataPart), 'utf8');
+            res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            return res.send(buf);
+        }
+        catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to decode data URL attachment', err);
+            return res.status(500).json({ data: null, error: 'attachment_decode_failed' });
+        }
+    }
+    // For any non data: URLs, just redirect the browser
+    return res.redirect(url);
+});
 // GET /api/crm/slas/:id
 slasRouter.get('/:id', async (req, res) => {
     const db = await getDb();

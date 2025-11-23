@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { getDb } from '../db.js';
@@ -225,4 +226,49 @@ contractsPublicRouter.post('/sign/:token', async (req, res) => {
         },
         error: null,
     });
+});
+// GET /api/public/contracts/attachments/:contractId/:attachmentId
+// Serves stored contract attachments, including inline HTML "final" copies.
+contractsPublicRouter.get('/attachments/:contractId/:attachmentId', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const { contractId, attachmentId } = req.params;
+    if (!ObjectId.isValid(contractId) || !ObjectId.isValid(attachmentId)) {
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+    const coll = db.collection('sla_contracts');
+    const contract = await coll.findOne({ _id: new ObjectId(contractId) });
+    if (!contract || !contract.attachments || !Array.isArray(contract.attachments)) {
+        return res.status(404).json({ data: null, error: 'not_found' });
+    }
+    const attId = new ObjectId(attachmentId);
+    const att = contract.attachments.find((a) => a && a._id && String(a._id) === String(attId));
+    if (!att || !att.url) {
+        return res.status(404).json({ data: null, error: 'attachment_not_found' });
+    }
+    const url = att.url;
+    // If this is a data: URL (how final HTML copies are stored), decode and stream it
+    if (url.startsWith('data:')) {
+        try {
+            const firstComma = url.indexOf(',');
+            if (firstComma === -1)
+                throw new Error('malformed_data_url');
+            const meta = url.substring(5, firstComma); // strip "data:"
+            const dataPart = url.substring(firstComma + 1);
+            const isBase64 = meta.includes(';base64');
+            const mimeType = meta.split(';')[0] || 'application/octet-stream';
+            const buf = isBase64 ? Buffer.from(dataPart, 'base64') : Buffer.from(decodeURIComponent(dataPart), 'utf8');
+            res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            return res.send(buf);
+        }
+        catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to decode data URL attachment (public)', err);
+            return res.status(500).json({ data: null, error: 'attachment_decode_failed' });
+        }
+    }
+    // For any non data: URLs, just redirect the browser
+    return res.redirect(url);
 });
