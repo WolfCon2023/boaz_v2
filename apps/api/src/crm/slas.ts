@@ -333,7 +333,7 @@ export function serialize(doc: SlaContractDoc) {
 }
 
 // Build a plain-object context for template rendering
-function buildContractContext(doc: SlaContractDoc) {
+export function buildContractContext(doc: SlaContractDoc) {
   const ctx: any = {
     ...serialize(doc),
   }
@@ -347,7 +347,7 @@ function buildContractContext(doc: SlaContractDoc) {
 }
 
 // Very small mustache-style renderer: {{ field }} supports dotted paths
-function renderTemplateString(tpl: string, context: any): string {
+export function renderTemplateString(tpl: string, context: any): string {
   return tpl.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_match, key) => {
     const path = String(key).split('.')
     let value: any = context
@@ -358,6 +358,117 @@ function renderTemplateString(tpl: string, context: any): string {
     if (value == null) return ''
     return String(value)
   })
+}
+
+// Generate a final signed HTML snapshot, attach it to the contract, and email copies
+export async function finalizeExecutedContract(contractId: ObjectId) {
+  const db = await getDb()
+  if (!db) return
+
+  const coll = db.collection<SlaContractDoc>('sla_contracts')
+  const contract = await coll.findOne({ _id: contractId })
+  if (!contract) return
+
+  const ctx = buildContractContext(contract)
+
+  const signedHtml = renderTemplateString(
+    `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Signed contract {{contractNumber}} – {{name}}</title>
+    <style>
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#0b1020; color:#f9fafb; padding:24px; }
+      .card { max-width:720px; margin:0 auto; background:#020617; border-radius:16px; padding:24px; border:1px solid #1f2937; }
+      h1 { font-size:20px; margin:0 0 4px 0; }
+      h2 { font-size:14px; text-transform:uppercase; letter-spacing:0.08em; color:#9ca3af; margin:20px 0 6px; }
+      p, li { font-size:13px; line-height:1.6; color:#d1d5db; }
+      table { width:100%; border-collapse:collapse; margin-top:4px; font-size:12px; }
+      th, td { padding:6px 8px; border-bottom:1px solid #1f2937; text-align:left; }
+      th { color:#9ca3af; font-weight:500; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Signed contract {{contractNumber}} – {{name}}</h1>
+      <p>Type: {{type}} · Status: {{status}}</p>
+      <h2>Parties</h2>
+      <p>
+        <strong>Customer:</strong> {{customerLegalName}}<br/>
+        <strong>Provider:</strong> {{providerLegalName}}
+      </p>
+      <h2>Term</h2>
+      <table>
+        <tr><th>Effective date</th><td>{{effectiveDate}}</td></tr>
+        <tr><th>Service term</th><td>{{startDate}} – {{endDate}}</td></tr>
+        <tr><th>Renewal date</th><td>{{renewalDate}}</td></tr>
+      </table>
+      <h2>Signatures</h2>
+      <table>
+        <tr>
+          <th>Customer signer</th>
+          <td>{{signedByCustomer}} {{signedAtCustomer}}</td>
+        </tr>
+        <tr>
+          <th>Provider signer</th>
+          <td>{{signedByProvider}} {{signedAtProvider}}</td>
+        </tr>
+        <tr>
+          <th>Executed date</th>
+          <td>{{executedDate}}</td>
+        </tr>
+      </table>
+    </div>
+  </body>
+</html>`,
+    ctx,
+  )
+
+  // Store as a simple data URL attachment so it's retrievable from the contract
+  const dataUrl = 'data:text/html;base64,' + Buffer.from(signedHtml, 'utf8').toString('base64')
+
+  const attachment: SlaAttachment = {
+    _id: new ObjectId(),
+    name: `Contract-${contract.contractNumber ?? ''}-signed.html`,
+    url: dataUrl,
+    mimeType: 'text/html',
+    sizeBytes: Buffer.byteLength(signedHtml, 'utf8'),
+    uploadedAt: new Date(),
+    isFinal: true,
+    kind: 'final',
+  }
+
+  await coll.updateOne(
+    { _id: contract._id },
+    {
+      $set: { updatedAt: new Date() },
+      $push: { attachments: attachment },
+    },
+  )
+
+  // Email signed HTML copy to all signed invitees
+  const invitesColl = db.collection<any>('sla_signature_invites')
+  const signedInvites = await invitesColl
+    .find({ contractId, status: 'signed' })
+    .project({ email: 1 })
+    .toArray()
+
+  const subject = `Signed contract ${contract.contractNumber ?? ''} – ${contract.name}`
+
+  for (const inv of signedInvites) {
+    const email = inv.email as string | undefined
+    if (!email) continue
+    try {
+      await sendEmail({
+        to: email,
+        subject,
+        html: signedHtml,
+      })
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to email signed contract copy to', email, err)
+    }
+  }
 }
 
 // GET /api/crm/slas?accountId=&status=&type=

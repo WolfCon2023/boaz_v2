@@ -3,7 +3,7 @@ import { ObjectId } from 'mongodb'
 import { z } from 'zod'
 import crypto from 'crypto'
 import { getDb } from '../db.js'
-import { serialize as serializeSlaInternal, SlaContractDoc } from './slas.js'
+import { serialize as serializeSlaInternal, SlaContractDoc, finalizeExecutedContract } from './slas.js'
 
 export const contractsPublicRouter = Router()
 
@@ -268,6 +268,12 @@ contractsPublicRouter.post('/sign/:token', async (req, res) => {
         },
       },
     )
+    // Generate and attach a final signed copy, and email to signers
+    try {
+      await finalizeExecutedContract(refreshed._id)
+    } catch (err) {
+      console.error('Failed to finalize executed contract', err)
+    }
   }
 
   const safeContract = serializeContractForSigning(refreshed)
