@@ -676,6 +676,7 @@ export default function CRMSLAs() {
             className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
           >
             <option value="all">Type (all)</option>
+            <option value="msa">MSA</option>
             <option value="support">Support</option>
             <option value="subscription">Subscription</option>
             <option value="project">Project</option>
@@ -914,6 +915,7 @@ export default function CRMSLAs() {
                       value={editType}
                       onChange={(e) => setEditType(e.target.value as any)}
                     >
+                      <option value="msa">MSA</option>
                       <option value="support">Support</option>
                       <option value="subscription">Subscription</option>
                       <option value="project">Project</option>
