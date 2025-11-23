@@ -336,8 +336,7 @@ export default function CRMSLAs() {
 
   const sendEmailMutation = useMutation({
     mutationFn: async (payload: { id: string; to: string; subject: string }) => {
-      // Treat this as a "send for signature" flow using signature invites,
-      // which will generate a secure signing link and a separate OTP email.
+      // "Send for signature" flow using signature invites
       const res = await http.post(`/api/crm/slas/${payload.id}/signature-invites`, {
         emailSubject: payload.subject,
         invites: [
@@ -358,6 +357,27 @@ export default function CRMSLAs() {
       toast.showToast(msg, 'error')
     },
   })
+
+  const sendSignedMutation = useMutation({
+    mutationFn: async (payload: { id: string; to: string; subject: string }) => {
+      // Manually email a signed copy of the contract
+      const res = await http.post(`/api/crm/slas/${payload.id}/send-signed`, {
+        to: payload.to,
+        subject: payload.subject,
+      })
+      return res.data as { data: { ok: boolean }; error: string | null }
+    },
+    onSuccess: () => {
+      toast.showToast('BOAZ says: Signed contract emailed.', 'success')
+      qc.invalidateQueries({ queryKey: ['slas'] })
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to email signed contract.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
+  const [emailMode, setEmailMode] = React.useState<'invite' | 'signed'>('invite')
 
   function openNew() {
     setEditing({
@@ -725,6 +745,7 @@ export default function CRMSLAs() {
                           type="button"
                           className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]"
                           onClick={() => {
+                            setEmailMode('invite')
                             setEmailContract(s)
                             setEmailTo('')
                             setEmailSubject(`Contract ${s.contractNumber ?? ''} – ${s.name}`.trim())
@@ -733,6 +754,23 @@ export default function CRMSLAs() {
                         >
                           Email
                         </button>
+                        {s.status === 'active' && (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 hover:bg-[color:var(--color-muted)]"
+                            onClick={() => {
+                              setEmailMode('signed')
+                              setEmailContract(s)
+                              setEmailTo('')
+                              setEmailSubject(
+                                `Signed contract ${s.contractNumber ?? ''} – ${s.name}`.trim(),
+                              )
+                              setEmailDialogOpen(true)
+                            }}
+                          >
+                            Email signed
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="rounded-lg border border-red-500/60 px-2 py-1 text-red-200 hover:bg-red-500/15"
@@ -1542,13 +1580,23 @@ export default function CRMSLAs() {
                   }
                   const subject =
                     emailSubject.trim() ||
-                    `Contract ${emailContract.contractNumber ?? ''} – ${emailContract.name}`.trim()
+                    (emailMode === 'signed'
+                      ? `Signed contract ${emailContract.contractNumber ?? ''} – ${emailContract.name}`.trim()
+                      : `Contract ${emailContract.contractNumber ?? ''} – ${emailContract.name}`.trim())
                   try {
-                    await sendEmailMutation.mutateAsync({
-                      id: emailContract._id,
-                      to: emailTo.trim(),
-                      subject,
-                    })
+                    if (emailMode === 'signed') {
+                      await sendSignedMutation.mutateAsync({
+                        id: emailContract._id,
+                        to: emailTo.trim(),
+                        subject,
+                      })
+                    } else {
+                      await sendEmailMutation.mutateAsync({
+                        id: emailContract._id,
+                        to: emailTo.trim(),
+                        subject,
+                      })
+                    }
                     setEmailDialogOpen(false)
                     setEmailContract(null)
                   } catch {

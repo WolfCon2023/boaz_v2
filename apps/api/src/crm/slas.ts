@@ -360,18 +360,10 @@ export function renderTemplateString(tpl: string, context: any): string {
   })
 }
 
-// Generate a final signed HTML snapshot, attach it to the contract, and email copies
-export async function finalizeExecutedContract(contractId: ObjectId) {
-  const db = await getDb()
-  if (!db) return
-
-  const coll = db.collection<SlaContractDoc>('sla_contracts')
-  const contract = await coll.findOne({ _id: contractId })
-  if (!contract) return
-
+// Build the signed HTML snapshot for a contract
+export function buildSignedHtml(contract: SlaContractDoc): string {
   const ctx = buildContractContext(contract)
-
-  const signedHtml = renderTemplateString(
+  return renderTemplateString(
     `<!DOCTYPE html>
 <html>
   <head>
@@ -423,6 +415,18 @@ export async function finalizeExecutedContract(contractId: ObjectId) {
 </html>`,
     ctx,
   )
+}
+
+// Generate a final signed HTML snapshot, attach it to the contract, and email copies
+export async function finalizeExecutedContract(contractId: ObjectId) {
+  const db = await getDb()
+  if (!db) return
+
+  const coll = db.collection<SlaContractDoc>('sla_contracts')
+  const contract = await coll.findOne({ _id: contractId })
+  if (!contract) return
+
+  const signedHtml = buildSignedHtml(contract)
 
   // Store as a simple data URL attachment so it's retrievable from the contract
   const dataUrl = 'data:text/html;base64,' + Buffer.from(signedHtml, 'utf8').toString('base64')
@@ -1441,6 +1445,74 @@ slasRouter.post('/:id/signature-invites', async (req, res) => {
   await coll.updateOne({ _id: contract._id }, update)
 
   res.json({ data: { invites: invitesWithUrls }, error: null })
+})
+
+// POST /api/crm/slas/:id/send-signed - manually email a signed copy to a recipient
+const sendSignedSchema = z.object({
+  to: z.string().email(),
+  subject: z.string().optional(),
+})
+
+slasRouter.post('/:id/send-signed', async (req, res) => {
+  const parsed = sendSignedSchema.safeParse(req.body ?? {})
+  if (!parsed.success) {
+    return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  }
+
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const { id } = req.params
+  if (!ObjectId.isValid(id)) return res.status(400).json({ data: null, error: 'invalid_id' })
+
+  const coll = db.collection<SlaContractDoc>('sla_contracts')
+  const contract = await coll.findOne({ _id: new ObjectId(id) })
+  if (!contract) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const body = parsed.data
+
+  // Ensure a finalized attachment exists (and email to signers) before manual send
+  try {
+    await finalizeExecutedContract(contract._id)
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to finalize contract before manual send-signed', err)
+  }
+
+  const refreshed = await coll.findOne({ _id: contract._id })
+  const effectiveContract = refreshed ?? contract
+
+  const signedHtml = buildSignedHtml(effectiveContract)
+
+  const subject =
+    body.subject && body.subject.trim().length > 0
+      ? body.subject.trim()
+      : `Signed contract ${effectiveContract.contractNumber ?? ''} – ${effectiveContract.name}`.trim()
+
+  await sendEmail({
+    to: body.to,
+    subject,
+    html: signedHtml,
+  })
+
+  const emailEntry: SlaEmailSend = {
+    to: body.to,
+    subject,
+    sentAt: new Date(),
+    sentByUserId: undefined,
+    messageId: undefined,
+    status: 'Sent',
+  }
+
+  await coll.updateOne(
+    { _id: effectiveContract._id },
+    {
+      $set: { updatedAt: new Date() },
+      $push: { emailSends: emailEntry },
+    },
+  )
+
+  res.json({ data: { ok: true }, error: null })
 })
 
 
