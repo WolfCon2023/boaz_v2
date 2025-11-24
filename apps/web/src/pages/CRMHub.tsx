@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { getPortalUrl } from '@/lib/urls'
+import { useToast } from '@/components/Toast'
 
 type LicenseAlertRow = {
   _id: string
@@ -11,6 +12,7 @@ type LicenseAlertRow = {
 }
 
 export default function CRMHub() {
+  const toast = useToast()
   const items: { label: string; desc: string; href: string }[] = [
     { label: 'Acceptance Queue', desc: 'View quotes accepted by signers', href: '/apps/crm/quotes/acceptance-queue' },
     { label: 'Accounts', desc: 'Companies and organizations', href: '/apps/crm/accounts' },
@@ -119,6 +121,12 @@ export default function CRMHub() {
   })
   const accounts = accountsQ.data?.data.items ?? []
   const [onboardingAccountId, setOnboardingAccountId] = React.useState('')
+  const [onboardingMode, setOnboardingMode] = React.useState<'existing' | 'new'>('existing')
+  const [newAccountName, setNewAccountName] = React.useState('')
+  const [newCompanyName, setNewCompanyName] = React.useState('')
+  const [newPrimaryName, setNewPrimaryName] = React.useState('')
+  const [newPrimaryEmail, setNewPrimaryEmail] = React.useState('')
+  const [newPrimaryPhone, setNewPrimaryPhone] = React.useState('')
 
   return (
     <div className="space-y-6">
@@ -197,34 +205,130 @@ export default function CRMHub() {
               Launch an onboarding project, contracts, and success monitoring for a specific account.
             </div>
             <div className="mt-3 flex flex-col gap-2 text-[11px] text-[color:var(--color-text-muted)]">
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide">
-                  Choose account
-                </label>
-                <select
-                  value={onboardingAccountId}
-                  onChange={(e) => setOnboardingAccountId(e.target.value)}
-                  className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
+                <button
+                  type="button"
+                  onClick={() => setOnboardingMode('existing')}
+                  className={`rounded-full border px-2 py-0.5 ${
+                    onboardingMode === 'existing'
+                      ? 'border-[color:var(--color-primary)] bg-[color:var(--color-primary-soft)] text-[color:var(--color-text)]'
+                      : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)]'
+                  }`}
                 >
-                  <option value="">
-                    {accountsQ.isLoading ? 'Loading accounts…' : 'Select account…'}
-                  </option>
-                  {accounts.map((a) => (
-                    <option key={a._id} value={a._id}>
-                      {a.accountNumber ? `#${a.accountNumber} – ` : ''}
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
+                  Use existing account
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOnboardingMode('new')}
+                  className={`rounded-full border px-2 py-0.5 ${
+                    onboardingMode === 'new'
+                      ? 'border-[color:var(--color-primary)] bg-[color:var(--color-primary-soft)] text-[color:var(--color-text)]'
+                      : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)]'
+                  }`}
+                >
+                  Create new account
+                </button>
               </div>
+              {onboardingMode === 'existing' ? (
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide">
+                    Choose account
+                  </label>
+                  <select
+                    value={onboardingAccountId}
+                    onChange={(e) => setOnboardingAccountId(e.target.value)}
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
+                  >
+                    <option value="">
+                      {accountsQ.isLoading ? 'Loading accounts…' : 'Select account…'}
+                    </option>
+                    {accounts.map((a) => (
+                      <option key={a._id} value={a._id}>
+                        {a.accountNumber ? `#${a.accountNumber} – ` : ''}
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide">
+                    New account details
+                  </label>
+                  <input
+                    value={newAccountName}
+                    onChange={(e) => setNewAccountName(e.target.value)}
+                    placeholder="Account name *"
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
+                  />
+                  <input
+                    value={newCompanyName}
+                    onChange={(e) => setNewCompanyName(e.target.value)}
+                    placeholder="Company name (optional)"
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
+                  />
+                  <input
+                    value={newPrimaryName}
+                    onChange={(e) => setNewPrimaryName(e.target.value)}
+                    placeholder="Primary contact name (optional)"
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
+                  />
+                  <input
+                    value={newPrimaryEmail}
+                    onChange={(e) => setNewPrimaryEmail(e.target.value)}
+                    placeholder="Primary contact email (optional)"
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
+                  />
+                  <input
+                    value={newPrimaryPhone}
+                    onChange={(e) => setNewPrimaryPhone(e.target.value)}
+                    placeholder="Primary contact phone (optional)"
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
+                  />
+                </div>
+              )}
               <button
                 type="button"
-                disabled={!onboardingAccountId}
-                onClick={() => {
-                  if (!onboardingAccountId) return
-                  window.location.href = `/apps/crm/accounts?openAccountId=${encodeURIComponent(
-                    onboardingAccountId,
-                  )}&onboarding=1`
+                disabled={
+                  onboardingMode === 'existing'
+                    ? !onboardingAccountId
+                    : !newAccountName.trim()
+                }
+                onClick={async () => {
+                  try {
+                    if (onboardingMode === 'existing') {
+                      if (!onboardingAccountId) return
+                      window.location.href = `/apps/crm/accounts?openAccountId=${encodeURIComponent(
+                        onboardingAccountId,
+                      )}&onboarding=1`
+                      return
+                    }
+                    // Create new account then jump into onboarding wizard
+                    if (!newAccountName.trim()) {
+                      toast.showToast('BOAZ says: Account name is required.', 'error')
+                      return
+                    }
+                    const res = await http.post('/api/crm/accounts', {
+                      name: newAccountName.trim(),
+                      companyName: newCompanyName.trim() || undefined,
+                      primaryContactName: newPrimaryName.trim() || undefined,
+                      primaryContactEmail: newPrimaryEmail.trim() || undefined,
+                      primaryContactPhone: newPrimaryPhone.trim() || undefined,
+                    })
+                    const acc = (res as any).data?.data ?? res.data?.data
+                    const accountId = acc?._id
+                    if (!accountId) {
+                      toast.showToast('BOAZ says: Account was created but no ID was returned.', 'error')
+                      return
+                    }
+                    toast.showToast('BOAZ says: Account created. Opening onboarding wizard…', 'success')
+                    window.location.href = `/apps/crm/accounts?openAccountId=${encodeURIComponent(
+                      accountId,
+                    )}&onboarding=1`
+                  } catch (err: any) {
+                    const msg = err?.response?.data?.error || err?.message || 'Failed to start onboarding.'
+                    toast.showToast(msg, 'error')
+                  }
                 }}
                 className="mt-1 inline-flex items-center justify-center rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-xs font-medium hover:bg-[color:var(--color-muted)] disabled:opacity-50"
               >
