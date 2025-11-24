@@ -165,7 +165,7 @@ export default function CRMSLAs() {
   const [statusFilter, setStatusFilter] = React.useState<
     'all' | SlaContract['status']
   >('all')
-  const [typeFilter, setTypeFilter] = React.useState<'all' | 'support' | 'subscription' | 'project' | 'other'>('all')
+  const [typeFilter, setTypeFilter] = React.useState<'all' | 'msa' | 'sow' | 'support' | 'subscription' | 'project' | 'other'>('all')
 
   const [editing, setEditing] = React.useState<SlaContract | null>(null)
   const [editName, setEditName] = React.useState('')
@@ -894,6 +894,7 @@ export default function CRMSLAs() {
           >
             <option value="all">Type (all)</option>
             <option value="msa">MSA</option>
+            <option value="sow">SOW</option>
             <option value="support">Support</option>
             <option value="subscription">Subscription</option>
             <option value="project">Project</option>
@@ -1280,6 +1281,7 @@ export default function CRMSLAs() {
                       onChange={(e) => setEditType(e.target.value as any)}
                     >
                       <option value="msa">MSA</option>
+                      <option value="sow">SOW</option>
                       <option value="support">Support</option>
                       <option value="subscription">Subscription</option>
                       <option value="project">Project</option>
