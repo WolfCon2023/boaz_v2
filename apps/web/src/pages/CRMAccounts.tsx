@@ -647,6 +647,14 @@ export default function CRMAccounts() {
     return map
   }, [accountProjectsSummaryData?.data.items])
 
+  const accountRowMap = React.useMemo(() => {
+    const map = new Map<string, Account>()
+    for (const a of items) {
+      map.set(a._id, a)
+    }
+    return map
+  }, [items])
+
   const accountSuccessMap = React.useMemo(() => {
     const map = new Map<string, AccountSuccessHealthRow>()
 
@@ -1321,23 +1329,9 @@ export default function CRMAccounts() {
                     </div>
                     <div>
                       {(() => {
-                        const rows = accountProjectsForDrawer?.data.items ?? []
-                        const onboardingProjects = rows.filter((p) => p.type === 'onboarding')
-                        let value: 'not_started' | 'in_progress' | 'complete' =
-                          editing.onboardingStatus ?? 'not_started'
-
-                        if (onboardingProjects.length) {
-                          const hasActive = onboardingProjects.some((p) =>
-                            ['not_started', 'in_progress', 'on_hold'].includes(p.status),
-                          )
-                          const hasCompleted = onboardingProjects.some((p) => p.status === 'completed')
-
-                          if (hasCompleted && !hasActive) {
-                            value = 'complete'
-                          } else {
-                            value = 'in_progress'
-                          }
-                        }
+                        const row = accountRowMap.get(editing._id) || editing
+                        const value: 'not_started' | 'in_progress' | 'complete' =
+                          row.onboardingStatus ?? 'not_started'
 
                         let label = 'Not started'
                         let className =
