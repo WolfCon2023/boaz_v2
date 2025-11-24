@@ -1321,7 +1321,24 @@ export default function CRMAccounts() {
                     </div>
                     <div>
                       {(() => {
-                        const value = editing.onboardingStatus ?? 'not_started'
+                        const rows = accountProjectsForDrawer?.data.items ?? []
+                        const onboardingProjects = rows.filter((p) => p.type === 'onboarding')
+                        let value: 'not_started' | 'in_progress' | 'complete' =
+                          editing.onboardingStatus ?? 'not_started'
+
+                        if (onboardingProjects.length) {
+                          const hasActive = onboardingProjects.some((p) =>
+                            ['not_started', 'in_progress', 'on_hold'].includes(p.status),
+                          )
+                          const hasCompleted = onboardingProjects.some((p) => p.status === 'completed')
+
+                          if (hasCompleted && !hasActive) {
+                            value = 'complete'
+                          } else {
+                            value = 'in_progress'
+                          }
+                        }
+
                         let label = 'Not started'
                         let className =
                           'inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]'
