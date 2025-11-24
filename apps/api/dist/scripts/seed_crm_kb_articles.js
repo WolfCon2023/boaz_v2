@@ -272,6 +272,64 @@ It provides visibility into what each customer owns, where it is deployed, and r
 - Use **support level** and **status** to prioritize upgrades and project work.`,
     },
     {
+        title: 'Using the Customer Success app in BOAZ‑OS CRM',
+        tags: ['crm', 'crm:success', 'health'],
+        category: 'Sales & Clients',
+        body: `Customer Success – Health scores and playbooks
+
+Purpose
+The Customer Success app turns signals from surveys, support tickets, assets, and projects into an account-level health score and playbook recommendations.
+
+Opening the app
+- Go to CRM Hub → Customer Success
+- Or click the Success badge or Customer success health card from an Account.
+
+How the Success health score works
+The Success health score is a risk score from 0–100. Higher scores mean more risk and therefore a Medium or High Success label.
+It combines four main signal groups:
+
+1. Surveys (from Surveys & Feedback)
+- Score goes up when the last survey score is lower.
+- Thresholds:
+  - Last score ≤ 6 → big impact
+  - Last score ≤ 7.5 → medium impact
+  - Last score ≤ 8.5 → small impact
+
+2. Support tickets (from Support / Tickets)
+- More open tickets increases risk.
+- More high/urgent tickets increases risk further.
+- Breached SLAs add additional risk.
+
+3. Assets / Installed Base (from Assets + Renewals)
+- The asset risk score feeds directly into Success (scaled by a factor so it matters but does not dominate).
+- Expired or expiring licenses add risk.
+- Products marked Needs Upgrade or Pending Renewal add risk.
+
+4. Projects (from Projects & Delivery)
+- Projects with health = at_risk or off_track add risk.
+- More at-risk or off-track projects means a higher Success risk score.
+
+Thresholds for Success labels
+- Score ≥ 70 → High
+- Score ≥ 35 and < 70 → Medium
+- Score < 35 → Low or OK
+
+Where you see the Success label
+- In the Accounts table Success column.
+- In the Account drawer Customer success health card.
+- In the Customer Success page, including filters and CSV export.
+
+How to deliberately test Medium / High Success states
+To see playbook actions and risk behavior in a demo or test environment you can intentionally drive an account to Medium or High Success (higher risk) by adding more negative signals in the four areas above:
+
+- Surveys: send a survey to that account and record a low score (for example ≤ 6 or in the 6–7.5 range).
+- Support tickets: create several tickets for the account, mark some high/urgent, and let at least one breach its SLA.
+- Assets / Installed Base: ensure the account owns assets with expired or soon-expiring licenses and products marked Needs Upgrade or Pending Renewal.
+- Projects: create projects for that account and set some projects to At risk or Off track.
+
+Once the combined score crosses the thresholds (score ≥ 35 for Medium, score ≥ 70 for High) you will see the updated label in the Accounts table Success column, the Account drawer Customer success health card, and the Customer Success page, and High/Medium accounts will surface playbook actions in the Account drawer.`,
+    },
+    {
         title: 'Using the Renewals & Subscriptions app in BOAZ‑OS CRM',
         tags: ['crm', 'crm:renewals', 'subscriptions'],
         category: 'Sales & Clients',
