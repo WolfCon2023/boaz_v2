@@ -1461,6 +1461,118 @@ export default function CRMAccounts() {
                 <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div>
+                      <div className="text-sm font-semibold">Success timeline</div>
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Recent surveys, support, projects, and renewals for this account.
+                      </div>
+                    </div>
+                  </div>
+                  <ul className="mt-1 space-y-0.5 text-[11px] text-[color:var(--color-text-muted)]">
+                    {(() => {
+                      const items: { at: Date | null; label: string }[] = []
+                      const s = accountSurveyStatusMap.get(editing._id)
+                      if (s && s.responseCount > 0 && s.lastResponseAt) {
+                        const d = new Date(s.lastResponseAt)
+                        if (Number.isFinite(d.getTime())) {
+                          items.push({
+                            at: d,
+                            label: `Last survey: score ${
+                              s.lastScore != null ? s.lastScore.toFixed(1) : '-'
+                            } on ${formatDateTime(d.toISOString())}`,
+                          })
+                        }
+                      }
+                      const t = accountTicketsMap.get(editing._id)
+                      if (t && (t.open || t.high || t.breached)) {
+                        items.push({
+                          at: null,
+                          label: `Current support load: ${t.open} open (${t.high} high/urgent), ${t.breached} breached SLA`,
+                        })
+                      }
+                      const renewals = assetsSummaryQ.data?.data.upcomingRenewals ?? []
+                      if (renewals.length > 0) {
+                        let nextIdx = -1
+                        let nextDate: Date | null = null
+                        renewals.forEach((r, idx) => {
+                          if (!r.expirationDate) return
+                          const d = new Date(r.expirationDate)
+                          if (!Number.isFinite(d.getTime())) return
+                          if (!nextDate || d < nextDate) {
+                            nextDate = d
+                            nextIdx = idx
+                          }
+                        })
+                        if (nextIdx >= 0 && nextDate) {
+                          const r = renewals[nextIdx]!
+                          const labelParts: string[] = []
+                          if (r.licenseIdentifier) labelParts.push(r.licenseIdentifier)
+                          else if (r.licenseKey) labelParts.push(r.licenseKey)
+                          items.push({
+                            at: nextDate,
+                            label: `Next renewal: ${
+                              labelParts.join(' ') || 'license'
+                            } expires ${formatDate(nextDate.toISOString())} (${r.renewalStatus})`,
+                          })
+                        }
+                      }
+                      const projItems = accountProjectsForDrawer?.data.items ?? []
+                      if (projItems.length > 0) {
+                        let nextProj: { name: string; status: string; health?: string; targetEndDate?: string | null } | null =
+                          null
+                        let nextProjDate: Date | null = null
+                        for (const p of projItems) {
+                          if (!p.targetEndDate) continue
+                          const d = new Date(p.targetEndDate)
+                          if (!Number.isFinite(d.getTime())) continue
+                          if (!nextProjDate || d < nextProjDate) {
+                            nextProjDate = d
+                            nextProj = p
+                          }
+                        }
+                        if (nextProj && nextProjDate) {
+                          const statusLabel =
+                            nextProj.health === 'at_risk'
+                              ? 'at risk'
+                              : nextProj.health === 'off_track'
+                              ? 'off track'
+                              : nextProj.health === 'on_track'
+                              ? 'on track'
+                              : nextProj.status
+                          items.push({
+                            at: nextProjDate,
+                            label: `Project milestone: ${nextProj.name} (${statusLabel}) target ${formatDate(
+                              nextProjDate.toISOString(),
+                            )}`,
+                          })
+                        }
+                      }
+
+                      if (!items.length) {
+                        return (
+                          <li className="text-[color:var(--color-text-muted)]">
+                            No recent success events recorded yet for this account.
+                          </li>
+                        )
+                      }
+
+                      items.sort((a, b) => {
+                        const av = a.at ? a.at.getTime() : 0
+                        const bv = b.at ? b.at.getTime() : 0
+                        return bv - av
+                      })
+
+                      return items.map((it, idx) => (
+                        <li key={idx} className="flex items-start gap-1">
+                          <span className="mt-[5px] inline-block h-1.5 w-1.5 rounded-full bg-[color:var(--color-primary-500)]" />
+                          <span>{it.label}</span>
+                        </li>
+                      ))
+                    })()}
+                  </ul>
+                </div>
+                <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
                       <div className="text-sm font-semibold">Installed Base</div>
                       <div className="text-[11px] text-[color:var(--color-text-muted)]">
                         Environments, installed products, and license renewals for this account.

@@ -12,7 +12,7 @@ async function main() {
   const updates: Array<{ title: string; body: string }> = [
     {
       title: 'Using the Customer Success app in BOAZ‑OS CRM',
-      body: `Customer Success – Health scores, dashboards, and playbooks
+      body: `Customer Success – Health scores, dashboards, timelines, and playbooks
 
 Purpose
 The Customer Success app turns signals from surveys, support tickets, assets, and projects into an account-level health score and clear playbook recommendations.
@@ -27,6 +27,7 @@ Main layout
 - Filters for search and Success level so you can focus on the riskiest customers.
 - Accounts table with columns for Success label, score, and key drivers.
 - CSV export so you can share or analyze Success data outside the app.
+- A compact success timeline in the Account drawer showing recent surveys, support load, projects, and renewals.
 
 How the Success health score works
 The Success health score is a risk score from 0–100. Higher scores mean more risk and therefore a Medium or High Success label.
