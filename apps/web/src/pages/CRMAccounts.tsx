@@ -9,7 +9,16 @@ import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
 import { RelatedTasks } from '@/components/RelatedTasks'
 
-type Account = { _id: string; accountNumber?: number; name?: string; companyName?: string; primaryContactName?: string; primaryContactEmail?: string; primaryContactPhone?: string }
+type Account = {
+  _id: string
+  accountNumber?: number
+  name?: string
+  companyName?: string
+  primaryContactName?: string
+  primaryContactEmail?: string
+  primaryContactPhone?: string
+  onboardingStatus?: 'not_started' | 'in_progress' | 'complete'
+}
 
 type AccountSurveyStatusSummary = {
   accountId: string
@@ -74,6 +83,7 @@ export default function CRMAccounts() {
     { key: 'primaryContactName', visible: true, label: 'Primary contact' },
     { key: 'primaryContactEmail', visible: true, label: 'Email' },
     { key: 'primaryContactPhone', visible: true, label: 'Phone' },
+    { key: 'onboardingStatus', visible: true, label: 'Onboarding' },
     { key: 'tasks', visible: true, label: 'Tasks' },
     { key: 'projects', visible: true, label: 'Projects' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
@@ -86,6 +96,7 @@ export default function CRMAccounts() {
     let hasAssetRisk = false
     let hasProjects = false
     let hasSuccess = false
+    let hasOnboarding = false
 
     const next = cols.map((c) => {
       if (c.key === 'tasks') {
@@ -95,6 +106,10 @@ export default function CRMAccounts() {
       if (c.key === 'surveyStatus') {
         hasSurvey = true
         return { ...c, visible: true, label: 'Survey' }
+      }
+      if (c.key === 'onboardingStatus') {
+        hasOnboarding = true
+        return { ...c, visible: true, label: 'Onboarding' }
       }
       if (c.key === 'assetRisk') {
         hasAssetRisk = true
@@ -114,6 +129,7 @@ export default function CRMAccounts() {
     const out = [...next]
     if (!hasTasks) out.push({ key: 'tasks', visible: true, label: 'Tasks' })
     if (!hasSurvey) out.push({ key: 'surveyStatus', visible: true, label: 'Survey' })
+    if (!hasOnboarding) out.push({ key: 'onboardingStatus', visible: true, label: 'Onboarding' })
     if (!hasAssetRisk) out.push({ key: 'assetRisk', visible: true, label: 'Asset risk' })
     if (!hasProjects) out.push({ key: 'projects', visible: true, label: 'Projects' })
     if (!hasSuccess) out.push({ key: 'successHealth', visible: true, label: 'Success' })
@@ -716,6 +732,22 @@ export default function CRMAccounts() {
     if (key === 'primaryContactPhone') {
       const value = a.primaryContactPhone ?? '-'
       return <span className="whitespace-nowrap font-mono text-xs">{value}</span>
+    }
+    if (key === 'onboardingStatus') {
+      const value = a.onboardingStatus ?? 'not_started'
+      let label = 'Not started'
+      let className =
+        'inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]'
+      if (value === 'in_progress') {
+        label = 'In progress'
+        className =
+          'inline-flex items-center rounded-full border border-sky-500/70 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-100'
+      } else if (value === 'complete') {
+        label = 'Complete'
+        className =
+          'inline-flex items-center rounded-full border border-emerald-500/70 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-100'
+      }
+      return <span className={className}>{label}</span>
     }
     if (key === 'tasks') {
       const count = accountTaskCountMap.get(a._id) ?? 0

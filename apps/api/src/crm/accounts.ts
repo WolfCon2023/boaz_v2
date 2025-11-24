@@ -132,7 +132,9 @@ accountsRouter.post('/', async (req, res) => {
       }
     }
 
-    const doc = { ...parsed.data, accountNumber }
+    const onboardingStatus: 'not_started' | 'in_progress' | 'complete' = 'not_started'
+
+    const doc = { ...parsed.data, accountNumber, onboardingStatus }
     try {
       const result = await db.collection('accounts').insertOne(doc)
 
@@ -158,7 +160,7 @@ accountsRouter.post('/', async (req, res) => {
         )
       }
 
-      const finalDoc = { ...parsed.data, accountNumber }
+      const finalDoc = { ...parsed.data, accountNumber, onboardingStatus }
       return res.status(201).json({ data: { _id: result.insertedId, ...finalDoc }, error: null })
     } catch (err: any) {
       if (err && err.code === 11000 && err.keyPattern?.accountNumber) {
@@ -180,7 +182,7 @@ accountsRouter.post('/', async (req, res) => {
             { upsert: true },
           )
 
-        const retryDoc = { ...parsed.data, accountNumber }
+        const retryDoc = { ...parsed.data, accountNumber, onboardingStatus }
         const retryResult = await db.collection('accounts').insertOne(retryDoc)
 
         const auth = (req as any).auth as { userId: string; email: string } | undefined
@@ -204,7 +206,7 @@ accountsRouter.post('/', async (req, res) => {
           )
         }
 
-        const finalDoc = { ...parsed.data, accountNumber }
+        const finalDoc = { ...parsed.data, accountNumber, onboardingStatus }
         return res.status(201).json({ data: { _id: retryResult.insertedId, ...finalDoc }, error: null })
       }
       throw err
