@@ -967,6 +967,7 @@ export default function CRMAccounts() {
             _id: string
             name: string
             status: string
+            type?: string
             health?: string
             targetEndDate?: string | null
           }>
@@ -1302,6 +1303,70 @@ export default function CRMAccounts() {
                       }}
                     >
                       Open renewals for this account
+                    </button>
+                  </div>
+                </div>
+                <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold">Onboarding summary</div>
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Current onboarding status and key onboarding project for this account.
+                      </div>
+                    </div>
+                    <div>
+                      {(() => {
+                        const value = editing.onboardingStatus ?? 'not_started'
+                        let label = 'Not started'
+                        let className =
+                          'inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]'
+                        if (value === 'in_progress') {
+                          label = 'In progress'
+                          className =
+                            'inline-flex items-center rounded-full border border-sky-500/70 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-100'
+                        } else if (value === 'complete') {
+                          label = 'Complete'
+                          className =
+                            'inline-flex items-center rounded-full border border-emerald-500/70 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-100'
+                        }
+                        return <span className={className}>{label}</span>
+                      })()}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[color:var(--color-text-muted)]">
+                    <div className="flex-1">
+                      {(() => {
+                        const rows = accountProjectsForDrawer?.data.items ?? []
+                        const onboardingProjects = rows.filter((p) => p.type === 'onboarding')
+                        if (!onboardingProjects.length) {
+                          return <span>No onboarding project is currently linked to this account.</span>
+                        }
+                        const next = onboardingProjects[0]!
+                        return (
+                          <span>
+                            Onboarding project:{' '}
+                            <span className="font-semibold text-[color:var(--color-text)]">{next.name}</span>
+                            {next.targetEndDate ? (
+                              <>
+                                {' '}
+                                · target {formatDate(next.targetEndDate)}
+                              </>
+                            ) : null}
+                          </span>
+                        )
+                      })()}
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                      onClick={() => {
+                        if (!editing?._id) return
+                        window.location.href = `/apps/crm/projects?accountId=${encodeURIComponent(
+                          editing._id,
+                        )}&type=onboarding`
+                      }}
+                    >
+                      View onboarding projects
                     </button>
                   </div>
                 </div>
