@@ -23,19 +23,18 @@ async function recomputeOnboardingStatus(db, accountIdStr) {
         .toArray());
     let onboardingStatus = 'not_started';
     if (rows.length) {
-        const hasActive = rows.some((r) => ['not_started', 'in_progress', 'on_hold'].includes(r.status));
+        const hasInProgressOrOnHold = rows.some((r) => r.status === 'in_progress' || r.status === 'on_hold');
         const hasCompleted = rows.some((r) => r.status === 'completed');
-        const hasNonCancelled = rows.some((r) => r.status !== 'cancelled');
-        if (hasActive) {
-            // Any onboarding project that is not completed/cancelled means onboarding is in progress
+        if (hasInProgressOrOnHold) {
+            // Any onboarding project that is actively being worked (in progress / on hold)
             onboardingStatus = 'in_progress';
         }
-        else if (hasCompleted && !hasActive) {
-            // All onboarding projects are completed or cancelled, and at least one is completed
+        else if (hasCompleted) {
+            // No active projects but at least one completed → overall onboarding complete
             onboardingStatus = 'complete';
         }
-        else if (!hasNonCancelled) {
-            // Only cancelled onboarding projects remain
+        else {
+            // Only not_started and/or cancelled onboarding projects → treat as not started
             onboardingStatus = 'not_started';
         }
     }

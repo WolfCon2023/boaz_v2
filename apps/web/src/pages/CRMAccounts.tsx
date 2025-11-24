@@ -267,14 +267,10 @@ export default function CRMAccounts() {
       const res = await http.post('/api/crm/projects', payload)
       return res.data
     },
-    onSuccess: (_data, accountId) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['account-projects'] })
       qc.invalidateQueries({ queryKey: ['accounts-projects-summary'] })
       qc.invalidateQueries({ queryKey: ['accounts'] })
-      // Optimistically update current drawer account status if it matches
-      if (accountId && editing && editing._id === accountId) {
-        setEditing({ ...editing, onboardingStatus: 'in_progress' })
-      }
       toast.showToast('BOAZ says: Onboarding project created.', 'success')
     },
     onError: (err: any) => {
