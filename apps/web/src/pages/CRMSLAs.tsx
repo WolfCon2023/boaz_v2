@@ -424,10 +424,11 @@ export default function CRMSLAs() {
       toast.showToast('BOAZ says: Contract template saved.', 'success')
     },
     onError: (err: any) => {
+      const code = err?.response?.data?.error
       const msg =
-        err?.response?.data?.error === 'duplicate_key'
+        code === 'duplicate_template_key' || code === 'duplicate_key'
           ? 'BOAZ says: Template key already exists. Please choose another key.'
-          : err?.response?.data?.error || err?.message || 'Failed to save template.'
+          : code || err?.message || 'Failed to save template.'
       toast.showToast(msg, 'error')
     },
   })
