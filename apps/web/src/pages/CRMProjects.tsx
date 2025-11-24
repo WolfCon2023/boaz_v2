@@ -151,6 +151,9 @@ export default function CRMProjects() {
     onSuccess: () => {
       toast.showToast('Project created', 'success')
       qc.invalidateQueries({ queryKey: ['projects'] })
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      qc.invalidateQueries({ queryKey: ['account-projects'] })
+      qc.invalidateQueries({ queryKey: ['accounts-projects-summary'] })
     },
     onError: () => {
       toast.showToast('Failed to create project', 'error')
@@ -165,6 +168,9 @@ export default function CRMProjects() {
     onSuccess: () => {
       toast.showToast('Project updated', 'success')
       qc.invalidateQueries({ queryKey: ['projects'] })
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      qc.invalidateQueries({ queryKey: ['account-projects'] })
+      qc.invalidateQueries({ queryKey: ['accounts-projects-summary'] })
     },
     onError: () => {
       toast.showToast('Failed to update project', 'error')
@@ -179,6 +185,9 @@ export default function CRMProjects() {
     onSuccess: () => {
       toast.showToast('Project deleted', 'success')
       qc.invalidateQueries({ queryKey: ['projects'] })
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      qc.invalidateQueries({ queryKey: ['account-projects'] })
+      qc.invalidateQueries({ queryKey: ['accounts-projects-summary'] })
     },
     onError: () => {
       toast.showToast('Failed to delete project', 'error')
