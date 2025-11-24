@@ -422,6 +422,7 @@ export default function CRMSLAs() {
     },
     onSuccess: () => {
       toast.showToast('BOAZ says: Contract template saved.', 'success')
+      qc.invalidateQueries({ queryKey: ['contract-templates'] })
     },
     onError: (err: any) => {
       const code = err?.response?.data?.error
@@ -585,6 +586,100 @@ export default function CRMSLAs() {
 
   function closeModal() {
     setEditing(null)
+  }
+
+  function applyTemplateDefaults(tpl: ContractTemplate) {
+    const key = tpl.key
+
+    if (key === 'msa-standard') {
+      setEditType('msa')
+      if (!editBillingFrequency) setEditBillingFrequency('Monthly')
+      if (!editPaymentTerms)
+        setEditPaymentTerms('Net 30 days from invoice date, unless otherwise agreed in writing.')
+      if (!editSupportHours)
+        setEditSupportHours('24x7 for P1 incidents; business hours (Mon–Fri) for all other priorities.')
+      if (!editUptimeTarget) setEditUptimeTarget('99.9')
+      if (!editSlaExclusions)
+        setEditSlaExclusions(
+          'Planned maintenance, force majeure events, and issues caused by Customer networks or third-party services are excluded from uptime calculations.',
+        )
+      if (!editChangeOrderProcess)
+        setEditChangeOrderProcess(
+          'Material changes to scope, hours, or fees require a written change order approved by both parties prior to implementation.',
+        )
+      if (!editTerminationConditions)
+        setEditTerminationConditions(
+          'Either party may terminate for material breach not cured within 30 days of written notice. Additional termination rights may apply as specified in the Master Agreement.',
+        )
+    } else if (key === 'subscription-standard') {
+      setEditType('subscription')
+      if (!editBillingFrequency) setEditBillingFrequency('Monthly in advance')
+      if (!editPaymentTerms)
+        setEditPaymentTerms('Net 30 days from invoice date. Overdue amounts may incur late fees.')
+      if (!editSupportHours)
+        setEditSupportHours('Business hours support (Mon–Fri, local business hours) with on-call escalation for P1.')
+      if (!editUptimeTarget) setEditUptimeTarget('99.9')
+      if (!editSlaExclusions)
+        setEditSlaExclusions(
+          'Planned maintenance, force majeure, Customer-caused incidents, and third-party outages are excluded.',
+        )
+      setEditAutoRenew(true)
+      if (!editAutoIncreasePercent) setEditAutoIncreasePercent('3')
+    } else if (key === 'sow-basic') {
+      setEditType('sow')
+      if (!editBillingFrequency) setEditBillingFrequency('Milestone-based')
+      if (!editServiceScope)
+        setEditServiceScope(
+          'Professional services to design, configure, and deploy the agreed solution as described in this Statement of Work.',
+        )
+      if (!editChangeOrderProcess)
+        setEditChangeOrderProcess(
+          'Any change to scope, timelines, or deliverables must be documented in a mutually signed change order.',
+        )
+      if (!editTerminationConditions)
+        setEditTerminationConditions(
+          'Either party may terminate for material breach with 30 days written notice if not cured; Customer remains liable for fees incurred through the termination date.',
+        )
+    }
+
+    // Optional SLA severity defaults for common templates (only fill if blank)
+    setSeverityRows((rows) =>
+      rows.map((row) => {
+        const next = { ...row }
+        if (key === 'msa-standard' || key === 'subscription-standard') {
+          if (row.key === 'P1') {
+            if (!next.responseDays && !next.responseHours) {
+              next.responseHours = '1'
+            }
+            if (!next.resolutionDays && !next.resolutionHours) {
+              next.resolutionHours = '4'
+            }
+          } else if (row.key === 'P2') {
+            if (!next.responseDays && !next.responseHours) {
+              next.responseHours = '4'
+            }
+            if (!next.resolutionDays && !next.resolutionHours) {
+              next.resolutionHours = '24'
+            }
+          } else if (row.key === 'P3') {
+            if (!next.responseDays && !next.responseHours) {
+              next.responseHours = '8'
+            }
+            if (!next.resolutionDays && !next.resolutionHours) {
+              next.resolutionDays = '3'
+            }
+          } else if (row.key === 'P4') {
+            if (!next.responseDays && !next.responseHours) {
+              next.responseHours = '24'
+            }
+            if (!next.resolutionDays && !next.resolutionHours) {
+              next.resolutionDays = '7'
+            }
+          }
+        }
+        return next
+      }),
+    )
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -1010,7 +1105,7 @@ export default function CRMSLAs() {
           <div className="absolute inset-0 bg-black/60" onClick={closeModal} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 space-y-1">
+                <div className="mb-3 space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <div className="space-y-0.5">
                     <h2 className="text-base font-semibold">
@@ -1067,33 +1162,50 @@ export default function CRMSLAs() {
                     ))}
                   </select>
                   {editing._id && selectedTemplateId && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const res = await http.post<{ data: { html: string } }>(
-                            `/api/crm/slas/${editing._id}/render`,
-                            { templateId: selectedTemplateId },
-                          )
-                          const html = res.data.data.html
-                          const win = window.open('', '_blank')
-                          if (win) {
-                            win.document.open()
-                            win.document.write(html)
-                            win.document.close()
+                    <>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await http.post<{ data: { html: string } }>(
+                              `/api/crm/slas/${editing._id}/render`,
+                              { templateId: selectedTemplateId },
+                            )
+                            const html = res.data.data.html
+                            const win = window.open('', '_blank')
+                            if (win) {
+                              win.document.open()
+                              win.document.write(html)
+                              win.document.close()
+                            }
+                          } catch (err) {
+                            console.error('Failed to render contract template', err)
+                            toast.showToast(
+                              'BOAZ says: Could not render this contract with the selected template.',
+                              'error',
+                            )
                           }
-                        } catch (err) {
-                          console.error('Failed to render contract template', err)
+                        }}
+                        className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                      >
+                        Preview template
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const tpl = templates.find((t) => t._id === selectedTemplateId)
+                          if (!tpl) return
+                          applyTemplateDefaults(tpl)
                           toast.showToast(
-                            'BOAZ says: Could not render this contract with the selected template.',
-                            'error',
+                            'BOAZ says: Template defaults applied. You can review and adjust any field.',
+                            'success',
                           )
-                        }
-                      }}
-                      className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
-                    >
-                      Preview template
-                    </button>
+                        }}
+                        className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                      >
+                        Apply defaults
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
