@@ -1151,7 +1151,20 @@ export default function CRMSLAs() {
                   <span className="font-semibold text-[color:var(--color-text)]">Template:</span>
                   <select
                     value={selectedTemplateId}
-                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    onChange={(e) => {
+                      const id = e.target.value
+                      setSelectedTemplateId(id)
+                      if (id) {
+                        const tpl = templates.find((t) => t._id === id)
+                        if (tpl) {
+                          applyTemplateDefaults(tpl)
+                          toast.showToast(
+                            'BOAZ says: Template defaults applied. You can review and adjust any field.',
+                            'success',
+                          )
+                        }
+                      }
+                    }}
                     className="min-w-[200px] rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
                   >
                     <option value="">No template selected</option>
@@ -1161,50 +1174,37 @@ export default function CRMSLAs() {
                       </option>
                     ))}
                   </select>
-                  {editing._id && selectedTemplateId && (
+                  {selectedTemplateId && (
                     <>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const res = await http.post<{ data: { html: string } }>(
-                              `/api/crm/slas/${editing._id}/render`,
-                              { templateId: selectedTemplateId },
-                            )
-                            const html = res.data.data.html
-                            const win = window.open('', '_blank')
-                            if (win) {
-                              win.document.open()
-                              win.document.write(html)
-                              win.document.close()
+                      {editing._id && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const res = await http.post<{ data: { html: string } }>(
+                                `/api/crm/slas/${editing._id}/render`,
+                                { templateId: selectedTemplateId },
+                              )
+                              const html = res.data.data.html
+                              const win = window.open('', '_blank')
+                              if (win) {
+                                win.document.open()
+                                win.document.write(html)
+                                win.document.close()
+                              }
+                            } catch (err) {
+                              console.error('Failed to render contract template', err)
+                              toast.showToast(
+                                'BOAZ says: Could not render this contract with the selected template.',
+                                'error',
+                              )
                             }
-                          } catch (err) {
-                            console.error('Failed to render contract template', err)
-                            toast.showToast(
-                              'BOAZ says: Could not render this contract with the selected template.',
-                              'error',
-                            )
-                          }
-                        }}
-                        className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
-                      >
-                        Preview template
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const tpl = templates.find((t) => t._id === selectedTemplateId)
-                          if (!tpl) return
-                          applyTemplateDefaults(tpl)
-                          toast.showToast(
-                            'BOAZ says: Template defaults applied. You can review and adjust any field.',
-                            'success',
-                          )
-                        }}
-                        className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
-                      >
-                        Apply defaults
-                      </button>
+                          }}
+                          className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                        >
+                          Preview template
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
