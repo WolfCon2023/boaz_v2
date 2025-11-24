@@ -396,8 +396,33 @@ export default function CRMSLAs() {
     },
   })
 
+  const saveTemplateMutation = useMutation({
+    mutationFn: async (payload: { id: string; key: string; name: string; description?: string }) => {
+      const res = await http.post(`/api/crm/slas/${payload.id}/save-template`, {
+        key: payload.key,
+        name: payload.name,
+        description: payload.description,
+      })
+      return res.data as { data: { _id: string; key: string; name: string; description?: string }; error: string | null }
+    },
+    onSuccess: () => {
+      toast.showToast('BOAZ says: Contract template saved.', 'success')
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.error === 'duplicate_key'
+          ? 'BOAZ says: Template key already exists. Please choose another key.'
+          : err?.response?.data?.error || err?.message || 'Failed to save template.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
   const [emailMode, setEmailMode] = React.useState<'invite' | 'signed' | 'attachment'>('invite')
   const [emailAttachmentId, setEmailAttachmentId] = React.useState<string | null>(null)
+  const [templateDialogOpen, setTemplateDialogOpen] = React.useState(false)
+  const [templateKey, setTemplateKey] = React.useState('')
+  const [templateName, setTemplateName] = React.useState('')
+  const [templateDescription, setTemplateDescription] = React.useState('')
 
   const [page, setPage] = React.useState(0)
   const pageSize = 20
@@ -640,9 +665,29 @@ export default function CRMSLAs() {
   }
 
   const rows = slasQ.data?.data.items ?? []
+  const [search, setSearch] = React.useState('')
+
+  const filteredRows = React.useMemo(() => {
+    const term = search.trim().toLowerCase()
+    if (!term) return rows
+    return rows.filter((s) => {
+      const accountLabel = (accountLabelById.get(s.accountId) ?? '').toLowerCase()
+      const name = (s.name || '').toLowerCase()
+      const type = (s.type || '').toLowerCase()
+      const status = (s.status || '').toLowerCase()
+      const contractNumber = s.contractNumber != null ? String(s.contractNumber).toLowerCase() : ''
+      return (
+        accountLabel.includes(term) ||
+        name.includes(term) ||
+        type.includes(term) ||
+        status.includes(term) ||
+        contractNumber.includes(term)
+      )
+    })
+  }, [rows, search, accountLabelById])
 
   const sortedRows = React.useMemo(() => {
-    const base = [...rows]
+    const base = [...filteredRows]
     base.sort((a, b) => {
       let av: any
       let bv: any
@@ -667,7 +712,7 @@ export default function CRMSLAs() {
       return 0
     })
     return base
-  }, [rows, sortKey, sortDir, accountLabelById])
+  }, [filteredRows, sortKey, sortDir, accountLabelById])
 
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize))
   const currentPage = Math.min(page, pageCount - 1)
@@ -767,6 +812,16 @@ export default function CRMSLAs() {
             <option value="asc">Asc</option>
             <option value="desc">Desc</option>
           </select>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(0)
+            }}
+            className="ml-auto min-w-[200px] rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs"
+            placeholder="Search contracts…"
+          />
         </div>
       </section>
 
@@ -949,13 +1004,35 @@ export default function CRMSLAs() {
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-                >
-                  Close
-                </button>
+                <div className="flex items-center gap-2">
+                  {editing._id && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const baseName = editing.name || 'Contract template'
+                        const slug =
+                          baseName
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, '-')
+                            .replace(/^-|-$/g, '') || 'contract-template'
+                        setTemplateKey(slug)
+                        setTemplateName(baseName)
+                        setTemplateDescription('')
+                        setTemplateDialogOpen(true)
+                      }}
+                      className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                    >
+                      Save as template
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
               <form onSubmit={handleSave} className="space-y-4 text-sm">
                 <div className="space-y-2 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
@@ -1840,6 +1917,108 @@ export default function CRMSLAs() {
                       Send email
                     </button>
                   </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {templateDialogOpen && editing && (
+        <div className="fixed inset-0 z-[2147483647]">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => {
+              setTemplateDialogOpen(false)
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,26rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</div>
+                  <div className="text-sm text-[color:var(--color-text-muted)]">
+                    Save this contract as a reusable template.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTemplateDialogOpen(false)
+                  }}
+                  className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                >
+                  Close
+                </button>
+              </div>
+              <form
+                className="space-y-3 text-sm"
+                onSubmit={async (e) => {
+                  e.preventDefault()
+                  if (!editing?._id) return
+                  const key = templateKey.trim()
+                  const name = templateName.trim()
+                  if (!key || !name) {
+                    toast.showToast('BOAZ says: Template key and name are required.', 'error')
+                    return
+                  }
+                  try {
+                    await saveTemplateMutation.mutateAsync({
+                      id: editing._id,
+                      key,
+                      name,
+                      description: templateDescription.trim() || undefined,
+                    })
+                    setTemplateDialogOpen(false)
+                  } catch {
+                    // handled in mutation
+                  }
+                }}
+              >
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium">Template key</label>
+                  <input
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                    value={templateKey}
+                    onChange={(e) => setTemplateKey(e.target.value)}
+                    placeholder="e.g., msa-standard"
+                  />
+                  <p className="text-[10px] text-[color:var(--color-text-muted)]">
+                    Used as a stable identifier; must be unique.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium">Template name</label>
+                  <input
+                    className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder="e.g., Managed Services MSA template"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium">Description (optional)</label>
+                  <textarea
+                    className="min-h-[60px] w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-sm"
+                    value={templateDescription}
+                    onChange={(e) => setTemplateDescription(e.target.value)}
+                    placeholder="Short description of when to use this template."
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-end gap-2 text-[11px] text-[color:var(--color-text-muted)]">
+                  <button
+                    type="button"
+                    onClick={() => setTemplateDialogOpen(false)}
+                    className="rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-[color:var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-soft)]"
+                  >
+                    Save template
+                  </button>
                 </div>
               </form>
             </div>
