@@ -35,6 +35,9 @@ export default function CRMAccounts() {
   const [query, setQuery] = React.useState('')
   const [sort, setSort] = React.useState<'name'|'companyName'|'accountNumber'>('name')
   const [dir, setDir] = React.useState<'asc'|'desc'>('asc')
+  const [onboardingFilter, setOnboardingFilter] = React.useState<
+    '' | 'not_started' | 'in_progress' | 'on_hold' | 'complete' | 'cancelled'
+  >('')
   type ColumnDef = { key: string; visible: boolean; label: string }
   type AssetsSummary = {
     totalEnvironments: number
@@ -175,6 +178,9 @@ export default function CRMAccounts() {
           .some((v) => (v ?? '').toString().toLowerCase().includes(ql))
       )
     }
+    if (onboardingFilter) {
+      rows = rows.filter((a) => (a.onboardingStatus ?? 'not_started') === onboardingFilter)
+    }
     const dirMul = dir === 'desc' ? -1 : 1
     rows = [...rows].sort((a: any, b: any) => {
       const av = a[sort]
@@ -186,10 +192,10 @@ export default function CRMAccounts() {
       return String(av).localeCompare(String(bv)) * dirMul
     })
     return rows
-  }, [items, query, sort, dir])
+  }, [items, query, sort, dir, onboardingFilter])
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
-  React.useEffect(() => { setPage(0) }, [query, sort, dir, pageSize])
+  React.useEffect(() => { setPage(0) }, [query, sort, dir, pageSize, onboardingFilter])
   const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize))
   const pageItems = React.useMemo(() => visibleItems.slice(page * pageSize, page * pageSize + pageSize), [visibleItems, page, pageSize])
   const remove = useMutation({
@@ -375,7 +381,7 @@ export default function CRMAccounts() {
     setSearchParams(params, { replace: true })
     try { localStorage.setItem('ACCOUNTS_COLS', JSON.stringify(cols)) } catch {}
     try { localStorage.setItem('ACCOUNTS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
-  }, [query, sort, dir, cols, savedViews, setSearchParams])
+  }, [query, sort, dir, cols, savedViews, setSearchParams, onboardingFilter])
 
   // If deep-linked with openAccountId, open that account drawer once data is loaded
   React.useEffect(() => {
@@ -389,7 +395,7 @@ export default function CRMAccounts() {
   }, [items, pendingOpenAccountId])
 
   async function saveCurrentView() {
-    const viewConfig = { query, sort, dir, cols, pageSize }
+    const viewConfig = { query, sort, dir, cols, pageSize, onboardingFilter }
     const name = savingViewName || `View ${savedViews.length + 1}`
     try {
       const res = await http.post('/api/views', { viewKey: 'accounts', name, config: viewConfig })
@@ -409,6 +415,7 @@ export default function CRMAccounts() {
     if (c.dir) setDir(c.dir)
     if (c.cols) setCols(ensureCoreCols(c.cols))
     if (c.pageSize) setPageSize(c.pageSize)
+    if (c.onboardingFilter !== undefined) setOnboardingFilter(c.onboardingFilter)
     setPage(0)
   }
   async function deleteView(id: string) { try { await http.delete(`/api/views/${id}`) } catch {}; setSavedViews((prev) => prev.filter((v) => v.id !== id)) }
@@ -1087,7 +1094,27 @@ export default function CRMAccounts() {
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search accounts..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <button type="button" onClick={() => { setQuery(''); setSort('name'); setDir('asc') }} disabled={!query && sort === 'name' && dir === 'asc'}
+          <select
+            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            value={onboardingFilter}
+            onChange={(e) => setOnboardingFilter(e.target.value as any)}
+          >
+            <option value="">Onboarding: all</option>
+            <option value="not_started">Onboarding: not started</option>
+            <option value="in_progress">Onboarding: in progress</option>
+            <option value="on_hold">Onboarding: on hold</option>
+            <option value="complete">Onboarding: complete</option>
+            <option value="cancelled">Onboarding: cancelled</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery('')
+              setSort('name')
+              setDir('asc')
+              setOnboardingFilter('')
+            }}
+            disabled={!query && sort === 'name' && dir === 'asc' && !onboardingFilter}
             className="rounded-lg border border-[color:var(--color-border)] px-2 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50">
             Reset
           </button>
