@@ -752,6 +752,8 @@ export default function CRMAccounts() {
     }
     if (key === 'onboardingStatus') {
       const value = a.onboardingStatus ?? 'not_started'
+
+      // Base status pill
       let label = 'Not started'
       let className =
         'inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]'
@@ -772,7 +774,42 @@ export default function CRMAccounts() {
         className =
           'inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]'
       }
-      return <span className={className}>{label}</span>
+
+      // Onboarding risk badge: long on-hold or long-running in-progress
+      let riskBadge: React.ReactNode = null
+      if (a.onboardingStatusChangedAt) {
+        const changed = new Date(a.onboardingStatusChangedAt)
+        if (Number.isFinite(changed.getTime())) {
+          const days = (Date.now() - changed.getTime()) / (1000 * 60 * 60 * 24)
+          const isLongOnHold = value === 'on_hold' && days >= 14
+          const isLongInProgress = value === 'in_progress' && days >= 60
+          if (isLongOnHold || isLongInProgress) {
+            riskBadge = (
+              <span
+                className="inline-flex items-center rounded-full border border-red-500/70 bg-red-500/15 px-2 py-0.5 text-[10px] text-red-100"
+                title={
+                  isLongOnHold
+                    ? 'Onboarding has been on hold for an extended period.'
+                    : 'Onboarding has been in progress for an extended period.'
+                }
+              >
+                Onboarding risk
+              </span>
+            )
+          }
+        }
+      }
+
+      if (!riskBadge) {
+        return <span className={className}>{label}</span>
+      }
+
+      return (
+        <div className="flex items-center gap-1">
+          <span className={className}>{label}</span>
+          {riskBadge}
+        </div>
+      )
     }
     if (key === 'tasks') {
       const count = accountTaskCountMap.get(a._id) ?? 0
