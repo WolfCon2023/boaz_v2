@@ -283,59 +283,74 @@ It provides visibility into what each customer owns, where it is deployed, and r
     title: 'Using the Customer Success app in BOAZ‑OS CRM',
     tags: ['crm', 'crm:success', 'health'],
     category: 'Sales & Clients',
-    body: `Customer Success – Health scores and playbooks
+    body: `Customer Success – Health scores, dashboards, and playbooks
 
 Purpose
-The Customer Success app turns signals from surveys, support tickets, assets, and projects into an account-level health score and playbook recommendations.
+The Customer Success app turns signals from surveys, support tickets, assets, and projects into an account-level health score and clear playbook recommendations.
+It helps you quickly see which customers are healthy, which are at risk, and where to focus proactive work.
 
 Opening the app
-- Go to CRM Hub → Customer Success
-- Or click the Success badge or Customer success health card from an Account.
+- Go to CRM Hub → Customer Success.
+- Or click the Success badge or the Customer success health card from an Account.
+
+Main layout
+- Header tiles showing counts of high-risk and medium-risk accounts.
+- Filters for search and Success level so you can focus on the riskiest customers.
+- Accounts table with columns for Success label, score, and key drivers.
+- CSV export so you can share or analyze Success data outside the app.
 
 How the Success health score works
 The Success health score is a risk score from 0–100. Higher scores mean more risk and therefore a Medium or High Success label.
 It combines four main signal groups:
 
-1. Surveys (from Surveys & Feedback)
+1. Surveys (from Surveys and Feedback)
 - Score goes up when the last survey score is lower.
-- Thresholds:
-  - Last score ≤ 6 → big impact
-  - Last score ≤ 7.5 → medium impact
-  - Last score ≤ 8.5 → small impact
+- Thresholds for the last survey score:
+  - Last score less than or equal to 6 has a big impact on risk.
+  - Last score less than or equal to 7.5 has a medium impact.
+  - Last score less than or equal to 8.5 has a small impact.
 
-2. Support tickets (from Support / Tickets)
+2. Support tickets (from Support and Tickets)
 - More open tickets increases risk.
-- More high/urgent tickets increases risk further.
+- More high or urgent tickets increases risk further.
 - Breached SLAs add additional risk.
 
-3. Assets / Installed Base (from Assets + Renewals)
-- The asset risk score feeds directly into Success (scaled by a factor so it matters but does not dominate).
+3. Assets and Installed Base (from Assets and Renewals)
+- The asset risk score feeds directly into Success and is scaled so it matters but does not dominate.
 - Expired or expiring licenses add risk.
 - Products marked Needs Upgrade or Pending Renewal add risk.
 
-4. Projects (from Projects & Delivery)
-- Projects with health = at_risk or off_track add risk.
+4. Projects (from Projects and Delivery)
+- Projects with health equal to at_risk or off_track add risk.
 - More at-risk or off-track projects means a higher Success risk score.
 
 Thresholds for Success labels
-- Score ≥ 70 → High
-- Score ≥ 35 and < 70 → Medium
-- Score < 35 → Low or OK
+- Score greater than or equal to 70 means the label is High (high risk).
+- Score greater than or equal to 35 and less than 70 means the label is Medium.
+- Score less than 35 means the label is Low or OK.
 
 Where you see the Success label
 - In the Accounts table Success column.
 - In the Account drawer Customer success health card.
-- In the Customer Success page, including filters and CSV export.
+- In the Customer Success page, including filters, tiles, and CSV export.
 
-How to deliberately test Medium / High Success states
+Customer Success in the Account drawer
+From the Account drawer you can:
+- See the Success badge for that account.
+- Review a Signals list summarizing surveys, support load, asset risk, and projects.
+- See Suggested playbooks that describe recommended actions.
+- Trigger playbook actions when Success is Medium or High, including creating follow-up tasks, scheduling QBR tasks, and opening Outreach sequences for targeted communication.
+
+How to deliberately test Medium or High Success states
 To see playbook actions and risk behavior in a demo or test environment you can intentionally drive an account to Medium or High Success (higher risk) by adding more negative signals in the four areas above:
 
-- Surveys: send a survey to that account and record a low score (for example ≤ 6 or in the 6–7.5 range).
-- Support tickets: create several tickets for the account, mark some high/urgent, and let at least one breach its SLA.
-- Assets / Installed Base: ensure the account owns assets with expired or soon-expiring licenses and products marked Needs Upgrade or Pending Renewal.
+- Surveys: send a survey to that account and record a low score, for example a score less than or equal to 6 or in the 6 to 7.5 range.
+- Support tickets: create several tickets for the account, mark some as high or urgent, and let at least one breach its SLA.
+- Assets and Installed Base: ensure the account owns assets with expired or soon-expiring licenses and products marked Needs Upgrade or Pending Renewal.
 - Projects: create projects for that account and set some projects to At risk or Off track.
 
-Once the combined score crosses the thresholds (score ≥ 35 for Medium, score ≥ 70 for High) you will see the updated label in the Accounts table Success column, the Account drawer Customer success health card, and the Customer Success page, and High/Medium accounts will surface playbook actions in the Account drawer.`,
+Once the combined score crosses the thresholds (score greater than or equal to 35 for Medium, or greater than or equal to 70 for High) you will see the updated label in the Accounts table Success column, the Account drawer Customer success health card, and the Customer Success page.
+When Success is Medium or High the Account drawer will also surface playbook actions so teams can quickly create follow-up tasks or schedule QBRs.`,
   },
   {
     title: 'Using the Renewals & Subscriptions app in BOAZ‑OS CRM',

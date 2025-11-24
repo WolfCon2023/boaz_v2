@@ -450,6 +450,13 @@ export default function CRMSuccess() {
           <div className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--color-border)] px-2 py-1">
             <span className="h-2 w-2 rounded-full bg-amber-500" /> <span>{medCount} medium‑risk</span>
           </div>
+          <a
+            href="/apps/crm/support/kb?tag=crm:success"
+            className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+          >
+            <span className="text-xs">Help</span>
+            <span className="text-[10px]">?</span>
+          </a>
           <button
             type="button"
             onClick={exportCsv}
