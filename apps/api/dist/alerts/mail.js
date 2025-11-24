@@ -15,8 +15,8 @@ export function getTransporter() {
     });
     return transporter;
 }
-export async function sendEmail({ to, subject, text, html, from }) {
+export async function sendEmail({ to, subject, text, html, from, attachments }) {
     const t = getTransporter();
     const fromAddr = from || env.ALERT_FROM || env.SMTP_USER || 'no-reply@example.com';
-    await t.sendMail({ from: fromAddr, to, subject, text, html });
+    await t.sendMail({ from: fromAddr, to, subject, text, html, attachments });
 }

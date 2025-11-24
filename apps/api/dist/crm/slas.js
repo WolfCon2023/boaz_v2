@@ -1721,6 +1721,7 @@ slasRouter.post('/:id/send-signed', async (req, res) => {
     const refreshed = await coll.findOne({ _id: contract._id });
     const effectiveContract = refreshed ?? contract;
     const signedHtml = buildSignedHtml(effectiveContract);
+    const signedPdf = await buildSignedPdf(effectiveContract);
     const subject = body.subject && body.subject.trim().length > 0
         ? body.subject.trim()
         : `Signed contract ${effectiveContract.contractNumber ?? ''} – ${effectiveContract.name}`.trim();
@@ -1728,6 +1729,13 @@ slasRouter.post('/:id/send-signed', async (req, res) => {
         to: body.to,
         subject,
         html: signedHtml,
+        attachments: [
+            {
+                filename: `Contract-${effectiveContract.contractNumber ?? ''}-signed.pdf`,
+                content: Buffer.from(signedPdf),
+                contentType: 'application/pdf',
+            },
+        ],
     });
     const emailEntry = {
         to: body.to,
