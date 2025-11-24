@@ -196,6 +196,41 @@ export default function CRMAccounts() {
     },
   })
 
+  const createSuccessTask = useMutation({
+    mutationFn: async (payload: { accountId: string; kind: 'health' | 'qbr' }) => {
+      const { accountId, kind } = payload
+      const subject =
+        kind === 'health'
+          ? 'Customer success follow-up'
+          : 'Schedule QBR / executive review'
+      const description =
+        kind === 'health'
+          ? 'Review recent surveys, tickets, assets, and projects for this account and plan next success actions.'
+          : 'Schedule a QBR / executive business review to align on outcomes, adoption, and upcoming renewals.'
+      const res = await http.post('/api/crm/tasks', {
+        type: 'todo',
+        subject,
+        description,
+        status: 'open',
+        priority: kind === 'health' ? 'high' : 'normal',
+        relatedType: 'account',
+        relatedId: accountId,
+      })
+      return res.data as { data?: any }
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      if (variables?.accountId) {
+        qc.invalidateQueries({ queryKey: ['related-tasks', 'account', variables.accountId] })
+      }
+      toast.showToast('BOAZ says: Success playbook task created.', 'success')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to create success playbook task.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
   const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)
   const [inlineName, setInlineName] = React.useState<string>('')
   const [inlineCompanyName, setInlineCompanyName] = React.useState<string>('')
@@ -1279,6 +1314,52 @@ export default function CRMAccounts() {
                         <li>Align in‑flight projects with renewal timelines and success metrics.</li>
                         <li>Trigger outreach sequences for champions when health is High.</li>
                       </ul>
+                      {(() => {
+                        const row = accountSuccessMap.get(editing._id)
+                        const label = row?.label
+                        if (label !== 'High' && label !== 'Medium') return null
+                        return (
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
+                              Playbook actions
+                            </span>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                              disabled={createSuccessTask.isPending}
+                              onClick={() => {
+                                if (!editing?._id) return
+                                createSuccessTask.mutate({ accountId: editing._id, kind: 'health' })
+                              }}
+                            >
+                              Create follow‑up task
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                              disabled={createSuccessTask.isPending}
+                              onClick={() => {
+                                if (!editing?._id) return
+                                createSuccessTask.mutate({ accountId: editing._id, kind: 'qbr' })
+                              }}
+                            >
+                              Schedule QBR task
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                              onClick={() => {
+                                if (!editing?._id) return
+                                window.location.href = `/apps/crm/outreach/sequences?accountId=${encodeURIComponent(
+                                  editing._id,
+                                )}`
+                              }}
+                            >
+                              Open outreach sequences
+                            </button>
+                          </div>
+                        )
+                      })()}
                     </div>
                   </div>
                 </div>
