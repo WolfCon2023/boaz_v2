@@ -444,7 +444,7 @@ export default function CRMSLAs() {
 
   const [page, setPage] = React.useState(0)
   const pageSize = 20
-  const [sortKey, setSortKey] = React.useState<'account' | 'name' | 'status' | 'start' | 'end'>('end')
+  const [sortKey, setSortKey] = React.useState<'account' | 'name' | 'type' | 'status' | 'start' | 'end'>('end')
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc')
 
   function openNew() {
@@ -809,6 +809,9 @@ export default function CRMSLAs() {
       } else if (sortKey === 'name') {
         av = a.name || ''
         bv = b.name || ''
+      } else if (sortKey === 'type') {
+        av = a.type || ''
+        bv = b.type || ''
       } else if (sortKey === 'status') {
         av = a.status || ''
         bv = b.status || ''
@@ -912,6 +915,7 @@ export default function CRMSLAs() {
             <option value="start">Sort by: Start date</option>
             <option value="name">Sort by: Name</option>
             <option value="account">Sort by: Account</option>
+            <option value="type">Sort by: Type</option>
             <option value="status">Sort by: Status</option>
           </select>
           <select
