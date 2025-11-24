@@ -947,7 +947,20 @@ export default function CRMAccounts() {
     enabled: Boolean(editing?._id && showHistory),
     queryFn: async () => {
       const res = await http.get(`/api/crm/accounts/${editing?._id}/history`)
-      return res.data as { data: { createdAt: string; deals: any[]; quotes: any[]; invoices: any[]; activities: any[] } }
+      return res.data as {
+        data: {
+          createdAt: string
+          deals: any[]
+          quotes: any[]
+          invoices: any[]
+          activities: any[]
+          history?: Array<{
+            description?: string
+            createdAt?: string
+            userName?: string
+          }>
+        }
+      }
     },
   })
 
@@ -1820,6 +1833,20 @@ export default function CRMAccounts() {
                     {historyQ.data && (
                       <div className="space-y-2">
                         <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
+                        <div>
+                          <div className="font-semibold">Account history</div>
+                          <ul className="list-disc pl-5">
+                            {(historyQ.data.data.history ?? []).map((h, i) => (
+                              <li key={i}>
+                                {h.createdAt ? `${formatDateTime(h.createdAt)} – ` : ''}
+                                {h.description ?? ''}
+                                {h.userName ? ` (${h.userName})` : ''}
+                              </li>
+                            ))}
+                            {(!historyQ.data.data.history ||
+                              historyQ.data.data.history.length === 0) && <li>None</li>}
+                          </ul>
+                        </div>
                         <div>
                           <div className="font-semibold">Deals</div>
                           <ul className="list-disc pl-5">{historyQ.data.data.deals.map((d, i) => (<li key={i}>{d.dealNumber ?? ''} {d.title ?? ''} {d.amount ? `$${d.amount}` : ''} {d.stage ?? ''} {d.closeDate ? `• Close: ${formatDate(d.closeDate)}` : ''}</li>))}{historyQ.data.data.deals.length===0 && <li>None</li>}</ul>
