@@ -1511,7 +1511,7 @@ export default function CRMAccounts() {
                             at: nextDate,
                             label: `Next renewal: ${
                               labelParts.join(' ') || 'license'
-                            } expires ${formatDate(nextDate.toISOString())} (${r.renewalStatus})`,
+                            } expires ${formatDate(r.expirationDate ?? '')} (${r.renewalStatus})`,
                           })
                         }
                       }
