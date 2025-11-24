@@ -108,6 +108,18 @@ export default function CRMHub() {
     return { expiring30, expiring60, expiring90, expired, needsUpgrade, pendingRenewalProducts }
   }, [assetsAlertsQ.data?.data.items])
 
+  const accountsQ = useQuery({
+    queryKey: ['hub-onboarding-accounts'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/accounts', {
+        params: { limit: 200, sort: 'name', dir: 'asc' },
+      })
+      return res.data as { data: { items: Array<{ _id: string; accountNumber?: number; name?: string }> } }
+    },
+  })
+  const accounts = accountsQ.data?.data.items ?? []
+  const [onboardingAccountId, setOnboardingAccountId] = React.useState('')
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">CRM Hub</h1>
@@ -178,6 +190,49 @@ export default function CRMHub() {
             </a>
           </li>
         ))}
+        <li key="New customer onboarding">
+          <div className="block h-full rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+            <div className="text-base font-semibold leading-6">New customer onboarding</div>
+            <div className="mt-1 text-xs leading-5 text-[color:var(--color-text-muted)]">
+              Launch an onboarding project, contracts, and success monitoring for a specific account.
+            </div>
+            <div className="mt-3 flex flex-col gap-2 text-[11px] text-[color:var(--color-text-muted)]">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide">
+                  Choose account
+                </label>
+                <select
+                  value={onboardingAccountId}
+                  onChange={(e) => setOnboardingAccountId(e.target.value)}
+                  className="w-full rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
+                >
+                  <option value="">
+                    {accountsQ.isLoading ? 'Loading accounts…' : 'Select account…'}
+                  </option>
+                  {accounts.map((a) => (
+                    <option key={a._id} value={a._id}>
+                      {a.accountNumber ? `#${a.accountNumber} – ` : ''}
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                disabled={!onboardingAccountId}
+                onClick={() => {
+                  if (!onboardingAccountId) return
+                  window.location.href = `/apps/crm/accounts?openAccountId=${encodeURIComponent(
+                    onboardingAccountId,
+                  )}&onboarding=1`
+                }}
+                className="mt-1 inline-flex items-center justify-center rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-xs font-medium hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              >
+                Start onboarding
+              </button>
+            </div>
+          </div>
+        </li>
         <li key="External Customer Portal">
           <div className="block h-full rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
             <div className="text-base font-semibold leading-6">

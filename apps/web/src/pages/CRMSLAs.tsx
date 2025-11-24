@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http, getApiUrl } from '@/lib/http'
 import { useToast } from '@/components/Toast'
@@ -160,6 +161,7 @@ function formatTargetLabel(total?: number | null): string {
 export default function CRMSLAs() {
   const toast = useToast()
   const qc = useQueryClient()
+  const [searchParams] = useSearchParams()
 
   const [accountFilter, setAccountFilter] = React.useState('')
   const [statusFilter, setStatusFilter] = React.useState<
@@ -446,6 +448,17 @@ export default function CRMSLAs() {
   const pageSize = 20
   const [sortKey, setSortKey] = React.useState<'account' | 'name' | 'type' | 'status' | 'start' | 'end'>('end')
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc')
+
+  // Initialize filters from URL once (e.g., accountId deep link from Accounts drawer)
+  const initializedFromUrl = React.useRef(false)
+  React.useEffect(() => {
+    if (initializedFromUrl.current) return
+    initializedFromUrl.current = true
+    const accountId = searchParams.get('accountId') ?? ''
+    if (accountId) {
+      setAccountFilter(accountId)
+    }
+  }, [searchParams])
 
   function openNew() {
     setEditing({

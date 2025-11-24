@@ -297,6 +297,8 @@ export default function CRMAccounts() {
     setInlinePrimaryContactPhone('')
   }
 
+  const [pendingOpenAccountId, setPendingOpenAccountId] = React.useState<string | null>(null)
+
   // Initialize from URL and localStorage once
   React.useEffect(() => {
     if (initializedFromUrl.current) return
@@ -305,9 +307,13 @@ export default function CRMAccounts() {
     const q0 = get('q')
     const sort0 = (get('sort') as any) || 'name'
     const dir0 = (get('dir') as any) || 'asc'
+    const openId = get('openAccountId')
     if (q0) setQuery(q0)
     setSort(sort0)
     setDir(dir0)
+    if (openId) {
+      setPendingOpenAccountId(openId)
+    }
     try {
       const stored = localStorage.getItem('ACCOUNTS_COLS')
       if (stored) {
@@ -353,6 +359,17 @@ export default function CRMAccounts() {
     try { localStorage.setItem('ACCOUNTS_COLS', JSON.stringify(cols)) } catch {}
     try { localStorage.setItem('ACCOUNTS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
   }, [query, sort, dir, cols, savedViews, setSearchParams])
+
+  // If deep-linked with openAccountId, open that account drawer once data is loaded
+  React.useEffect(() => {
+    if (!pendingOpenAccountId) return
+    if (!items.length) return
+    const found = items.find((a) => a._id === pendingOpenAccountId)
+    if (found) {
+      setEditing(found)
+      setPendingOpenAccountId(null)
+    }
+  }, [items, pendingOpenAccountId])
 
   async function saveCurrentView() {
     const viewConfig = { query, sort, dir, cols, pageSize }
@@ -990,24 +1007,6 @@ export default function CRMAccounts() {
       setPortalEl(null)
     }
   }, [editing])
-
-  const [pendingOpenAccountId, setPendingOpenAccountId] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    const openId = searchParams.get('accountId')
-    if (openId) {
-      setPendingOpenAccountId(openId)
-    }
-  }, [searchParams])
-
-  React.useEffect(() => {
-    if (!pendingOpenAccountId || !items.length) return
-    const match = items.find((a) => a._id === pendingOpenAccountId)
-    if (match) {
-      setEditing(match)
-      setPendingOpenAccountId(null)
-    }
-  }, [pendingOpenAccountId, items])
 
   return (
     <div className="space-y-4">
