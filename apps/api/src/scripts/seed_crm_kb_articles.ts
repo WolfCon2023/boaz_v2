@@ -568,6 +568,11 @@ When a signer completes the digital signature the app:
 Working from Accounts and Deals
 From an Account drawer you can see contracts and renewal information to support QBRs and renewal planning. From a Deal drawer you can see which contracts are tied to that opportunity.
 
+Onboarding and implementation flows
+You can use the Contracts and SLAs app together with Accounts, Projects, and Customer Success to run onboarding flows:
+- From an Account drawer, use the onboarding wizard to create an onboarding project, then open Contracts and SLAs for that account to draft and send the primary agreement.
+- After contracts are in place, use Customer Success to monitor health and trigger follow-up playbooks (for example QBR tasks) as the relationship evolves.
+
 Best practices
 1. Keep contract status and dates accurate so renewals and health dashboards are reliable.
 2. Align SLA targets and summaries in the app with the signed legal document.

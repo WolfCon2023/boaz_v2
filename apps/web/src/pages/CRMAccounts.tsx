@@ -231,6 +231,37 @@ export default function CRMAccounts() {
     },
   })
 
+  const createOnboardingProject = useMutation({
+    mutationFn: async (accountId: string) => {
+      const today = new Date()
+      const start = today.toISOString().slice(0, 10)
+      const target = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+      const payload = {
+        name: `Onboarding – ${editing?.name || editing?.companyName || 'New customer'}`,
+        description:
+          'Standard onboarding and implementation project for this account. Adjust scope, milestones, and owners as needed.',
+        status: 'not_started',
+        type: 'onboarding',
+        health: 'on_track',
+        progressPercent: 0,
+        accountId,
+        startDate: start,
+        targetEndDate: target.toISOString().slice(0, 10),
+      }
+      const res = await http.post('/api/crm/projects', payload)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['account-projects'] })
+      qc.invalidateQueries({ queryKey: ['accounts-projects-summary'] })
+      toast.showToast('BOAZ says: Onboarding project created.', 'success')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to create onboarding project.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
   const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)
   const [inlineName, setInlineName] = React.useState<string>('')
   const [inlineCompanyName, setInlineCompanyName] = React.useState<string>('')
@@ -1457,6 +1488,65 @@ export default function CRMAccounts() {
                       </div>
                     </>
                   ) : null}
+                </div>
+                <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold">Onboarding &amp; kickoff wizard</div>
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Guided steps to start an onboarding project, align contracts, and set up success monitoring.
+                      </div>
+                    </div>
+                  </div>
+                  <ol className="mt-1 list-decimal space-y-1 pl-5 text-[11px] text-[color:var(--color-text-muted)]">
+                    <li className="flex flex-wrap items-center gap-2">
+                      <span className="flex-1">
+                        Create an onboarding project to track implementation, milestones, and owners for this account.
+                      </span>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                        disabled={createOnboardingProject.isPending || !editing?._id}
+                        onClick={() => {
+                          if (!editing?._id) return
+                          createOnboardingProject.mutate(editing._id)
+                        }}
+                      >
+                        Create onboarding project
+                      </button>
+                    </li>
+                    <li className="flex flex-wrap items-center gap-2">
+                      <span className="flex-1">
+                        Review or create the main contract and SLA for this customer, including commercial and legal terms.
+                      </span>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                        onClick={() => {
+                          if (!editing?._id) return
+                          window.location.href = `/apps/crm/slas?accountId=${encodeURIComponent(editing._id)}`
+                        }}
+                      >
+                        Open contracts &amp; SLAs
+                      </button>
+                    </li>
+                    <li className="flex flex-wrap items-center gap-2">
+                      <span className="flex-1">
+                        Set up ongoing success monitoring and playbooks for this account in the Customer Success app.
+                      </span>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                        onClick={() => {
+                          if (!editing?._id) return
+                          const q = encodeURIComponent(editing.name || editing.companyName || '')
+                          window.location.href = `/apps/crm/success?q=${q}`
+                        }}
+                      >
+                        Open Customer Success
+                      </button>
+                    </li>
+                  </ol>
                 </div>
                 <div className="col-span-full mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
