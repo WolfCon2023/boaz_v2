@@ -62,17 +62,19 @@ async function recomputeOnboardingStatus(db: any, accountIdStr?: string | null) 
     return
   }
 
-  const coll = db.collection<ProjectDoc>('crm_projects')
-  const rows = await coll
+  const coll = db.collection('crm_projects')
+  const rows = (await coll
     .find({ accountId: accountIdStr, type: 'onboarding' })
-    .project<{ status: ProjectStatus }>({ status: 1 } as any)
-    .toArray()
+    .project({ status: 1 } as any)
+    .toArray()) as Array<{ status: ProjectStatus }>
 
   let onboardingStatus: 'not_started' | 'in_progress' | 'complete' = 'not_started'
 
   if (rows.length) {
-    const hasActive = rows.some((r) => ['not_started', 'in_progress', 'on_hold'].includes(r.status))
-    const hasCompleted = rows.some((r) => r.status === 'completed')
+    const hasActive = rows.some((r: { status: ProjectStatus }) =>
+      ['not_started', 'in_progress', 'on_hold'].includes(r.status),
+    )
+    const hasCompleted = rows.some((r: { status: ProjectStatus }) => r.status === 'completed')
 
     if (hasCompleted && !hasActive) {
       onboardingStatus = 'complete'

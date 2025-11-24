@@ -106,7 +106,8 @@ accountsRouter.post('/', async (req, res) => {
                 accountNumber = 998801;
             }
         }
-        const doc = { ...parsed.data, accountNumber };
+        const onboardingStatus = 'not_started';
+        const doc = { ...parsed.data, accountNumber, onboardingStatus };
         try {
             const result = await db.collection('accounts').insertOne(doc);
             // Add history entry for creation
@@ -118,7 +119,7 @@ accountsRouter.post('/', async (req, res) => {
             else {
                 await addAccountHistory(db, result.insertedId, 'created', `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`);
             }
-            const finalDoc = { ...parsed.data, accountNumber };
+            const finalDoc = { ...parsed.data, accountNumber, onboardingStatus };
             return res.status(201).json({ data: { _id: result.insertedId, ...finalDoc }, error: null });
         }
         catch (err) {
@@ -136,7 +137,7 @@ accountsRouter.post('/', async (req, res) => {
                 await db
                     .collection('counters')
                     .updateOne({ _id: 'accountNumber' }, [{ $set: { seq: { $max: ['$seq', accountNumber] } } }], { upsert: true });
-                const retryDoc = { ...parsed.data, accountNumber };
+                const retryDoc = { ...parsed.data, accountNumber, onboardingStatus };
                 const retryResult = await db.collection('accounts').insertOne(retryDoc);
                 const auth = req.auth;
                 if (auth) {
@@ -146,7 +147,7 @@ accountsRouter.post('/', async (req, res) => {
                 else {
                     await addAccountHistory(db, retryResult.insertedId, 'created', `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`);
                 }
-                const finalDoc = { ...parsed.data, accountNumber };
+                const finalDoc = { ...parsed.data, accountNumber, onboardingStatus };
                 return res.status(201).json({ data: { _id: retryResult.insertedId, ...finalDoc }, error: null });
             }
             throw err;

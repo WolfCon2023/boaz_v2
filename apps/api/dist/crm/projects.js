@@ -6,6 +6,34 @@ import { requireAuth } from '../auth/rbac.js';
 export const projectsRouter = Router();
 // All project routes require auth
 projectsRouter.use(requireAuth);
+async function recomputeOnboardingStatus(db, accountIdStr) {
+    if (!accountIdStr)
+        return;
+    let accountObjectId;
+    try {
+        accountObjectId = new ObjectId(accountIdStr);
+    }
+    catch {
+        return;
+    }
+    const coll = db.collection('crm_projects');
+    const rows = (await coll
+        .find({ accountId: accountIdStr, type: 'onboarding' })
+        .project({ status: 1 })
+        .toArray());
+    let onboardingStatus = 'not_started';
+    if (rows.length) {
+        const hasActive = rows.some((r) => ['not_started', 'in_progress', 'on_hold'].includes(r.status));
+        const hasCompleted = rows.some((r) => r.status === 'completed');
+        if (hasCompleted && !hasActive) {
+            onboardingStatus = 'complete';
+        }
+        else {
+            onboardingStatus = 'in_progress';
+        }
+    }
+    await db.collection('accounts').updateOne({ _id: accountObjectId }, { $set: { onboardingStatus } });
+}
 const createProjectSchema = z.object({
     name: z.string().min(1),
     description: z.string().optional(),
@@ -294,6 +322,10 @@ projectsRouter.post('/', async (req, res) => {
         updatedAt: now,
     };
     await db.collection('crm_projects').insertOne(doc);
+    // If this is an onboarding project, update the parent account's onboarding status
+    if (doc.type === 'onboarding' && doc.accountId) {
+        await recomputeOnboardingStatus(db, doc.accountId);
+    }
     res.status(201).json({ data: serializeProject(doc), error: null });
 });
 // PUT /api/crm/projects/:id
@@ -370,8 +402,17 @@ projectsRouter.put('/:id', async (req, res) => {
     }
     update.updatedAt = new Date();
     await coll.updateOne({ _id: idStr }, { $set: update });
-    const updated = await coll.findOne({ _id: idStr });
-    res.json({ data: serializeProject(updated), error: null });
+    const updated = (await coll.findOne({ _id: idStr }));
+    // Recompute onboarding status for affected accounts
+    const previousAccountId = existing.accountId;
+    const nextAccountId = (update.accountId ?? existing.accountId) || null;
+    if (previousAccountId) {
+        await recomputeOnboardingStatus(db, previousAccountId);
+    }
+    if (nextAccountId && nextAccountId !== previousAccountId) {
+        await recomputeOnboardingStatus(db, nextAccountId);
+    }
+    res.json({ data: updated ? serializeProject(updated) : null, error: null });
 });
 // DELETE /api/crm/projects/:id
 projectsRouter.delete('/:id', async (req, res) => {
@@ -379,9 +420,17 @@ projectsRouter.delete('/:id', async (req, res) => {
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     const idStr = String(req.params.id);
-    const result = await db.collection('crm_projects').deleteOne({ _id: idStr });
+    const coll = db.collection('crm_projects');
+    const existing = await coll.findOne({ _id: idStr });
+    if (!existing) {
+        return res.status(404).json({ data: null, error: 'not_found' });
+    }
+    const result = await coll.deleteOne({ _id: idStr });
     if (!result.deletedCount) {
         return res.status(404).json({ data: null, error: 'not_found' });
+    }
+    if (existing.accountId) {
+        await recomputeOnboardingStatus(db, existing.accountId);
     }
     res.json({ data: { ok: true }, error: null });
 });
