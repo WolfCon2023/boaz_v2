@@ -747,7 +747,17 @@ export default function CRMAccounts() {
       return <span className="whitespace-nowrap font-mono text-xs">{value}</span>
     }
     if (key === 'onboardingStatus') {
-      const value = a.onboardingStatus ?? 'not_started'
+      const summary = accountProjectsMap.get(a._id)
+      let value: 'not_started' | 'in_progress' | 'complete' = a.onboardingStatus ?? 'not_started'
+      if (summary) {
+        if (summary.active > 0) {
+          value = 'in_progress'
+        } else if (summary.completed > 0) {
+          value = 'complete'
+        } else {
+          value = 'not_started'
+        }
+      }
       let label = 'Not started'
       let className =
         'inline-flex items-center rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]'
@@ -1329,9 +1339,25 @@ export default function CRMAccounts() {
                     </div>
                     <div>
                       {(() => {
+                        const rows = accountProjectsForDrawer?.data.items ?? []
+                        const onboardingProjects = rows.filter((p) => p.type === 'onboarding')
+
                         const row = accountRowMap.get(editing._id) || editing
-                        const value: 'not_started' | 'in_progress' | 'complete' =
+                        let value: 'not_started' | 'in_progress' | 'complete' =
                           row.onboardingStatus ?? 'not_started'
+
+                        if (onboardingProjects.length) {
+                          const hasActive = onboardingProjects.some((p) =>
+                            ['not_started', 'in_progress', 'on_hold'].includes(p.status),
+                          )
+                          const hasCompleted = onboardingProjects.some((p) => p.status === 'completed')
+
+                          if (hasCompleted && !hasActive) {
+                            value = 'complete'
+                          } else {
+                            value = 'in_progress'
+                          }
+                        }
 
                         let label = 'Not started'
                         let className =
