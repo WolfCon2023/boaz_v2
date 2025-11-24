@@ -25,11 +25,18 @@ async function recomputeOnboardingStatus(db, accountIdStr) {
     if (rows.length) {
         const hasActive = rows.some((r) => ['not_started', 'in_progress', 'on_hold'].includes(r.status));
         const hasCompleted = rows.some((r) => r.status === 'completed');
-        if (hasCompleted && !hasActive) {
+        const hasNonCancelled = rows.some((r) => r.status !== 'cancelled');
+        if (hasActive) {
+            // Any onboarding project that is not completed/cancelled means onboarding is in progress
+            onboardingStatus = 'in_progress';
+        }
+        else if (hasCompleted && !hasActive) {
+            // All onboarding projects are completed or cancelled, and at least one is completed
             onboardingStatus = 'complete';
         }
-        else {
-            onboardingStatus = 'in_progress';
+        else if (!hasNonCancelled) {
+            // Only cancelled onboarding projects remain
+            onboardingStatus = 'not_started';
         }
     }
     await db.collection('accounts').updateOne({ _id: accountObjectId }, { $set: { onboardingStatus } });
