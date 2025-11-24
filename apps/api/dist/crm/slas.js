@@ -1328,6 +1328,47 @@ slasRouter.post('/:id/render', async (req, res) => {
     const rendered = renderTemplateString(templateHtml, ctx);
     res.json({ data: { html: rendered }, error: null });
 });
+// POST /api/crm/slas/:id/save-template - save current contract as a reusable HTML template
+const saveTemplateSchema = z.object({
+    key: z.string().min(1),
+    name: z.string().min(1),
+    description: z.string().optional(),
+});
+slasRouter.post('/:id/save-template', async (req, res) => {
+    const parsed = saveTemplateSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    }
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const { id } = req.params;
+    if (!ObjectId.isValid(id))
+        return res.status(400).json({ data: null, error: 'invalid_id' });
+    const coll = db.collection('sla_contracts');
+    const contract = await coll.findOne({ _id: new ObjectId(id) });
+    if (!contract)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const body = parsed.data;
+    const templatesColl = db.collection('contract_templates');
+    const existing = await templatesColl.findOne({ key: body.key });
+    if (existing) {
+        return res.status(409).json({ data: null, error: 'duplicate_template_key' });
+    }
+    const htmlBody = buildSignedHtml(contract);
+    const now = new Date();
+    const doc = {
+        _id: new ObjectId(),
+        key: body.key,
+        name: body.name,
+        description: body.description,
+        htmlBody,
+        createdAt: now,
+        updatedAt: now,
+    };
+    await templatesColl.insertOne(doc);
+    res.status(201).json({ data: { _id: String(doc._id), key: doc.key, name: doc.name }, error: null });
+});
 // POST /api/crm/slas/:id/send - send contract email (HTML body)
 const sendSchema = z.object({
     to: z.string().email(),
