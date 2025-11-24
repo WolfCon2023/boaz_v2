@@ -21,20 +21,32 @@ async function recomputeOnboardingStatus(db, accountIdStr) {
         .find({ accountId: accountIdStr, type: 'onboarding' })
         .project({ status: 1 })
         .toArray());
+    // Account-level onboarding status mirrors the most advanced state of any onboarding project:
+    // - 'in_progress' if any project is in_progress
+    // - 'on_hold' if none in_progress but at least one on_hold
+    // - 'complete' if none in_progress/on_hold but at least one completed
+    // - 'cancelled' if only cancelled projects exist
+    // - 'not_started' if only not_started (or no onboarding projects)
     let onboardingStatus = 'not_started';
     if (rows.length) {
-        const hasInProgressOrOnHold = rows.some((r) => r.status === 'in_progress' || r.status === 'on_hold');
+        const hasInProgress = rows.some((r) => r.status === 'in_progress');
+        const hasOnHold = rows.some((r) => r.status === 'on_hold');
         const hasCompleted = rows.some((r) => r.status === 'completed');
-        if (hasInProgressOrOnHold) {
-            // Any onboarding project that is actively being worked (in progress / on hold)
+        const hasNotStarted = rows.some((r) => r.status === 'not_started');
+        const hasCancelled = rows.some((r) => r.status === 'cancelled');
+        if (hasInProgress) {
             onboardingStatus = 'in_progress';
         }
+        else if (hasOnHold) {
+            onboardingStatus = 'on_hold';
+        }
         else if (hasCompleted) {
-            // No active projects but at least one completed → overall onboarding complete
             onboardingStatus = 'complete';
         }
+        else if (hasCancelled && !hasNotStarted) {
+            onboardingStatus = 'cancelled';
+        }
         else {
-            // Only not_started and/or cancelled onboarding projects → treat as not started
             onboardingStatus = 'not_started';
         }
     }

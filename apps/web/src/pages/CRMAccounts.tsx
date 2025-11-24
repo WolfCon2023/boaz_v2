@@ -17,7 +17,7 @@ type Account = {
   primaryContactName?: string
   primaryContactEmail?: string
   primaryContactPhone?: string
-  onboardingStatus?: 'not_started' | 'in_progress' | 'complete'
+  onboardingStatus?: 'not_started' | 'in_progress' | 'on_hold' | 'complete' | 'cancelled'
 }
 
 type AccountSurveyStatusSummary = {
@@ -751,10 +751,18 @@ export default function CRMAccounts() {
         label = 'In progress'
         className =
           'inline-flex items-center rounded-full border border-sky-500/70 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-100'
+      } else if (value === 'on_hold') {
+        label = 'On hold'
+        className =
+          'inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-100'
       } else if (value === 'complete') {
         label = 'Complete'
         className =
           'inline-flex items-center rounded-full border border-emerald-500/70 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-100'
+      } else if (value === 'cancelled') {
+        label = 'Cancelled'
+        className =
+          'inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]'
       }
       return <span className={className}>{label}</span>
     }
@@ -1326,7 +1334,7 @@ export default function CRMAccounts() {
                     <div>
                       {(() => {
                         const row = accountRowMap.get(editing._id) || editing
-                        const value: 'not_started' | 'in_progress' | 'complete' =
+                        const value: Account['onboardingStatus'] =
                           row.onboardingStatus ?? 'not_started'
 
                         let label = 'Not started'
@@ -1336,10 +1344,18 @@ export default function CRMAccounts() {
                           label = 'In progress'
                           className =
                             'inline-flex items-center rounded-full border border-sky-500/70 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-100'
+                        } else if (value === 'on_hold') {
+                          label = 'On hold'
+                          className =
+                            'inline-flex items-center rounded-full border border-amber-500/70 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-100'
                         } else if (value === 'complete') {
                           label = 'Complete'
                           className =
                             'inline-flex items-center rounded-full border border-emerald-500/70 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-100'
+                        } else if (value === 'cancelled') {
+                          label = 'Cancelled'
+                          className =
+                            'inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-2 py-0.5 text-[11px] text-[color:var(--color-text-muted)]'
                         }
                         return <span className={className}>{label}</span>
                       })()}

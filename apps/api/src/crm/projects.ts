@@ -68,22 +68,35 @@ async function recomputeOnboardingStatus(db: any, accountIdStr?: string | null) 
     .project({ status: 1 } as any)
     .toArray()) as Array<{ status: ProjectStatus }>
 
-  let onboardingStatus: 'not_started' | 'in_progress' | 'complete' = 'not_started'
+  // Account-level onboarding status mirrors the most advanced state of any onboarding project:
+  // - 'in_progress' if any project is in_progress
+  // - 'on_hold' if none in_progress but at least one on_hold
+  // - 'complete' if none in_progress/on_hold but at least one completed
+  // - 'cancelled' if only cancelled projects exist
+  // - 'not_started' if only not_started (or no onboarding projects)
+  let onboardingStatus:
+    | 'not_started'
+    | 'in_progress'
+    | 'on_hold'
+    | 'complete'
+    | 'cancelled' = 'not_started'
 
   if (rows.length) {
-    const hasInProgressOrOnHold = rows.some(
-      (r: { status: ProjectStatus }) => r.status === 'in_progress' || r.status === 'on_hold',
-    )
-    const hasCompleted = rows.some((r: { status: ProjectStatus }) => r.status === 'completed')
+    const hasInProgress = rows.some((r) => r.status === 'in_progress')
+    const hasOnHold = rows.some((r) => r.status === 'on_hold')
+    const hasCompleted = rows.some((r) => r.status === 'completed')
+    const hasNotStarted = rows.some((r) => r.status === 'not_started')
+    const hasCancelled = rows.some((r) => r.status === 'cancelled')
 
-    if (hasInProgressOrOnHold) {
-      // Any onboarding project that is actively being worked (in progress / on hold)
+    if (hasInProgress) {
       onboardingStatus = 'in_progress'
+    } else if (hasOnHold) {
+      onboardingStatus = 'on_hold'
     } else if (hasCompleted) {
-      // No active projects but at least one completed → overall onboarding complete
       onboardingStatus = 'complete'
+    } else if (hasCancelled && !hasNotStarted) {
+      onboardingStatus = 'cancelled'
     } else {
-      // Only not_started and/or cancelled onboarding projects → treat as not started
       onboardingStatus = 'not_started'
     }
   }
