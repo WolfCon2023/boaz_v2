@@ -109,87 +109,110 @@ accountsRouter.post('/', async (req, res) => {
   }
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
-  // Generate accountNumber starting at 998801
-  // Retry logic to handle race conditions and duplicate key errors
+  // Generate accountNumber starting at 998801 with simple duplicate protection
   let accountNumber: number | undefined
-  let result: any
-  let attempts = 0
-  const maxAttempts = 10
-  
-  while (attempts < maxAttempts) {
+  try {
     try {
-      // Try to get next sequence (only on first attempt)
-      if (accountNumber === undefined) {
-        try {
-          const { getNextSequence } = await import('../db.js')
-          accountNumber = await getNextSequence('accountNumber')
-        } catch {}
-        // Fallback if counter not initialized
-        if (accountNumber === undefined) {
-          try {
-            const last = await db
-              .collection('accounts')
-              .find({ accountNumber: { $type: 'number' } })
-              .project({ accountNumber: 1 })
-              .sort({ accountNumber: -1 })
-              .limit(1)
-              .toArray()
-            accountNumber = Number((last[0] as any)?.accountNumber ?? 998800) + 1
-          } catch {
-            accountNumber = 998801
-          }
-        }
+      const { getNextSequence } = await import('../db.js')
+      accountNumber = await getNextSequence('accountNumber')
+    } catch {}
+    if (accountNumber === undefined) {
+      // Fallback if counter not initialized
+      try {
+        const last = await db
+          .collection('accounts')
+          .find({ accountNumber: { $type: 'number' } })
+          .project({ accountNumber: 1 })
+          .sort({ accountNumber: -1 })
+          .limit(1)
+          .toArray()
+        accountNumber = Number((last[0] as any)?.accountNumber ?? 998800) + 1
+      } catch {
+        accountNumber = 998801
+      }
+    }
+
+    const doc = { ...parsed.data, accountNumber }
+    try {
+      const result = await db.collection('accounts').insertOne(doc)
+
+      // Add history entry for creation
+      const auth = (req as any).auth as { userId: string; email: string } | undefined
+      if (auth) {
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+        await addAccountHistory(
+          db,
+          result.insertedId,
+          'created',
+          `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`,
+          auth.userId,
+          (user as any)?.name,
+          auth.email,
+        )
       } else {
-        // If previous attempt failed, increment and try next number
-        accountNumber++
+        await addAccountHistory(
+          db,
+          result.insertedId,
+          'created',
+          `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`,
+        )
       }
-      
-      const doc = { ...parsed.data, accountNumber }
-      result = await db.collection('accounts').insertOne(doc)
-      break // Success, exit loop
+
+      const finalDoc = { ...parsed.data, accountNumber }
+      return res.status(201).json({ data: { _id: result.insertedId, ...finalDoc }, error: null })
     } catch (err: any) {
-      // Check if it's a duplicate key error
-      if (err.code === 11000 && err.keyPattern?.accountNumber) {
-        attempts++
-        if (attempts >= maxAttempts) {
-          return res.status(500).json({ data: null, error: 'failed_to_generate_account_number' })
+      if (err && err.code === 11000 && err.keyPattern?.accountNumber) {
+        // Align counter with current max and try one more time
+        const maxDocs = await db
+          .collection('accounts')
+          .find({ accountNumber: { $type: 'number' } })
+          .project({ accountNumber: 1 } as any)
+          .sort({ accountNumber: -1 } as any)
+          .limit(1)
+          .toArray()
+        const maxNum = (maxDocs[0] as any)?.accountNumber ?? 998800
+        accountNumber = Number(maxNum) + 1
+        await db
+          .collection<{ _id: string; seq: number }>('counters')
+          .updateOne(
+            { _id: 'accountNumber' },
+            [{ $set: { seq: { $max: ['$seq', accountNumber] } } }] as any,
+            { upsert: true },
+          )
+
+        const retryDoc = { ...parsed.data, accountNumber }
+        const retryResult = await db.collection('accounts').insertOne(retryDoc)
+
+        const auth = (req as any).auth as { userId: string; email: string } | undefined
+        if (auth) {
+          const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+          await addAccountHistory(
+            db,
+            retryResult.insertedId,
+            'created',
+            `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`,
+            auth.userId,
+            (user as any)?.name,
+            auth.email,
+          )
+        } else {
+          await addAccountHistory(
+            db,
+            retryResult.insertedId,
+            'created',
+            `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`,
+          )
         }
-        // Continue loop to retry with incremented number
-        continue
+
+        const finalDoc = { ...parsed.data, accountNumber }
+        return res.status(201).json({ data: { _id: retryResult.insertedId, ...finalDoc }, error: null })
       }
-      // Other errors, rethrow
       throw err
     }
-  }
-  
-  if (!result || accountNumber === undefined) {
+  } catch (err) {
+    console.error('create_account_error', err)
     return res.status(500).json({ data: null, error: 'failed_to_create_account' })
   }
-  
-  // Add history entry for creation
-  const auth = (req as any).auth as { userId: string; email: string } | undefined
-  if (auth) {
-    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
-    await addAccountHistory(
-      db,
-      result.insertedId,
-      'created',
-      `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`,
-      auth.userId,
-      (user as any)?.name,
-      auth.email
-    )
-  } else {
-    await addAccountHistory(
-      db,
-      result.insertedId,
-      'created',
-      `Account created: ${parsed.data.name}${parsed.data.companyName ? ` (${parsed.data.companyName})` : ''}`
-    )
-  }
-  
-  const finalDoc = { ...parsed.data, accountNumber }
-  res.status(201).json({ data: { _id: result.insertedId, ...finalDoc }, error: null })
 })
 
 // PUT /api/crm/accounts/:id

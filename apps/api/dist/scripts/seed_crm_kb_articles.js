@@ -275,7 +275,7 @@ It provides visibility into what each customer owns, where it is deployed, and r
         title: 'Using the Customer Success app in BOAZ‑OS CRM',
         tags: ['crm', 'crm:success', 'health'],
         category: 'Sales & Clients',
-        body: `Customer Success – Health scores, dashboards, and playbooks
+        body: `Customer Success – Health scores, dashboards, timelines, and playbooks
 
 Purpose
 The Customer Success app turns signals from surveys, support tickets, assets, and projects into an account-level health score and clear playbook recommendations.
@@ -290,6 +290,7 @@ Main layout
 - Filters for search and Success level so you can focus on the riskiest customers.
 - Accounts table with columns for Success label, score, and key drivers.
 - CSV export so you can share or analyze Success data outside the app.
+- A compact success timeline in the Account drawer showing recent surveys, support load, projects, and renewals.
 
 How the Success health score works
 The Success health score is a risk score from 0–100. Higher scores mean more risk and therefore a Medium or High Success label.
@@ -558,6 +559,11 @@ When a signer completes the digital signature the app:
 
 Working from Accounts and Deals
 From an Account drawer you can see contracts and renewal information to support QBRs and renewal planning. From a Deal drawer you can see which contracts are tied to that opportunity.
+
+Onboarding and implementation flows
+You can use the Contracts and SLAs app together with Accounts, Projects, and Customer Success to run onboarding flows:
+- From an Account drawer, use the onboarding wizard to create an onboarding project, then open Contracts and SLAs for that account to draft and send the primary agreement.
+- After contracts are in place, use Customer Success to monitor health and trigger follow-up playbooks (for example QBR tasks) as the relationship evolves.
 
 Best practices
 1. Keep contract status and dates accurate so renewals and health dashboards are reliable.
