@@ -104,6 +104,12 @@ type SlaContract = {
 
 type SlaAttachmentView = NonNullable<SlaContract['attachments']>[number]
 
+type ContractTemplate = {
+  _id: string
+  key: string
+  name: string
+  description?: string
+}
 type SeverityRow = {
   key: string
   label: string
@@ -289,6 +295,15 @@ export default function CRMSLAs() {
     },
   })
 
+  const templatesQ = useQuery<{ data: { items: ContractTemplate[] } }>({
+    queryKey: ['contract-templates'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/contract-templates')
+      return res.data as { data: { items: ContractTemplate[] } }
+    },
+  })
+  const templates: ContractTemplate[] = templatesQ.data?.data.items ?? []
+
   const createMutation = useMutation({
     mutationFn: async (payload: Partial<SlaContract>) => {
       const res = await http.post('/api/crm/slas', payload)
@@ -423,6 +438,7 @@ export default function CRMSLAs() {
   const [templateKey, setTemplateKey] = React.useState('')
   const [templateName, setTemplateName] = React.useState('')
   const [templateDescription, setTemplateDescription] = React.useState('')
+  const [selectedTemplateId, setSelectedTemplateId] = React.useState('')
 
   const [page, setPage] = React.useState(0)
   const pageSize = 20
@@ -993,45 +1009,91 @@ export default function CRMSLAs() {
           <div className="absolute inset-0 bg-black/60" onClick={closeModal} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="space-y-0.5">
-                  <h2 className="text-base font-semibold">
-                    {editing._id ? 'Edit contract / SLA' : 'New contract / SLA'}
-                  </h2>
-                  {editing.contractNumber != null && (
-                    <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                      Contract #{editing.contractNumber} · Status: {editing.status}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {editing._id && (
+              <div className="mb-3 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <h2 className="text-base font-semibold">
+                      {editing._id ? 'Edit contract / SLA' : 'New contract / SLA'}
+                    </h2>
+                    {editing.contractNumber != null && (
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Contract #{editing.contractNumber} · Status: {editing.status}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {editing._id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const baseName = editing.name || 'Contract template'
+                          const slug =
+                            baseName
+                              .toLowerCase()
+                              .replace(/[^a-z0-9]+/g, '-')
+                              .replace(/^-|-$/g, '') || 'contract-template'
+                          setTemplateKey(slug)
+                          setTemplateName(baseName)
+                          setTemplateDescription('')
+                          setTemplateDialogOpen(true)
+                        }}
+                        className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                      >
+                        Save as template
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => {
-                        const baseName = editing.name || 'Contract template'
-                        const slug =
-                          baseName
-                            .toLowerCase()
-                            .replace(/[^a-z0-9]+/g, '-')
-                            .replace(/^-|-$/g, '') || 'contract-template'
-                        setTemplateKey(slug)
-                        setTemplateName(baseName)
-                        setTemplateDescription('')
-                        setTemplateDialogOpen(true)
-                      }}
-                      className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                      onClick={closeModal}
+                      className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
                     >
-                      Save as template
+                      Close
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--color-text-muted)]">
+                  <span className="font-semibold text-[color:var(--color-text)]">Template:</span>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    className="min-w-[200px] rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-[11px]"
+                  >
+                    <option value="">No template selected</option>
+                    {templates.map((t) => (
+                      <option key={t._id} value={t._id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  {editing._id && selectedTemplateId && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await http.post<{ data: { html: string } }>(
+                            `/api/crm/slas/${editing._id}/render`,
+                            { templateId: selectedTemplateId },
+                          )
+                          const html = res.data.data.html
+                          const win = window.open('', '_blank')
+                          if (win) {
+                            win.document.open()
+                            win.document.write(html)
+                            win.document.close()
+                          }
+                        } catch (err) {
+                          console.error('Failed to render contract template', err)
+                          toast.showToast(
+                            'BOAZ says: Could not render this contract with the selected template.',
+                            'error',
+                          )
+                        }
+                      }}
+                      className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                    >
+                      Preview template
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-                  >
-                    Close
-                  </button>
                 </div>
               </div>
               <form onSubmit={handleSave} className="space-y-4 text-sm">
