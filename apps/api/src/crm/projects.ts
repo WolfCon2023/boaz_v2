@@ -101,7 +101,18 @@ async function recomputeOnboardingStatus(db: any, accountIdStr?: string | null) 
     }
   }
 
-  await db.collection('accounts').updateOne({ _id: accountObjectId }, { $set: { onboardingStatus } })
+  const accountsColl = db.collection('accounts')
+  const existing = await accountsColl.findOne(
+    { _id: accountObjectId },
+    { projection: { onboardingStatus: 1 } as any },
+  )
+
+  const update: any = { onboardingStatus }
+  if (!existing || (existing as any).onboardingStatus !== onboardingStatus) {
+    update.onboardingStatusChangedAt = new Date()
+  }
+
+  await accountsColl.updateOne({ _id: accountObjectId }, { $set: update })
 }
 
 const createProjectSchema = z.object({

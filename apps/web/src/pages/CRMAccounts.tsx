@@ -18,6 +18,7 @@ type Account = {
   primaryContactEmail?: string
   primaryContactPhone?: string
   onboardingStatus?: 'not_started' | 'in_progress' | 'on_hold' | 'complete' | 'cancelled'
+  onboardingStatusChangedAt?: string
 }
 
 type AccountSurveyStatusSummary = {
@@ -1357,6 +1358,17 @@ export default function CRMAccounts() {
                       <div className="text-[11px] text-[color:var(--color-text-muted)]">
                         Current onboarding status and key onboarding project for this account.
                       </div>
+                      {(() => {
+                        const row = accountRowMap.get(editing._id) || editing
+                        if (!row.onboardingStatusChangedAt) return null
+                        const d = new Date(row.onboardingStatusChangedAt)
+                        if (!Number.isFinite(d.getTime())) return null
+                        return (
+                          <div className="mt-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                            Last status change: {formatDateTime(d.toISOString())}
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div>
                       {(() => {
