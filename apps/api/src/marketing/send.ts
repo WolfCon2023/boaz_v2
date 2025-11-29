@@ -30,7 +30,14 @@ function injectUnsubscribe(html: string, unsubscribeUrl: string): string {
   if (html.includes('{{unsubscribeurl}}')) {
     return html.replaceAll('{{unsubscribeurl}}', unsubscribeUrl)
   }
-  // Case-insensitive replacement as fallback
+
+  // Also handle older patterns like "http://{{unsubscribeurl}}/" or "https://{{unsubscribeurl}}"
+  const fullRegex = /https?:\/\/\{\{unsubscribeurl\}\}\/?/gi
+  if (fullRegex.test(html)) {
+    return html.replace(fullRegex, unsubscribeUrl)
+  }
+
+  // Case-insensitive replacement as fallback for bare token
   const regex = /\{\{unsubscribeurl\}\}/gi
   if (regex.test(html)) {
     return html.replace(regex, unsubscribeUrl)

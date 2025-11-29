@@ -851,7 +851,7 @@ export default function CRMAccounts() {
               navigate(`/apps/crm/tasks?relatedType=account&relatedId=${encodeURIComponent(a._id)}`)
             }}
           >
-            Open
+            View tasks
           </button>
           <button
             type="button"
@@ -878,7 +878,7 @@ export default function CRMAccounts() {
               }
             }}
           >
-            Add
+            Add task
           </button>
         </div>
       )
