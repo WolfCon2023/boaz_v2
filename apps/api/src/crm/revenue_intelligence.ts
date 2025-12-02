@@ -11,19 +11,18 @@ type DealStage = 'Lead' | 'Qualified' | 'Proposal' | 'Negotiation' | 'Closed Won
 
 type DealDoc = {
   _id: string
-  accountId: string
-  name: string
-  value: number
-  stage: DealStage
-  probability: number
-  closeDate: Date
+  accountId?: string
+  title?: string
+  amount?: number
+  stage?: string
+  closeDate?: Date
   ownerId?: string
-  createdAt: Date
-  updatedAt: Date
+  createdAt?: Date
+  updatedAt?: Date
   lastActivityAt?: Date
   daysInStage?: number
-  source?: string
-  lostReason?: string
+  dealNumber?: number
+  approver?: string
 }
 
 type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year'
@@ -59,24 +58,29 @@ function calculateDealScore(deal: DealDoc, accountAge?: number, dealAge?: number
   factors: Array<{ factor: string; impact: number; description: string }>
 } {
   const factors: Array<{ factor: string; impact: number; description: string }> = []
-  let score = deal.probability || 50
+  // Start with a base score of 50 (no probability field in deals)
+  let score = 50
 
   // Factor 1: Stage progression (higher stages = higher confidence)
-  const stageWeights: Record<DealStage, number> = {
+  const stage = deal.stage || 'new'
+  const stageWeights: Record<string, number> = {
+    'new': -10,
     'Lead': -10,
     'Qualified': 0,
     'Proposal': 10,
     'Negotiation': 15,
+    'Contract Signed / Closed Won': 0,
     'Closed Won': 0,
     'Closed Lost': 0,
+    'Submitted for Review': 5,
   }
-  const stageImpact = stageWeights[deal.stage] || 0
+  const stageImpact = stageWeights[stage] || 0
   if (stageImpact !== 0) {
     score += stageImpact
     factors.push({
       factor: 'Deal Stage',
       impact: stageImpact,
-      description: `${deal.stage} stage ${stageImpact > 0 ? 'increases' : 'decreases'} likelihood`,
+      description: `${stage} stage ${stageImpact > 0 ? 'increases' : 'decreases'} likelihood`,
     })
   }
 
@@ -194,11 +198,11 @@ revenueIntelligenceRouter.get('/forecast', async (req, res) => {
   }
   if (ownerId) dealMatch.ownerId = ownerId
 
-  const deals = await db.collection('crm_deals').find(dealMatch).toArray() as any[]
+  const deals = await db.collection('deals').find(dealMatch).toArray() as any[]
 
   // Fetch account ages for scoring
   const accountIds = [...new Set(deals.map((d) => d.accountId).filter(Boolean))]
-  const accounts = await db.collection('crm_accounts').find({ _id: { $in: accountIds.map((id) => new ObjectId(id)) } }).toArray() as any[]
+  const accounts = await db.collection('accounts').find({ _id: { $in: accountIds.map((id) => new ObjectId(id)) } }).toArray() as any[]
   const accountAgeMap = new Map<string, number>()
   accounts.forEach((acc) => {
     const age = acc.createdAt ? Math.ceil((Date.now() - new Date(acc.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0
@@ -219,10 +223,10 @@ revenueIntelligenceRouter.get('/forecast', async (req, res) => {
     }
   })
 
-  // Calculate forecast metrics
-  const totalPipeline = scoredDeals.reduce((sum, d) => sum + (d.value || 0), 0)
-  const weightedPipeline = scoredDeals.reduce((sum, d) => sum + (d.value || 0) * (d.aiScore / 100), 0)
-  const closedWon = scoredDeals.filter((d) => d.stage === 'Closed Won').reduce((sum, d) => sum + (d.value || 0), 0)
+  // Calculate forecast metrics (use 'amount' field from deals)
+  const totalPipeline = scoredDeals.reduce((sum, d) => sum + (d.amount || 0), 0)
+  const weightedPipeline = scoredDeals.reduce((sum, d) => sum + (d.amount || 0) * (d.aiScore / 100), 0)
+  const closedWon = scoredDeals.filter((d) => d.stage === 'Contract Signed / Closed Won' || d.stage === 'Closed Won').reduce((sum, d) => sum + (d.amount || 0), 0)
 
   // Confidence intervals (pessimistic, likely, optimistic)
   const highConfDeals = scoredDeals.filter((d) => d.aiConfidence === 'High')
@@ -230,27 +234,27 @@ revenueIntelligenceRouter.get('/forecast', async (req, res) => {
   const lowConfDeals = scoredDeals.filter((d) => d.aiConfidence === 'Low')
 
   const pessimistic = closedWon +
-    highConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.7, 0) +
-    medConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.3, 0) +
-    lowConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.1, 0)
+    highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.7, 0) +
+    medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.3, 0) +
+    lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.1, 0)
 
   const likely = closedWon +
-    highConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.85, 0) +
-    medConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.5, 0) +
-    lowConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.2, 0)
+    highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.85, 0) +
+    medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.5, 0) +
+    lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.2, 0)
 
   const optimistic = closedWon +
-    highConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.95, 0) +
-    medConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.7, 0) +
-    lowConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.4, 0)
+    highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.95, 0) +
+    medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.7, 0) +
+    lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.4, 0)
 
   // Stage breakdown
   const byStage = scoredDeals.reduce((acc, d) => {
     const stage = d.stage || 'Unknown'
     if (!acc[stage]) acc[stage] = { count: 0, value: 0, weightedValue: 0 }
     acc[stage].count++
-    acc[stage].value += d.value || 0
-    acc[stage].weightedValue += (d.value || 0) * (d.aiScore / 100)
+    acc[stage].value += d.amount || 0
+    acc[stage].weightedValue += (d.amount || 0) * (d.aiScore / 100)
     return acc
   }, {} as Record<string, { count: number; value: number; weightedValue: number }>)
 
@@ -293,7 +297,7 @@ revenueIntelligenceRouter.get('/deal-score/:dealId', async (req, res) => {
     return res.status(400).json({ data: null, error: 'invalid_deal_id' })
   }
 
-  const deal = await db.collection('crm_deals').findOne({ _id: new ObjectId(dealId) }) as any
+  const deal = await db.collection('deals').findOne({ _id: new ObjectId(dealId) }) as any
   if (!deal) {
     return res.status(404).json({ data: null, error: 'deal_not_found' })
   }
@@ -301,7 +305,7 @@ revenueIntelligenceRouter.get('/deal-score/:dealId', async (req, res) => {
   // Get account age
   let accountAge: number | undefined
   if (deal.accountId && ObjectId.isValid(deal.accountId)) {
-    const account = await db.collection('crm_accounts').findOne({ _id: new ObjectId(deal.accountId) }) as any
+    const account = await db.collection('accounts').findOne({ _id: new ObjectId(deal.accountId) }) as any
     if (account?.createdAt) {
       accountAge = Math.ceil((Date.now() - new Date(account.createdAt).getTime()) / (1000 * 60 * 60 * 24))
     }
@@ -315,10 +319,9 @@ revenueIntelligenceRouter.get('/deal-score/:dealId', async (req, res) => {
   res.json({
     data: {
       dealId: deal._id,
-      dealName: deal.name,
-      stage: deal.stage,
-      value: deal.value,
-      probability: deal.probability,
+      dealName: deal.title || 'Untitled',
+      stage: deal.stage || 'new',
+      value: deal.amount || 0,
       ...scoring,
     },
     error: null,
@@ -348,7 +351,7 @@ revenueIntelligenceRouter.get('/rep-performance', async (req, res) => {
   }
 
   // Fetch all deals in period
-  const deals = await db.collection('crm_deals').find({
+  const deals = await db.collection('deals').find({
     closeDate: { $gte: startDate, $lte: endDate },
   }).toArray() as any[]
 
@@ -372,18 +375,18 @@ revenueIntelligenceRouter.get('/rep-performance', async (req, res) => {
       }
     }
     acc[owner].totalDeals++
-    acc[owner].totalValue += deal.value || 0
+    acc[owner].totalValue += deal.amount || 0
     acc[owner].deals.push(deal)
 
-    if (deal.stage === 'Closed Won') {
+    if (deal.stage === 'Contract Signed / Closed Won' || deal.stage === 'Closed Won') {
       acc[owner].closedWon++
-      acc[owner].wonValue += deal.value || 0
+      acc[owner].wonValue += deal.amount || 0
     } else if (deal.stage === 'Closed Lost') {
       acc[owner].closedLost++
-      acc[owner].lostValue += deal.value || 0
+      acc[owner].lostValue += deal.amount || 0
     } else {
       acc[owner].openDeals++
-      acc[owner].pipelineValue += deal.value || 0
+      acc[owner].pipelineValue += deal.amount || 0
     }
 
     return acc

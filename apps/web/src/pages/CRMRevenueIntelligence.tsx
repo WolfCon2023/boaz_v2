@@ -10,13 +10,13 @@ type DealStage = 'Lead' | 'Qualified' | 'Proposal' | 'Negotiation' | 'Closed Won
 
 type Deal = {
   _id: string
-  accountId: string
-  name: string
-  value: number
-  stage: DealStage
-  probability: number
-  closeDate: string
+  accountId?: string
+  title?: string
+  amount?: number
+  stage?: string
+  closeDate?: string
   ownerId?: string
+  dealNumber?: number
   aiScore: number
   aiConfidence: 'High' | 'Medium' | 'Low'
   aiFactors: Array<{ factor: string; impact: number; description: string }>
@@ -327,13 +327,13 @@ export default function CRMRevenueIntelligence() {
                 <tbody>
                   {forecast.deals.slice(0, 50).map((deal) => (
                     <tr key={deal._id} className="border-b border-[color:var(--color-border)]">
-                      <td className="px-2 py-2">{deal.name}</td>
+                      <td className="px-2 py-2">{deal.title || 'Untitled'}</td>
                       <td className="px-2 py-2">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${getStageColor(deal.stage)}`}>
-                          {deal.stage}
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${getStageColor(deal.stage as DealStage)}`}>
+                          {deal.stage || 'new'}
                         </span>
                       </td>
-                      <td className="px-2 py-2 text-right font-semibold">{formatCurrency(deal.value)}</td>
+                      <td className="px-2 py-2 text-right font-semibold">{formatCurrency(deal.amount || 0)}</td>
                       <td className="px-2 py-2 text-center">
                         <span
                           className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -470,7 +470,7 @@ export default function CRMRevenueIntelligence() {
                 <>
                   <div className="mb-4 flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-lg font-semibold">{deal.name}</h2>
+                      <h2 className="text-lg font-semibold">{deal.title || 'Untitled'}</h2>
                       <p className="text-xs text-[color:var(--color-text-muted)]">AI Deal Scoring Analysis</p>
                     </div>
                     <button
@@ -498,7 +498,7 @@ export default function CRMRevenueIntelligence() {
                       </div>
                       <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
                         <div className="text-[10px] text-[color:var(--color-text-muted)]">Value</div>
-                        <div className="mt-1 text-2xl font-semibold">{formatCurrency(deal.value)}</div>
+                        <div className="mt-1 text-2xl font-semibold">{formatCurrency(deal.amount || 0)}</div>
                       </div>
                     </div>
 
