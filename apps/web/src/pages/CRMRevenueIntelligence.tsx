@@ -1,10 +1,9 @@
 import * as React from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
-import { formatDate, formatDateOnly } from '@/lib/dateFormat'
-import { useToast } from '@/components/Toast'
+import { formatDateOnly } from '@/lib/dateFormat'
 
 type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year'
 type DealStage = 'Lead' | 'Qualified' | 'Proposal' | 'Negotiation' | 'Closed Won' | 'Closed Lost'
@@ -64,8 +63,6 @@ type RepPerformance = {
 }
 
 export default function CRMRevenueIntelligence() {
-  const qc = useQueryClient()
-  const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [period, setPeriod] = React.useState<ForecastPeriod>(
@@ -75,15 +72,6 @@ export default function CRMRevenueIntelligence() {
     (searchParams.get('view') as any) || 'forecast',
   )
   const [selectedDealId, setSelectedDealId] = React.useState<string | null>(null)
-  const [scenarioAdjustments, setScenarioAdjustments] = React.useState<
-    Array<{
-      dealId: string
-      newStage?: DealStage
-      newValue?: number
-      newProbability?: number
-      newCloseDate?: string
-    }>
-  >([])
 
   React.useEffect(() => {
     const params = new URLSearchParams()
@@ -117,19 +105,6 @@ export default function CRMRevenueIntelligence() {
             totalWon: number
             avgWinRate: number
           }
-        }
-      }
-    },
-  })
-
-  const scenarioMutation = useMutation({
-    mutationFn: async (adjustments: typeof scenarioAdjustments) => {
-      const res = await http.post('/api/crm/revenue-intelligence/scenario', { period, adjustments })
-      return res.data as {
-        data: {
-          baseline: ForecastData['summary']
-          scenario: any
-          delta: any
         }
       }
     },
