@@ -477,16 +477,90 @@ export default function CRMRevenueIntelligence() {
       )}
 
       {/* What-If Scenario View */}
-      {view === 'scenario' && (
-        <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-          <h2 className="mb-3 text-sm font-semibold">What-If Scenario Modeling</h2>
-          <p className="text-xs text-[color:var(--color-text-muted)] mb-4">
-            Coming soon: Interactive scenario modeling to test pipeline changes and forecast impacts.
-          </p>
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-amber-400">
-            This feature is under development. You'll be able to adjust deal stages, values, and close dates to see how they impact your forecast.
-          </div>
-        </section>
+      {view === 'scenario' && forecast && (
+        <>
+          <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+            <h2 className="mb-3 text-sm font-semibold">What-If Scenario Modeling</h2>
+            <p className="text-xs text-[color:var(--color-text-muted)] mb-4">
+              Select deals below and adjust their stages, values, or close dates to see how changes impact your forecast.
+            </p>
+            
+            {forecast.summary.totalDeals === 0 ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-amber-400">
+                No deals available for scenario modeling. Add deals with forecasted close dates in the selected period.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+                  <h3 className="text-sm font-semibold text-blue-400 mb-2">How to Use</h3>
+                  <ol className="list-decimal pl-5 space-y-1 text-xs text-[color:var(--color-text-muted)]">
+                    <li>Review your current deals in the table below</li>
+                    <li>Click on any deal to see its AI scoring factors</li>
+                    <li>Use the Forecast view to see baseline projections</li>
+                    <li>Advanced scenario modeling (adjust values inline) coming in next release</li>
+                  </ol>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-[color:var(--color-border)] text-[10px] uppercase text-[color:var(--color-text-muted)]">
+                        <th className="px-2 py-2 text-left">Deal</th>
+                        <th className="px-2 py-2 text-left">Stage</th>
+                        <th className="px-2 py-2 text-right">Value</th>
+                        <th className="px-2 py-2 text-center">AI Score</th>
+                        <th className="px-2 py-2 text-center">Confidence</th>
+                        <th className="px-2 py-2 text-left">Forecast Close</th>
+                        <th className="px-2 py-2 text-left">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {forecast.deals.slice(0, 50).map((deal) => (
+                        <tr key={deal._id} className="border-b border-[color:var(--color-border)]">
+                          <td className="px-2 py-2">{deal.title || 'Untitled'}</td>
+                          <td className="px-2 py-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${getStageColor(deal.stage as DealStage)}`}>
+                              {deal.stage || 'new'}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 text-right font-semibold">{formatCurrency(deal.amount || 0)}</td>
+                          <td className="px-2 py-2 text-center">
+                            <span
+                              className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                deal.aiScore >= 70
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : deal.aiScore >= 40
+                                    ? 'bg-amber-500/20 text-amber-400'
+                                    : 'bg-red-500/20 text-red-400'
+                              }`}
+                            >
+                              {deal.aiScore}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${getConfidenceColor(deal.aiConfidence)}`}>
+                              {deal.aiConfidence}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2">{formatDateOnly(deal.forecastedCloseDate || deal.closeDate)}</td>
+                          <td className="px-2 py-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDealId(deal._id)}
+                              className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </section>
+        </>
       )}
 
       {/* Deal Score Detail Modal */}
