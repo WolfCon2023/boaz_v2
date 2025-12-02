@@ -28,6 +28,30 @@ type DealDoc = {
 
 type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year'
 
+type ForecastData = {
+  period: ForecastPeriod
+  startDate: Date
+  endDate: Date
+  summary: {
+    totalDeals: number
+    totalPipeline: number
+    weightedPipeline: number
+    closedWon: number
+    forecast: {
+      pessimistic: number
+      likely: number
+      optimistic: number
+    }
+    confidence: {
+      high: number
+      medium: number
+      low: number
+    }
+  }
+  byStage: Record<string, { count: number; value: number; weightedValue: number }>
+  deals: any[]
+}
+
 // Calculate AI-powered deal score based on multiple factors
 function calculateDealScore(deal: DealDoc, accountAge?: number, dealAge?: number, activityRecency?: number): {
   score: number
@@ -438,7 +462,7 @@ revenueIntelligenceRouter.post('/scenario', async (req, res) => {
   const forecastRes = await fetch(`http://localhost:${process.env.PORT || 4004}/api/crm/revenue-intelligence/forecast?period=${period}`, {
     headers: { cookie: req.headers.cookie || '' },
   })
-  const forecastData = await forecastRes.json()
+  const forecastData = (await forecastRes.json()) as { data: ForecastData }
   const baseline = forecastData.data
 
   // Apply adjustments to deals
