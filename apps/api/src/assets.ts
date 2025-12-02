@@ -164,6 +164,17 @@ function parseLicenseExpirationDate(value?: string | null): Date | null {
   return dt
 }
 
+function formatDateOnly(dt: Date | null | undefined): string | null {
+  if (!dt) return null
+  const d = dt instanceof Date ? dt : new Date(dt)
+  if (!Number.isFinite(d.getTime())) return null
+  // Use UTC to avoid timezone shifts - format as YYYY-MM-DD
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function serializeEnvironment(doc: EnvironmentDoc) {
   return {
     ...doc,
@@ -683,7 +694,13 @@ assetsRouter.get('/license-report', async (req, res) => {
 
   const rows = await db.collection<LicenseDoc>('assets_licenses').aggregate(pipeline).toArray()
 
-  res.json({ data: { items: rows }, error: null })
+  // Format dates as YYYY-MM-DD strings to avoid timezone shifts
+  const formattedRows = rows.map((r: any) => ({
+    ...r,
+    expirationDate: formatDateOnly(r.expirationDate),
+  }))
+
+  res.json({ data: { items: formattedRows }, error: null })
 })
 
 // Installed products report across customers with optional filters
@@ -808,7 +825,14 @@ assetsRouter.get('/product-report', async (req, res) => {
 
   const rows = await db.collection<InstalledProductDoc>('assets_products').aggregate(pipeline).toArray()
 
-  res.json({ data: { items: rows }, error: null })
+  // Format dates as YYYY-MM-DD strings to avoid timezone shifts
+  const formattedRows = rows.map((r: any) => ({
+    ...r,
+    deploymentDate: formatDateOnly(r.deploymentDate),
+    nextExpirationDate: formatDateOnly(r.nextExpirationDate),
+  }))
+
+  res.json({ data: { items: formattedRows }, error: null })
 })
 
 
