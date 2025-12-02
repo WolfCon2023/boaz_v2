@@ -393,6 +393,55 @@ It stores SKU, pricing, cost, margin, category, and status data.
 - Use **Category** and **Status** to organize active vs. legacy offerings.`,
   },
   {
+    title: 'Using the Vendors app in BOAZ‑OS CRM',
+    tags: ['crm', 'crm:vendors', 'catalog'],
+    category: 'Product / Service',
+    body: `# Vendors – Catalog of software, hardware, and service providers
+
+## Purpose
+The **Vendors** app is the catalog of companies that provide software, hardware, cloud services, or third party tools for your customers and internal teams.
+It gives you a single source of truth for vendor contact details, categories, and support information, and feeds into the Assets / Installed Base app.
+
+## Opening the app
+- Go to **CRM Hub → Vendors**.
+- Or use the CRM navigation bar and click **Vendors**.
+
+## Main layout
+- **Header filters** – quick search by name plus an Active or Inactive filter.
+- **Vendor table** – list of vendors with columns for Name, Website, Support contact, Status, and Categories.
+- **Add vendor** – opens a drawer to create a new vendor record.
+
+## Creating and editing vendors
+1. Click **Add vendor** (or **Edit** on an existing row).
+2. Fill in:
+   - **Name** – friendly name that appears in dropdowns.
+   - **Legal name** – official legal entity name (optional).
+   - **Website** – vendor website URL (optional).
+   - **Support email** and **Support phone** – where teams should open tickets or get help.
+   - **Categories** – comma separated values such as "CRM, Telephony, Infrastructure".
+   - **Status** – Active for current vendors, Inactive for legacy or replaced vendors.
+   - **Address** – address lines, city, state or region, postal code, country (optional).
+   - **Notes** – internal notes or guidance about the vendor (optional).
+3. Click **Save** to write the record to the vendor catalog.
+
+## Categories
+- Use **Categories** to group vendors by domain or responsibility.
+- Examples: CRM, Billing, Telephony, Infrastructure, Integration, Security.
+- Categories can be used later in reporting or filters.
+
+## Using vendors in Assets / Installed Base
+- When adding an installed product in **Assets / Installed Base**:
+  - Use the **Vendor** dropdown to select from the Vendors catalog.
+  - The vendor name is copied into the installed product for reporting.
+  - You can still override the vendor name or type a custom vendor for one off tools.
+
+## Best practices
+- Keep **Status** accurate so inactive vendors do not clutter dropdowns.
+- Use clear, consistent **Categories** so reports and filters stay readable.
+- Store **support email and phone** for quick access when troubleshooting incidents.
+- Use **Notes** to capture contract nuances or internal guidance on how to work with each vendor.`,
+  },
+  {
     title: 'Using the Quotes app in BOAZ‑OS CRM',
     tags: ['crm', 'crm:quotes', 'sales'],
     category: 'Sales & Clients',
