@@ -240,6 +240,7 @@ export default function CRMRevenueIntelligence() {
 
           {/* Summary Cards */}
           {forecast.summary.totalDeals > 0 && (
+          <>
           <section className="grid gap-4 md:grid-cols-4">
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
               <div className="text-xs text-[color:var(--color-text-muted)]">Total Pipeline</div>
@@ -331,7 +332,6 @@ export default function CRMRevenueIntelligence() {
           </section>
 
           {/* Deals Table */}
-          {forecast.summary.totalDeals > 0 && (
           <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
             <h2 className="mb-3 text-sm font-semibold">Deals in Period ({forecast.deals.length})</h2>
             <div className="overflow-x-auto">
@@ -391,6 +391,7 @@ export default function CRMRevenueIntelligence() {
               </table>
             </div>
           </section>
+          </>
           )}
         </>
       )}
