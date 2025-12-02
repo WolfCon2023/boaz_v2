@@ -28,6 +28,7 @@ import CRMApprovalQueue from '@/pages/CRMApprovalQueue'
 import CRMDealApprovalQueue from '@/pages/CRMDealApprovalQueue'
 import CRMInvoices from '@/pages/CRMInvoices'
 import CRMProducts from '@/pages/CRMProducts'
+import CRMVendors from '@/pages/CRMVendors'
 import CRMAssets from '@/pages/CRMAssets'
 import CRMAssetsReport from '@/pages/CRMAssetsReport'
 import CRMInvoicePrint from '@/pages/CRMInvoicePrint'
@@ -87,6 +88,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/slas', element: <RequireAuth><RequireApplication appKey="crm"><CRMSLAs /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/renewals', element: <RequireAuth><RequireApplication appKey="crm"><CRMRenewals /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/products', element: <RequireAuth><RequireApplication appKey="crm"><CRMProducts /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/vendors', element: <RequireAuth><RequireApplication appKey="crm"><CRMVendors /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/assets', element: <RequireAuth><RequireApplication appKey="crm"><CRMAssets /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/assets/report', element: <RequireAuth><RequireApplication appKey="crm"><CRMAssetsReport /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/outreach/templates', element: <RequireAuth><RequireApplication appKey="crm"><CRMOutreachTemplates /></RequireApplication></RequireAuth> },

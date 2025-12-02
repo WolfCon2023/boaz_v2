@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { requireAuth } from '../auth/rbac.js'
 import { sendAuthEmail } from '../auth/email.js'
 import { env } from '../env.js'
+import { vendorsRouter } from './vendors.js'
 
 export const crmRouter = Router()
 
@@ -450,5 +451,8 @@ crmRouter.get('/contacts/:id/history', async (req, res) => {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }
 })
+
+// Mount sub-routers that use /api/crm prefix
+crmRouter.use('/vendors', vendorsRouter)
 
 

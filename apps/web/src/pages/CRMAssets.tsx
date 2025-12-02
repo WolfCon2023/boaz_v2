@@ -84,6 +84,13 @@ type CatalogProduct = {
   isActive?: boolean
 }
 
+type VendorOption = {
+  id: string
+  name: string
+  website?: string
+  status: 'Active' | 'Inactive'
+}
+
 export default function CRMAssets() {
   const toast = useToast()
   const qc = useQueryClient()
@@ -104,6 +111,7 @@ export default function CRMAssets() {
   const [newProdName, setNewProdName] = React.useState('')
   const [newProdType, setNewProdType] = React.useState('Software')
   const [newProdVendor, setNewProdVendor] = React.useState('')
+  const [newProdVendorId, setNewProdVendorId] = React.useState('')
   const [newProdVersion, setNewProdVersion] = React.useState('')
   const [newProdStatus, setNewProdStatus] = React.useState('Active')
   const [newProdSupport, setNewProdSupport] = React.useState('Standard')
@@ -171,6 +179,17 @@ export default function CRMAssets() {
   const environments = environmentsQ.data?.data.items ?? []
   const products = productsQ.data?.data.items ?? []
   const catalogProducts = catalogProductsQ.data?.data.items ?? []
+
+  const vendorsQ = useQuery({
+    queryKey: ['assets-vendors'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/vendors/options', {
+        params: { status: 'Active' },
+      })
+      return res.data as { data: { items: VendorOption[] } }
+    },
+  })
+  const vendors = vendorsQ.data?.data.items ?? []
   const summary = summaryQ.data?.data
   const productIdForLicenses = licenseProduct?._id ?? ''
 
@@ -307,6 +326,8 @@ export default function CRMAssets() {
       setNewProdCatalogId('')
       setNewProdUsageType('Customer')
       setNewProdLinkedAccountId('')
+      setNewProdVendor('')
+      setNewProdVendorId('')
       setNewProdType('Software')
       setNewProdVendor('')
       setNewProdVersion('')
@@ -889,11 +910,35 @@ export default function CRMAssets() {
                 </select>
               </div>
               <div>
+                <label className="mb-1 block text-[10px] text-[color:var(--color-text-muted)]">
+                  Vendor
+                </label>
+                <select
+                  value={newProdVendorId}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setNewProdVendorId(value)
+                    if (value) {
+                      const v = vendors.find((x) => x.id === value)
+                      if (v) {
+                        setNewProdVendor(v.name)
+                      }
+                    }
+                  }}
+                  className="mb-1 w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="">Select vendor (optional)</option>
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </select>
                 <input
                   type="text"
                   value={newProdVendor}
                   onChange={(e) => setNewProdVendor(e.target.value)}
-                  placeholder="Vendor"
+                  placeholder="Vendor name (custom allowed)"
                   className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
                 />
               </div>

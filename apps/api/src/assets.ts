@@ -105,7 +105,8 @@ const installedProductSchema = z.object({
   version: z.string().trim().optional().nullable(),
   serialNumber: z.string().trim().optional().nullable(),
   configuration: z.any().optional(),
-  deploymentDate: z.string().datetime().optional(), // ISO string
+  // Accept any string here (ISO or YYYY-MM-DD). We will parse and validate manually.
+  deploymentDate: z.string().trim().optional().nullable(),
   status: z.enum(['Active', 'Needs Upgrade', 'Pending Renewal', 'Retired']).default('Active'),
   supportLevel: z.enum(['Basic', 'Standard', 'Premium']).optional(),
 })
