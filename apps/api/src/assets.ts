@@ -21,6 +21,7 @@ type EnvironmentType =
 type ProductStatus = 'Active' | 'Needs Upgrade' | 'Pending Renewal' | 'Retired'
 type ProductType = 'Software' | 'Hardware' | 'Cloud Service' | 'Integration' | 'Subscription'
 type SupportLevel = 'Basic' | 'Standard' | 'Premium'
+type ProductUsageType = 'Customer' | 'Internal'
 
 type LicenseType = 'Seat-based' | 'Device-based' | 'Perpetual' | 'Subscription'
 type RenewalStatus = 'Active' | 'Expired' | 'Pending Renewal'
@@ -41,6 +42,8 @@ type InstalledProductDoc = {
   _id: string
   customerId: string
   environmentId: string
+  usageType?: ProductUsageType
+  linkedAccountId?: string
   catalogProductId?: string
   productName: string
   productType: ProductType
@@ -93,6 +96,8 @@ const environmentUpdateSchema = environmentSchema.partial()
 const installedProductSchema = z.object({
   customerId: z.string().trim().min(1),
   environmentId: z.string().trim().min(1),
+  usageType: z.enum(['Customer', 'Internal']).default('Customer'),
+  linkedAccountId: z.string().trim().optional(),
   catalogProductId: z.string().trim().optional(),
   productName: z.string().trim().min(1),
   productType: z.enum(['Software', 'Hardware', 'Cloud Service', 'Integration', 'Subscription']),
@@ -266,6 +271,8 @@ assetsRouter.post('/products', async (req, res) => {
     _id,
     customerId: parsed.data.customerId,
     environmentId: parsed.data.environmentId,
+    usageType: parsed.data.usageType ?? 'Customer',
+    linkedAccountId: parsed.data.linkedAccountId,
     catalogProductId: parsed.data.catalogProductId,
     productName: parsed.data.productName,
     productType: parsed.data.productType,
@@ -337,6 +344,8 @@ assetsRouter.put('/products/:productId', async (req, res) => {
 
   if (parsed.data.customerId !== undefined) update.customerId = parsed.data.customerId
   if (parsed.data.environmentId !== undefined) update.environmentId = parsed.data.environmentId
+   if (parsed.data.usageType !== undefined) update.usageType = parsed.data.usageType
+   if (parsed.data.linkedAccountId !== undefined) update.linkedAccountId = parsed.data.linkedAccountId
   if (parsed.data.catalogProductId !== undefined) update.catalogProductId = parsed.data.catalogProductId
   if (parsed.data.productName !== undefined) update.productName = parsed.data.productName
   if (parsed.data.productType !== undefined) update.productType = parsed.data.productType

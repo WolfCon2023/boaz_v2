@@ -28,6 +28,8 @@ type InstalledProduct = {
   _id: string
   customerId: string
   environmentId: string
+  usageType?: 'Customer' | 'Internal'
+  linkedAccountId?: string
   catalogProductId?: string
   productName: string
   productType: string
@@ -96,6 +98,8 @@ export default function CRMAssets() {
   const [newEnvNotes, setNewEnvNotes] = React.useState('')
 
   const [newProdEnvId, setNewProdEnvId] = React.useState('')
+  const [newProdUsageType, setNewProdUsageType] = React.useState<'Customer' | 'Internal'>('Customer')
+  const [newProdLinkedAccountId, setNewProdLinkedAccountId] = React.useState('')
   const [newProdCatalogId, setNewProdCatalogId] = React.useState('')
   const [newProdName, setNewProdName] = React.useState('')
   const [newProdType, setNewProdType] = React.useState('Software')
@@ -278,6 +282,8 @@ export default function CRMAssets() {
       const payload: any = {
         customerId,
         environmentId: newProdEnvId,
+        usageType: newProdUsageType,
+        linkedAccountId: newProdLinkedAccountId || undefined,
         catalogProductId: newProdCatalogId || undefined,
         productName: newProdName.trim(),
         productType: newProdType as any,
@@ -299,6 +305,8 @@ export default function CRMAssets() {
       setNewProdEnvId('')
       setNewProdName('')
       setNewProdCatalogId('')
+      setNewProdUsageType('Customer')
+      setNewProdLinkedAccountId('')
       setNewProdType('Software')
       setNewProdVendor('')
       setNewProdVersion('')
@@ -779,6 +787,45 @@ export default function CRMAssets() {
           <div className="space-y-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-[11px]">
             <div className="mb-1 font-semibold text-[color:var(--color-text)]">Add installed product</div>
             <div className="grid gap-2 md:grid-cols-4">
+              <div>
+                <label className="mb-1 block text-[10px] text-[color:var(--color-text-muted)]">Usage</label>
+                <select
+                  value={newProdUsageType}
+                  onChange={(e) => {
+                    const value = e.target.value as 'Customer' | 'Internal'
+                    setNewProdUsageType(value)
+                    if (value === 'Customer' && customerId) {
+                      setNewProdLinkedAccountId(customerId)
+                    }
+                    if (value === 'Internal') {
+                      setNewProdLinkedAccountId('')
+                    }
+                  }}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="Customer">Customer deployment</option>
+                  <option value="Internal">Internal or shared asset</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] text-[color:var(--color-text-muted)]">
+                  Associated account {newProdUsageType === 'Internal' ? '(optional)' : ''}
+                </label>
+                <select
+                  value={newProdLinkedAccountId}
+                  onChange={(e) => setNewProdLinkedAccountId(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="">
+                    {newProdUsageType === 'Internal' ? 'None / internal only' : 'Match selected customer'}
+                  </option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.accountNumber ? `${c.accountNumber} – ${c.name}` : c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="md:col-span-2 space-y-1">
                 <select
                   value={newProdCatalogId}
