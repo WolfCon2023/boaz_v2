@@ -392,10 +392,8 @@ export default function CRMAssets() {
         renewalStatus: licenseRenewalStatus as any,
       }
       if (licenseExpiration) {
-        const d = new Date(licenseExpiration)
-        if (!Number.isNaN(d.getTime())) {
-          payload.expirationDate = d.toISOString()
-        }
+        // Send raw YYYY-MM-DD so the API can treat it as date-only.
+        payload.expirationDate = licenseExpiration
       }
       if (licenseCost.trim()) {
         const c = Number(licenseCost)
@@ -430,10 +428,8 @@ export default function CRMAssets() {
         renewalStatus: licenseRenewalStatus as any,
       }
       if (licenseExpiration) {
-        const d = new Date(licenseExpiration)
-        if (!Number.isNaN(d.getTime())) {
-          payload.expirationDate = d.toISOString()
-        }
+        // Send raw YYYY-MM-DD so the API can treat it as date-only.
+        payload.expirationDate = licenseExpiration
       } else {
         payload.expirationDate = null
       }

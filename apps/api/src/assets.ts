@@ -120,7 +120,8 @@ const licenseSchema = z.object({
   licenseIdentifier: z.string().trim().optional(),
   licenseCount: z.number().int().min(1),
   seatsAssigned: z.number().int().min(0).optional().default(0),
-  expirationDate: z.string().datetime().optional(), // ISO
+  // Accept any string here and parse manually to avoid timezone issues.
+  expirationDate: z.string().trim().optional(),
   renewalStatus: z.enum(['Active', 'Expired', 'Pending Renewal']).default('Active'),
   cost: z.number().nonnegative().optional(),
   assignedUsers: z.array(z.string().trim()).optional(),
@@ -134,6 +135,23 @@ function parseDeploymentDate(value?: string | null): Date | null {
   if (!v) return null
 
   // Handle YYYY-MM-DD as a date-only value, anchored at midday UTC to avoid timezone shifts
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y, m, d] = v.split('-').map((s) => Number(s))
+    const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+    if (!Number.isFinite(dt.getTime())) return null
+    return dt
+  }
+
+  const dt = new Date(v)
+  if (!Number.isFinite(dt.getTime())) return null
+  return dt
+}
+
+function parseLicenseExpirationDate(value?: string | null): Date | null {
+  if (!value) return null
+  const v = String(value).trim()
+  if (!v) return null
+
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
     const [y, m, d] = v.split('-').map((s) => Number(s))
     const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
@@ -414,7 +432,7 @@ assetsRouter.post('/licenses', async (req, res) => {
   const now = new Date()
   const _id = new ObjectId().toHexString()
 
-  const expirationDate = parsed.data.expirationDate ? new Date(parsed.data.expirationDate) : null
+  const expirationDate = parseLicenseExpirationDate(parsed.data.expirationDate)
 
   if (parsed.data.seatsAssigned && parsed.data.seatsAssigned > parsed.data.licenseCount) {
     return res.status(400).json({ data: null, error: 'seats_exceed_license_count' })
@@ -473,7 +491,7 @@ assetsRouter.put('/licenses/:licenseId', async (req, res) => {
   if (parsed.data.licenseCount !== undefined) update.licenseCount = parsed.data.licenseCount
   if (parsed.data.seatsAssigned !== undefined) update.seatsAssigned = parsed.data.seatsAssigned
   if (parsed.data.expirationDate !== undefined) {
-    update.expirationDate = parsed.data.expirationDate ? new Date(parsed.data.expirationDate) : null
+    update.expirationDate = parseLicenseExpirationDate(parsed.data.expirationDate)
   }
   if (parsed.data.renewalStatus !== undefined) update.renewalStatus = parsed.data.renewalStatus
   if (parsed.data.cost !== undefined) update.cost = parsed.data.cost
