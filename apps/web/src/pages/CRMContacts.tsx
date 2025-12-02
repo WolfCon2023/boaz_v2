@@ -241,6 +241,8 @@ export default function CRMContacts() {
   const enrollmentsQ = useQuery({
     queryKey: ['outreach-enrollments', editing?._id],
     enabled: Boolean(editing?._id),
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async () => {
       const res = await http.get('/api/crm/outreach/enroll', { params: { contactId: editing?._id, includeCompleted: false } })
       return res.data as { data: { items: Array<{ _id: string; sequenceId: string; startedAt: string; lastStepIndex?: number; completedAt?: string | null }> } }
