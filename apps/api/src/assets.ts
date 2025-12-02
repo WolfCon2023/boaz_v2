@@ -47,9 +47,9 @@ type InstalledProductDoc = {
   catalogProductId?: string
   productName: string
   productType: ProductType
-  vendor?: string
-  version?: string
-  serialNumber?: string
+  vendor?: string | null
+  version?: string | null
+  serialNumber?: string | null
   configuration?: any
   deploymentDate?: Date | null
   status: ProductStatus
@@ -101,9 +101,9 @@ const installedProductSchema = z.object({
   catalogProductId: z.string().trim().optional(),
   productName: z.string().trim().min(1),
   productType: z.enum(['Software', 'Hardware', 'Cloud Service', 'Integration', 'Subscription']),
-  vendor: z.string().trim().optional(),
-  version: z.string().trim().optional(),
-  serialNumber: z.string().trim().optional(),
+  vendor: z.string().trim().optional().nullable(),
+  version: z.string().trim().optional().nullable(),
+  serialNumber: z.string().trim().optional().nullable(),
   configuration: z.any().optional(),
   deploymentDate: z.string().datetime().optional(), // ISO string
   status: z.enum(['Active', 'Needs Upgrade', 'Pending Renewal', 'Retired']).default('Active'),
