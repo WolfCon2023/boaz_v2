@@ -686,4 +686,129 @@ assetsRouter.get('/license-report', async (req, res) => {
   res.json({ data: { items: rows }, error: null })
 })
 
+// Installed products report across customers with optional filters
+assetsRouter.get('/product-report', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const productMatch: any = {}
+
+  const customerId = typeof req.query.customerId === 'string' ? req.query.customerId.trim() : ''
+  if (customerId) productMatch.customerId = customerId
+
+  const environmentId = typeof req.query.environmentId === 'string' ? req.query.environmentId.trim() : ''
+  if (environmentId) productMatch.environmentId = environmentId
+
+  const vendor = typeof req.query.vendor === 'string' ? req.query.vendor.trim() : ''
+  if (vendor) productMatch.vendor = { $regex: vendor, $options: 'i' }
+
+  const productStatus = typeof req.query.productStatus === 'string' ? req.query.productStatus.trim() : ''
+  if (productStatus && ['Active', 'Needs Upgrade', 'Pending Renewal', 'Retired'].includes(productStatus)) {
+    productMatch.status = productStatus
+  }
+
+  const productType = typeof req.query.productType === 'string' ? req.query.productType.trim() : ''
+  if (productType && ['Software', 'Hardware', 'Cloud Service', 'Integration', 'Subscription'].includes(productType)) {
+    productMatch.productType = productType
+  }
+
+  const windowDays = Number(req.query.windowDays ?? 0)
+  const now = new Date()
+  const end =
+    Number.isFinite(windowDays) && windowDays > 0
+      ? new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000)
+      : null
+
+  const pipeline: any[] = [
+    { $match: productMatch },
+    {
+      $lookup: {
+        from: 'assets_environments',
+        localField: 'environmentId',
+        foreignField: '_id',
+        as: 'env',
+      },
+    },
+    { $unwind: { path: '$env', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: 'assets_licenses',
+        localField: '_id',
+        foreignField: 'productId',
+        as: 'licenses',
+      },
+    },
+    {
+      $addFields: {
+        totalLicenseCount: { $sum: '$licenses.licenseCount' },
+        totalSeatsAssigned: { $sum: '$licenses.seatsAssigned' },
+        activeLicenses: {
+          $size: {
+            $filter: {
+              input: '$licenses',
+              as: 'lic',
+              cond: { $eq: ['$$lic.renewalStatus', 'Active'] },
+            },
+          },
+        },
+        pendingLicenses: {
+          $size: {
+            $filter: {
+              input: '$licenses',
+              as: 'lic',
+              cond: { $eq: ['$$lic.renewalStatus', 'Pending Renewal'] },
+            },
+          },
+        },
+        expiredLicenses: {
+          $size: {
+            $filter: {
+              input: '$licenses',
+              as: 'lic',
+              cond: { $eq: ['$$lic.renewalStatus', 'Expired'] },
+            },
+          },
+        },
+        nextExpirationDate: {
+          $min: '$licenses.expirationDate',
+        },
+      },
+    },
+  ]
+
+  if (end) {
+    pipeline.push({
+      $match: {
+        nextExpirationDate: { $ne: null, $gte: now, $lte: end },
+      },
+    })
+  }
+
+  pipeline.push({
+    $project: {
+      _id: 1,
+      customerId: 1,
+      environmentId: 1,
+      environmentName: '$env.name',
+      environmentType: '$env.environmentType',
+      productName: '$productName',
+      productType: '$productType',
+      vendor: '$vendor',
+      status: '$status',
+      supportLevel: '$supportLevel',
+      deploymentDate: '$deploymentDate',
+      totalLicenseCount: 1,
+      totalSeatsAssigned: 1,
+      activeLicenses: 1,
+      pendingLicenses: 1,
+      expiredLicenses: 1,
+      nextExpirationDate: 1,
+    },
+  })
+
+  const rows = await db.collection<InstalledProductDoc>('assets_products').aggregate(pipeline).toArray()
+
+  res.json({ data: { items: rows }, error: null })
+})
+
 
