@@ -312,10 +312,9 @@ export default function CRMAssets() {
         supportLevel: newProdSupport as any,
       }
       if (newProdDeploymentDate) {
-        const d = new Date(newProdDeploymentDate)
-        if (!Number.isNaN(d.getTime())) {
-          payload.deploymentDate = d.toISOString()
-        }
+        // Send the raw YYYY-MM-DD string to the API so it can be interpreted
+        // as a date-only value without timezone shifts.
+        payload.deploymentDate = newProdDeploymentDate
       }
       const res = await http.post('/api/assets/products', payload)
       return res.data

@@ -30,6 +30,7 @@ export default function CRMVendors() {
   const [q, setQ] = React.useState('')
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'Active' | 'Inactive'>('all')
   const [editing, setEditing] = React.useState<Vendor | null>(null)
+  const [categoriesDraft, setCategoriesDraft] = React.useState('')
 
   const { data, isFetching } = useQuery({
     queryKey: ['vendors', q, statusFilter],
@@ -210,7 +211,10 @@ export default function CRMVendors() {
                         <button
                           type="button"
                           className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
-                          onClick={() => setEditing(v)}
+                          onClick={() => {
+                            setEditing(v)
+                            setCategoriesDraft((v.categories ?? []).join(', '))
+                          }}
                         >
                           Edit
                         </button>
@@ -331,16 +335,8 @@ export default function CRMVendors() {
                   </label>
                   <input
                     type="text"
-                    value={(editing.categories ?? []).join(', ')}
-                    onChange={(e) =>
-                      setEditing({
-                        ...editing,
-                        categories: e.target.value
-                          .split(',')
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
+                    value={categoriesDraft}
+                    onChange={(e) => setCategoriesDraft(e.target.value)}
                     className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
                   />
                 </div>
@@ -451,7 +447,10 @@ export default function CRMVendors() {
                       postalCode: editing.postalCode?.trim() || undefined,
                       country: editing.country?.trim() || undefined,
                       status: editing.status,
-                      categories: (editing.categories ?? []).filter(Boolean),
+                      categories: categoriesDraft
+                        .split(',')
+                        .map((s) => s.trim())
+                        .filter(Boolean),
                       notes: editing.notes ?? undefined,
                     }
                     saveVendor.mutate(payload)
