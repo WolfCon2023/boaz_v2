@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
@@ -40,6 +40,7 @@ type ProductReportRow = {
 
 export default function CRMAssetsProductsReport() {
   const toast = useToast()
+  const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [customerId, setCustomerId] = React.useState(searchParams.get('customerId') ?? 'all')
@@ -234,6 +235,44 @@ export default function CRMAssetsProductsReport() {
     a.click()
     URL.revokeObjectURL(url)
   }
+
+  const [editingProduct, setEditingProduct] = React.useState<ProductReportRow | null>(null)
+  const [editProductName, setEditProductName] = React.useState('')
+  const [editProductType, setEditProductType] = React.useState('Software')
+  const [editVendor, setEditVendor] = React.useState('')
+  const [editStatus, setEditStatus] = React.useState('Active')
+  const [editSupportLevel, setEditSupportLevel] = React.useState('Standard')
+  const [editDeploymentDate, setEditDeploymentDate] = React.useState('')
+
+  const updateProduct = useMutation({
+    mutationFn: async () => {
+      if (!editingProduct) throw new Error('No product selected.')
+      const payload: any = {
+        productName: editProductName.trim(),
+        productType: editProductType as any,
+        vendor: editVendor.trim() || undefined,
+        status: editStatus as any,
+        supportLevel: editSupportLevel as any,
+      }
+      if (editDeploymentDate) {
+        payload.deploymentDate = editDeploymentDate
+      } else {
+        payload.deploymentDate = null
+      }
+      const res = await http.put(`/api/assets/products/${editingProduct._id}`, payload)
+      return res.data
+    },
+    onSuccess: () => {
+      setEditingProduct(null)
+      qc.invalidateQueries({ queryKey: ['assets-product-report'] })
+      qc.invalidateQueries({ queryKey: ['assets-summary'] })
+      toast.showToast('Installed product updated.', 'success')
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to update installed product.'
+      toast.showToast(msg, 'error')
+    },
+  })
 
   return (
     <div className="space-y-6">
@@ -443,6 +482,21 @@ export default function CRMAssetsProductsReport() {
                           >
                             Open assets
                           </button>
+                          <button
+                            type="button"
+                            className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+                            onClick={() => {
+                              setEditingProduct(r)
+                              setEditProductName(r.productName)
+                              setEditProductType((r.productType as any) || 'Software')
+                              setEditVendor(r.vendor ?? '')
+                              setEditStatus((r.status as any) || 'Active')
+                              setEditSupportLevel((r.supportLevel as any) || 'Standard')
+                              setEditDeploymentDate(r.deploymentDate ? r.deploymentDate.slice(0, 10) : '')
+                            }}
+                          >
+                            Edit product
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -453,6 +507,136 @@ export default function CRMAssetsProductsReport() {
           </div>
         )}
       </section>
+
+      {editingProduct && (
+        <div className="fixed inset-0 z-[2147483647]">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => {
+              if (updateProduct.isPending) return
+              setEditingProduct(null)
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,34rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-xs shadow-2xl">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold">Edit installed product</div>
+                  <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                    {editingProduct.productName}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Product name
+                  </label>
+                  <input
+                    type="text"
+                    value={editProductName}
+                    onChange={(e) => setEditProductName(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Type
+                  </label>
+                  <select
+                    value={editProductType}
+                    onChange={(e) => setEditProductType(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  >
+                    <option value="Software">Software</option>
+                    <option value="Hardware">Hardware</option>
+                    <option value="Cloud Service">Cloud Service</option>
+                    <option value="Integration">Integration</option>
+                    <option value="Subscription">Subscription</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Vendor
+                  </label>
+                  <input
+                    type="text"
+                    value={editVendor}
+                    onChange={(e) => setEditVendor(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Status
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Needs Upgrade">Needs Upgrade</option>
+                    <option value="Pending Renewal">Pending Renewal</option>
+                    <option value="Retired">Retired</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Support level
+                  </label>
+                  <select
+                    value={editSupportLevel}
+                    onChange={(e) => setEditSupportLevel(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  >
+                    <option value="Basic">Basic</option>
+                    <option value="Standard">Standard</option>
+                    <option value="Premium">Premium</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Deployment date
+                  </label>
+                  <input
+                    type="date"
+                    value={editDeploymentDate}
+                    onChange={(e) => setEditDeploymentDate(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                  disabled={updateProduct.isPending}
+                  onClick={() => setEditingProduct(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={updateProduct.isPending || !editProductName.trim()}
+                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                  onClick={() => {
+                    if (!editProductName.trim()) {
+                      toast.showToast('Product name is required.', 'error')
+                      return
+                    }
+                    updateProduct.mutate()
+                  }}
+                >
+                  Save changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
