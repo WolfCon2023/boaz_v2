@@ -41,6 +41,7 @@ type InstalledProductDoc = {
   _id: string
   customerId: string
   environmentId: string
+  catalogProductId?: string
   productName: string
   productType: ProductType
   vendor?: string
@@ -92,6 +93,7 @@ const environmentUpdateSchema = environmentSchema.partial()
 const installedProductSchema = z.object({
   customerId: z.string().trim().min(1),
   environmentId: z.string().trim().min(1),
+  catalogProductId: z.string().trim().optional(),
   productName: z.string().trim().min(1),
   productType: z.enum(['Software', 'Hardware', 'Cloud Service', 'Integration', 'Subscription']),
   vendor: z.string().trim().optional(),
@@ -264,6 +266,7 @@ assetsRouter.post('/products', async (req, res) => {
     _id,
     customerId: parsed.data.customerId,
     environmentId: parsed.data.environmentId,
+    catalogProductId: parsed.data.catalogProductId,
     productName: parsed.data.productName,
     productType: parsed.data.productType,
     vendor: parsed.data.vendor,
@@ -334,6 +337,7 @@ assetsRouter.put('/products/:productId', async (req, res) => {
 
   if (parsed.data.customerId !== undefined) update.customerId = parsed.data.customerId
   if (parsed.data.environmentId !== undefined) update.environmentId = parsed.data.environmentId
+  if (parsed.data.catalogProductId !== undefined) update.catalogProductId = parsed.data.catalogProductId
   if (parsed.data.productName !== undefined) update.productName = parsed.data.productName
   if (parsed.data.productType !== undefined) update.productType = parsed.data.productType
   if (parsed.data.vendor !== undefined) update.vendor = parsed.data.vendor

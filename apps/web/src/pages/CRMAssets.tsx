@@ -28,6 +28,7 @@ type InstalledProduct = {
   _id: string
   customerId: string
   environmentId: string
+  catalogProductId?: string
   productName: string
   productType: string
   vendor?: string
@@ -73,6 +74,14 @@ type Summary = {
   }
 }
 
+type CatalogProduct = {
+  _id: string
+  name: string
+  sku?: string
+  type?: string
+  isActive?: boolean
+}
+
 export default function CRMAssets() {
   const toast = useToast()
   const qc = useQueryClient()
@@ -87,6 +96,7 @@ export default function CRMAssets() {
   const [newEnvNotes, setNewEnvNotes] = React.useState('')
 
   const [newProdEnvId, setNewProdEnvId] = React.useState('')
+  const [newProdCatalogId, setNewProdCatalogId] = React.useState('')
   const [newProdName, setNewProdName] = React.useState('')
   const [newProdType, setNewProdType] = React.useState('Software')
   const [newProdVendor, setNewProdVendor] = React.useState('')
@@ -143,9 +153,20 @@ export default function CRMAssets() {
     },
   })
 
+  const catalogProductsQ = useQuery({
+    queryKey: ['assets-product-catalog'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/products', {
+        params: { isActive: true, sort: 'name', dir: 'asc' },
+      })
+      return res.data as { data: { items: CatalogProduct[] } }
+    },
+  })
+
   const customers = customersQ.data?.data.items ?? []
   const environments = environmentsQ.data?.data.items ?? []
   const products = productsQ.data?.data.items ?? []
+  const catalogProducts = catalogProductsQ.data?.data.items ?? []
   const summary = summaryQ.data?.data
   const productIdForLicenses = licenseProduct?._id ?? ''
 
@@ -257,6 +278,7 @@ export default function CRMAssets() {
       const payload: any = {
         customerId,
         environmentId: newProdEnvId,
+        catalogProductId: newProdCatalogId || undefined,
         productName: newProdName.trim(),
         productType: newProdType as any,
         vendor: newProdVendor.trim() || undefined,
@@ -276,6 +298,7 @@ export default function CRMAssets() {
     onSuccess: () => {
       setNewProdEnvId('')
       setNewProdName('')
+      setNewProdCatalogId('')
       setNewProdType('Software')
       setNewProdVendor('')
       setNewProdVersion('')
@@ -756,12 +779,38 @@ export default function CRMAssets() {
           <div className="space-y-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-[11px]">
             <div className="mb-1 font-semibold text-[color:var(--color-text)]">Add installed product</div>
             <div className="grid gap-2 md:grid-cols-4">
+              <div className="md:col-span-2 space-y-1">
+                <select
+                  value={newProdCatalogId}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setNewProdCatalogId(value)
+                    if (value) {
+                      const selected = catalogProducts.find((p) => p._id === value)
+                      if (selected) {
+                        setNewProdName(selected.name)
+                      }
+                    }
+                  }}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="">Select catalog product (optional)</option>
+                  {catalogProducts.map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.sku ? `${p.sku} – ${p.name}` : p.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-[color:var(--color-text-muted)]">
+                  Use the catalog for BOAZ products, or enter a custom name for third party applications.
+                </p>
+              </div>
               <div className="md:col-span-2">
                 <input
                   type="text"
                   value={newProdName}
                   onChange={(e) => setNewProdName(e.target.value)}
-                  placeholder="Product name"
+                  placeholder="Installed product name"
                   className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
                 />
               </div>
