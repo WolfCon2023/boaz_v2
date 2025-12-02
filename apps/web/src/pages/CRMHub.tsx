@@ -46,6 +46,11 @@ export default function CRMHub() {
     { label: 'Outreach', desc: 'Email/SMS templates, sequences, events', href: '/apps/crm/outreach/templates' },
     { label: 'Products', desc: 'Product catalog, bundles, discounts, and terms', href: '/apps/crm/products' },
     {
+      label: 'Vendors',
+      desc: 'Software, hardware, and service vendors tied to assets and contracts',
+      href: '/apps/crm/vendors',
+    },
+    {
       label: 'Projects & Delivery',
       desc: 'Customer implementations, onboarding projects, and delivery work',
       href: '/apps/crm/projects',
