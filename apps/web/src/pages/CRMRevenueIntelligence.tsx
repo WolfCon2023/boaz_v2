@@ -180,35 +180,41 @@ export default function CRMRevenueIntelligence() {
               <button
                 type="button"
                 onClick={() => setView('forecast')}
-                className={`px-3 py-1.5 text-xs ${
+                title="AI-powered pipeline forecasting with confidence intervals (pessimistic, likely, optimistic) based on deal scoring"
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs ${
                   view === 'forecast'
                     ? 'bg-[color:var(--color-primary-600)] text-white'
                     : 'bg-[color:var(--color-bg)] hover:bg-[color:var(--color-muted)]'
                 }`}
               >
-                Forecast
+                <span>Forecast</span>
+                <span className="text-[10px] opacity-60">ⓘ</span>
               </button>
               <button
                 type="button"
                 onClick={() => setView('reps')}
-                className={`px-3 py-1.5 text-xs border-l border-[color:var(--color-border)] ${
+                title="Sales rep performance analytics including win rates, forecasted revenue, and performance scoring"
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs border-l border-[color:var(--color-border)] ${
                   view === 'reps'
                     ? 'bg-[color:var(--color-primary-600)] text-white'
                     : 'bg-[color:var(--color-bg)] hover:bg-[color:var(--color-muted)]'
                 }`}
               >
-                Rep Performance
+                <span>Rep Performance</span>
+                <span className="text-[10px] opacity-60">ⓘ</span>
               </button>
               <button
                 type="button"
                 onClick={() => setView('scenario')}
-                className={`px-3 py-1.5 text-xs border-l border-[color:var(--color-border)] ${
+                title="Model pipeline changes by adjusting deal stages, values, and close dates to see forecast impact (coming soon)"
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs border-l border-[color:var(--color-border)] ${
                   view === 'scenario'
                     ? 'bg-[color:var(--color-primary-600)] text-white'
                     : 'bg-[color:var(--color-bg)] hover:bg-[color:var(--color-muted)]'
                 }`}
               >
-                What-If Scenarios
+                <span>What-If Scenarios</span>
+                <span className="text-[10px] opacity-60">ⓘ</span>
               </button>
             </div>
           </div>
