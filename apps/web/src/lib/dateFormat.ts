@@ -136,6 +136,52 @@ function formatDateForInput(date: Date | string | number | null | undefined): st
 }
 
 /**
+ * Format a date-only value (no time component) without timezone conversion
+ * Use this for deployment dates, expiration dates, etc. that should display as-is
+ */
+function formatDateOnly(date: Date | string | number | null | undefined): string {
+  if (!date) return '-'
+  
+  // If it's already a YYYY-MM-DD string, parse and format it
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split('-')
+    const prefs = getPreferences()
+    const dateFormat = prefs?.dateFormat || 'MM/DD/YYYY'
+    
+    switch (dateFormat) {
+      case 'DD/MM/YYYY':
+        return `${day}/${month}/${year}`
+      case 'YYYY-MM-DD':
+        return date
+      case 'MM/DD/YYYY':
+      default:
+        return `${month}/${day}/${year}`
+    }
+  }
+  
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return '-'
+  
+  const prefs = getPreferences()
+  const dateFormat = prefs?.dateFormat || 'MM/DD/YYYY'
+  
+  // Use UTC to avoid timezone shifts for date-only values
+  const year = d.getUTCFullYear()
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  
+  switch (dateFormat) {
+    case 'DD/MM/YYYY':
+      return `${day}/${month}/${year}`
+    case 'YYYY-MM-DD':
+      return `${year}-${month}-${day}`
+    case 'MM/DD/YYYY':
+    default:
+      return `${month}/${day}/${year}`
+  }
+}
+
+/**
  * React hook to get formatted date/time functions that react to preference changes
  */
 export function useDateFormat() {
@@ -152,10 +198,11 @@ export function useDateFormat() {
     formatTime,
     formatDateTime,
     formatDateForInput,
+    formatDateOnly,
     preferences,
   }
 }
 
 // Export non-hook versions for use outside components
-export { formatDate, formatTime, formatDateTime, formatDateForInput }
+export { formatDate, formatTime, formatDateTime, formatDateForInput, formatDateOnly }
 

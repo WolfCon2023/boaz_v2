@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
-import { formatDateTime } from '@/lib/dateFormat'
+import { formatDateOnly } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 
 type Customer = {
@@ -245,7 +245,7 @@ export default function CRMAssetsReport() {
         r.licenseKey ?? '',
         String(r.licenseCount ?? ''),
         String(r.seatsAssigned ?? ''),
-        r.expirationDate ? formatDateTime(r.expirationDate) : '',
+        r.expirationDate ? formatDateOnly(r.expirationDate) : '',
         r.renewalStatus ?? '',
         typeof r.cost === 'number' ? r.cost.toFixed(2) : '',
         daysUntil,
@@ -535,7 +535,7 @@ export default function CRMAssetsReport() {
                         </span>
                       </td>
                       <td className="px-2 py-1 align-top">
-                        {r.expirationDate ? formatDateTime(r.expirationDate) : '-'}
+                        {r.expirationDate ? formatDateOnly(r.expirationDate) : '-'}
                       </td>
                       <td className="px-2 py-1 align-top">
                         <span className={renewalChipClass}>{r.renewalStatus}</span>

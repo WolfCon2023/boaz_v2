@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
-import { formatDateTime } from '@/lib/dateFormat'
+import { formatDateOnly } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 
 type Customer = {
@@ -216,13 +216,13 @@ export default function CRMAssetsProductsReport() {
         r.productType ?? '',
         r.status ?? '',
         r.supportLevel ?? '',
-        r.deploymentDate ? formatDateTime(r.deploymentDate) : '',
+        r.deploymentDate ? formatDateOnly(r.deploymentDate) : '',
         String(r.totalLicenseCount ?? ''),
         String(r.totalSeatsAssigned ?? ''),
         String(r.activeLicenses ?? ''),
         String(r.pendingLicenses ?? ''),
         String(r.expiredLicenses ?? ''),
-        r.nextExpirationDate ? formatDateTime(r.nextExpirationDate) : '',
+        r.nextExpirationDate ? formatDateOnly(r.nextExpirationDate) : '',
       ]
       return cells.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')
     })
@@ -439,7 +439,7 @@ export default function CRMAssetsProductsReport() {
                       <td className="px-2 py-1 align-top">{r.status ?? '-'}</td>
                       <td className="px-2 py-1 align-top">{r.supportLevel ?? '-'}</td>
                       <td className="px-2 py-1 align-top">
-                        {r.deploymentDate ? formatDateTime(r.deploymentDate) : '-'}
+                        {r.deploymentDate ? formatDateOnly(r.deploymentDate) : '-'}
                       </td>
                       <td className="px-2 py-1 align-top">
                         {typeof r.totalLicenseCount === 'number' || typeof r.totalSeatsAssigned === 'number' ? (
@@ -456,7 +456,7 @@ export default function CRMAssetsProductsReport() {
                         </span>
                       </td>
                       <td className="px-2 py-1 align-top">
-                        {r.nextExpirationDate ? formatDateTime(r.nextExpirationDate) : '-'}
+                        {r.nextExpirationDate ? formatDateOnly(r.nextExpirationDate) : '-'}
                       </td>
                       <td className="px-2 py-1 align-top">
                         <div className="flex flex-wrap gap-1.5">
