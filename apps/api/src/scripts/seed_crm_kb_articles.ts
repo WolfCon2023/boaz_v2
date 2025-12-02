@@ -442,6 +442,81 @@ It gives you a single source of truth for vendor contact details, categories, an
 - Use **Notes** to capture contract nuances or internal guidance on how to work with each vendor.`,
   },
   {
+    title: 'Using Revenue Intelligence & Forecasting in BOAZ‑OS CRM',
+    tags: ['crm', 'crm:revenue-intelligence', 'forecasting', 'ai', 'analytics'],
+    category: 'Sales & Analytics',
+    body: `# Revenue Intelligence & Forecasting – AI-powered pipeline analytics
+
+## Purpose
+The **Revenue Intelligence** app uses AI to score deals, forecast revenue with confidence intervals, and predict rep performance. It helps sales leaders make data driven decisions and identify risks and opportunities in the pipeline.
+
+## Opening the app
+- Go to **CRM Hub → Revenue Intelligence**.
+- Or use the CRM navigation bar and click **Revenue Intelligence**.
+
+## Core concepts
+- **AI Deal Score** – a 0-100 score predicting deal likelihood based on multiple factors.
+- **Confidence Level** – High, Medium, or Low based on data quality and deal characteristics.
+- **Forecast Range** – Pessimistic, Likely, and Optimistic revenue projections.
+- **Rep Performance Score** – a 0-100 score evaluating rep effectiveness.
+
+## Understanding AI Deal Scoring
+The AI analyzes each deal using multiple factors:
+- **Deal stage progression** – later stages score higher
+- **Deal age** – stale deals score lower
+- **Activity recency** – recent engagement scores higher
+- **Account maturity** – established accounts score higher
+- **Time in current stage** – stuck deals score lower
+- **Close date proximity** – closing soon with late stage scores higher
+
+Each factor contributes positively or negatively to the overall score. You can view the detailed breakdown by clicking **View Score** on any deal.
+
+## Pipeline Forecasting
+The **Forecast** view shows:
+- **Total Pipeline** – sum of all deal values in the period
+- **Weighted Pipeline** – pipeline adjusted by AI scores
+- **Closed Won** – revenue already closed
+- **Forecast Range** – three scenarios based on confidence levels:
+  - **Pessimistic** – conservative estimate (High confidence at 70%, Medium at 30%, Low at 10%)
+  - **Likely** – most probable outcome (High at 85%, Medium at 50%, Low at 20%)
+  - **Optimistic** – best case scenario (High at 95%, Medium at 70%, Low at 40%)
+
+The forecast automatically accounts for deal confidence levels, so high confidence deals contribute more to the forecast than low confidence deals.
+
+## Rep Performance Analytics
+The **Rep Performance** view shows:
+- **Performance Score** – 0-100 rating based on win rate, deal size, and pipeline activity
+- **Forecasted Revenue** – closed won plus expected revenue from open pipeline
+- **Win Rate** – percentage of closed deals that were won
+- **Average Deal Size** – mean value of all deals
+- **Pipeline metrics** – open deals, closed won, closed lost, total pipeline value
+
+Reps are ranked by forecasted revenue to help identify top performers and those who may need coaching.
+
+## Period Selection
+Choose from:
+- **Current Month** – deals closing this month
+- **Current Quarter** – deals closing this quarter
+- **Next Month** – deals closing next month
+- **Next Quarter** – deals closing next quarter
+- **Current Year** – deals closing this year
+
+## What-If Scenarios (Coming Soon)
+The **Scenario** view will allow you to model pipeline changes:
+- Adjust deal stages, values, probabilities, and close dates
+- See real time impact on forecast
+- Compare baseline vs scenario side by side
+- Test different strategies before committing
+
+## Best practices
+- Review AI scoring factors to understand what drives deal success.
+- Focus coaching on reps with low performance scores.
+- Use confidence levels to prioritize deals that need attention.
+- Check forecast ranges weekly to spot trends early.
+- Update deal data regularly (stage, activity, close date) for accurate AI scoring.
+- Use the **Likely** forecast for planning, but prepare for the **Pessimistic** scenario.`,
+  },
+  {
     title: 'Using the Quotes app in BOAZ‑OS CRM',
     tags: ['crm', 'crm:quotes', 'sales'],
     category: 'Sales & Clients',

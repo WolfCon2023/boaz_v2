@@ -61,6 +61,11 @@ export default function CRMHub() {
       desc: 'Renewal pipeline, health, churn risk, upsell, MRR/ARR',
       href: '/apps/crm/renewals',
     },
+    {
+      label: 'Revenue Intelligence',
+      desc: 'AI-powered deal scoring, pipeline forecasting, and rep performance analytics',
+      href: '/apps/crm/revenue-intelligence',
+    },
     { label: 'Surveys & Feedback', desc: 'NPS/CSAT and post‑interaction surveys', href: '/apps/crm/surveys' },
     {
       label: 'Tasks & Activities',

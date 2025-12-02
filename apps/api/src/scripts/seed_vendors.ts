@@ -8,12 +8,6 @@ async function main() {
     return
   }
 
-  const existingCount = await db.collection('crm_vendors').countDocuments()
-  if (existingCount > 0) {
-    console.log(`crm_vendors already has ${existingCount} record(s); skipping seed.`)
-    return
-  }
-
   const now = new Date()
 
   const vendors = [
@@ -114,8 +108,21 @@ async function main() {
     },
   ]
 
-  await db.collection('crm_vendors').insertMany(vendors as any[])
-  console.log(`Inserted ${vendors.length} vendors into crm_vendors.`)
+  // Check which vendors already exist by name
+  const existingVendors = await db.collection('crm_vendors').find({}).toArray()
+  const existingNames = new Set(existingVendors.map((v: any) => v.name))
+
+  // Filter to only vendors that don't exist yet
+  const vendorsToInsert = vendors.filter((v) => !existingNames.has(v.name))
+
+  if (vendorsToInsert.length === 0) {
+    console.log('All sample vendors already exist. No new vendors to insert.')
+    return
+  }
+
+  await db.collection('crm_vendors').insertMany(vendorsToInsert as any[])
+  console.log(`Inserted ${vendorsToInsert.length} new vendor(s) into crm_vendors.`)
+  console.log(`Skipped ${vendors.length - vendorsToInsert.length} vendor(s) that already exist.`)
 }
 
 main().catch((err) => {
