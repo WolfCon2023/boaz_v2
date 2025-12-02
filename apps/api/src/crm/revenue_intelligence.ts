@@ -138,7 +138,9 @@ function calculateDealScore(deal: DealDoc, accountAge?: number, dealAge?: number
   }
 
   // Factor 6: Close date proximity (closing soon with high stage = boost)
-  const daysToClose = deal.closeDate ? Math.ceil((new Date(deal.closeDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 999
+  // Use forecastedCloseDate if available, otherwise fallback to closeDate
+  const closeDate = (deal as any).forecastedCloseDate || deal.closeDate
+  const daysToClose = closeDate ? Math.ceil((new Date(closeDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 999
   if (daysToClose < 0) {
     score -= 20
     factors.push({ factor: 'Overdue Close Date', impact: -20, description: 'Close date has passed' })
@@ -191,9 +193,12 @@ revenueIntelligenceRouter.get('/forecast', async (req, res) => {
     endDate = new Date(now.getFullYear(), 11, 31)
   }
 
-  // Fetch deals in the period
+  // Fetch deals in the period (use forecastedCloseDate for forecasting, fallback to closeDate)
   const dealMatch: any = {
-    closeDate: { $gte: startDate, $lte: endDate },
+    $or: [
+      { forecastedCloseDate: { $gte: startDate, $lte: endDate } },
+      { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lte: endDate } }] },
+    ],
     stage: { $nin: ['Closed Lost'] },
   }
   if (ownerId) dealMatch.ownerId = ownerId
@@ -350,9 +355,12 @@ revenueIntelligenceRouter.get('/rep-performance', async (req, res) => {
     endDate = new Date(now.getFullYear(), 11, 31)
   }
 
-  // Fetch all deals in period
+  // Fetch all deals in period (use forecastedCloseDate for forecasting, fallback to closeDate)
   const deals = await db.collection('deals').find({
-    closeDate: { $gte: startDate, $lte: endDate },
+    $or: [
+      { forecastedCloseDate: { $gte: startDate, $lte: endDate } },
+      { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lte: endDate } }] },
+    ],
   }).toArray() as any[]
 
   // Group by owner

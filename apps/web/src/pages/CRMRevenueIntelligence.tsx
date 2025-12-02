@@ -15,6 +15,7 @@ type Deal = {
   amount?: number
   stage?: string
   closeDate?: string
+  forecastedCloseDate?: string
   ownerId?: string
   dealNumber?: number
   aiScore: number
@@ -217,7 +218,28 @@ export default function CRMRevenueIntelligence() {
       {/* Forecast View */}
       {view === 'forecast' && forecast && (
         <>
+          {/* No Data Message */}
+          {forecast.summary.totalDeals === 0 && (
+            <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6">
+              <h2 className="mb-2 text-sm font-semibold text-amber-400">No Deals Found in Selected Period</h2>
+              <p className="text-xs text-[color:var(--color-text-muted)] mb-3">
+                Revenue Intelligence analyzes deals with close dates in the selected period. To see forecasts:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-xs text-[color:var(--color-text-muted)]">
+                <li>Go to <a href="/apps/crm/deals" className="text-[color:var(--color-primary-600)] hover:underline">Deals</a> and create or edit deals</li>
+                <li>Set a <strong>Forecasted Close Date</strong> for each deal (expected close date)</li>
+                <li>Add an <strong>Amount</strong> (deal value)</li>
+                <li>Set the <strong>Stage</strong> (Proposal, Negotiation, etc.)</li>
+                <li>Return here to see AI-powered forecasts and scoring</li>
+              </ul>
+              <p className="mt-3 text-xs text-[color:var(--color-text-muted)]">
+                Try selecting a different period above, or check if your deals have close dates set.
+              </p>
+            </section>
+          )}
+
           {/* Summary Cards */}
+          {forecast.summary.totalDeals > 0 && (
           <section className="grid gap-4 md:grid-cols-4">
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
               <div className="text-xs text-[color:var(--color-text-muted)]">Total Pipeline</div>
@@ -309,6 +331,7 @@ export default function CRMRevenueIntelligence() {
           </section>
 
           {/* Deals Table */}
+          {forecast.summary.totalDeals > 0 && (
           <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
             <h2 className="mb-3 text-sm font-semibold">Deals in Period ({forecast.deals.length})</h2>
             <div className="overflow-x-auto">
@@ -320,7 +343,7 @@ export default function CRMRevenueIntelligence() {
                     <th className="px-2 py-2 text-right">Value</th>
                     <th className="px-2 py-2 text-center">AI Score</th>
                     <th className="px-2 py-2 text-center">Confidence</th>
-                    <th className="px-2 py-2 text-left">Close Date</th>
+                    <th className="px-2 py-2 text-left">Forecast Close</th>
                     <th className="px-2 py-2 text-left">Actions</th>
                   </tr>
                 </thead>
@@ -352,7 +375,7 @@ export default function CRMRevenueIntelligence() {
                           {deal.aiConfidence}
                         </span>
                       </td>
-                      <td className="px-2 py-2">{formatDateOnly(deal.closeDate)}</td>
+                      <td className="px-2 py-2">{formatDateOnly(deal.forecastedCloseDate || deal.closeDate)}</td>
                       <td className="px-2 py-2">
                         <button
                           type="button"
@@ -368,6 +391,7 @@ export default function CRMRevenueIntelligence() {
               </table>
             </div>
           </section>
+          )}
         </>
       )}
 

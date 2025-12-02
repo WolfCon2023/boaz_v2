@@ -16,6 +16,7 @@ type Deal = {
   amount?: number
   stage?: string
   closeDate?: string
+  forecastedCloseDate?: string
   accountId?: string
   accountNumber?: number
   marketingCampaignId?: string
@@ -68,7 +69,8 @@ export default function CRMDeals() {
     { key: 'title', visible: true, label: 'Title' },
     { key: 'amount', visible: true, label: 'Amount' },
     { key: 'stage', visible: true, label: 'Stage' },
-    { key: 'closeDate', visible: true, label: 'Close date' },
+    { key: 'forecastedCloseDate', visible: true, label: 'Forecast close' },
+    { key: 'closeDate', visible: true, label: 'Actual close' },
     { key: 'tasks', visible: true, label: 'Tasks' },
     { key: 'projects', visible: true, label: 'Projects' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
@@ -657,6 +659,7 @@ export default function CRMDeals() {
     if (key === 'title') return d.title ?? ''
     if (key === 'amount') return typeof d.amount === 'number' ? `$${d.amount.toLocaleString()}` : '-'
     if (key === 'stage') return d.stage ?? '-'
+    if (key === 'forecastedCloseDate') return d.forecastedCloseDate ? formatDate(d.forecastedCloseDate) : '-'
     if (key === 'closeDate') return d.closeDate ? formatDate(d.closeDate) : '-'
     if (key === 'tasks') {
       const count = dealTaskCountMap.get(d._id) ?? 0
@@ -946,6 +949,7 @@ export default function CRMDeals() {
                 if (col.key === 'title') return d.title ?? ''
                 if (col.key === 'amount') return typeof d.amount === 'number' ? d.amount : ''
                 if (col.key === 'stage') return d.stage ?? ''
+                if (col.key === 'forecastedCloseDate') return d.forecastedCloseDate ? new Date(d.forecastedCloseDate).toISOString().slice(0,10) : ''
                 if (col.key === 'closeDate') return d.closeDate ? new Date(d.closeDate).toISOString().slice(0,10) : ''
                 return ''
               }))
@@ -983,7 +987,18 @@ export default function CRMDeals() {
             <option>Contract Signed / Closed Won</option>
             <option>Rejected / Returned for Revision</option>
           </select>
-          <input name="closeDate" type="date" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <div className="col-span-full grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-[color:var(--color-text-muted)] mb-1">Forecasted Close Date</label>
+              <input name="forecastedCloseDate" type="date" className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+              <p className="text-[10px] text-[color:var(--color-text-muted)] mt-1">Expected close date (for forecasting)</p>
+            </div>
+            <div>
+              <label className="block text-xs text-[color:var(--color-text-muted)] mb-1">Actual Close Date (optional)</label>
+              <input name="closeDate" type="date" className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+              <p className="text-[10px] text-[color:var(--color-text-muted)] mt-1">Actual date when deal closed</p>
+            </div>
+          </div>
           <select name="marketingCampaignId" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="">Campaign (optional)</option>
             {((campaignsQ?.data?.items ?? []) as any[]).map((c) => (
@@ -1161,7 +1176,18 @@ export default function CRMDeals() {
                   <option>Contract Signed / Closed Won</option>
                   <option>Rejected / Returned for Revision</option>
                 </select>
-                <input name="closeDate" type="date" defaultValue={editing.closeDate ? editing.closeDate.slice(0,10) : ''} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="col-span-full grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-[color:var(--color-text-muted)] mb-1">Forecasted Close Date</label>
+                    <input name="forecastedCloseDate" type="date" defaultValue={editing.forecastedCloseDate ? editing.forecastedCloseDate.slice(0,10) : ''} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                    <p className="text-[10px] text-[color:var(--color-text-muted)] mt-1">Expected close date (for forecasting)</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[color:var(--color-text-muted)] mb-1">Actual Close Date</label>
+                    <input name="closeDate" type="date" defaultValue={editing.closeDate ? editing.closeDate.slice(0,10) : ''} className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                    <p className="text-[10px] text-[color:var(--color-text-muted)] mt-1">Actual date when deal closed</p>
+                  </div>
+                </div>
                 <label className="col-span-full text-sm">Account
                   <select name="accountId" className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
                     <option value="">(no change)</option>
