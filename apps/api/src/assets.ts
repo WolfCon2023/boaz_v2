@@ -128,6 +128,24 @@ const licenseSchema = z.object({
 
 const licenseUpdateSchema = licenseSchema.partial()
 
+function parseDeploymentDate(value?: string | null): Date | null {
+  if (!value) return null
+  const v = String(value).trim()
+  if (!v) return null
+
+  // Handle YYYY-MM-DD as a date-only value, anchored at midday UTC to avoid timezone shifts
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y, m, d] = v.split('-').map((s) => Number(s))
+    const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+    if (!Number.isFinite(dt.getTime())) return null
+    return dt
+  }
+
+  const dt = new Date(v)
+  if (!Number.isFinite(dt.getTime())) return null
+  return dt
+}
+
 function serializeEnvironment(doc: EnvironmentDoc) {
   return {
     ...doc,
@@ -266,7 +284,7 @@ assetsRouter.post('/products', async (req, res) => {
 
   const now = new Date()
   const _id = new ObjectId().toHexString()
-  const deploymentDate = parsed.data.deploymentDate ? new Date(parsed.data.deploymentDate) : null
+  const deploymentDate = parseDeploymentDate(parsed.data.deploymentDate)
 
   const doc: InstalledProductDoc = {
     _id,
@@ -357,7 +375,7 @@ assetsRouter.put('/products/:productId', async (req, res) => {
   if (parsed.data.status !== undefined) update.status = parsed.data.status
   if (parsed.data.supportLevel !== undefined) update.supportLevel = parsed.data.supportLevel
   if (parsed.data.deploymentDate !== undefined) {
-    update.deploymentDate = parsed.data.deploymentDate ? new Date(parsed.data.deploymentDate) : null
+    update.deploymentDate = parseDeploymentDate(parsed.data.deploymentDate)
   }
 
   const coll = db.collection<InstalledProductDoc>('assets_products')
