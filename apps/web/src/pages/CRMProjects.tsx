@@ -492,9 +492,9 @@ export default function CRMProjects() {
                         <button
                           type="button"
                           onClick={() => openEdit(p)}
-                          className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
+                          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-2 py-1 text-[11px] text-white hover:bg-[color:var(--color-primary-700)]"
                         >
-                          Edit
+                          Open
                         </button>
                         <button
                           type="button"
