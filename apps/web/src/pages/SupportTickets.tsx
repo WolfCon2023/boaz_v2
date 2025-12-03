@@ -124,6 +124,42 @@ export default function SupportTickets() {
     () => surveyProgramsData?.data.items ?? [],
     [surveyProgramsData?.data.items],
   )
+
+  // Fetch contacts for assignee dropdown
+  const { data: contactsData } = useQuery({
+    queryKey: ['contacts-for-assignee'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/contacts', { params: { limit: 1000 } })
+      return res.data as { data: { items: Array<{ _id: string; name?: string; email?: string }> } }
+    },
+  })
+  const contacts = React.useMemo(() => contactsData?.data.items ?? [], [contactsData?.data.items])
+
+  // State for assignee search
+  const [assigneeSearch, setAssigneeSearch] = React.useState('')
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = React.useState(false)
+  const [selectedAssignee, setSelectedAssignee] = React.useState<{ name: string; email: string } | null>(null)
+  
+  const filteredContacts = React.useMemo(() => {
+    if (!assigneeSearch.trim()) return contacts
+    const lower = assigneeSearch.toLowerCase()
+    return contacts.filter((c) => 
+      c.name?.toLowerCase().includes(lower) || 
+      c.email?.toLowerCase().includes(lower)
+    )
+  }, [assigneeSearch, contacts])
+
+  // Close assignee dropdown when clicking outside
+  React.useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('.assignee-search-container')) {
+        setShowAssigneeDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
   // Sync filters from URL query params
   React.useEffect(() => {
     if (!initializedFromUrl.current) {
@@ -638,10 +674,61 @@ export default function SupportTickets() {
             <button type="button" onClick={() => { setStatus(''); setStatusMulti(['open','pending']); setBreachedOnly(false); setDueNext60(true); setSort('slaDueAt'); setDir('asc') }} className="text-left rounded-lg border border-[color:var(--color-border)] p-3 hover:bg-[color:var(--color-muted)]"><div className="text-xs text-[color:var(--color-text-muted)]">Due next 60m</div><div className="text-xl font-semibold text-yellow-300">{computedMetrics.dueNext60}</div></button>
           </div>
         )}
-        <form ref={createFormRef} className="grid items-start gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = String(fd.get('assignee')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const rawSla = createSlaValue || String(fd.get('slaDueAt')||''); const slaDueAt = rawSla ? new Date(rawSla).toISOString() : undefined; const requesterName = String(fd.get('requesterName')||'') || undefined; const requesterEmail = String(fd.get('requesterEmail')||'') || undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt, requesterName, requesterEmail }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue('') }}>
+        <form ref={createFormRef} className="grid items-start gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = selectedAssignee ? `${selectedAssignee.name} <${selectedAssignee.email}>` : ''; const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const rawSla = createSlaValue || String(fd.get('slaDueAt')||''); const slaDueAt = rawSla ? new Date(rawSla).toISOString() : undefined; const requesterName = String(fd.get('requesterName')||'') || undefined; const requesterEmail = String(fd.get('requesterEmail')||'') || undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt, requesterName, requesterEmail }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue(''); setSelectedAssignee(null); setAssigneeSearch('') }}>
           <input name="shortDescription" required placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="status" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option><option>canceled</option></select>
-          <input name="assignee" placeholder="Assignee" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] px-3 py-2 text-sm" />
+          <div className="relative assignee-search-container">
+            <input 
+              type="text"
+              value={selectedAssignee ? `${selectedAssignee.name || selectedAssignee.email}` : assigneeSearch}
+              onChange={(e) => {
+                setAssigneeSearch(e.target.value)
+                setSelectedAssignee(null)
+                setShowAssigneeDropdown(true)
+              }}
+              onFocus={() => setShowAssigneeDropdown(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setShowAssigneeDropdown(false)
+                  setAssigneeSearch('')
+                }
+              }}
+              placeholder="Search assignee..."
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] px-3 py-2 text-sm"
+            />
+            {showAssigneeDropdown && filteredContacts.length > 0 && (
+              <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-lg">
+                {filteredContacts.slice(0, 50).map((contact) => (
+                  <button
+                    key={contact._id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAssignee({ name: contact.name || '', email: contact.email || '' })
+                      setAssigneeSearch('')
+                      setShowAssigneeDropdown(false)
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] border-b border-[color:var(--color-border-soft)] last:border-b-0"
+                  >
+                    <div className="font-medium">{contact.name || 'No name'}</div>
+                    <div className="text-xs text-[color:var(--color-text-muted)]">{contact.email}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedAssignee && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAssignee(null)
+                  setAssigneeSearch('')
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
+                title="Clear assignee"
+              >
+                ✕
+              </button>
+            )}
+          </div>
           <input name="requesterName" placeholder="Contact name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <input name="requesterEmail" type="email" placeholder="Contact email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="priority" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select>
