@@ -670,7 +670,28 @@ export default function CRMInvoices() {
   const historyQ = useQuery({
     queryKey: ['invoice-history', editing?._id, showHistory],
     enabled: Boolean(editing?._id && showHistory),
-    queryFn: async () => { const res = await http.get(`/api/crm/invoices/${editing?._id}/history`); return res.data as { data: { createdAt: string; payments: any[]; refunds: any[]; invoice: any } } },
+    queryFn: async () => { 
+      const res = await http.get(`/api/crm/invoices/${editing?._id}/history`)
+      return res.data as { 
+        data: { 
+          history: Array<{
+            _id: string
+            eventType: string
+            description: string
+            userName?: string
+            userEmail?: string
+            createdAt: string
+            oldValue?: any
+            newValue?: any
+            metadata?: any
+          }>
+          createdAt: string
+          payments: any[]
+          refunds: any[]
+          invoice: any
+        } 
+      } 
+    },
   })
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   React.useEffect(() => { if (!editing) return; const el = document.createElement('div'); el.setAttribute('data-overlay', 'invoice-editor'); Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' }); document.body.appendChild(el); setPortalEl(el); return () => { try { document.body.removeChild(el) } catch {}; setPortalEl(null) } }, [editing])
@@ -1488,13 +1509,46 @@ export default function CRMInvoices() {
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
                 </div>
                 {showHistory && historyQ.data && (
-                  <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs">
-                    <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
-                    <div className="mt-1">Invoice: {historyQ.data.data.invoice?.invoiceNumber ?? ''} {historyQ.data.data.invoice?.title ?? ''} • Status: {historyQ.data.data.invoice?.status ?? ''}</div>
-                    <div className="mt-2 font-semibold">Payments</div>
-                    <ul className="list-disc pl-5">{historyQ.data.data.payments.map((p, i) => (<li key={i}>${p.amount ?? ''} • {p.method ?? ''} • {p.paidAt ? formatDateTime(p.paidAt) : ''}</li>))}{historyQ.data.data.payments.length===0 && <li>None</li>}</ul>
-                    <div className="mt-2 font-semibold">Refunds</div>
-                    <ul className="list-disc pl-5">{historyQ.data.data.refunds.map((r, i) => (<li key={i}>${r.amount ?? ''} • {r.reason ?? ''} • {r.refundedAt ? formatDateTime(r.refundedAt) : ''}</li>))}{historyQ.data.data.refunds.length===0 && <li>None</li>}</ul>
+                  <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs space-y-3">
+                    <div>
+                      <div className="font-semibold mb-2">Invoice Information</div>
+                      <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
+                      <div className="mt-1">Invoice: {historyQ.data.data.invoice?.invoiceNumber ?? ''} {historyQ.data.data.invoice?.title ?? ''} • Status: {historyQ.data.data.invoice?.status ?? ''}</div>
+                    </div>
+                    
+                    <div>
+                      <div className="font-semibold mb-2">History Timeline</div>
+                      {historyQ.data.data.history && historyQ.data.data.history.length > 0 ? (
+                        <div className="space-y-2 max-h-80 overflow-y-auto">
+                          {historyQ.data.data.history.map((entry) => (
+                            <div key={entry._id} className="rounded-lg border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg)] p-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <div className="font-medium">{entry.description}</div>
+                                  {entry.userName && (
+                                    <div className="mt-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                                      By: {entry.userName} ({entry.userEmail})
+                                    </div>
+                                  )}
+                                  {(entry.oldValue !== undefined || entry.newValue !== undefined) && (
+                                    <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                                      {entry.oldValue !== undefined && <span>From: {JSON.stringify(entry.oldValue)}</span>}
+                                      {entry.oldValue !== undefined && entry.newValue !== undefined && <span> → </span>}
+                                      {entry.newValue !== undefined && <span>To: {JSON.stringify(entry.newValue)}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-[color:var(--color-text-muted)] whitespace-nowrap">
+                                  {formatDateTime(entry.createdAt)}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[color:var(--color-text-muted)]">No history entries found.</div>
+                      )}
+                    </div>
                   </div>
                 )}
                 <div className="col-span-full mt-4 pt-4 border-t">
