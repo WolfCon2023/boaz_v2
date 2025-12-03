@@ -9,7 +9,7 @@ import { useToast } from '@/components/Toast'
 type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
 type TaskType = 'call' | 'meeting' | 'todo' | 'email' | 'note'
 type TaskPriority = 'low' | 'normal' | 'high'
-type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote'
+type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote' | 'project'
 
 type Task = {
   _id: string
@@ -94,6 +94,120 @@ export default function CRMTasks() {
     },
     placeholderData: keepPreviousData,
   })
+
+  // Fetch related entities for name lookups
+  const { data: contactsData } = useQuery({
+    queryKey: ['contacts-all-tasks'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/contacts', { params: { limit: 1000 } })
+      return res.data as { data: { items: Array<{ _id: string; name?: string; email?: string }> } }
+    },
+  })
+
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts-all-tasks'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/accounts', { params: { limit: 1000 } })
+      return res.data as { data: { items: Array<{ _id: string; name?: string; accountNumber?: number }> } }
+    },
+  })
+
+  const { data: dealsData } = useQuery({
+    queryKey: ['deals-all-tasks'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/deals', { params: { limit: 1000 } })
+      return res.data as { data: { items: Array<{ _id: string; title?: string; dealNumber?: number }> } }
+    },
+  })
+
+  const { data: invoicesData } = useQuery({
+    queryKey: ['invoices-all-tasks'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/invoices', { params: { limit: 1000 } })
+      return res.data as { data: { items: Array<{ _id: string; invoiceNumber?: string }> } }
+    },
+  })
+
+  const { data: quotesData } = useQuery({
+    queryKey: ['quotes-all-tasks'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/quotes', { params: { limit: 1000 } })
+      return res.data as { data: { items: Array<{ _id: string; quoteNumber?: string }> } }
+    },
+  })
+
+  const { data: projectsData } = useQuery({
+    queryKey: ['projects-all-tasks'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/projects', { params: { limit: 1000 } })
+      return res.data as { data: { items: Array<{ _id: string; name?: string }> } }
+    },
+  })
+
+  // Create lookup maps for related entities
+  const contactById = React.useMemo(() => {
+    const map = new Map<string, { name?: string; email?: string }>()
+    contactsData?.data.items.forEach((c) => map.set(c._id, c))
+    return map
+  }, [contactsData])
+
+  const accountById = React.useMemo(() => {
+    const map = new Map<string, { name?: string; accountNumber?: number }>()
+    accountsData?.data.items.forEach((a) => map.set(a._id, a))
+    return map
+  }, [accountsData])
+
+  const dealById = React.useMemo(() => {
+    const map = new Map<string, { title?: string; dealNumber?: number }>()
+    dealsData?.data.items.forEach((d) => map.set(d._id, d))
+    return map
+  }, [dealsData])
+
+  const invoiceById = React.useMemo(() => {
+    const map = new Map<string, { invoiceNumber?: string }>()
+    invoicesData?.data.items.forEach((i) => map.set(i._id, i))
+    return map
+  }, [invoicesData])
+
+  const quoteById = React.useMemo(() => {
+    const map = new Map<string, { quoteNumber?: string }>()
+    quotesData?.data.items.forEach((q) => map.set(q._id, q))
+    return map
+  }, [quotesData])
+
+  const projectById = React.useMemo(() => {
+    const map = new Map<string, { name?: string }>()
+    projectsData?.data.items.forEach((p) => map.set(p._id, p))
+    return map
+  }, [projectsData])
+
+  // Helper function to get related entity name
+  const getRelatedEntityName = (task: Task): string => {
+    if (!task.relatedType || !task.relatedId) return ''
+    
+    switch (task.relatedType) {
+      case 'contact':
+        const contact = contactById.get(task.relatedId)
+        return contact?.name || contact?.email || task.relatedId
+      case 'account':
+        const account = accountById.get(task.relatedId)
+        return account ? `${account.accountNumber ? `#${account.accountNumber} – ` : ''}${account.name || ''}` : task.relatedId
+      case 'deal':
+        const deal = dealById.get(task.relatedId)
+        return deal ? `${deal.dealNumber ? `#${deal.dealNumber} – ` : ''}${deal.title || ''}` : task.relatedId
+      case 'invoice':
+        const invoice = invoiceById.get(task.relatedId)
+        return invoice?.invoiceNumber || task.relatedId
+      case 'quote':
+        const quote = quoteById.get(task.relatedId)
+        return quote?.quoteNumber || task.relatedId
+      case 'project':
+        const project = projectById.get(task.relatedId)
+        return project?.name || task.relatedId
+      default:
+        return task.relatedId
+    }
+  }
 
   // If navigated with ?task=<id> (from Contacts/Accounts/Deals related tasks), auto-open that task
   React.useEffect(() => {
@@ -532,6 +646,7 @@ export default function CRMTasks() {
                 <option value="deal">Deal</option>
                 <option value="quote">Quote</option>
                 <option value="invoice">Invoice</option>
+                <option value="project">Project</option>
               </select>
               <input
                 type="text"
@@ -701,7 +816,7 @@ export default function CRMTasks() {
                         {t.completedAt && <span>Completed {formatDate(t.completedAt)}</span>}
                         {t.relatedType && t.relatedId && (
                           <span>
-                            Related {t.relatedType}: <span className="font-mono text-[10px]">{t.relatedId}</span>
+                            Related {t.relatedType}: <span className="text-[10px]">{getRelatedEntityName(t)}</span>
                           </span>
                         )}
                       </div>
@@ -823,7 +938,7 @@ export default function CRMTasks() {
                               {t.relatedType && t.relatedId && (
                                 <span>
                                   {t.relatedType}:{' '}
-                                  <span className="font-mono text-[9px]">{t.relatedId}</span>
+                                  <span className="text-[9px]">{getRelatedEntityName(t)}</span>
                                 </span>
                               )}
                             </div>
@@ -936,6 +1051,7 @@ export default function CRMTasks() {
                     <option value="deal">Deal</option>
                     <option value="quote">Quote</option>
                     <option value="invoice">Invoice</option>
+                    <option value="project">Project</option>
                   </select>
                   <input
                     type="text"
