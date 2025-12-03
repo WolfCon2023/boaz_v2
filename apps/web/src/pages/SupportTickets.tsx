@@ -22,6 +22,8 @@ type Ticket = {
   createdAt?: string
   updatedAt?: string
   comments?: { author?: string; body?: string; at?: string }[]
+  requesterName?: string | null
+  requesterEmail?: string | null
 }
 
 type TicketSurveyStatusSummary = {
@@ -51,6 +53,8 @@ export default function SupportTickets() {
     { key: 'status', visible: true, label: 'Status' },
     { key: 'priority', visible: true, label: 'Priority' },
     { key: 'assignee', visible: true, label: 'Assignee' },
+    { key: 'requesterName', visible: true, label: 'Contact name' },
+    { key: 'requesterEmail', visible: true, label: 'Contact email' },
     { key: 'surveyStatus', visible: true, label: 'Survey' },
     { key: 'slaDueAt', visible: true, label: 'SLA Due' },
     { key: 'updatedAt', visible: true, label: 'Updated' },
@@ -344,6 +348,8 @@ export default function SupportTickets() {
     if (key==='status') return t.status ?? '-'
     if (key==='priority') return t.priority ?? '-'
     if (key==='assignee') return t.assignee ?? '-'
+    if (key==='requesterName') return t.requesterName ?? '-'
+    if (key==='requesterEmail') return t.requesterEmail ?? '-'
     if (key==='slaDueAt') return t.slaDueAt ? formatDateTime(t.slaDueAt) : '-'
     if (key==='updatedAt') return t.updatedAt ? formatDateTime(t.updatedAt) : '-'
     if (key==='surveyStatus') return renderSurveyStatus(t)
@@ -416,6 +422,8 @@ export default function SupportTickets() {
       status: t.status ?? '',
       priority: t.priority ?? '',
       assignee: t.assignee ?? '',
+      requesterName: t.requesterName ?? '',
+      requesterEmail: t.requesterEmail ?? '',
       accountId: t.accountId ?? '',
       contactId: t.contactId ?? '',
       commentsCount: Array.isArray(t.comments) ? String(t.comments.length) : '0',
@@ -630,11 +638,12 @@ export default function SupportTickets() {
             <button type="button" onClick={() => { setStatus(''); setStatusMulti(['open','pending']); setBreachedOnly(false); setDueNext60(true); setSort('slaDueAt'); setDir('asc') }} className="text-left rounded-lg border border-[color:var(--color-border)] p-3 hover:bg-[color:var(--color-muted)]"><div className="text-xs text-[color:var(--color-text-muted)]">Due next 60m</div><div className="text-xl font-semibold text-yellow-300">{computedMetrics.dueNext60}</div></button>
           </div>
         )}
-        <form ref={createFormRef} className="grid items-start gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = String(fd.get('assignee')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const rawSla = createSlaValue || String(fd.get('slaDueAt')||''); const slaDueAt = rawSla ? new Date(rawSla).toISOString() : undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue('') }}>
+        <form ref={createFormRef} className="grid items-start gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = String(fd.get('assignee')||''); const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const rawSla = createSlaValue || String(fd.get('slaDueAt')||''); const slaDueAt = rawSla ? new Date(rawSla).toISOString() : undefined; const requesterName = String(fd.get('requesterName')||'') || undefined; const requesterEmail = String(fd.get('requesterEmail')||'') || undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt, requesterName, requesterEmail }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue('') }}>
           <input name="shortDescription" required placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="status" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option><option>canceled</option></select>
           <input name="assignee" placeholder="Assignee" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] px-3 py-2 text-sm" />
-          
+          <input name="requesterName" placeholder="Contact name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <input name="requesterEmail" type="email" placeholder="Contact email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="priority" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>normal</option><option>low</option><option>high</option><option>urgent</option></select>
           <div className="flex items-center gap-2">
             <input name="slaDueAt" type="hidden" value={createSlaValue} readOnly />
