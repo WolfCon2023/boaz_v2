@@ -100,16 +100,22 @@ marketingTrackingRouter.get('/r/:token', async (req, res) => {
     if (link.utmCampaign)
         target.searchParams.set('utm_campaign', link.utmCampaign);
     const clickedAt = new Date();
+    // Fetch campaign name for better tracking
+    let campaign = null;
+    if (link.campaignId) {
+        campaign = await db.collection('marketing_campaigns').findOne({ _id: link.campaignId }, { projection: { name: 1 } });
+    }
+    const campaignName = campaign?.name || link.utmCampaign || 'unknown';
     // Log to marketing_events (for campaign-specific tracking)
     await db.collection('marketing_events').insertOne({ event: 'click', token, campaignId: link.campaignId || null, url: target.toString(), at: clickedAt });
-    // Also log to outreach_events (for unified outreach tracking) - note: no recipient info available from link clicks
+    // Also log to outreach_events (for unified outreach tracking)
     if (link.campaignId) {
         await db.collection('outreach_events').insertOne({
             channel: 'email',
             event: 'clicked',
             recipient: null, // Link clicks don't have recipient info
-            variant: `campaign:${link.campaignId.toHexString()}`,
-            meta: { campaignId: link.campaignId.toHexString(), url: link.url, token },
+            variant: `campaign:${campaignName}`,
+            meta: { campaignId: link.campaignId.toHexString(), campaignName, url: link.url, token },
             at: clickedAt
         });
     }

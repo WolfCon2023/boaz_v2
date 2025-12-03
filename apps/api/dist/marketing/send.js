@@ -69,6 +69,73 @@ function injectPixel(html, pixelUrl) {
         return html.replace(/<\/body>/i, img + '</body>');
     return html + img;
 }
+/**
+ * Automatically wraps all external links in HTML with tracking tokens
+ * @param html - The HTML content to process
+ * @param campaignId - The campaign ObjectId
+ * @param db - Database connection
+ * @param baseUrl - Base URL for tracking redirects
+ * @returns Modified HTML with all links wrapped for tracking
+ */
+async function wrapLinksWithTracking(html, campaignId, db, baseUrl, campaignName) {
+    // Find all <a href="..."> tags
+    const linkRegex = /<a\s+([^>]*\s+)?href=["']([^"']+)["']([^>]*)>/gi;
+    const matches = [...html.matchAll(linkRegex)];
+    if (matches.length === 0)
+        return html;
+    // Track replacements to avoid double-processing
+    const replacements = new Map();
+    for (const match of matches) {
+        const fullTag = match[0];
+        const beforeHref = match[1] || '';
+        const originalUrl = match[2];
+        const afterHref = match[3] || '';
+        // Skip if already a tracking link
+        if (originalUrl.includes('/api/marketing/r/'))
+            continue;
+        // Skip relative URLs, anchors, mailto, tel, javascript, etc.
+        if (originalUrl.startsWith('#') ||
+            originalUrl.startsWith('mailto:') ||
+            originalUrl.startsWith('tel:') ||
+            originalUrl.startsWith('javascript:') ||
+            originalUrl.startsWith('{{') || // Skip template variables
+            !originalUrl.match(/^https?:\/\//i) // Only process absolute HTTP(S) URLs
+        )
+            continue;
+        // Check if we already processed this URL
+        if (replacements.has(originalUrl)) {
+            const trackedUrl = replacements.get(originalUrl);
+            const newTag = `<a ${beforeHref}href="${trackedUrl}"${afterHref}>`;
+            html = html.replace(fullTag, newTag);
+            continue;
+        }
+        // Create a tracking token for this link
+        const token = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+        const linkDoc = {
+            token,
+            campaignId,
+            url: originalUrl,
+            utmSource: 'email',
+            utmMedium: 'campaign',
+            utmCampaign: campaignName || campaignId.toHexString(),
+            createdAt: new Date()
+        };
+        try {
+            await db.collection('marketing_links').insertOne(linkDoc);
+            const trackedUrl = `${baseUrl}/api/marketing/r/${token}`;
+            replacements.set(originalUrl, trackedUrl);
+            // Replace in HTML
+            const newTag = `<a ${beforeHref}href="${trackedUrl}"${afterHref}>`;
+            html = html.replace(fullTag, newTag);
+        }
+        catch (err) {
+            console.error('Failed to create tracking link:', err);
+            // Skip this link if we can't create tracking
+            continue;
+        }
+    }
+    return html;
+}
 // POST /api/marketing/campaigns/:id/send { dryRun?: boolean }
 marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
     const db = await getDb();
@@ -95,6 +162,8 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
         if (!html)
             return res.status(400).json({ data: null, error: 'missing_html' });
         const base = `${req.protocol}://${req.get('host')}`;
+        // Automatically wrap all links with tracking tokens
+        html = await wrapLinksWithTracking(html, _id, db, base, campaign.name || 'campaign');
         const filter = buildFilterFromRules(Array.isArray(segment.rules) ? segment.rules : []);
         const recipients = await db
             .collection('contacts')
