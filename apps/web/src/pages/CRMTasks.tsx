@@ -637,7 +637,10 @@ export default function CRMTasks() {
             <div className="flex gap-2">
               <select
                 value={newRelatedType}
-                onChange={(e) => setNewRelatedType(e.target.value as any)}
+                onChange={(e) => {
+                  setNewRelatedType(e.target.value as any)
+                  setNewRelatedId('') // Clear the ID when type changes
+                }}
                 className="w-28 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-xs text-[color:var(--color-text)]"
               >
                 <option value="">None</option>
@@ -648,13 +651,90 @@ export default function CRMTasks() {
                 <option value="invoice">Invoice</option>
                 <option value="project">Project</option>
               </select>
-              <input
-                type="text"
-                value={newRelatedId}
-                onChange={(e) => setNewRelatedId(e.target.value)}
-                className="w-28 md:w-40 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                placeholder="Record ID"
-              />
+              {newRelatedType === 'contact' && (
+                <select
+                  value={newRelatedId}
+                  onChange={(e) => setNewRelatedId(e.target.value)}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">Select contact...</option>
+                  {(contactsData?.data.items ?? []).map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name || c.email || c._id}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {newRelatedType === 'account' && (
+                <select
+                  value={newRelatedId}
+                  onChange={(e) => setNewRelatedId(e.target.value)}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">Select account...</option>
+                  {(accountsData?.data.items ?? []).map((a) => (
+                    <option key={a._id} value={a._id}>
+                      {a.accountNumber ? `#${a.accountNumber} – ` : ''}{a.name || a._id}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {newRelatedType === 'deal' && (
+                <select
+                  value={newRelatedId}
+                  onChange={(e) => setNewRelatedId(e.target.value)}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">Select deal...</option>
+                  {(dealsData?.data.items ?? []).map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.dealNumber ? `#${d.dealNumber} – ` : ''}{d.title || d._id}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {newRelatedType === 'invoice' && (
+                <select
+                  value={newRelatedId}
+                  onChange={(e) => setNewRelatedId(e.target.value)}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">Select invoice...</option>
+                  {(invoicesData?.data.items ?? []).map((i) => (
+                    <option key={i._id} value={i._id}>
+                      {i.invoiceNumber || i._id}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {newRelatedType === 'quote' && (
+                <select
+                  value={newRelatedId}
+                  onChange={(e) => setNewRelatedId(e.target.value)}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">Select quote...</option>
+                  {(quotesData?.data.items ?? []).map((q) => (
+                    <option key={q._id} value={q._id}>
+                      {q.quoteNumber || q._id}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {newRelatedType === 'project' && (
+                <select
+                  value={newRelatedId}
+                  onChange={(e) => setNewRelatedId(e.target.value)}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">Select project...</option>
+                  {(projectsData?.data.items ?? []).map((p) => (
+                    <option key={p._id} value={p._id}>
+                      {p.name || p._id}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
           <div>
@@ -1042,7 +1122,10 @@ export default function CRMTasks() {
                 <div className="flex gap-2">
                   <select
                     value={editRelatedType}
-                    onChange={(e) => setEditRelatedType(e.target.value as any)}
+                    onChange={(e) => {
+                      setEditRelatedType(e.target.value as any)
+                      setEditRelatedId('') // Clear the ID when type changes
+                    }}
                     className="w-28 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-xs text-[color:var(--color-text)]"
                   >
                     <option value="">None</option>
@@ -1053,13 +1136,90 @@ export default function CRMTasks() {
                     <option value="invoice">Invoice</option>
                     <option value="project">Project</option>
                   </select>
-                  <input
-                    type="text"
-                    value={editRelatedId}
-                    onChange={(e) => setEditRelatedId(e.target.value)}
-                    className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                    placeholder="Record ID"
-                  />
+                  {editRelatedType === 'contact' && (
+                    <select
+                      value={editRelatedId}
+                      onChange={(e) => setEditRelatedId(e.target.value)}
+                      className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="">Select contact...</option>
+                      {(contactsData?.data.items ?? []).map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.name || c.email || c._id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {editRelatedType === 'account' && (
+                    <select
+                      value={editRelatedId}
+                      onChange={(e) => setEditRelatedId(e.target.value)}
+                      className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="">Select account...</option>
+                      {(accountsData?.data.items ?? []).map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {a.accountNumber ? `#${a.accountNumber} – ` : ''}{a.name || a._id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {editRelatedType === 'deal' && (
+                    <select
+                      value={editRelatedId}
+                      onChange={(e) => setEditRelatedId(e.target.value)}
+                      className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="">Select deal...</option>
+                      {(dealsData?.data.items ?? []).map((d) => (
+                        <option key={d._id} value={d._id}>
+                          {d.dealNumber ? `#${d.dealNumber} – ` : ''}{d.title || d._id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {editRelatedType === 'invoice' && (
+                    <select
+                      value={editRelatedId}
+                      onChange={(e) => setEditRelatedId(e.target.value)}
+                      className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="">Select invoice...</option>
+                      {(invoicesData?.data.items ?? []).map((i) => (
+                        <option key={i._id} value={i._id}>
+                          {i.invoiceNumber || i._id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {editRelatedType === 'quote' && (
+                    <select
+                      value={editRelatedId}
+                      onChange={(e) => setEditRelatedId(e.target.value)}
+                      className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="">Select quote...</option>
+                      {(quotesData?.data.items ?? []).map((q) => (
+                        <option key={q._id} value={q._id}>
+                          {q.quoteNumber || q._id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {editRelatedType === 'project' && (
+                    <select
+                      value={editRelatedId}
+                      onChange={(e) => setEditRelatedId(e.target.value)}
+                      className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                    >
+                      <option value="">Select project...</option>
+                      {(projectsData?.data.items ?? []).map((p) => (
+                        <option key={p._id} value={p._id}>
+                          {p.name || p._id}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
               <div className="flex justify-between items-center gap-2">
