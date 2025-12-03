@@ -135,10 +135,15 @@ export default function SupportTickets() {
   })
   const contacts = React.useMemo(() => contactsData?.data.items ?? [], [contactsData?.data.items])
 
-  // State for assignee search
+  // State for assignee search (create form)
   const [assigneeSearch, setAssigneeSearch] = React.useState('')
   const [showAssigneeDropdown, setShowAssigneeDropdown] = React.useState(false)
   const [selectedAssignee, setSelectedAssignee] = React.useState<{ name: string; email: string } | null>(null)
+
+  // State for assignee search (edit form)
+  const [editAssigneeSearch, setEditAssigneeSearch] = React.useState('')
+  const [showEditAssigneeDropdown, setShowEditAssigneeDropdown] = React.useState(false)
+  const [selectedEditAssignee, setSelectedEditAssignee] = React.useState<{ name: string; email: string } | null>(null)
   
   const filteredContacts = React.useMemo(() => {
     if (!assigneeSearch.trim()) return contacts
@@ -149,12 +154,22 @@ export default function SupportTickets() {
     )
   }, [assigneeSearch, contacts])
 
+  const filteredEditContacts = React.useMemo(() => {
+    if (!editAssigneeSearch.trim()) return contacts
+    const lower = editAssigneeSearch.toLowerCase()
+    return contacts.filter((c) => 
+      c.name?.toLowerCase().includes(lower) || 
+      c.email?.toLowerCase().includes(lower)
+    )
+  }, [editAssigneeSearch, contacts])
+
   // Close assignee dropdown when clicking outside
   React.useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as HTMLElement
-      if (!target.closest('.assignee-search-container')) {
+      if (!target.closest('.assignee-search-container') && !target.closest('.edit-assignee-search-container')) {
         setShowAssigneeDropdown(false)
+        setShowEditAssigneeDropdown(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -532,6 +547,24 @@ export default function SupportTickets() {
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   React.useEffect(() => { if (!editing) return; const el = document.createElement('div'); el.setAttribute('data-overlay', 'ticket-editor'); Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' }); document.body.appendChild(el); setPortalEl(el); return () => { try { document.body.removeChild(el) } catch {}; setPortalEl(null) } }, [editing])
 
+  // Initialize edit assignee when editing starts
+  React.useEffect(() => {
+    if (editing && editing.assignee) {
+      // Try to parse "Name <email>" format
+      const match = editing.assignee.match(/^(.+?)\s*<(.+?)>$/)
+      if (match) {
+        setSelectedEditAssignee({ name: match[1].trim(), email: match[2].trim() })
+      } else {
+        // Fallback: just use the assignee string as-is
+        setSelectedEditAssignee({ name: editing.assignee, email: '' })
+      }
+      setEditAssigneeSearch('')
+    } else {
+      setSelectedEditAssignee(null)
+      setEditAssigneeSearch('')
+    }
+  }, [editing])
+
   const [surveyProgramId, setSurveyProgramId] = React.useState('')
   const [surveyScore, setSurveyScore] = React.useState('')
   const [surveyComment, setSurveyComment] = React.useState('')
@@ -811,7 +844,7 @@ export default function SupportTickets() {
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
               <div className="mb-3 text-base font-semibold">Edit ticket</div>
-              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, shortDescription: String(fd.get('shortDescription')||'')||undefined, status: String(fd.get('status')||'')||undefined, priority: String(fd.get('priority')||'')||undefined, assignee: String(fd.get('assignee')||'')||undefined, description: String(fd.get('description')||'')||undefined }; const sla = String(fd.get('slaDueAt')||''); if (sla) payload.slaDueAt = new Date(sla).toISOString(); update.mutate(payload); setEditing(null) }}>
+              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const assignee = selectedEditAssignee ? `${selectedEditAssignee.name} <${selectedEditAssignee.email}>` : ''; const payload: any = { _id: editing._id, shortDescription: String(fd.get('shortDescription')||'')||undefined, status: String(fd.get('status')||'')||undefined, priority: String(fd.get('priority')||'')||undefined, assignee: assignee || undefined, description: String(fd.get('description')||'')||undefined }; const sla = String(fd.get('slaDueAt')||''); if (sla) payload.slaDueAt = new Date(sla).toISOString(); update.mutate(payload); setEditing(null) }}>
                 <label className="text-xs text-[color:var(--color-text-muted)]">Short description</label>
                 <input name="shortDescription" defaultValue={editing.shortDescription ?? editing.title ?? ''} placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <label className="text-xs text-[color:var(--color-text-muted)]">Status</label>
@@ -819,7 +852,58 @@ export default function SupportTickets() {
                 <label className="text-xs text-[color:var(--color-text-muted)]">Priority</label>
                 <select name="priority" defaultValue={editing.priority ?? 'normal'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>low</option><option>normal</option><option>high</option><option>urgent</option></select>
                 <label className="text-xs text-[color:var(--color-text-muted)]">Assignee</label>
-                <input name="assignee" defaultValue={editing.assignee ?? ''} placeholder="Assignee" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] px-3 py-2 text-sm" />
+                <div className="relative edit-assignee-search-container">
+                  <input 
+                    type="text"
+                    value={selectedEditAssignee ? `${selectedEditAssignee.name || selectedEditAssignee.email}` : editAssigneeSearch}
+                    onChange={(e) => {
+                      setEditAssigneeSearch(e.target.value)
+                      setSelectedEditAssignee(null)
+                      setShowEditAssigneeDropdown(true)
+                    }}
+                    onFocus={() => setShowEditAssigneeDropdown(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setShowEditAssigneeDropdown(false)
+                        setEditAssigneeSearch('')
+                      }
+                    }}
+                    placeholder="Search assignee..."
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] px-3 py-2 text-sm"
+                  />
+                  {showEditAssigneeDropdown && filteredEditContacts.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-lg">
+                      {filteredEditContacts.slice(0, 50).map((contact) => (
+                        <button
+                          key={contact._id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedEditAssignee({ name: contact.name || '', email: contact.email || '' })
+                            setEditAssigneeSearch('')
+                            setShowEditAssigneeDropdown(false)
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] border-b border-[color:var(--color-border-soft)] last:border-b-0"
+                        >
+                          <div className="font-medium">{contact.name || 'No name'}</div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">{contact.email}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {selectedEditAssignee && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEditAssignee(null)
+                        setEditAssigneeSearch('')
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
+                      title="Clear assignee"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
                 <label className="text-xs text-[color:var(--color-text-muted)]">SLA Due</label>
                 <div className="flex items-center gap-2">
                   <input name="slaDueAt" type="datetime-local" defaultValue={editing.slaDueAt ? editing.slaDueAt.slice(0,16) : ''} className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
