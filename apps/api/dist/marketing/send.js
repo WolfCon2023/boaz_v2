@@ -31,7 +31,12 @@ function injectUnsubscribe(html, unsubscribeUrl) {
     if (html.includes('{{unsubscribeurl}}')) {
         return html.replaceAll('{{unsubscribeurl}}', unsubscribeUrl);
     }
-    // Case-insensitive replacement as fallback
+    // Also handle older patterns like "http://{{unsubscribeurl}}/" or "https://{{unsubscribeurl}}"
+    const fullRegex = /https?:\/\/\{\{unsubscribeurl\}\}\/?/gi;
+    if (fullRegex.test(html)) {
+        return html.replace(fullRegex, unsubscribeUrl);
+    }
+    // Case-insensitive replacement as fallback for bare token
     const regex = /\{\{unsubscribeurl\}\}/gi;
     if (regex.test(html)) {
         return html.replace(regex, unsubscribeUrl);
@@ -154,7 +159,20 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
                 continue;
             try {
                 await sendEmail({ to: email, subject: String(campaign.subject || campaign.name || ''), html: personalized });
-                await db.collection('marketing_events').insertOne({ event: 'sent', campaignId: _id, recipient: email, at: new Date() });
+                const sentAt = new Date();
+                // Log to marketing_events (for campaign-specific tracking)
+                await db.collection('marketing_events').insertOne({ event: 'sent', campaignId: _id, recipient: email, at: sentAt });
+                // Also log to outreach_events (for unified outreach tracking)
+                await db.collection('outreach_events').insertOne({
+                    channel: 'email',
+                    event: 'sent',
+                    recipient: email,
+                    variant: `campaign:${campaign.name || _id.toHexString()}`,
+                    templateId: null,
+                    sequenceId: null,
+                    meta: { campaignId: _id.toHexString(), campaignName: campaign.name },
+                    at: sentAt
+                });
                 sent++;
             }
             catch {

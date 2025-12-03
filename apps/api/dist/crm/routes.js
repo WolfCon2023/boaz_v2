@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/rbac.js';
 import { sendAuthEmail } from '../auth/email.js';
 import { env } from '../env.js';
+import { vendorsRouter } from './vendors.js';
+import { revenueIntelligenceRouter } from './revenue_intelligence.js';
 export const crmRouter = Router();
 // Helper function to add history entry
 async function addContactHistory(db, contactId, eventType, description, userId, userName, userEmail, oldValue, newValue, metadata) {
@@ -369,3 +371,6 @@ crmRouter.get('/contacts/:id/history', async (req, res) => {
         res.status(400).json({ data: null, error: 'invalid_id' });
     }
 });
+// Mount sub-routers that use /api/crm prefix
+crmRouter.use('/vendors', vendorsRouter);
+crmRouter.use('/revenue-intelligence', revenueIntelligenceRouter);

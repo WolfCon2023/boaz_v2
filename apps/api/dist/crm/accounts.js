@@ -72,7 +72,8 @@ accountsRouter.post('/', async (req, res) => {
         name: z.string().trim().min(1),
         companyName: opt(z.string()),
         primaryContactName: opt(z.string()),
-        primaryContactEmail: opt(z.string().email()),
+        // Be lenient here: email is optional and we don't want a formatting typo to block onboarding
+        primaryContactEmail: opt(z.string()),
         primaryContactPhone: opt(z.string()),
     });
     const parsed = schema.safeParse(req.body);

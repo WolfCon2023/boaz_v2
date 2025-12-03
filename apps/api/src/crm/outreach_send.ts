@@ -59,10 +59,19 @@ outreachSendRouter.post('/email', requireAuth, upload.single('attachment'), asyn
     }
   }
   
+  // Log sent event immediately (before attempting to send)
   try {
-    // Log sent event immediately
-    await db.collection('outreach_events').insertOne({ channel: 'email', event: 'sent', recipient: to, variant: variant ?? null, at: new Date() })
-  } catch {}
+    await db.collection('outreach_events').insertOne({ 
+      channel: 'email', 
+      event: 'sent', 
+      recipient: to, 
+      variant: variant ?? null, 
+      at: new Date() 
+    })
+    console.log(`[Outreach] Logged 'sent' event for ${to}`)
+  } catch (err) {
+    console.error('[Outreach] Failed to log sent event:', err)
+  }
   
   // Use the same email sending function as the rest of the app (supports SendGrid, Mailgun, SMTP)
   try {
@@ -92,9 +101,18 @@ outreachSendRouter.post('/sms', requireAuth, async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   const { to, text } = req.body ?? {}
   if (!to || !text) return res.status(400).json({ data: null, error: 'invalid_payload' })
+  // Log sent event immediately (before attempting to send)
   try {
-    await db.collection('outreach_events').insertOne({ channel: 'sms', event: 'sent', recipient: to, at: new Date() })
-  } catch {}
+    await db.collection('outreach_events').insertOne({ 
+      channel: 'sms', 
+      event: 'sent', 
+      recipient: to, 
+      at: new Date() 
+    })
+    console.log(`[Outreach] Logged 'sent' event for SMS to ${to}`)
+  } catch (err) {
+    console.error('[Outreach] Failed to log SMS sent event:', err)
+  }
   try {
     if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM_NUMBER) {
       const form = new URLSearchParams({
@@ -130,7 +148,10 @@ outreachSendRouter.post('/webhook/sendgrid', async (req, res) => {
   const docs = events
     .filter((e: any) => e && allowed.has(e.event))
     .map((e: any) => ({ channel: 'email', event: map[e.event], recipient: e.email, variant: e.variant ?? null, at: e.timestamp ? new Date(e.timestamp * 1000) : new Date() }))
-  if (docs.length) await db.collection('outreach_events').insertMany(docs)
+  if (docs.length) {
+    await db.collection('outreach_events').insertMany(docs)
+    console.log(`[Outreach Webhook] Logged ${docs.length} SendGrid events`)
+  }
   res.json({ ok: true })
 })
 
@@ -142,7 +163,10 @@ outreachSendRouter.post('/webhook/mailgun', async (req, res) => {
   const map: Record<string, string> = { delivered: 'delivered', opened: 'opened', clicked: 'clicked', bounced: 'bounced', complained: 'spam', unsubscribed: 'unsubscribed' }
   const type = e?.event || e?.eventName
   const out = map[type]
-  if (out) await db.collection('outreach_events').insertOne({ channel: 'email', event: out, recipient: e?.recipient || e?.message?.headers?.to, at: e?.timestamp ? new Date(e.timestamp * 1000) : new Date() })
+  if (out) {
+    await db.collection('outreach_events').insertOne({ channel: 'email', event: out, recipient: e?.recipient || e?.message?.headers?.to, at: e?.timestamp ? new Date(e.timestamp * 1000) : new Date() })
+    console.log(`[Outreach Webhook] Logged Mailgun '${out}' event for ${e?.recipient || e?.message?.headers?.to}`)
+  }
   res.json({ ok: true })
 })
 
@@ -154,7 +178,10 @@ outreachSendRouter.post('/webhook/twilio', async (req, res) => {
   const to = req.body?.To || req.body?.to
   const map: Record<string, string> = { delivered: 'delivered', sent: 'sent', failed: 'bounced' }
   const out = map[status]
-  if (out && to) await db.collection('outreach_events').insertOne({ channel: 'sms', event: out, recipient: to, at: new Date() })
+  if (out && to) {
+    await db.collection('outreach_events').insertOne({ channel: 'sms', event: out, recipient: to, at: new Date() })
+    console.log(`[Outreach Webhook] Logged Twilio '${out}' event for SMS to ${to}`)
+  }
   res.json({ ok: true })
 })
 

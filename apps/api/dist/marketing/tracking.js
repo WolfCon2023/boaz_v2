@@ -71,7 +71,20 @@ marketingTrackingRouter.get('/r/:token', async (req, res) => {
         target.searchParams.set('utm_medium', link.utmMedium);
     if (link.utmCampaign)
         target.searchParams.set('utm_campaign', link.utmCampaign);
-    await db.collection('marketing_events').insertOne({ event: 'click', token, campaignId: link.campaignId || null, url: target.toString(), at: new Date() });
+    const clickedAt = new Date();
+    // Log to marketing_events (for campaign-specific tracking)
+    await db.collection('marketing_events').insertOne({ event: 'click', token, campaignId: link.campaignId || null, url: target.toString(), at: clickedAt });
+    // Also log to outreach_events (for unified outreach tracking) - note: no recipient info available from link clicks
+    if (link.campaignId) {
+        await db.collection('outreach_events').insertOne({
+            channel: 'email',
+            event: 'clicked',
+            recipient: null, // Link clicks don't have recipient info
+            variant: `campaign:${link.campaignId.toHexString()}`,
+            meta: { campaignId: link.campaignId.toHexString(), url: link.url, token },
+            at: clickedAt
+        });
+    }
     res.redirect(302, target.toString());
 });
 // GET /api/marketing/pixel.gif?c=&e=
@@ -83,7 +96,20 @@ marketingTrackingRouter.get('/pixel.gif', async (req, res) => {
     const e = String(req.query.e || '');
     try {
         const campaignId = ObjectId.isValid(c) ? new ObjectId(c) : null;
-        await db.collection('marketing_events').insertOne({ event: 'open', campaignId, recipient: e || null, at: new Date() });
+        const openedAt = new Date();
+        // Log to marketing_events (for campaign-specific tracking)
+        await db.collection('marketing_events').insertOne({ event: 'open', campaignId, recipient: e || null, at: openedAt });
+        // Also log to outreach_events (for unified outreach tracking)
+        if (e) {
+            await db.collection('outreach_events').insertOne({
+                channel: 'email',
+                event: 'opened',
+                recipient: e,
+                variant: campaignId ? `campaign:${campaignId.toHexString()}` : null,
+                meta: { campaignId: campaignId?.toHexString() || null },
+                at: openedAt
+            });
+        }
     }
     catch {
         // ignore

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
@@ -73,6 +73,15 @@ export default function CRMRevenueIntelligence() {
     (searchParams.get('view') as any) || 'forecast',
   )
   const [selectedDealId, setSelectedDealId] = React.useState<string | null>(null)
+  
+  // Scenario adjustments state
+  const [scenarioAdjustments, setScenarioAdjustments] = React.useState<
+    Map<string, { newStage?: string; newValue?: number; newCloseDate?: string }>
+  >(new Map())
+  const [editingDealId, setEditingDealId] = React.useState<string | null>(null)
+  const [editStage, setEditStage] = React.useState('')
+  const [editValue, setEditValue] = React.useState('')
+  const [editCloseDate, setEditCloseDate] = React.useState('')
 
   React.useEffect(() => {
     const params = new URLSearchParams()
@@ -113,6 +122,80 @@ export default function CRMRevenueIntelligence() {
 
   const forecast = forecastQ.data?.data
   const reps = repsQ.data?.data
+
+  // Scenario mutation
+  const scenarioMutation = useMutation({
+    mutationFn: async (adjustments: Array<{ dealId: string; newStage?: string; newValue?: number; newCloseDate?: string }>) => {
+      const res = await http.post('/api/crm/revenue-intelligence/scenario', { period, adjustments })
+      return res.data as {
+        data: {
+          baseline: ForecastData['summary']
+          scenario: {
+            totalDeals: number
+            totalPipeline: number
+            weightedPipeline: number
+            closedWon: number
+            forecast: { pessimistic: number; likely: number; optimistic: number }
+          }
+          delta: {
+            totalPipeline: number
+            weightedPipeline: number
+            pessimistic: number
+            likely: number
+            optimistic: number
+          }
+        }
+      }
+    },
+  })
+
+  function startEditDeal(deal: Deal) {
+    setEditingDealId(deal._id)
+    const existing = scenarioAdjustments.get(deal._id)
+    setEditStage(existing?.newStage || deal.stage || '')
+    setEditValue(String(existing?.newValue !== undefined ? existing.newValue : deal.amount || ''))
+    setEditCloseDate(existing?.newCloseDate || deal.forecastedCloseDate || deal.closeDate || '')
+  }
+
+  function saveScenarioAdjustment(dealId: string) {
+    const newAdj = new Map(scenarioAdjustments)
+    const deal = forecast?.deals.find((d) => d._id === dealId)
+    if (!deal) return
+
+    const changes: any = {}
+    if (editStage && editStage !== deal.stage) changes.newStage = editStage
+    if (editValue && Number(editValue) !== deal.amount) changes.newValue = Number(editValue)
+    if (editCloseDate && editCloseDate !== (deal.forecastedCloseDate || deal.closeDate)) changes.newCloseDate = editCloseDate
+
+    if (Object.keys(changes).length > 0) {
+      newAdj.set(dealId, changes)
+    } else {
+      newAdj.delete(dealId)
+    }
+
+    setScenarioAdjustments(newAdj)
+    setEditingDealId(null)
+  }
+
+  function cancelEdit() {
+    setEditingDealId(null)
+    setEditStage('')
+    setEditValue('')
+    setEditCloseDate('')
+  }
+
+  function clearScenario() {
+    setScenarioAdjustments(new Map())
+    scenarioMutation.reset()
+  }
+
+  function runScenario() {
+    const adjustments = Array.from(scenarioAdjustments.entries()).map(([dealId, changes]) => ({
+      dealId,
+      ...changes,
+    }))
+    scenarioMutation.mutate(adjustments)
+  }
 
   function formatCurrency(value: number): string {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(
@@ -480,10 +563,35 @@ export default function CRMRevenueIntelligence() {
       {view === 'scenario' && forecast && (
         <>
           <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-            <h2 className="mb-3 text-sm font-semibold">What-If Scenario Modeling</h2>
-            <p className="text-xs text-[color:var(--color-text-muted)] mb-4">
-              Select deals below and adjust their stages, values, or close dates to see how changes impact your forecast.
-            </p>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-semibold">What-If Scenario Modeling</h2>
+                <p className="text-xs text-[color:var(--color-text-muted)]">
+                  Adjust deal values to see forecast impact. Changes are temporary and don't affect actual deals.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {scenarioAdjustments.size > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={clearScenario}
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                    >
+                      Clear ({scenarioAdjustments.size})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={runScenario}
+                      disabled={scenarioMutation.isPending}
+                      className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                    >
+                      {scenarioMutation.isPending ? 'Calculating...' : 'Run Scenario'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
             
             {forecast.summary.totalDeals === 0 ? (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-xs text-amber-400">
@@ -491,15 +599,50 @@ export default function CRMRevenueIntelligence() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
-                  <h3 className="text-sm font-semibold text-blue-400 mb-2">How to Use</h3>
-                  <ol className="list-decimal pl-5 space-y-1 text-xs text-[color:var(--color-text-muted)]">
-                    <li>Review your current deals in the table below</li>
-                    <li>Click on any deal to see its AI scoring factors</li>
-                    <li>Use the Forecast view to see baseline projections</li>
-                    <li>Advanced scenario modeling (adjust values inline) coming in next release</li>
-                  </ol>
-                </div>
+                {/* Scenario Results */}
+                {scenarioMutation.data && (
+                  <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
+                    <h3 className="text-sm font-semibold text-blue-400">Scenario Impact</h3>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                        <div className="text-[10px] text-[color:var(--color-text-muted)]">Pessimistic</div>
+                        <div className="mt-1 text-lg font-semibold">
+                          {formatCurrency(scenarioMutation.data.data.scenario.forecast.pessimistic)}
+                        </div>
+                        <div className="mt-1 text-[10px]">
+                          <span className={scenarioMutation.data.data.delta.pessimistic >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                            {scenarioMutation.data.data.delta.pessimistic >= 0 ? '+' : ''}
+                            {formatCurrency(scenarioMutation.data.data.delta.pessimistic)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                        <div className="text-[10px] text-[color:var(--color-text-muted)]">Likely</div>
+                        <div className="mt-1 text-lg font-semibold text-blue-400">
+                          {formatCurrency(scenarioMutation.data.data.scenario.forecast.likely)}
+                        </div>
+                        <div className="mt-1 text-[10px]">
+                          <span className={scenarioMutation.data.data.delta.likely >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                            {scenarioMutation.data.data.delta.likely >= 0 ? '+' : ''}
+                            {formatCurrency(scenarioMutation.data.data.delta.likely)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                        <div className="text-[10px] text-[color:var(--color-text-muted)]">Optimistic</div>
+                        <div className="mt-1 text-lg font-semibold text-emerald-400">
+                          {formatCurrency(scenarioMutation.data.data.scenario.forecast.optimistic)}
+                        </div>
+                        <div className="mt-1 text-[10px]">
+                          <span className={scenarioMutation.data.data.delta.optimistic >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                            {scenarioMutation.data.data.delta.optimistic >= 0 ? '+' : ''}
+                            {formatCurrency(scenarioMutation.data.data.delta.optimistic)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-xs">
@@ -508,52 +651,140 @@ export default function CRMRevenueIntelligence() {
                         <th className="px-2 py-2 text-left">Deal</th>
                         <th className="px-2 py-2 text-left">Stage</th>
                         <th className="px-2 py-2 text-right">Value</th>
-                        <th className="px-2 py-2 text-center">AI Score</th>
-                        <th className="px-2 py-2 text-center">Confidence</th>
                         <th className="px-2 py-2 text-left">Forecast Close</th>
+                        <th className="px-2 py-2 text-center">AI Score</th>
                         <th className="px-2 py-2 text-left">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {forecast.deals.slice(0, 50).map((deal) => (
-                        <tr key={deal._id} className="border-b border-[color:var(--color-border)]">
-                          <td className="px-2 py-2">{deal.title || 'Untitled'}</td>
-                          <td className="px-2 py-2">
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${getStageColor(deal.stage as DealStage)}`}>
-                              {deal.stage || 'new'}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2 text-right font-semibold">{formatCurrency(deal.amount || 0)}</td>
-                          <td className="px-2 py-2 text-center">
-                            <span
-                              className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                deal.aiScore >= 70
-                                  ? 'bg-emerald-500/20 text-emerald-400'
-                                  : deal.aiScore >= 40
-                                    ? 'bg-amber-500/20 text-amber-400'
-                                    : 'bg-red-500/20 text-red-400'
-                              }`}
-                            >
-                              {deal.aiScore}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2 text-center">
-                            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${getConfidenceColor(deal.aiConfidence)}`}>
-                              {deal.aiConfidence}
-                            </span>
-                          </td>
-                          <td className="px-2 py-2">{formatDateOnly(deal.forecastedCloseDate || deal.closeDate)}</td>
-                          <td className="px-2 py-2">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedDealId(deal._id)}
-                              className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
-                            >
-                              View Details
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {forecast.deals.slice(0, 50).map((deal) => {
+                        const isEditing = editingDealId === deal._id
+                        const hasAdjustment = scenarioAdjustments.has(deal._id)
+                        const adjustment = scenarioAdjustments.get(deal._id)
+
+                        return (
+                          <tr
+                            key={deal._id}
+                            className={`border-b border-[color:var(--color-border)] ${hasAdjustment ? 'bg-blue-500/5' : ''}`}
+                          >
+                            <td className="px-2 py-2">
+                              {deal.title || 'Untitled'}
+                              {hasAdjustment && (
+                                <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-blue-400" title="Modified" />
+                              )}
+                            </td>
+                            <td className="px-2 py-2">
+                              {isEditing ? (
+                                <select
+                                  value={editStage}
+                                  onChange={(e) => setEditStage(e.target.value)}
+                                  className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs"
+                                >
+                                  <option value="new">new</option>
+                                  <option value="Draft / Deal Created">Draft / Deal Created</option>
+                                  <option value="Submitted for Review">Submitted for Review</option>
+                                  <option value="Initial Validation">Initial Validation</option>
+                                  <option value="Manager Approval">Manager Approval</option>
+                                  <option value="Finance Approval">Finance Approval</option>
+                                  <option value="Legal Review">Legal Review</option>
+                                  <option value="Executive Approval">Executive Approval</option>
+                                  <option value="Approved / Ready for Signature">Approved / Ready for Signature</option>
+                                  <option value="Proposal">Proposal</option>
+                                  <option value="Negotiation">Negotiation</option>
+                                  <option value="Contract Signed / Closed Won">Contract Signed / Closed Won</option>
+                                  <option value="Closed Lost">Closed Lost</option>
+                                </select>
+                              ) : (
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] ${getStageColor((adjustment?.newStage || deal.stage) as DealStage)}`}>
+                                  {adjustment?.newStage || deal.stage || 'new'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              {isEditing ? (
+                                <input
+                                  type="number"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
+                                />
+                              ) : (
+                                <span className="font-semibold">
+                                  {formatCurrency(adjustment?.newValue !== undefined ? adjustment.newValue : deal.amount || 0)}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2">
+                              {isEditing ? (
+                                <input
+                                  type="date"
+                                  value={editCloseDate ? editCloseDate.slice(0, 10) : ''}
+                                  onChange={(e) => setEditCloseDate(e.target.value)}
+                                  className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs"
+                                />
+                              ) : (
+                                formatDateOnly(adjustment?.newCloseDate || deal.forecastedCloseDate || deal.closeDate)
+                              )}
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              <span
+                                className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                  deal.aiScore >= 70
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : deal.aiScore >= 40
+                                      ? 'bg-amber-500/20 text-amber-400'
+                                      : 'bg-red-500/20 text-red-400'
+                                }`}
+                              >
+                                {deal.aiScore}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2">
+                              {isEditing ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => saveScenarioAdjustment(deal._id)}
+                                    className="rounded border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400 hover:bg-emerald-500/20"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelEdit}
+                                    className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditDeal(deal)}
+                                    className="rounded border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] hover:bg-[color:var(--color-muted)]"
+                                  >
+                                    {hasAdjustment ? 'Edit' : 'Adjust'}
+                                  </button>
+                                  {hasAdjustment && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newAdj = new Map(scenarioAdjustments)
+                                        newAdj.delete(deal._id)
+                                        setScenarioAdjustments(newAdj)
+                                      }}
+                                      className="rounded border border-red-500/50 px-2 py-0.5 text-[10px] text-red-400 hover:bg-red-500/10"
+                                    >
+                                      Reset
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>

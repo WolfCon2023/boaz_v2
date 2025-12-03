@@ -162,6 +162,7 @@ dealsRouter.post('/', async (req, res) => {
     const amountRaw = raw.amount;
     const stageRaw = typeof raw.stage === 'string' ? raw.stage.trim() : undefined;
     const closeDateRaw = typeof raw.closeDate === 'string' ? raw.closeDate.trim() : undefined;
+    const forecastedCloseDateRaw = typeof raw.forecastedCloseDate === 'string' ? raw.forecastedCloseDate.trim() : undefined;
     const accountNumberParsed = accountNumberRaw === undefined || accountNumberRaw === '' ? undefined : Number(accountNumberRaw);
     const amountParsed = amountRaw === undefined || amountRaw === '' ? undefined : Number(amountRaw);
     try {
@@ -220,6 +221,8 @@ dealsRouter.post('/', async (req, res) => {
         // Normalize date-only strings to midday UTC to avoid timezone shifting one day back
         if (closeDateRaw)
             doc.closeDate = new Date(`${closeDateRaw}T12:00:00Z`);
+        if (forecastedCloseDateRaw)
+            doc.forecastedCloseDate = new Date(`${forecastedCloseDateRaw}T12:00:00Z`);
         if (!doc.closeDate && doc.stage === closedWon)
             doc.closeDate = new Date();
         // Generate dealNumber starting at 100001
@@ -780,6 +783,7 @@ dealsRouter.put('/:id', async (req, res) => {
             amount: z.number().optional(),
             stage: z.string().optional(),
             closeDate: z.string().optional(),
+            forecastedCloseDate: z.string().optional(),
             marketingCampaignId: z.string().optional().or(z.literal('')),
             attributionToken: z.string().optional(),
             approver: z.string().optional(),
@@ -844,6 +848,8 @@ dealsRouter.put('/:id', async (req, res) => {
             const closedWon = 'Contract Signed / Closed Won';
             if (update.closeDate)
                 update.closeDate = new Date(`${update.closeDate}T12:00:00Z`);
+            if (update.forecastedCloseDate)
+                update.forecastedCloseDate = new Date(`${update.forecastedCloseDate}T12:00:00Z`);
             const previousStage = currentDeal.stage;
             const movingToClosedWon = update.stage === closedWon && previousStage !== closedWon;
             // Track stage changes

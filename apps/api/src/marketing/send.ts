@@ -153,7 +153,20 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
       if (dryRun) continue
       try {
         await sendEmail({ to: email, subject: String(campaign.subject || campaign.name || ''), html: personalized })
-        await db.collection('marketing_events').insertOne({ event: 'sent', campaignId: _id, recipient: email, at: new Date() })
+        const sentAt = new Date()
+        // Log to marketing_events (for campaign-specific tracking)
+        await db.collection('marketing_events').insertOne({ event: 'sent', campaignId: _id, recipient: email, at: sentAt })
+        // Also log to outreach_events (for unified outreach tracking)
+        await db.collection('outreach_events').insertOne({ 
+          channel: 'email', 
+          event: 'sent', 
+          recipient: email, 
+          variant: `campaign:${campaign.name || _id.toHexString()}`,
+          templateId: null,
+          sequenceId: null,
+          meta: { campaignId: _id.toHexString(), campaignName: campaign.name },
+          at: sentAt 
+        })
         sent++
       } catch {
         errors++

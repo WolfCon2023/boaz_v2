@@ -25,13 +25,17 @@ const environmentUpdateSchema = environmentSchema.partial();
 const installedProductSchema = z.object({
     customerId: z.string().trim().min(1),
     environmentId: z.string().trim().min(1),
+    usageType: z.enum(['Customer', 'Internal']).default('Customer'),
+    linkedAccountId: z.string().trim().optional(),
+    catalogProductId: z.string().trim().optional(),
     productName: z.string().trim().min(1),
     productType: z.enum(['Software', 'Hardware', 'Cloud Service', 'Integration', 'Subscription']),
-    vendor: z.string().trim().optional(),
-    version: z.string().trim().optional(),
-    serialNumber: z.string().trim().optional(),
+    vendor: z.string().trim().optional().nullable(),
+    version: z.string().trim().optional().nullable(),
+    serialNumber: z.string().trim().optional().nullable(),
     configuration: z.any().optional(),
-    deploymentDate: z.string().datetime().optional(), // ISO string
+    // Accept any string here (ISO or YYYY-MM-DD). We will parse and validate manually.
+    deploymentDate: z.string().trim().optional().nullable(),
     status: z.enum(['Active', 'Needs Upgrade', 'Pending Renewal', 'Retired']).default('Active'),
     supportLevel: z.enum(['Basic', 'Standard', 'Premium']).optional(),
 });
@@ -43,12 +47,62 @@ const licenseSchema = z.object({
     licenseIdentifier: z.string().trim().optional(),
     licenseCount: z.number().int().min(1),
     seatsAssigned: z.number().int().min(0).optional().default(0),
-    expirationDate: z.string().datetime().optional(), // ISO
+    // Accept any string here and parse manually to avoid timezone issues.
+    expirationDate: z.string().trim().optional(),
     renewalStatus: z.enum(['Active', 'Expired', 'Pending Renewal']).default('Active'),
     cost: z.number().nonnegative().optional(),
     assignedUsers: z.array(z.string().trim()).optional(),
 });
 const licenseUpdateSchema = licenseSchema.partial();
+function parseDeploymentDate(value) {
+    if (!value)
+        return null;
+    const v = String(value).trim();
+    if (!v)
+        return null;
+    // Handle YYYY-MM-DD as a date-only value, anchored at midday UTC to avoid timezone shifts
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        const [y, m, d] = v.split('-').map((s) => Number(s));
+        const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+        if (!Number.isFinite(dt.getTime()))
+            return null;
+        return dt;
+    }
+    const dt = new Date(v);
+    if (!Number.isFinite(dt.getTime()))
+        return null;
+    return dt;
+}
+function parseLicenseExpirationDate(value) {
+    if (!value)
+        return null;
+    const v = String(value).trim();
+    if (!v)
+        return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        const [y, m, d] = v.split('-').map((s) => Number(s));
+        const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+        if (!Number.isFinite(dt.getTime()))
+            return null;
+        return dt;
+    }
+    const dt = new Date(v);
+    if (!Number.isFinite(dt.getTime()))
+        return null;
+    return dt;
+}
+function formatDateOnly(dt) {
+    if (!dt)
+        return null;
+    const d = dt instanceof Date ? dt : new Date(dt);
+    if (!Number.isFinite(d.getTime()))
+        return null;
+    // Use UTC to avoid timezone shifts - format as YYYY-MM-DD
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
 function serializeEnvironment(doc) {
     return {
         ...doc,
@@ -171,11 +225,14 @@ assetsRouter.post('/products', async (req, res) => {
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     const now = new Date();
     const _id = new ObjectId().toHexString();
-    const deploymentDate = parsed.data.deploymentDate ? new Date(parsed.data.deploymentDate) : null;
+    const deploymentDate = parseDeploymentDate(parsed.data.deploymentDate);
     const doc = {
         _id,
         customerId: parsed.data.customerId,
         environmentId: parsed.data.environmentId,
+        usageType: parsed.data.usageType ?? 'Customer',
+        linkedAccountId: parsed.data.linkedAccountId,
+        catalogProductId: parsed.data.catalogProductId,
         productName: parsed.data.productName,
         productType: parsed.data.productType,
         vendor: parsed.data.vendor,
@@ -239,6 +296,12 @@ assetsRouter.put('/products/:productId', async (req, res) => {
         update.customerId = parsed.data.customerId;
     if (parsed.data.environmentId !== undefined)
         update.environmentId = parsed.data.environmentId;
+    if (parsed.data.usageType !== undefined)
+        update.usageType = parsed.data.usageType;
+    if (parsed.data.linkedAccountId !== undefined)
+        update.linkedAccountId = parsed.data.linkedAccountId;
+    if (parsed.data.catalogProductId !== undefined)
+        update.catalogProductId = parsed.data.catalogProductId;
     if (parsed.data.productName !== undefined)
         update.productName = parsed.data.productName;
     if (parsed.data.productType !== undefined)
@@ -256,7 +319,7 @@ assetsRouter.put('/products/:productId', async (req, res) => {
     if (parsed.data.supportLevel !== undefined)
         update.supportLevel = parsed.data.supportLevel;
     if (parsed.data.deploymentDate !== undefined) {
-        update.deploymentDate = parsed.data.deploymentDate ? new Date(parsed.data.deploymentDate) : null;
+        update.deploymentDate = parseDeploymentDate(parsed.data.deploymentDate);
     }
     const coll = db.collection('assets_products');
     const existing = await coll.findOne({ _id: id });
@@ -288,7 +351,7 @@ assetsRouter.post('/licenses', async (req, res) => {
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     const now = new Date();
     const _id = new ObjectId().toHexString();
-    const expirationDate = parsed.data.expirationDate ? new Date(parsed.data.expirationDate) : null;
+    const expirationDate = parseLicenseExpirationDate(parsed.data.expirationDate);
     if (parsed.data.seatsAssigned && parsed.data.seatsAssigned > parsed.data.licenseCount) {
         return res.status(400).json({ data: null, error: 'seats_exceed_license_count' });
     }
@@ -345,7 +408,7 @@ assetsRouter.put('/licenses/:licenseId', async (req, res) => {
     if (parsed.data.seatsAssigned !== undefined)
         update.seatsAssigned = parsed.data.seatsAssigned;
     if (parsed.data.expirationDate !== undefined) {
-        update.expirationDate = parsed.data.expirationDate ? new Date(parsed.data.expirationDate) : null;
+        update.expirationDate = parseLicenseExpirationDate(parsed.data.expirationDate);
     }
     if (parsed.data.renewalStatus !== undefined)
         update.renewalStatus = parsed.data.renewalStatus;
@@ -507,5 +570,131 @@ assetsRouter.get('/license-report', async (req, res) => {
         },
     });
     const rows = await db.collection('assets_licenses').aggregate(pipeline).toArray();
-    res.json({ data: { items: rows }, error: null });
+    // Format dates as YYYY-MM-DD strings to avoid timezone shifts
+    const formattedRows = rows.map((r) => ({
+        ...r,
+        expirationDate: formatDateOnly(r.expirationDate),
+    }));
+    res.json({ data: { items: formattedRows }, error: null });
+});
+// Installed products report across customers with optional filters
+assetsRouter.get('/product-report', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const productMatch = {};
+    const customerId = typeof req.query.customerId === 'string' ? req.query.customerId.trim() : '';
+    if (customerId)
+        productMatch.customerId = customerId;
+    const environmentId = typeof req.query.environmentId === 'string' ? req.query.environmentId.trim() : '';
+    if (environmentId)
+        productMatch.environmentId = environmentId;
+    const vendor = typeof req.query.vendor === 'string' ? req.query.vendor.trim() : '';
+    if (vendor)
+        productMatch.vendor = { $regex: vendor, $options: 'i' };
+    const productStatus = typeof req.query.productStatus === 'string' ? req.query.productStatus.trim() : '';
+    if (productStatus && ['Active', 'Needs Upgrade', 'Pending Renewal', 'Retired'].includes(productStatus)) {
+        productMatch.status = productStatus;
+    }
+    const productType = typeof req.query.productType === 'string' ? req.query.productType.trim() : '';
+    if (productType && ['Software', 'Hardware', 'Cloud Service', 'Integration', 'Subscription'].includes(productType)) {
+        productMatch.productType = productType;
+    }
+    const windowDays = Number(req.query.windowDays ?? 0);
+    const now = new Date();
+    const end = Number.isFinite(windowDays) && windowDays > 0
+        ? new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000)
+        : null;
+    const pipeline = [
+        { $match: productMatch },
+        {
+            $lookup: {
+                from: 'assets_environments',
+                localField: 'environmentId',
+                foreignField: '_id',
+                as: 'env',
+            },
+        },
+        { $unwind: { path: '$env', preserveNullAndEmptyArrays: true } },
+        {
+            $lookup: {
+                from: 'assets_licenses',
+                localField: '_id',
+                foreignField: 'productId',
+                as: 'licenses',
+            },
+        },
+        {
+            $addFields: {
+                totalLicenseCount: { $sum: '$licenses.licenseCount' },
+                totalSeatsAssigned: { $sum: '$licenses.seatsAssigned' },
+                activeLicenses: {
+                    $size: {
+                        $filter: {
+                            input: '$licenses',
+                            as: 'lic',
+                            cond: { $eq: ['$$lic.renewalStatus', 'Active'] },
+                        },
+                    },
+                },
+                pendingLicenses: {
+                    $size: {
+                        $filter: {
+                            input: '$licenses',
+                            as: 'lic',
+                            cond: { $eq: ['$$lic.renewalStatus', 'Pending Renewal'] },
+                        },
+                    },
+                },
+                expiredLicenses: {
+                    $size: {
+                        $filter: {
+                            input: '$licenses',
+                            as: 'lic',
+                            cond: { $eq: ['$$lic.renewalStatus', 'Expired'] },
+                        },
+                    },
+                },
+                nextExpirationDate: {
+                    $min: '$licenses.expirationDate',
+                },
+            },
+        },
+    ];
+    if (end) {
+        pipeline.push({
+            $match: {
+                nextExpirationDate: { $ne: null, $gte: now, $lte: end },
+            },
+        });
+    }
+    pipeline.push({
+        $project: {
+            _id: 1,
+            customerId: 1,
+            environmentId: 1,
+            environmentName: '$env.name',
+            environmentType: '$env.environmentType',
+            productName: '$productName',
+            productType: '$productType',
+            vendor: '$vendor',
+            status: '$status',
+            supportLevel: '$supportLevel',
+            deploymentDate: '$deploymentDate',
+            totalLicenseCount: 1,
+            totalSeatsAssigned: 1,
+            activeLicenses: 1,
+            pendingLicenses: 1,
+            expiredLicenses: 1,
+            nextExpirationDate: 1,
+        },
+    });
+    const rows = await db.collection('assets_products').aggregate(pipeline).toArray();
+    // Format dates as YYYY-MM-DD strings to avoid timezone shifts
+    const formattedRows = rows.map((r) => ({
+        ...r,
+        deploymentDate: formatDateOnly(r.deploymentDate),
+        nextExpirationDate: formatDateOnly(r.nextExpirationDate),
+    }));
+    res.json({ data: { items: formattedRows }, error: null });
 });
