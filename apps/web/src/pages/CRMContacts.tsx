@@ -238,6 +238,15 @@ export default function CRMContacts() {
       return res.data as { data: { items: Array<{ _id: string; name?: string }> } }
     },
   })
+  
+  // Outreach: templates list for one-off emails
+  const outreachTemplates = useQuery({
+    queryKey: ['outreach-templates-email-contacts'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/outreach/templates', { params: { q: '', sort: 'name', dir: 'asc' } })
+      return res.data as { data: { items: Array<{ _id: string; name?: string; channel?: 'email'|'sms'; subject?: string; body?: string }> } }
+    },
+  })
   const enrollmentsQ = useQuery({
     queryKey: ['outreach-enrollments', editing?._id],
     enabled: Boolean(editing?._id),
@@ -858,6 +867,33 @@ export default function CRMContacts() {
                   </div>
                   <div>
                     <label className="text-xs">Send one‑off email</label>
+                    <select 
+                      className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold"
+                      onChange={(e) => {
+                        const templateId = e.target.value
+                        if (!templateId) return
+                        const template = outreachTemplates.data?.data.items.find((t) => t._id === templateId)
+                        if (template && template.channel === 'email') {
+                          if (oneOffSubjectRef.current && template.subject) {
+                            oneOffSubjectRef.current.value = template.subject
+                          }
+                          if (oneOffTextRef.current && template.body) {
+                            oneOffTextRef.current.value = template.body
+                          }
+                          toast.showToast(`Loaded template: ${template.name || 'Untitled'}`, 'success')
+                        }
+                        e.currentTarget.selectedIndex = 0
+                      }}
+                    >
+                      <option value="">Load from template…</option>
+                      {(outreachTemplates.data?.data.items ?? [])
+                        .filter((t) => t.channel === 'email')
+                        .map((t) => (
+                          <option key={t._id} value={t._id}>
+                            {t.name || 'Untitled'}
+                          </option>
+                        ))}
+                    </select>
                     <input ref={oneOffSubjectRef} placeholder="Subject" className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
                     <textarea ref={oneOffTextRef} placeholder="Body" rows={3} className="mt-1 w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm" />
                     <input 

@@ -925,6 +925,13 @@ function CampaignsTab() {
     },
   })
   const { data: tplData } = useQuery({ queryKey: ['mkt-templates'], queryFn: async () => (await http.get('/api/marketing/templates')).data })
+  const { data: outreachTemplatesData } = useQuery({ 
+    queryKey: ['outreach-templates-email'], 
+    queryFn: async () => {
+      const res = await http.get('/api/crm/outreach/templates', { params: { q: '', sort: 'name', dir: 'asc' } })
+      return res.data as { data: { items: Array<{ _id: string; name?: string; channel?: 'email'|'sms'; subject?: string; body?: string }> } }
+    }
+  })
   const create = useMutation({
     mutationFn: async (payload: {
       name: string
@@ -1431,6 +1438,39 @@ ${sections}
             </select>
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
+            <div className="sm:col-span-1">
+              <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                Load from outreach template
+              </label>
+              <select
+                onChange={(e) => {
+                  const templateId = e.target.value
+                  if (!templateId) return
+                  const template = outreachTemplatesData?.data.items.find((t) => t._id === templateId)
+                  if (template && template.channel === 'email') {
+                    if (template.subject) setSubject(template.subject)
+                    if (template.body) {
+                      // Convert plain text to simple HTML
+                      const htmlBody = template.body.split('\n').map(line => `<p>${line || '<br/>'}</p>`).join('')
+                      setMjml(`<mjml><mj-body><mj-section><mj-column>${htmlBody}</mj-column></mj-section></mj-body></mjml>`)
+                      renderPreview()
+                    }
+                    toast.showToast(`Loaded template: ${template.name || 'Untitled'}`, 'success')
+                  }
+                  e.currentTarget.selectedIndex = 0
+                }}
+                className="w-full rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]"
+              >
+                <option value="">Select template…</option>
+                {(outreachTemplatesData?.data.items ?? [])
+                  .filter((t) => t.channel === 'email')
+                  .map((t) => (
+                    <option key={t._id} value={t._id}>
+                      {t.name || 'Untitled'}
+                    </option>
+                  ))}
+              </select>
+            </div>
             <div className="sm:col-span-1">
               <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
                 Linked survey program (optional)
