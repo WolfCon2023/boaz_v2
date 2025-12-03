@@ -409,7 +409,7 @@ quotesRouter.post('/:id/request-approval', requireAuth, async (req, res) => {
             <li><strong>Quote:</strong> ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}</li>
             <li><strong>Requested by:</strong> ${requesterData.name || requesterData.email}</li>
             <li><strong>Total:</strong> $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
-            <li><strong>Requested:</strong> ${now.toLocaleString()}</li>
+            <li><strong>Requested:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
           </ul>
           <p><a href="${approvalQueueUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Approval Queue</a></p>
           <p>Or copy and paste this URL into your browser:</p>
@@ -423,7 +423,7 @@ A new quote requires your approval:
 Quote: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}
 Requested by: ${requesterData.name || requesterData.email}
 Total: $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-Requested: ${now.toLocaleString()}
+Requested: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
 
 View Approval Queue: ${approvalQueueUrl}
         `,
@@ -614,7 +614,7 @@ quotesRouter.post('/:id/approve', requireAuth, async (req, res) => {
           <ul>
             <li><strong>Quote:</strong> ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}</li>
             <li><strong>Approved by:</strong> ${userData.name || userData.email}</li>
-            <li><strong>Approved at:</strong> ${now.toLocaleString()}</li>
+            <li><strong>Approved at:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
             ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
           </ul>
         `,
@@ -625,7 +625,7 @@ Your quote has been approved:
 
 Quote: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}
 Approved by: ${userData.name || userData.email}
-Approved at: ${now.toLocaleString()}
+Approved at: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
 ${reviewNotes ? `Notes: ${reviewNotes}` : ''}
         `,
             });

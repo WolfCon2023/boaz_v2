@@ -439,7 +439,7 @@ dealsRouter.post('/:id/request-approval', requireAuth, async (req, res) => {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                 })}</li>
-            <li><strong>Requested:</strong> ${now.toLocaleString()}</li>
+            <li><strong>Requested:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
           </ul>
           <p><a href="${approvalQueueUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Deal Approval Queue</a></p>
           <p>Or copy and paste this URL into your browser:</p>
@@ -455,7 +455,7 @@ Amount: $${(dealData.amount || 0).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                 })}
-Requested: ${now.toLocaleString()}
+Requested: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
 
 View Deal Approval Queue: ${approvalQueueUrl}
         `,
@@ -629,7 +629,7 @@ dealsRouter.post('/:id/approve', requireAuth, async (req, res) => {
           <ul>
             <li><strong>Deal:</strong> ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData?.title || 'Untitled'}</li>
             <li><strong>Approved by:</strong> ${userData.name || userData.email}</li>
-            <li><strong>Approved at:</strong> ${now.toLocaleString()}</li>
+            <li><strong>Approved at:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
             ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
           </ul>
         `,
@@ -639,7 +639,7 @@ Your deal has been approved:
 
 Deal: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData?.title || 'Untitled'}
 Approved by: ${userData.name || userData.email}
-Approved at: ${now.toLocaleString()}
+Approved at: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
 ${reviewNotes ? `Notes: ${reviewNotes}` : ''}
         `,
             });

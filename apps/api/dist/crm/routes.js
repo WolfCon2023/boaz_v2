@@ -260,7 +260,7 @@ crmRouter.post('/deals/:id/request-approval', requireAuth, async (req, res) => {
             <li><strong>Deal:</strong> ${dealData.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData.title || 'Untitled'}</li>
             <li><strong>Requested by:</strong> ${requesterData.name || requesterData.email}</li>
             <li><strong>Amount:</strong> $${(dealData.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
-            <li><strong>Requested:</strong> ${now.toLocaleString()}</li>
+            <li><strong>Requested:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
           </ul>
           <p><a href="${approvalQueueUrl}" style="display:inline-block;padding:10px 20px;background-color:#007bff;color:#ffffff;text-decoration:none;border-radius:5px;">View Deal Approval Queue</a></p>
           <p>Or copy and paste this URL into your browser:</p>
@@ -274,7 +274,7 @@ A new deal requires your approval:
 Deal: ${dealData.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData.title || 'Untitled'}
 Requested by: ${requesterData.name || requesterData.email}
 Amount: $${(dealData.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-Requested: ${now.toLocaleString()}
+Requested: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
 
 View Deal Approval Queue: ${approvalQueueUrl}
         `,
