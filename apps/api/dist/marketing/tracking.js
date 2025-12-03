@@ -2,19 +2,47 @@ import { Router } from 'express';
 import { ObjectId } from 'mongodb';
 import { getDb } from '../db.js';
 export const marketingTrackingRouter = Router();
-// GET /api/marketing/metrics?campaignId=
+// GET /api/marketing/metrics?campaignId=&startDate=&endDate=
 marketingTrackingRouter.get('/metrics', async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.json({ data: { byCampaign: [] }, error: null });
     const campaignId = String(req.query.campaignId ?? '');
+    const startDate = String(req.query.startDate ?? '');
+    const endDate = String(req.query.endDate ?? '');
     const match = {};
     if (ObjectId.isValid(campaignId))
         match.campaignId = new ObjectId(campaignId);
+    // Add date filters
+    if (startDate || endDate) {
+        const dateFilter = {};
+        if (startDate) {
+            const d = new Date(startDate);
+            if (!isNaN(d.getTime()))
+                dateFilter.$gte = d;
+        }
+        if (endDate) {
+            const d = new Date(endDate);
+            if (!isNaN(d.getTime())) {
+                d.setHours(23, 59, 59, 999);
+                dateFilter.$lte = d;
+            }
+        }
+        if (Object.keys(dateFilter).length > 0)
+            match.at = dateFilter;
+    }
     const agg = await db.collection('marketing_events').aggregate([
         { $match: match },
-        { $group: { _id: '$campaignId', clicks: { $sum: { $cond: [{ $eq: ['$event', 'click'] }, 1, 0] } }, opens: { $sum: { $cond: [{ $eq: ['$event', 'open'] }, 1, 0] } }, visits: { $sum: { $cond: [{ $eq: ['$event', 'visit'] }, 1, 0] } } } },
-        { $project: { campaignId: '$_id', clicks: 1, opens: 1, visits: 1, _id: 0 } }
+        {
+            $group: {
+                _id: '$campaignId',
+                sent: { $sum: { $cond: [{ $eq: ['$event', 'sent'] }, 1, 0] } },
+                opens: { $sum: { $cond: [{ $eq: ['$event', 'open'] }, 1, 0] } },
+                clicks: { $sum: { $cond: [{ $eq: ['$event', 'click'] }, 1, 0] } },
+                visits: { $sum: { $cond: [{ $eq: ['$event', 'visit'] }, 1, 0] } }
+            }
+        },
+        { $project: { campaignId: '$_id', sent: 1, opens: 1, clicks: 1, visits: 1, _id: 0 } }
     ]).toArray();
     res.json({ data: { byCampaign: agg }, error: null });
 });

@@ -1572,10 +1572,11 @@ ${sections}
 }
 
 function AnalyticsTab() {
+  const qc = useQueryClient()
   const [startDate, setStartDate] = React.useState<string>('')
   const [endDate, setEndDate] = React.useState<string>('')
   const [selected, setSelected] = React.useState<string>('')
-  const { data } = useQuery({ queryKey: ['mkt-metrics', startDate, endDate], queryFn: async () => (await http.get('/api/marketing/metrics', { params: { startDate: startDate || undefined, endDate: endDate || undefined } })).data, refetchInterval: 60000 })
+  const { data, isFetching } = useQuery({ queryKey: ['mkt-metrics', startDate, endDate], queryFn: async () => (await http.get('/api/marketing/metrics', { params: { startDate: startDate || undefined, endDate: endDate || undefined } })).data, refetchInterval: 60000 })
   const { data: campaigns } = useQuery({ queryKey: ['mkt-campaigns'], queryFn: async () => (await http.get('/api/marketing/campaigns')).data })
   const [filterCampaign, setFilterCampaign] = React.useState<string>('')
   const { data: surveyMetrics } = useQuery({
@@ -1602,7 +1603,7 @@ function AnalyticsTab() {
     queryFn: async () => (await http.get('/api/marketing/metrics/roi', { params: { campaignId: filterCampaign || undefined, startDate: startDate || undefined, endDate: endDate || undefined } })).data,
     refetchInterval: 60000,
   })
-  const rows = (data?.data?.byCampaign ?? []) as { campaignId: string; opens: number; clicks: number; visits: number }[]
+  const rows = (data?.data?.byCampaign ?? []) as { campaignId: string; sent: number; opens: number; clicks: number; visits: number }[]
   const linkRows = (linkMetrics?.data?.items ?? []) as { token: string; url: string; utmSource?: string; utmMedium?: string; utmCampaign?: string; clicks: number; campaignId?: string }[]
   const roiRows = (roiMetrics?.data?.items ?? []) as { campaignId: string; revenue: number; dealsCount: number }[]
   const surveyRows =
@@ -1641,21 +1642,66 @@ function AnalyticsTab() {
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="rounded-lg border px-2 py-2 text-sm bg-transparent" />
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-lg border px-2 py-2 text-sm bg-transparent" />
         <button type="button" className="rounded-lg border px-2 py-2 text-sm" onClick={() => { setStartDate(''); setEndDate('') }} disabled={!startDate && !endDate}>Clear dates</button>
+        <button 
+          type="button" 
+          onClick={() => {
+            qc.invalidateQueries({ queryKey: ['mkt-metrics'] })
+            qc.invalidateQueries({ queryKey: ['mkt-survey-metrics'] })
+            qc.invalidateQueries({ queryKey: ['mkt-link-metrics'] })
+            qc.invalidateQueries({ queryKey: ['mkt-roi-metrics'] })
+          }}
+          disabled={isFetching}
+          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+        >
+          {isFetching ? 'Refreshing...' : 'Refresh'}
+        </button>
+        {isFetching && (
+          <span className="text-xs text-[color:var(--color-text-muted)]">Updating...</span>
+        )}
+      </div>
+      <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 text-xs text-blue-400">
+        <div className="font-semibold mb-1">📊 Analytics Auto-Update</div>
+        <div>Analytics refresh automatically every 60 seconds. Click "Refresh" to update immediately.</div>
       </div>
       <div className="rounded-2xl border">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b"><th className="p-2 text-left">Campaign</th><th className="p-2 text-left">Opens</th><th className="p-2 text-left">Clicks</th><th className="p-2 text-left">Visits</th></tr>
+            <tr className="border-b bg-[color:var(--color-muted)] text-[color:var(--color-text-muted)]">
+              <th className="p-2 text-left">Campaign</th>
+              <th className="p-2 text-left">Sent</th>
+              <th className="p-2 text-left">Opens</th>
+              <th className="p-2 text-left">Clicks</th>
+              <th className="p-2 text-left">Visits</th>
+              <th className="p-2 text-left">Open Rate</th>
+              <th className="p-2 text-left">Click Rate</th>
+            </tr>
           </thead>
           <tbody>
             {rows.map((r) => {
               const list = ((campaigns?.data?.items ?? []) as any[])
               const found = list.find((c) => String(c._id) === String(r.campaignId))
               const name = found?.name || String(r.campaignId)
+              const openRate = r.sent > 0 ? ((r.opens / r.sent) * 100).toFixed(1) : '0.0'
+              const clickRate = r.sent > 0 ? ((r.clicks / r.sent) * 100).toFixed(1) : '0.0'
               return (
-                <tr key={String(r.campaignId)} className="border-b"><td className="p-2">{name}</td><td className="p-2">{r.opens}</td><td className="p-2">{r.clicks}</td><td className="p-2">{r.visits}</td></tr>
+                <tr key={String(r.campaignId)} className="border-b hover:bg-[color:var(--color-muted)]">
+                  <td className="p-2 font-medium">{name}</td>
+                  <td className="p-2">{r.sent}</td>
+                  <td className="p-2">{r.opens}</td>
+                  <td className="p-2">{r.clicks}</td>
+                  <td className="p-2">{r.visits}</td>
+                  <td className="p-2 text-[color:var(--color-text-muted)]">{openRate}%</td>
+                  <td className="p-2 text-[color:var(--color-text-muted)]">{clickRate}%</td>
+                </tr>
               )
             })}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-4 text-center text-[color:var(--color-text-muted)]">
+                  No campaign metrics found. Send a campaign to see analytics.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
