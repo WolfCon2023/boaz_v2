@@ -1,6 +1,6 @@
 import React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { http } from '@/lib/http'
+import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { useToast } from '@/components/Toast'
 import { HelpCircle } from 'lucide-react'
@@ -142,7 +142,10 @@ function ComposerTab() {
         })
         
         if (res.data?.data?.url) {
-          uploadedUrls.push(res.data.data.url)
+          // Convert relative URL to absolute URL with API domain
+          const relativeUrl = res.data.data.url
+          const absoluteUrl = relativeUrl.startsWith('http') ? relativeUrl : getApiUrl(relativeUrl)
+          uploadedUrls.push(absoluteUrl)
         }
       }
       
