@@ -272,6 +272,7 @@ dealsRouter.post('/', async (req, res) => {
       amount: typeof amountParsed === 'number' && Number.isFinite(amountParsed) ? amountParsed : undefined,
       stage: stageRaw || 'new',
       approver: typeof raw.approver === 'string' ? raw.approver.trim() || undefined : undefined,
+      ownerId: typeof raw.ownerId === 'string' ? raw.ownerId.trim() || undefined : undefined,
     }
     if (ObjectId.isValid(raw.marketingCampaignId)) doc.marketingCampaignId = new ObjectId(raw.marketingCampaignId)
     if (typeof raw.attributionToken === 'string') doc.attributionToken = raw.attributionToken.trim()
@@ -974,6 +975,7 @@ dealsRouter.put('/:id', async (req, res) => {
       marketingCampaignId: z.string().optional().or(z.literal('')),
       attributionToken: z.string().optional(),
       approver: z.string().optional(),
+      ownerId: z.string().optional(),
     })
     const parsed = schema.safeParse(req.body)
     if (!parsed.success) {

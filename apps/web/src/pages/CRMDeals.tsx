@@ -21,6 +21,7 @@ type Deal = {
   accountNumber?: number
   marketingCampaignId?: string
   approver?: string
+  ownerId?: string
 }
 
 type DealSurveyStatusSummary = {
@@ -69,6 +70,7 @@ export default function CRMDeals() {
     { key: 'title', visible: true, label: 'Title' },
     { key: 'amount', visible: true, label: 'Amount' },
     { key: 'stage', visible: true, label: 'Stage' },
+    { key: 'ownerId', visible: true, label: 'Owner' },
     { key: 'forecastedCloseDate', visible: true, label: 'Forecast close' },
     { key: 'closeDate', visible: true, label: 'Actual close' },
     { key: 'tasks', visible: true, label: 'Tasks' },
@@ -785,6 +787,7 @@ export default function CRMDeals() {
         </div>
       )
     }
+    if (key === 'ownerId') return d.ownerId ? d.ownerId : '-'
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
@@ -964,7 +967,7 @@ export default function CRMDeals() {
             }}
           >Export CSV</button>
         </div>
-        <form className="flex flex-wrap gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = String(fd.get('title')||''); const accNumStr = String(fd.get('accountNumber')||''); const accNum = accNumStr ? Number(accNumStr) : undefined; const amount = fd.get('amount') ? Number(fd.get('amount')) : undefined; const stage = String(fd.get('stage')||'')|| undefined; const closeDate = String(fd.get('closeDate')||'')|| undefined; const campaignSel = String(fd.get('marketingCampaignId')||''); const acc = (accountsQ.data?.data.items ?? []).find(a => a.accountNumber === accNum); const payload: any = { title, amount, stage, closeDate }; if (acc?._id) payload.accountId = acc._id; else if (typeof accNum === 'number' && Number.isFinite(accNum)) payload.accountNumber = accNum; if (campaignSel) payload.marketingCampaignId = campaignSel; create.mutate(payload); (e.currentTarget as HTMLFormElement).reset() }}>
+        <form className="flex flex-wrap gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = String(fd.get('title')||''); const accNumStr = String(fd.get('accountNumber')||''); const accNum = accNumStr ? Number(accNumStr) : undefined; const amount = fd.get('amount') ? Number(fd.get('amount')) : undefined; const stage = String(fd.get('stage')||'')|| undefined; const closeDate = String(fd.get('closeDate')||'')|| undefined; const forecastedCloseDate = String(fd.get('forecastedCloseDate')||'')|| undefined; const campaignSel = String(fd.get('marketingCampaignId')||''); const ownerId = String(fd.get('ownerId')||'').trim() || undefined; const acc = (accountsQ.data?.data.items ?? []).find(a => a.accountNumber === accNum); const payload: any = { title, amount, stage, closeDate, forecastedCloseDate, ownerId }; if (acc?._id) payload.accountId = acc._id; else if (typeof accNum === 'number' && Number.isFinite(accNum)) payload.accountNumber = accNum; if (campaignSel) payload.marketingCampaignId = campaignSel; create.mutate(payload); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="title" required placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <select name="accountNumber" required className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="">Select account</option>
@@ -1005,6 +1008,7 @@ export default function CRMDeals() {
               <option key={c._id} value={c._id}>{c.name}</option>
             ))}
           </select>
+          <input name="ownerId" placeholder="Owner (email or ID)" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <button className="ml-auto rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">
             Add deal
           </button>
@@ -1148,16 +1152,20 @@ export default function CRMDeals() {
                   const amount = amountRaw && String(amountRaw).trim() ? Number(amountRaw) : undefined
                   const stage = String(fd.get('stage')||'').trim() || undefined
                   const closeDateRaw = String(fd.get('closeDate')||'').trim() || undefined
+                  const forecastedCloseDateRaw = String(fd.get('forecastedCloseDate')||'').trim() || undefined
                   const accSel = String(fd.get('accountId')||'').trim() || undefined
                   const campaignSel = String(fd.get('marketingCampaignId')||'').trim() || undefined
+                  const ownerIdRaw = String(fd.get('ownerId')||'').trim() || undefined
                   const payload: any = { _id: editing._id }
                   if (title) payload.title = title
                   if (amount !== undefined && !isNaN(amount)) payload.amount = amount
                   if (stage) payload.stage = stage
                   if (closeDateRaw) payload.closeDate = closeDateRaw
+                  if (forecastedCloseDateRaw) payload.forecastedCloseDate = forecastedCloseDateRaw
                   if (accSel) payload.accountId = accSel
                   if (campaignSel) payload.marketingCampaignId = campaignSel
                   else if (campaignSel === undefined && editing.marketingCampaignId) payload.marketingCampaignId = ''
+                  if (ownerIdRaw) payload.ownerId = ownerIdRaw
                   update.mutate(payload)
                   setEditing(null)
                 }}
@@ -1176,6 +1184,7 @@ export default function CRMDeals() {
                   <option>Contract Signed / Closed Won</option>
                   <option>Rejected / Returned for Revision</option>
                 </select>
+                <input name="ownerId" defaultValue={editing.ownerId ?? ''} placeholder="Owner (email or ID)" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <div className="col-span-full grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs text-[color:var(--color-text-muted)] mb-1">Forecasted Close Date</label>
