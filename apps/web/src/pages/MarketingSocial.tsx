@@ -563,16 +563,54 @@ function AccountsTab() {
     instagram: 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500',
   }
   
+  const handleOAuthConnect = (platform: SocialPlatform) => {
+    // Redirect to OAuth flow
+    window.location.href = `/api/marketing/social/oauth/connect/${platform}`
+  }
+  
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">🔗 Connected Accounts</h2>
-        <button
-          onClick={() => setShowConnectForm(!showConnectForm)}
-          className="rounded-lg bg-blue-600 text-white px-4 py-2 text-sm hover:bg-blue-700"
-        >
-          + Connect Account
-        </button>
+        <div className="flex gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleOAuthConnect('facebook')}
+              className="rounded-lg bg-blue-600 text-white px-3 py-2 text-sm hover:bg-blue-700 flex items-center gap-2"
+              title="Connect with Facebook OAuth"
+            >
+              📘 Connect Facebook
+            </button>
+            <button
+              onClick={() => handleOAuthConnect('twitter')}
+              className="rounded-lg bg-sky-500 text-white px-3 py-2 text-sm hover:bg-sky-600 flex items-center gap-2"
+              title="Connect with Twitter OAuth"
+            >
+              🐦 Connect Twitter
+            </button>
+            <button
+              onClick={() => handleOAuthConnect('linkedin')}
+              className="rounded-lg bg-blue-700 text-white px-3 py-2 text-sm hover:bg-blue-800 flex items-center gap-2"
+              title="Connect with LinkedIn OAuth"
+            >
+              💼 Connect LinkedIn
+            </button>
+            <button
+              onClick={() => handleOAuthConnect('instagram')}
+              className="rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-2 text-sm hover:from-purple-600 hover:to-pink-600 flex items-center gap-2"
+              title="Connect with Instagram OAuth (via Facebook)"
+            >
+              📸 Connect Instagram
+            </button>
+          </div>
+          <button
+            onClick={() => setShowConnectForm(!showConnectForm)}
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            title="Manual entry (for testing)"
+          >
+            ⚙️ Manual
+          </button>
+        </div>
       </div>
       
       {showConnectForm && (
@@ -639,8 +677,9 @@ function AccountsTab() {
             </div>
           </div>
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-            <p className="font-semibold mb-1">ℹ️ Note</p>
-            <p>In production, this would use OAuth to securely connect your accounts. For demo purposes, you can manually enter account details.</p>
+            <p className="font-semibold mb-1">ℹ️ Manual Entry</p>
+            <p className="mb-2">This manual form is for testing purposes only. In production, use the OAuth buttons above to securely connect your accounts.</p>
+            <p className="text-xs">OAuth provides secure authentication without exposing passwords and automatically handles token refresh.</p>
           </div>
         </div>
       )}

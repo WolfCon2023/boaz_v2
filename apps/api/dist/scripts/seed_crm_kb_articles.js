@@ -695,6 +695,313 @@ Best practices
 3. Use covered asset and service tags for better integration with Assets, Renewals, and Success.
 4. Use the Email and history panel in the contract editor to see when contracts were sent, signed, and which copies were delivered.`,
     },
+    {
+        title: 'Using the Social Media Management app in BOAZ‑OS Marketing',
+        tags: ['marketing', 'social-media', 'facebook', 'twitter', 'linkedin', 'instagram', 'social:composer', 'social:analytics'],
+        category: 'Marketing',
+        body: `Social Media Management – Multi-platform posting and analytics
+
+Purpose
+The Social Media Management app enables you to create, schedule, publish, and analyze content across Facebook, Twitter, LinkedIn, and Instagram from a single unified interface. This eliminates the need to log into multiple platforms and provides centralized analytics and scheduling.
+
+Opening the app
+- From the Marketing page, click the Social Media button (gradient purple/pink button with 📱 icon)
+- Or navigate directly to Marketing → Social Media
+- The app opens to the Composer tab by default
+
+Core concepts
+The Social Media app has four main sections accessible via tabs at the top:
+1. Composer – Create and publish posts across multiple platforms
+2. Calendar – View and manage scheduled posts by date
+3. Accounts – Connect and manage your social media accounts
+4. Analytics – Track performance metrics across all platforms
+
+Section 1: Connecting Social Media Accounts
+
+Before you can post, you must connect at least one social media account.
+
+How to connect an account:
+1. Click the Accounts tab at the top
+2. Click the Connect Account button (blue button in top right)
+3. A connection form appears with these fields:
+   - Platform: Select Facebook, Twitter, LinkedIn, or Instagram
+   - Account Name: A friendly name for this account (e.g., "Company Facebook Page")
+   - Account ID: The platform specific account identifier
+   - Username: (Optional) Your @username or handle on that platform
+4. Click Connect to save the account
+
+Managing connected accounts:
+- Each account displays as a card showing:
+  - Platform icon and color coding (Facebook blue, Twitter sky blue, LinkedIn dark blue, Instagram gradient)
+  - Account name and username
+  - Current status: Active, Disconnected, Expired, or Error
+  - Follower count (when available)
+  - Last sync timestamp
+- To disconnect an account: Click the Disconnect button on its card and confirm
+- Active accounts appear in the Composer when creating posts
+
+Account status indicators:
+- Active (green): Account is connected and ready to post
+- Disconnected (gray): Account connection was manually removed
+- Expired (yellow): Access token has expired, requires reconnection
+- Error (red): Authentication or API error, check credentials
+
+Note: In production environments, accounts would connect via OAuth authentication. For demo/testing, accounts can be added manually with their platform IDs.
+
+Section 2: Creating and Publishing Posts (Composer Tab)
+
+The Composer is where you create content for one or multiple platforms simultaneously.
+
+Creating a new post:
+1. Go to the Composer tab (default view)
+2. Select platforms: Click the platform buttons (Facebook, Twitter, LinkedIn, Instagram) you want to post to. Selected platforms highlight in blue.
+3. Select accounts: For each platform selected, checkboxes appear for all connected accounts on that platform. Select which accounts should receive this post.
+4. Write your content: Enter text in the large Content textarea. As you type, a character counter shows how many characters you have used relative to the strictest limit among selected platforms.
+5. (Optional) Add a link: Enter a URL in the Link field. This will be included in the post with automatic UTM tracking.
+6. (Optional) Add hashtags: Enter hashtags in the Hashtags field, separated by spaces or commas. The # symbol is optional; the system adds it automatically.
+7. (Optional) Schedule for later: Use the Schedule date and time pickers to set when the post should go live. Leave blank to post immediately.
+8. Choose an action:
+   - Save as Draft: Saves the post without publishing (status = draft)
+   - Schedule Post: Saves and queues for automatic publishing at the scheduled time
+   - Publish Now: Publishes immediately to all selected accounts
+
+Understanding character limits:
+Different platforms have different maximum character lengths:
+- Facebook: 63,206 characters
+- Twitter/X: 280 characters
+- LinkedIn: 3,000 characters
+- Instagram: 2,200 characters
+
+When you select multiple platforms, the character counter uses the strictest (lowest) limit. For example, if you select Twitter and LinkedIn, the limit is 280 characters because Twitter is more restrictive.
+
+The character counter turns red if you exceed the limit, warning you before publishing.
+
+Multi-platform posting best practices:
+- Keep content concise if including Twitter (280 char limit)
+- Use platform appropriate tone (LinkedIn = professional, Instagram = visual/casual)
+- Hashtags work well on Instagram and Twitter, less so on LinkedIn
+- Include links with clear calls to action
+- Preview your post on each platform before publishing (see Preview panel)
+
+Using the Preview panel:
+The right sidebar shows real-time previews of how your post will appear on each selected platform:
+- Each platform gets its own preview card
+- Platform icon and name are shown at the top
+- Your content appears as it will render
+- Links show as clickable URL cards
+- Hashtags appear styled in blue
+- Character limits are respected in the preview
+
+If no platforms are selected, the preview shows a message: "Select platforms to see preview"
+
+Section 3: Managing Scheduled Posts (Calendar Tab)
+
+The Calendar tab shows all posts with future scheduled dates, organized chronologically.
+
+Viewing scheduled posts:
+- Posts are grouped by date (e.g., "Monday, December 9, 2024")
+- Within each date, posts are sorted by time (earliest first)
+- Each post card shows:
+  - Platform icons for where it will be published
+  - Scheduled time (e.g., "9:00 AM")
+  - Content preview (first 2 lines)
+- If no posts are scheduled: "No scheduled posts. Create one in the Composer tab!"
+
+Calendar best practices:
+- Spread posts throughout the day to maximize reach
+- Schedule posts during peak engagement hours (typically 9am-3pm on weekdays)
+- Avoid over-posting to the same platform on the same day
+- Review your calendar weekly to ensure consistent presence
+- Plan campaigns and product launches in advance using scheduled posts
+
+Section 4: Analyzing Performance (Analytics Tab)
+
+The Analytics tab provides comprehensive performance metrics across all your social media accounts.
+
+Summary metrics (top cards):
+Four summary cards show high level engagement:
+1. Total Posts: Number of published posts in the selected date range
+2. Likes: Total likes/reactions across all platforms
+3. Shares: Total shares/retweets/reposts
+4. Comments: Total comments/replies received
+
+Date range filtering:
+- Use the Start Date and End Date pickers to filter metrics
+- Leave blank to see all-time metrics
+- Metrics automatically update when you change the date range
+
+Performance by platform:
+Below the summary cards, a detailed breakdown shows metrics for each platform you have posted to:
+- Platform name and post count
+- Detailed metrics for that platform:
+  - Likes: Heart reactions or like buttons
+  - Shares: Retweets (Twitter), shares (Facebook/LinkedIn), shares (Instagram Stories)
+  - Comments: Direct replies and comments
+  - Clicks: Link clicks and CTA button clicks
+  - Reach: Unique users who saw your content
+  - Impressions: Total times your content was displayed (includes repeat views)
+
+Understanding the metrics:
+- Likes: Direct engagement showing content resonated
+- Shares: Strongest signal of value; users amplify your message
+- Comments: Deep engagement; users taking time to respond
+- Clicks: Measures call to action effectiveness
+- Reach: Size of your actual audience
+- Impressions: Frequency of exposure (impressions divided by reach = average views per person)
+
+Engagement rate formula:
+Engagement Rate = (Likes + Shares + Comments + Clicks) divided by Reach × 100%
+
+A good engagement rate varies by platform:
+- Facebook: 1-2%
+- Twitter: 0.5-1%
+- LinkedIn: 2-3%
+- Instagram: 3-6%
+
+Analytics best practices:
+- Check analytics weekly to identify trends
+- Compare platforms to see where your audience is most active
+- Track engagement rate over time (not just absolute numbers)
+- Note which post types get the most shares (that is your most valuable content)
+- If reach is growing but engagement is flat, refocus on quality over quantity
+- Use high performing posts as templates for future content
+
+Section 5: Post Status Workflow
+
+Every post has a status that determines its lifecycle:
+1. Draft: Post is saved but not published or scheduled. Only visible to you.
+2. Scheduled: Post will automatically publish at the specified date/time.
+3. Published: Post is live on the selected platforms.
+4. Failed: Post attempted to publish but encountered an error (network issue, expired credentials, etc.).
+
+Status transitions:
+- Draft can be edited freely, scheduled, or published
+- Scheduled posts can be edited or deleted before their scheduled time
+- Published posts cannot be edited or deleted (same as native platform behavior)
+- Failed posts can be reviewed, edited, and retried
+
+Section 6: Platform Specific Tips
+
+Facebook posting tips:
+- Optimal post length: 40-80 characters (despite 63K limit)
+- Best times: Tuesday-Thursday, 1-3pm
+- Use emojis, questions, and fill in the blank posts for engagement
+- Video posts get 10x the engagement of text only posts
+- Tag other pages/profiles to expand reach
+
+Twitter/X posting tips:
+- Optimal tweet length: 100-150 characters (despite 280 limit)
+- Best times: Wednesday-Friday, 9am-12pm
+- Use 1-2 hashtags (3+ reduces engagement)
+- Include images or GIFs to increase retweets by 150%
+- Threads (multiple connected tweets) get more engagement than single tweets
+
+LinkedIn posting tips:
+- Optimal post length: 150-300 characters
+- Best times: Tuesday-Thursday, 7-9am or 12-1pm
+- Professional tone; avoid excessive emojis
+- Share industry insights, company updates, thought leadership
+- Posts with "How to", "Future of", and "X reasons" perform well
+- Native LinkedIn articles (vs external links) get more engagement
+
+Instagram posting tips:
+- Optimal caption length: 138-150 characters
+- Best times: Monday-Friday, 11am or 1-2pm
+- Use 9-11 hashtags for maximum reach (up to 30 allowed)
+- High quality images are critical (Instagram is visual first)
+- Include location tags to increase discoverability
+- Stories have higher daily engagement than feed posts
+
+Section 7: Advanced Features and Integrations
+
+Campaign linking:
+When creating a social post, you can optionally link it to a Marketing Campaign:
+- This tracks social media as part of your broader marketing efforts
+- Analytics roll up to the campaign level
+- Useful for product launches, events, or seasonal promotions
+
+Link tracking:
+All links posted through the Social Media app are automatically tracked:
+- Unique tracking parameters are added (UTM codes)
+- Click through rates are recorded
+- You can see which posts drive the most traffic to your website
+- Integration with Marketing Analytics for unified reporting
+
+Section 8: Troubleshooting
+
+Problem: "No accounts connected" warning when trying to post
+Solution: Go to the Accounts tab and connect at least one account for the platforms you want to post to.
+
+Problem: Post failed to publish
+Solution: Check these common issues:
+1. Account status shows "Expired" or "Error": Reconnect the account
+2. Content exceeds platform character limit: Edit to shorten
+3. Network connectivity: Retry publishing
+4. Platform API outage: Wait and retry later
+
+Problem: Analytics showing zero engagement
+Solution: 
+1. Ensure posts are marked as "Published" not "Draft"
+2. Allow 24-48 hours for metrics to populate from platforms
+3. Check that platform API credentials are current
+4. Metrics only update for posts made after account connection
+
+Problem: Character counter is red but content looks short
+Solution: The counter uses the strictest limit among selected platforms. If Twitter is selected, the limit is 280 characters even if other platforms allow more. Either shorten your content or deselect Twitter and create a separate Twitter optimized post.
+
+Problem: Scheduled post did not publish at the set time
+Solution: 
+1. Check that the post status is "Scheduled" not "Draft"
+2. Ensure the scheduled time is in the future (not past)
+3. Verify account credentials are valid (not expired)
+4. Background scheduling jobs run every 15 minutes; there may be a slight delay
+
+Section 9: Best Practices Summary
+
+Content strategy:
+1. Post consistently (aim for 3-5 posts per week per platform)
+2. Vary content types (questions, tips, quotes, company news, industry trends)
+3. Use the 80/20 rule: 80% valuable content, 20% promotional
+4. Engage with comments within 1-2 hours for algorithm boost
+5. Repost evergreen content every 3-6 months
+
+Scheduling strategy:
+1. Create a content calendar 2-4 weeks in advance
+2. Schedule posts during peak hours for your audience
+3. Use the Calendar tab to visualize your posting frequency
+4. Batch create content (write 10 posts at once, schedule over 2 weeks)
+5. Leave room for real time/breaking news posts
+
+Analytics strategy:
+1. Review analytics weekly
+2. Identify top 3 performing posts each month
+3. Create more content similar to high performers
+4. Track engagement rate trend over time
+5. Set monthly goals (example: increase LinkedIn engagement rate from 2% to 2.5%)
+6. Compare your metrics to industry benchmarks
+
+Efficiency tips:
+1. Write posts in batches to save time
+2. Create a swipe file of high performing posts to use as templates
+3. Use the multi-platform posting feature to save time (write once, post everywhere)
+4. Set up a regular content review meeting (weekly or biweekly)
+5. Track which post types are easiest to create and highest performing, then focus there
+
+Security and compliance:
+1. Only grant account access to trusted team members
+2. Review connected accounts quarterly and remove unused ones
+3. Monitor for unauthorized posts (check Analytics for unexpected activity)
+4. Follow each platform's terms of service and community guidelines
+5. Avoid posting sensitive company information on social media
+
+Getting help:
+- For account connection issues: Check platform API documentation or contact support
+- For content strategy questions: Refer to platform specific tips in Section 6
+- For technical issues: Submit a support ticket with the post ID and error message
+- For feature requests: Use the feedback form in Settings
+
+This Social Media Management app provides enterprise grade multi-platform publishing with unified analytics, eliminating the need for external tools while keeping all your marketing data in one place within BOAZ-OS.`,
+    },
 ];
 async function main() {
     const db = await getDb();
