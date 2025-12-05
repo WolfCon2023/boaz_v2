@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { useToast } from '@/components/Toast'
+import { HelpCircle } from 'lucide-react'
 
 type SocialPlatform = 'facebook' | 'twitter' | 'linkedin' | 'instagram'
 type PostStatus = 'draft' | 'scheduled' | 'published' | 'failed'
@@ -58,7 +59,18 @@ export default function MarketingSocial() {
       <CRMNav />
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Social Media</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold">Social Media</h1>
+            <a
+              href="/apps/crm/kb?q=social-media"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-700"
+              title="View Social Media help documentation"
+            >
+              <HelpCircle className="w-5 h-5" />
+            </a>
+          </div>
           <p className="text-sm text-[color:var(--color-text-muted)] mt-1">
             Manage and schedule posts across all your social platforms
           </p>

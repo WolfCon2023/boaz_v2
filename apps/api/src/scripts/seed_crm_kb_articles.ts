@@ -704,6 +704,214 @@ Best practices
 4. Use the Email and history panel in the contract editor to see when contracts were sent, signed, and which copies were delivered.`,
   },
   {
+    title: 'Using the Marketing Suite in BOAZ‑OS',
+    tags: ['marketing', 'campaigns', 'segments', 'analytics', 'getting-started'],
+    category: 'Marketing',
+    body: `Marketing Suite – Email campaigns, segmentation, and analytics
+
+Purpose
+The Marketing Suite in BOAZ-OS provides a complete email marketing platform with campaign management, audience segmentation, analytics tracking, and unsubscribe management. Create professional email campaigns, target specific audiences, and measure performance all in one place.
+
+Opening the app
+- From the main menu, go to CRM Hub → Marketing
+- Or navigate directly to /apps/crm/marketing
+- The app opens to the Campaigns tab by default
+
+Core concepts
+The Marketing app has four main sections accessible via tabs at the top:
+1. Campaigns – Create and send email campaigns using MJML or simple block builder
+2. Segments – Define target audiences with rule-based filtering
+3. Analytics – Track campaign performance with opens, clicks, and engagement metrics
+4. Do Not Contact – Manage unsubscribed email addresses for compliance
+
+Additionally, a Social Media button provides access to multi-platform social posting.
+
+Section 1: Email Campaigns
+
+Creating a campaign:
+1. Click the Campaigns tab
+2. Click "New campaign" button
+3. Fill in campaign details:
+   - Name: Internal reference name for the campaign
+   - Subject: Email subject line (supports variables like {{name}})
+   - Segment: Select which audience segment receives this campaign
+   - Survey Program: (Optional) Link to a survey for feedback collection
+4. Design your email using one of two methods:
+   - Simple Builder: Drag and drop blocks (text, button, image, divider, columns)
+   - MJML Editor: Write responsive email HTML using MJML syntax
+5. Add footer text that appears after the copyright notice
+6. Preview your email in the right panel
+7. Send a test email to verify appearance
+8. Click "Send campaign" when ready
+
+Campaign builder options:
+- Simple Builder: Add blocks, customize colors, alignment, and content
+- MJML Editor: Full control with MJML markup language
+- Template Library: Load pre-built templates (Basic, Hero, Survey)
+- Load from Outreach Templates: Reuse templates from the Outreach app
+
+Best practices for campaigns:
+- Keep subject lines under 50 characters for mobile
+- Use personalization variables ({{name}}, {{company}})
+- Include a clear call-to-action button
+- Test on multiple devices before sending
+- A/B test subject lines for better open rates
+- Send during business hours (Tuesday-Thursday, 10am-2pm typically best)
+
+Section 2: Audience Segments
+
+Creating a segment:
+1. Click the Segments tab
+2. Click "New segment" button
+3. Name your segment (e.g., "Enterprise Customers")
+4. Add filtering rules:
+   - Field: Select from contact fields (name, email, company, title, etc.)
+   - Operator: Choose Contains, Equals, or Starts With
+   - Value: Enter the filter value
+5. Add multiple rules for AND logic (all conditions must match)
+6. Optionally add direct email addresses for one-off inclusions
+7. Save the segment
+
+Segment best practices:
+- Create segments for different customer types (prospects, customers, partners)
+- Use job titles to target decision makers
+- Segment by company size or industry for relevant messaging
+- Keep segments updated as contact data changes
+- Test segments with small sends before full campaigns
+
+Section 3: Analytics
+
+Viewing campaign performance:
+1. Click the Analytics tab
+2. Select date range to filter results
+3. View metrics by campaign:
+   - Sent: Total emails delivered
+   - Opens: Unique recipients who opened (tracked via pixel)
+   - Clicks: Link clicks within the email (tracked via redirect)
+   - Open Rate: Opens divided by Sent (industry average: 15-25%)
+   - Click Rate: Clicks divided by Sent (industry average: 2-5%)
+4. Click "Refresh" to update metrics in real-time
+5. Use the date range filter to analyze specific time periods
+
+Understanding the metrics:
+- Sent: Successfully delivered emails (excludes bounces and unsubscribes)
+- Opens: Tracked when recipient loads images (may undercount if images blocked)
+- Clicks: Every link is automatically tracked with unique tokens
+- Open Rate: Higher is better; 20%+ is good for B2B
+- Click Rate: Measures engagement; 3%+ is good for B2B
+- Visits: Landing page visits from campaign links
+
+Analytics best practices:
+- Check analytics 24-48 hours after send for accurate results
+- Compare campaigns to identify high-performing content
+- Track click-through rates to measure call-to-action effectiveness
+- Use date ranges to see trends over time
+- Export data for deeper analysis in spreadsheets
+
+Section 4: Do Not Contact List
+
+Managing unsubscribes:
+1. Click the Do Not Contact tab
+2. View all unsubscribed email addresses
+3. See which campaign triggered each unsubscribe
+4. Search by email address
+5. Sort by date, email, or campaign
+6. (Admin only) Remove emails from DNC list if subscriber explicitly requests
+
+How unsubscribes work:
+- Every campaign email includes an automatic unsubscribe link in the footer
+- When clicked, the email is added to the DNC list immediately
+- Future campaigns automatically exclude DNC list emails
+- Unsubscribe page shows a confirmation message
+- No manual intervention needed for compliance
+
+DNC list compliance:
+- CAN-SPAM Act requires unsubscribe links in all marketing emails
+- GDPR requires honoring unsubscribe requests immediately
+- Never manually add someone to a campaign after they unsubscribe
+- Only remove from DNC if subscriber explicitly requests re-subscription
+- Keep records of unsubscribe requests for compliance audits
+
+Section 5: Link Tracking
+
+All links in campaigns are automatically tracked:
+- System generates unique tracking tokens for each link
+- Clicks are recorded with timestamp and recipient
+- Links redirect through /api/marketing/r/:token
+- UTM parameters are automatically added (utm_source=email, utm_medium=campaign)
+- Click data appears in Analytics tab
+- Integration with Google Analytics for full funnel tracking
+
+Section 6: Integration with Other Apps
+
+Marketing integrates with:
+- Contacts: Pull audience segments from contact database
+- Surveys: Link campaigns to survey programs for feedback
+- Outreach Templates: Reuse templates across marketing and outreach
+- Social Media: Coordinate campaigns across email and social channels
+- Analytics: Unified view of all marketing performance
+
+Section 7: Troubleshooting
+
+Problem: Campaign not sending
+Solution: Check that segment has contacts and is not empty. Verify email service is configured.
+
+Problem: Low open rates
+Solution: Improve subject lines, verify sender reputation, check spam folder placement, send at better times.
+
+Problem: Images not displaying in preview
+Solution: Ensure image URLs are absolute (not relative). Check that images are publicly accessible.
+
+Problem: Unsubscribe link not working
+Solution: Verify API endpoint /api/marketing/unsubscribe is accessible. Check that link is not wrapped by link tracking.
+
+Problem: Analytics showing zero opens/clicks
+Solution: Allow 24-48 hours for metrics to populate. Ensure tracking pixel and links are not blocked. Check that campaign status is "sent" not "draft".
+
+Section 8: Best Practices Summary
+
+Campaign strategy:
+- Send consistently (weekly or bi-weekly newsletters)
+- Segment audiences for relevant content
+- Use A/B testing for subject lines and content
+- Include clear calls-to-action
+- Mobile-optimize all emails (60%+ open on mobile)
+- Personalize with recipient name and company
+
+Content strategy:
+- 80% valuable content, 20% promotional
+- Use storytelling and case studies
+- Include social proof (testimonials, stats)
+- Keep emails scannable with headers and bullets
+- Use images strategically (not too many)
+- Always include an unsubscribe link
+
+Compliance:
+- Honor unsubscribe requests immediately
+- Include physical mailing address in footer
+- Don't purchase email lists
+- Get explicit consent before emailing
+- Keep records of opt-ins
+- Follow CAN-SPAM, GDPR, and CCPA regulations
+
+Performance optimization:
+- Clean your email list quarterly (remove bounces and inactive)
+- Monitor sender reputation
+- Avoid spam trigger words
+- Test emails before sending
+- Track metrics and iterate
+- Benchmark against industry standards
+
+Getting help:
+- For campaign creation: Use templates as starting points
+- For segmentation: Start with simple rules, add complexity gradually
+- For analytics: Compare to industry benchmarks (15-25% open rate, 2-5% click rate)
+- For compliance: Review CAN-SPAM and GDPR requirements
+- For technical issues: Submit support ticket with campaign ID and error details
+
+The Marketing Suite provides enterprise-grade email marketing capabilities integrated directly into BOAZ-OS, eliminating the need for external tools like Mailchimp or Constant Contact while keeping all your customer data in one place.`,
+  },
+  {
     title: 'Using the Social Media Management app in BOAZ‑OS Marketing',
     tags: ['marketing', 'social-media', 'facebook', 'twitter', 'linkedin', 'instagram', 'social:composer', 'social:analytics'],
     category: 'Marketing',

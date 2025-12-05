@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
-import { Type, Image, MousePointerClick, Minus, Columns, GripVertical } from 'lucide-react'
+import { Type, Image, MousePointerClick, Minus, Columns, GripVertical, HelpCircle } from 'lucide-react'
 import { useToast } from '@/components/Toast'
 import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -29,7 +29,18 @@ export default function Marketing() {
     <div className="space-y-6">
       <CRMNav />
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Marketing</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold">Marketing</h1>
+          <a
+            href="/apps/crm/kb?q=marketing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:text-blue-700"
+            title="View Marketing help documentation"
+          >
+            <HelpCircle className="w-5 h-5" />
+          </a>
+        </div>
         <div className="flex items-center gap-2">
           <Link 
             to="/apps/crm/marketing/social"
