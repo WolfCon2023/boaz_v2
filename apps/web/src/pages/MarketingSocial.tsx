@@ -62,7 +62,7 @@ export default function MarketingSocial() {
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">Social Media</h1>
             <a
-              href="/apps/crm/kb?q=social-media"
+              href="/apps/crm/support/kb?q=social-media"
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-600 hover:text-blue-700"

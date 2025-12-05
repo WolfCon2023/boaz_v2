@@ -32,7 +32,7 @@ export default function Marketing() {
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold">Marketing</h1>
           <a
-            href="/apps/crm/kb?q=marketing"
+            href="/apps/crm/support/kb?q=marketing"
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 hover:text-blue-700"
