@@ -97,6 +97,9 @@ function ComposerTab() {
   const [hashtags, setHashtags] = React.useState('')
   const [scheduleDate, setScheduleDate] = React.useState('')
   const [scheduleTime, setScheduleTime] = React.useState('')
+  const [images, setImages] = React.useState<string[]>([])
+  const [uploading, setUploading] = React.useState(false)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
   
   const { data: accountsData } = useQuery({
     queryKey: ['social-accounts'],
@@ -108,6 +111,44 @@ function ComposerTab() {
   
   const accounts = accountsData?.data.items ?? []
   const activeAccounts = accounts.filter((a: SocialAccount) => a.status === 'active')
+  
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    
+    setUploading(true)
+    const uploadedUrls: string[] = []
+    
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const formData = new FormData()
+        formData.append('image', file)
+        
+        const res = await http.post('/api/marketing/images/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        
+        if (res.data?.data?.url) {
+          uploadedUrls.push(res.data.data.url)
+        }
+      }
+      
+      setImages([...images, ...uploadedUrls])
+      toast.showToast(`${uploadedUrls.length} image(s) uploaded successfully!`, 'success')
+    } catch (err: any) {
+      toast.showToast(err?.response?.data?.error || 'Failed to upload images', 'error')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+  
+  const removeImage = (index: number) => {
+    setImages(images.filter((_, i) => i !== index))
+  }
   
   const createPost = useMutation({
     mutationFn: async (payload: any) => {
@@ -125,6 +166,7 @@ function ComposerTab() {
       setHashtags('')
       setScheduleDate('')
       setScheduleTime('')
+      setImages([])
     },
     onError: (err: any) => {
       toast.showToast(err?.response?.data?.error || 'Failed to create post', 'error')
@@ -187,6 +229,7 @@ function ComposerTab() {
       content,
       platforms: selectedPlatforms,
       accountIds: selectedAccounts,
+      images: images.length > 0 ? images : undefined,
       link: link || undefined,
       hashtags: hashtagArray.length > 0 ? hashtagArray : undefined,
       status,
@@ -296,6 +339,68 @@ function ComposerTab() {
             />
           </div>
           
+          {/* Images */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Images (Optional)</label>
+            <div className="space-y-3">
+              {/* Upload Button */}
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || images.length >= 4}
+                  className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {uploading ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>📷</span>
+                      <span>Add Images</span>
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-[color:var(--color-text-muted)] mt-1">
+                  Max 4 images, 10MB each (JPEG, PNG, GIF, WebP)
+                </p>
+              </div>
+              
+              {/* Image Previews */}
+              {images.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {images.map((imageUrl, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={imageUrl}
+                        alt={`Upload ${index + 1}`}
+                        className="w-full h-32 object-cover rounded-lg border border-[color:var(--color-border)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                        title="Remove image"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          
           {/* Link */}
           <div className="mb-4">
             <label className="block text-sm font-medium mb-2">Link (Optional)</label>
@@ -393,6 +498,18 @@ function ComposerTab() {
                   <div className="text-sm whitespace-pre-wrap break-words">
                     {content || <span className="text-[color:var(--color-text-muted)]">Your content will appear here...</span>}
                   </div>
+                  {images.length > 0 && (
+                    <div className={`mt-2 grid gap-1 ${images.length === 1 ? 'grid-cols-1' : images.length === 2 ? 'grid-cols-2' : images.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                      {images.map((img, i) => (
+                        <img
+                          key={i}
+                          src={img}
+                          alt={`Preview ${i + 1}`}
+                          className="w-full h-24 object-cover rounded"
+                        />
+                      ))}
+                    </div>
+                  )}
                   {link && (
                     <div className="mt-2 p-2 bg-[color:var(--color-muted)] rounded text-xs truncate">
                       🔗 {link}
@@ -478,6 +595,23 @@ function CalendarTab() {
                         </span>
                       </div>
                       <p className="text-sm line-clamp-2">{post.content}</p>
+                      {post.images && post.images.length > 0 && (
+                        <div className="mt-2 flex gap-1">
+                          {post.images.slice(0, 3).map((img, i) => (
+                            <img
+                              key={i}
+                              src={img}
+                              alt={`Post image ${i + 1}`}
+                              className="w-12 h-12 object-cover rounded"
+                            />
+                          ))}
+                          {post.images.length > 3 && (
+                            <div className="w-12 h-12 bg-[color:var(--color-muted)] rounded flex items-center justify-center text-xs">
+                              +{post.images.length - 3}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
