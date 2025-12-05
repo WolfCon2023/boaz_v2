@@ -647,6 +647,7 @@ function AccountsTab() {
   const [newAccountName, setNewAccountName] = React.useState('')
   const [newAccountId, setNewAccountId] = React.useState('')
   const [newUsername, setNewUsername] = React.useState('')
+  const [newAccessToken, setNewAccessToken] = React.useState('')
   
   const { data } = useQuery({
     queryKey: ['social-accounts'],
@@ -670,6 +671,7 @@ function AccountsTab() {
       setNewAccountName('')
       setNewAccountId('')
       setNewUsername('')
+      setNewAccessToken('')
     },
     onError: (err: any) => {
       toast.showToast(err?.response?.data?.error || 'Failed to connect account', 'error')
@@ -691,8 +693,8 @@ function AccountsTab() {
   })
   
   const handleConnect = () => {
-    if (!newAccountName || !newAccountId) {
-      toast.showToast('Please fill in all required fields', 'error')
+    if (!newAccountName || !newAccountId || !newAccessToken) {
+      toast.showToast('Please fill in all required fields (Name, ID, and Access Token)', 'error')
       return
     }
     connectAccount.mutate({
@@ -700,6 +702,7 @@ function AccountsTab() {
       accountName: newAccountName,
       accountId: newAccountId,
       username: newUsername || undefined,
+      accessToken: newAccessToken,
       status: 'active',
     })
   }
@@ -712,54 +715,16 @@ function AccountsTab() {
     instagram: 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500',
   }
   
-  const handleOAuthConnect = (platform: SocialPlatform) => {
-    // Redirect to OAuth flow
-    window.location.href = `/api/marketing/social/oauth/connect/${platform}`
-  }
-  
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">🔗 Connected Accounts</h2>
-        <div className="flex gap-2">
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleOAuthConnect('facebook')}
-              className="rounded-lg bg-blue-600 text-white px-3 py-2 text-sm hover:bg-blue-700 flex items-center gap-2"
-              title="Connect with Facebook OAuth"
-            >
-              📘 Connect Facebook
-            </button>
-            <button
-              onClick={() => handleOAuthConnect('twitter')}
-              className="rounded-lg bg-sky-500 text-white px-3 py-2 text-sm hover:bg-sky-600 flex items-center gap-2"
-              title="Connect with Twitter OAuth"
-            >
-              🐦 Connect Twitter
-            </button>
-            <button
-              onClick={() => handleOAuthConnect('linkedin')}
-              className="rounded-lg bg-blue-700 text-white px-3 py-2 text-sm hover:bg-blue-800 flex items-center gap-2"
-              title="Connect with LinkedIn OAuth"
-            >
-              💼 Connect LinkedIn
-            </button>
-            <button
-              onClick={() => handleOAuthConnect('instagram')}
-              className="rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-2 text-sm hover:from-purple-600 hover:to-pink-600 flex items-center gap-2"
-              title="Connect with Instagram OAuth (via Facebook)"
-            >
-              📸 Connect Instagram
-            </button>
-          </div>
-          <button
-            onClick={() => setShowConnectForm(!showConnectForm)}
-            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-            title="Manual entry (for testing)"
-          >
-            ⚙️ Manual
-          </button>
-        </div>
+        <button
+          onClick={() => setShowConnectForm(!showConnectForm)}
+          className="rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-4 py-2 text-sm hover:from-indigo-600 hover:to-purple-700 flex items-center gap-2"
+        >
+          <span className="text-lg">➕</span> Connect Account
+        </button>
       </div>
       
       {showConnectForm && (
@@ -809,6 +774,19 @@ function AccountsTab() {
                 className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Access Token *</label>
+              <textarea
+                value={newAccessToken}
+                onChange={(e) => setNewAccessToken(e.target.value)}
+                placeholder="Paste your platform access token here (from Facebook/Twitter/LinkedIn developer portal)"
+                rows={3}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm font-mono"
+              />
+              <p className="text-xs text-[color:var(--color-text-muted)] mt-1">
+                This token will be used to publish posts to your account. Keep it secure!
+              </p>
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={handleConnect}
@@ -825,10 +803,14 @@ function AccountsTab() {
               </button>
             </div>
           </div>
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-            <p className="font-semibold mb-1">ℹ️ Manual Entry</p>
-            <p className="mb-2">This manual form is for testing purposes only. In production, use the OAuth buttons above to securely connect your accounts.</p>
-            <p className="text-xs">OAuth provides secure authentication without exposing passwords and automatically handles token refresh.</p>
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+            <p className="font-semibold mb-2">ℹ️ How to Get Access Tokens</p>
+            <div className="space-y-2 text-xs">
+              <p><strong>Facebook:</strong> Go to Facebook Developers → Your App → Tools → Graph API Explorer → Get Page Access Token</p>
+              <p><strong>Twitter:</strong> Go to Twitter Developer Portal → Your App → Keys and Tokens → Generate Access Token</p>
+              <p><strong>LinkedIn:</strong> Use OAuth 2.0 flow to get an access token (requires API access)</p>
+              <p className="text-yellow-700 dark:text-yellow-300 font-semibold mt-2">⚠️ Keep your access tokens secure! Never share them publicly.</p>
+            </div>
           </div>
         </div>
       )}
