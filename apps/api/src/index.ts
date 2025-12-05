@@ -29,6 +29,8 @@ import { marketingTemplatesRouter } from './marketing/templates.js'
 import { marketingSendRouter } from './marketing/send.js'
 import { marketingUnsubscribeRouter } from './marketing/unsubscribe.js'
 import { marketingImagesRouter } from './marketing/images.js'
+import { socialAccountsRouter } from './marketing/social_accounts.js'
+import { socialPostsRouter } from './marketing/social_posts.js'
 import { surveysRouter } from './crm/surveys.js'
 import { renewalsRouter } from './crm/renewals.js'
 import { viewsRouter } from './views.js'
@@ -111,6 +113,8 @@ app.use('/api/marketing', marketingTemplatesRouter)
 app.use('/api/marketing', marketingSendRouter)
 app.use('/api/marketing', marketingUnsubscribeRouter)
 app.use('/api/marketing', marketingImagesRouter)
+app.use('/api/marketing/social', socialAccountsRouter)
+app.use('/api/marketing/social', socialPostsRouter)
 app.use('/api/assets', assetsRouter)
 app.use('/api/crm/slas', slasRouter)
 app.use('/api/crm/contract-templates', contractTemplatesRouter)

@@ -53,6 +53,7 @@ import LegalPrivacy from '@/pages/legal/Privacy'
 import Helpdesk from '@/pages/Helpdesk'
 import Support from '@/pages/Support'
 import Marketing from '@/pages/Marketing'
+import MarketingSocial from '@/pages/MarketingSocial'
 import RequestStatus from '@/pages/RequestStatus'
 import TermsReview from '@/pages/TermsReview'
 import QuoteView from '@/pages/QuoteView'
@@ -99,6 +100,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/outreach/sequences', element: <RequireAuth><RequireApplication appKey="crm"><CRMOutreachSequences /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/outreach/events', element: <RequireAuth><RequireApplication appKey="crm"><CRMOutreachEvents /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/marketing', element: <RequireAuth><RequireApplication appKey="crm"><Marketing /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/marketing/social', element: <RequireAuth><RequireApplication appKey="crm"><MarketingSocial /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/support/tickets', element: <RequireAuth><RequireApplication appKey="crm"><SupportTickets /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/support/kb', element: <RequireAuth><RequireApplication appKey="crm"><KnowledgeBase /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/documents', element: <RequireAuth><RequireApplication appKey="crm"><CRMDocuments /></RequireApplication></RequireAuth> },

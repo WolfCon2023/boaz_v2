@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
@@ -30,6 +31,12 @@ export default function Marketing() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Marketing</h1>
         <div className="flex items-center gap-2">
+          <Link 
+            to="/apps/crm/marketing/social"
+            className="rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-1 text-sm hover:from-purple-700 hover:to-pink-700 flex items-center gap-1"
+          >
+            📱 Social Media
+          </Link>
           <button onClick={() => setTab('campaigns')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='campaigns'?'bg-[color:var(--color-muted)]':''}`}>Campaigns</button>
           <button onClick={() => setTab('segments')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='segments'?'bg-[color:var(--color-muted)]':''}`}>Segments</button>
           <button onClick={() => setTab('analytics')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='analytics'?'bg-[color:var(--color-muted)]':''}`}>Analytics</button>
