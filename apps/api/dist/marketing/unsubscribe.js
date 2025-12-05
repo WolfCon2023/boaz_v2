@@ -5,19 +5,95 @@ import { requireAuth, requirePermission } from '../auth/rbac.js';
 export const marketingUnsubscribeRouter = Router();
 // GET /api/marketing/unsubscribe?e=email&c=campaignId (public endpoint)
 marketingUnsubscribeRouter.get('/unsubscribe', async (req, res) => {
+    console.log('📧 Unsubscribe request received:', {
+        email: req.query.e,
+        campaignId: req.query.c,
+        url: req.originalUrl
+    });
     const db = await getDb();
-    if (!db)
+    if (!db) {
+        console.error('❌ Database unavailable for unsubscribe');
         return res.status(500).send('db_unavailable');
+    }
     const email = String(req.query.e || '').toLowerCase().trim();
     const c = String(req.query.c || '');
-    if (!email)
+    if (!email) {
+        console.error('❌ Missing email parameter');
         return res.status(400).send('missing_email');
+    }
     const doc = { email, at: new Date() };
     if (ObjectId.isValid(c))
         doc.campaignId = new ObjectId(c);
-    await db.collection('marketing_unsubscribes').updateOne({ email }, { $set: doc }, { upsert: true });
+    try {
+        await db.collection('marketing_unsubscribes').updateOne({ email }, { $set: doc }, { upsert: true });
+        console.log('✅ Successfully unsubscribed:', email);
+    }
+    catch (err) {
+        console.error('❌ Failed to unsubscribe:', err);
+        return res.status(500).send('Failed to process unsubscribe request');
+    }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send('<!doctype html><html><body><div style="font-family:system-ui;padding:24px">You have been unsubscribed. You can close this page.</div></body></html>');
+    res.send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unsubscribed</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 500px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    .icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    h1 {
+      color: #1e293b;
+      font-size: 24px;
+      margin: 0 0 16px 0;
+    }
+    p {
+      color: #64748b;
+      font-size: 16px;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .email {
+      color: #6366f1;
+      font-weight: 600;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✓</div>
+    <h1>You've been unsubscribed</h1>
+    <p>
+      We've removed <span class="email">${email}</span> from our mailing list.
+      <br><br>
+      You won't receive any more marketing emails from us.
+      <br><br>
+      You can safely close this page.
+    </p>
+  </div>
+</body>
+</html>`);
 });
 // GET /api/marketing/unsubscribes (list all unsubscribes - requires auth)
 marketingUnsubscribeRouter.get('/unsubscribes', requireAuth, async (req, res) => {

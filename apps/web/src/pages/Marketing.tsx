@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
-import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { formatDate } from '@/lib/dateFormat'
 import { Type, Image, MousePointerClick, Minus, Columns, GripVertical } from 'lucide-react'
 import { useToast } from '@/components/Toast'
 import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
@@ -23,7 +23,7 @@ type Campaign = {
 type Template = { key: string; name: string; mjml: string }
 
 export default function Marketing() {
-  const [tab, setTab] = React.useState<'campaigns'|'segments'|'analytics'|'unsubscribes'>('campaigns')
+  const [tab, setTab] = React.useState<'campaigns'|'segments'|'analytics'>('campaigns')
   return (
     <div className="space-y-6">
       <CRMNav />
@@ -33,13 +33,11 @@ export default function Marketing() {
           <button onClick={() => setTab('campaigns')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='campaigns'?'bg-[color:var(--color-muted)]':''}`}>Campaigns</button>
           <button onClick={() => setTab('segments')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='segments'?'bg-[color:var(--color-muted)]':''}`}>Segments</button>
           <button onClick={() => setTab('analytics')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='analytics'?'bg-[color:var(--color-muted)]':''}`}>Analytics</button>
-          <button onClick={() => setTab('unsubscribes')} className={`rounded-lg border px-3 py-1 text-sm ${tab==='unsubscribes'?'bg-[color:var(--color-muted)]':''}`}>Do Not Contact</button>
         </div>
       </div>
       {tab === 'campaigns' && <CampaignsTab />}
       {tab === 'segments' && <SegmentsTab />}
       {tab === 'analytics' && <AnalyticsTab />}
-      {tab === 'unsubscribes' && <UnsubscribesTab />}
     </div>
   )
 }
@@ -1866,201 +1864,4 @@ function RoiDrilldown({ selectedCampaignId, startDate, endDate, campaigns, onCle
   )
 }
 
-function UnsubscribesTab() {
-  const qc = useQueryClient()
-  const toast = useToast()
-  const [q, setQ] = React.useState('')
-  const [sort, setSort] = React.useState<'email' | 'at' | 'campaignId'>('at')
-  const [dir, setDir] = React.useState<'asc' | 'desc'>('desc')
-  const [removingId, setRemovingId] = React.useState<string | null>(null)
-  
-  // Check if user is admin
-  const { data: userRolesData } = useQuery({
-    queryKey: ['user-roles'],
-    queryFn: async () => {
-      const res = await http.get('/api/auth/me/roles')
-      return res.data as { roles: Array<{ name: string; permissions: string[] }>; isAdmin: boolean }
-    },
-  })
-  const isAdmin = userRolesData?.isAdmin || false
-  
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['marketing-unsubscribes', q, sort, dir],
-    queryFn: async () => {
-      const res = await http.get('/api/marketing/unsubscribes', { params: { q, sort, dir } })
-      return res.data as { data: { items: Array<{
-        _id: string
-        email: string
-        name?: string | null
-        campaignId?: string | null
-        campaignName?: string | null
-        at: string
-      }> } }
-    },
-    retry: false,
-  })
-  
-  const items = data?.data.items ?? []
-  
-  const removeFromDNC = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await http.delete(`/api/marketing/unsubscribes/${id}`)
-      return res.data
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['marketing-unsubscribes'] })
-      setRemovingId(null)
-      toast.showToast('Subscriber has been removed from the Do Not Contact list and will receive emails again.', 'success')
-    },
-    onError: (err: any) => {
-      const errorMsg = err?.response?.data?.error || err?.message || 'Failed to remove from DNC list'
-      toast.showToast(`Error: ${errorMsg}`, 'error')
-      setRemovingId(null)
-    },
-  })
-  
-  const handleRemove = (item: { _id: string; email: string; name?: string | null }) => {
-    const displayName = item.name || item.email
-    if (confirm(`Are you sure you want to remove ${displayName} from the Do Not Contact list? They will begin receiving marketing emails again.`)) {
-      setRemovingId(item._id)
-      removeFromDNC.mutate(item._id)
-    }
-  }
-  
-  const handleSort = (field: 'email' | 'at' | 'campaignId') => {
-    if (sort === field) {
-      setDir(dir === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSort(field)
-      setDir('asc')
-    }
-  }
-  
-  const getSortIndicator = (field: string) => {
-    if (sort !== field) return ''
-    return dir === 'asc' ? ' ↑' : ' ↓'
-  }
-  
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by email..."
-          className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-        />
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as any)}
-          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
-        >
-          <option value="at">Unsubscribed Date</option>
-          <option value="email">Email</option>
-          <option value="campaignId">Campaign</option>
-        </select>
-        <select
-          value={dir}
-          onChange={(e) => setDir(e.target.value as any)}
-          className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
-        >
-          <option value="desc">Desc</option>
-          <option value="asc">Asc</option>
-        </select>
-      </div>
-      
-      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="text-left text-[color:var(--color-text-muted)] bg-[color:var(--color-muted)]">
-            <tr>
-              <th 
-                className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
-                onClick={() => handleSort('email')}
-              >
-                Email {getSortIndicator('email')}
-              </th>
-              <th className="px-4 py-2">Name</th>
-              <th 
-                className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
-                onClick={() => handleSort('campaignId')}
-              >
-                Campaign {getSortIndicator('campaignId')}
-              </th>
-              <th 
-                className="px-4 py-2 cursor-pointer hover:text-[color:var(--color-text)] select-none"
-                onClick={() => handleSort('at')}
-              >
-                Unsubscribed {getSortIndicator('at')}
-              </th>
-              {isAdmin && <th className="px-4 py-2">Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={isAdmin ? 5 : 4} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
-                  Loading...
-                </td>
-              </tr>
-            ) : error ? (
-              <tr>
-                <td colSpan={isAdmin ? 5 : 4} className="px-4 py-8 text-center text-red-600">
-                  {(error as any)?.response?.status === 401 
-                    ? 'Please log in to view the unsubscribe list.'
-                    : 'Failed to load unsubscribes. Please try again.'}
-                </td>
-              </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={isAdmin ? 5 : 4} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
-                  No unsubscribes found
-                </td>
-              </tr>
-            ) : (
-              items.map((item) => (
-                <tr key={item._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
-                  <td className="px-4 py-2 font-medium">{item.email}</td>
-                  <td className="px-4 py-2">{item.name || item.email || '-'}</td>
-                  <td className="px-4 py-2">
-                    {item.campaignName ? (
-                      <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
-                        {item.campaignName}
-                      </span>
-                    ) : (
-                      <span className="text-[color:var(--color-text-muted)]">All Campaigns</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">{item.at ? formatDateTime(item.at) : '-'}</td>
-                  {isAdmin && (
-                    <td className="px-4 py-2">
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(item)}
-                        disabled={removingId === item._id}
-                        className="rounded border border-green-400 px-2 py-1 text-xs text-green-400 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Remove from Do Not Contact list"
-                      >
-                        {removingId === item._id ? 'Removing...' : 'Remove from DNC'}
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        {items.length > 0 && (
-          <div className="p-4 text-sm text-[color:var(--color-text-muted)] border-t border-[color:var(--color-border)]">
-            Showing {items.length} unsubscribe{items.length !== 1 ? 's' : ''}
-          </div>
-        )}
-      </div>
-      
-      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-        <p className="font-semibold mb-1">Do Not Contact List</p>
-        <p>This list shows all email addresses that have unsubscribed from marketing campaigns. These recipients will be automatically excluded from future campaign sends.</p>
-      </div>
-    </div>
-  )
-}
 

@@ -107,6 +107,12 @@ async function wrapLinksWithTracking(
     // Skip if already a tracking link
     if (originalUrl.includes('/api/marketing/r/')) continue
     
+    // Skip unsubscribe and pixel tracking URLs
+    if (
+      originalUrl.includes('/api/marketing/unsubscribe') ||
+      originalUrl.includes('/api/marketing/pixel.gif')
+    ) continue
+    
     // Skip relative URLs, anchors, mailto, tel, javascript, etc.
     if (
       originalUrl.startsWith('#') ||
