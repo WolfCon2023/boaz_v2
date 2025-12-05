@@ -106,14 +106,24 @@ socialPostsRouter.post('/posts', requireAuth, async (req, res) => {
             updatedAt: now,
         };
         const result = await db.collection('social_posts').insertOne(doc);
+        const postId = result.insertedId.toHexString();
         // If status is 'published' and no scheduledFor, publish immediately
         if (parsed.status === 'published' && !parsed.scheduledFor) {
-            // Trigger immediate publish (background job would handle this in production)
-            console.log('📱 Immediate publish requested for post:', result.insertedId.toHexString());
+            console.log('📱 Immediate publish requested for post:', postId);
+            // Trigger actual publishing to platforms (async, don't wait)
+            fetch(`${req.protocol}://${req.get('host')}/api/marketing/social/publish/${postId}`, {
+                method: 'POST',
+                headers: {
+                    'Cookie': req.headers.cookie || '',
+                    'Content-Type': 'application/json'
+                }
+            }).catch(err => {
+                console.error('Failed to trigger publish:', err);
+            });
         }
         res.status(201).json({
             data: {
-                _id: result.insertedId.toHexString(),
+                _id: postId,
                 message: 'Social post created successfully'
             },
             error: null
@@ -198,33 +208,7 @@ socialPostsRouter.delete('/posts/:id', requireAuth, async (req, res) => {
     }
 });
 // POST /api/marketing/social/posts/:id/publish - Publish a post immediately
-socialPostsRouter.post('/posts/:id/publish', requireAuth, async (req, res) => {
-    const db = await getDb();
-    if (!db)
-        return res.status(500).json({ data: null, error: 'db_unavailable' });
-    try {
-        const _id = new ObjectId(req.params.id);
-        const post = await db.collection('social_posts').findOne({ _id });
-        if (!post) {
-            return res.status(404).json({ data: null, error: 'post_not_found' });
-        }
-        // Update status to published
-        await db.collection('social_posts').updateOne({ _id }, {
-            $set: {
-                status: 'published',
-                publishedAt: new Date(),
-                updatedAt: new Date()
-            }
-        });
-        // In production, this would trigger actual API calls to social platforms
-        console.log('📱 Publishing post to platforms:', post.platforms);
-        res.json({ data: { message: 'Post published successfully' }, error: null });
-    }
-    catch (err) {
-        console.error('Publish social post error:', err);
-        res.status(500).json({ data: null, error: err.message || 'failed_to_publish_post' });
-    }
-});
+// Note: This endpoint is now handled by social_publish.ts for actual platform API calls
 // GET /api/marketing/social/analytics - Get aggregated analytics
 socialPostsRouter.get('/analytics', requireAuth, async (req, res) => {
     const db = await getDb();
