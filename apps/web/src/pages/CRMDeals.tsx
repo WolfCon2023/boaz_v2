@@ -798,8 +798,9 @@ export default function CRMDeals() {
       )
     }
     if (key === 'ownerId') {
-      const owner = d.ownerId && userById.get(d.ownerId)
-      return owner ? `${owner.name}` : (d.ownerId || '-')
+      if (!d.ownerId) return '-'
+      const owner = userById.get(d.ownerId)
+      return owner ? owner.name : d.ownerId
     }
     return ''
   }
@@ -967,6 +968,10 @@ export default function CRMDeals() {
                 if (col.key === 'stage') return d.stage ?? ''
                 if (col.key === 'forecastedCloseDate') return d.forecastedCloseDate ? new Date(d.forecastedCloseDate).toISOString().slice(0,10) : ''
                 if (col.key === 'closeDate') return d.closeDate ? new Date(d.closeDate).toISOString().slice(0,10) : ''
+                if (col.key === 'ownerId') {
+                  const owner = d.ownerId && userById.get(d.ownerId)
+                  return owner ? owner.name : (d.ownerId || '')
+                }
                 return ''
               }))
               const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
