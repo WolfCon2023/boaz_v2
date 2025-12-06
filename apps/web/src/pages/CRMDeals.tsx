@@ -264,7 +264,7 @@ export default function CRMDeals() {
   const usersQ = useQuery({
     queryKey: ['users-list'],
     queryFn: async () => {
-      const res = await http.get('/auth/users')
+      const res = await http.get('/api/auth/users')
       return res.data as { data: { items: UserPick[] } }
     },
   })
