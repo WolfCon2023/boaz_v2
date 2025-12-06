@@ -120,8 +120,19 @@ export default function CRMRevenueIntelligence() {
     },
   })
 
+  // Fetch users for name resolution
+  const usersQ = useQuery({
+    queryKey: ['users-list'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/users')
+      return res.data as { data: { items: Array<{ _id: string; name: string; email: string }> } }
+    },
+  })
+
   const forecast = forecastQ.data?.data
   const reps = repsQ.data?.data
+  const users = usersQ.data?.data.items ?? []
+  const userById = React.useMemo(() => new Map(users.map((u) => [u._id, u])), [users])
 
   // Scenario mutation
   const scenarioMutation = useMutation({
@@ -525,9 +536,12 @@ export default function CRMRevenueIntelligence() {
                   </tr>
                 </thead>
                 <tbody>
-                  {reps.reps.map((rep) => (
+                  {reps.reps.map((rep) => {
+                    const user = userById.get(rep.ownerId)
+                    const repName = user ? user.name : rep.ownerId
+                    return (
                     <tr key={rep.ownerId} className="border-b border-[color:var(--color-border)]">
-                      <td className="px-2 py-2 font-semibold">{rep.ownerId}</td>
+                      <td className="px-2 py-2 font-semibold">{repName}</td>
                       <td className="px-2 py-2 text-center">
                         <span
                           className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -551,7 +565,8 @@ export default function CRMRevenueIntelligence() {
                       <td className="px-2 py-2 text-right">{formatCurrency(rep.avgDealSize)}</td>
                       <td className="px-2 py-2 text-right">{formatCurrency(rep.pipelineValue)}</td>
                     </tr>
-                  ))}
+                  )
+                  })}
                 </tbody>
               </table>
             </div>
