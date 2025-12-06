@@ -31,6 +31,7 @@ type DealSurveyStatusSummary = {
   lastScore: number | null
 }
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
+type UserPick = { _id: string; name: string; email: string }
 type LinkedRenewal = {
   _id: string
   name: string
@@ -260,12 +261,21 @@ export default function CRMDeals() {
       return res.data as { data: { items: AccountPick[] } }
     },
   })
+  const usersQ = useQuery({
+    queryKey: ['users-list'],
+    queryFn: async () => {
+      const res = await http.get('/auth/users')
+      return res.data as { data: { items: UserPick[] } }
+    },
+  })
   const { data: campaignsQ } = useQuery({
     queryKey: ['mkt-campaigns'],
     queryFn: async () => (await http.get('/api/marketing/campaigns')).data as { data: { items: { _id: string; name: string }[] } },
   })
   const accounts = accountsQ.data?.data.items ?? []
+  const users = usersQ.data?.data.items ?? []
   const acctById = React.useMemo(() => new Map(accounts.map((a) => [a._id, a])), [accounts])
+  const userById = React.useMemo(() => new Map(users.map((u) => [u._id, u])), [users])
   // Managers for approval workflow
   // Managers for approval workflow
   const { data: managersData } = useQuery({
@@ -787,7 +797,10 @@ export default function CRMDeals() {
         </div>
       )
     }
-    if (key === 'ownerId') return d.ownerId ? d.ownerId : '-'
+    if (key === 'ownerId') {
+      const owner = d.ownerId && userById.get(d.ownerId)
+      return owner ? `${owner.name}` : (d.ownerId || '-')
+    }
     return ''
   }
   function handleDragStart(key: string) { setDraggedCol(key) }
@@ -1008,7 +1021,12 @@ export default function CRMDeals() {
               <option key={c._id} value={c._id}>{c.name}</option>
             ))}
           </select>
-          <input name="ownerId" placeholder="Owner (email or ID)" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <select name="ownerId" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+            <option value="">Owner (optional)</option>
+            {users.map((u) => (
+              <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+            ))}
+          </select>
           <button className="ml-auto rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">
             Add deal
           </button>
@@ -1184,7 +1202,12 @@ export default function CRMDeals() {
                   <option>Contract Signed / Closed Won</option>
                   <option>Rejected / Returned for Revision</option>
                 </select>
-                <input name="ownerId" defaultValue={editing.ownerId ?? ''} placeholder="Owner (email or ID)" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <select name="ownerId" defaultValue={editing.ownerId ?? ''} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+                  <option value="">Owner (optional)</option>
+                  {users.map((u) => (
+                    <option key={u._id} value={u._id}>{u.name} ({u.email})</option>
+                  ))}
+                </select>
                 <div className="col-span-full grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs text-[color:var(--color-text-muted)] mb-1">Forecasted Close Date</label>

@@ -769,6 +769,30 @@ authRouter.get('/admin/roles', requireAuth, requirePermission('*'), async (req, 
         res.status(500).json({ error: err.message || 'Failed to get roles' });
     }
 });
+// Get users list for dropdowns (lightweight)
+authRouter.get('/users', requireAuth, async (req, res) => {
+    try {
+        const db = await getDb();
+        if (!db)
+            return res.status(500).json({ data: null, error: 'db_unavailable' });
+        // Get all active users with just id, name, and email
+        const users = await db.collection('users')
+            .find({ status: { $ne: 'deleted' } })
+            .project({ _id: 1, name: 1, email: 1 })
+            .sort({ name: 1 })
+            .toArray();
+        const formatted = users.map((u) => ({
+            _id: u._id.toHexString(),
+            name: u.name || u.email || 'Unnamed User',
+            email: u.email || '',
+        }));
+        res.json({ data: { items: formatted }, error: null });
+    }
+    catch (err) {
+        console.error('Get users error:', err);
+        res.status(500).json({ data: null, error: err.message || 'failed_to_get_users' });
+    }
+});
 // Admin: List/Search users
 authRouter.get('/admin/users', requireAuth, requirePermission('*'), async (req, res) => {
     try {
