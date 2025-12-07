@@ -1,7 +1,171 @@
 import { Router } from 'express';
 import { getDb, getNextSequence } from '../db.js';
 import { ObjectId } from 'mongodb';
+import { sendAuthEmail } from '../auth/email.js';
+import { env } from '../env.js';
 export const supportTicketsRouter = Router();
+// Helper to extract email from assignee string (format: "Name <email>" or just "email")
+function extractAssigneeEmail(assignee) {
+    if (!assignee || typeof assignee !== 'string')
+        return null;
+    const match = assignee.match(/<(.+?)>/);
+    if (match)
+        return match[1].trim();
+    // If no angle brackets, assume it's just an email
+    if (assignee.includes('@'))
+        return assignee.trim();
+    return null;
+}
+// Helper to send ticket notification email
+async function sendTicketNotification(db, ticket, assigneeEmail) {
+    try {
+        const webUrl = env.ORIGIN.split(',')[0].trim(); // Use first origin if multiple
+        const ticketUrl = `${webUrl}/apps/crm/support/tickets?ticket=${ticket._id?.toHexString()}`;
+        const now = new Date();
+        const timestamp = now.toLocaleString('en-US', {
+            timeZone: 'America/New_York',
+            dateStyle: 'medium',
+            timeStyle: 'short',
+        });
+        // Get account and contact info if available
+        let accountName = '';
+        let contactName = '';
+        if (ticket.accountId) {
+            const account = await db.collection('accounts').findOne({ _id: ticket.accountId });
+            if (account)
+                accountName = account.name || '';
+        }
+        if (ticket.contactId) {
+            const contact = await db.collection('contacts').findOne({ _id: ticket.contactId });
+            if (contact)
+                contactName = contact.name || contact.email || '';
+        }
+        const htmlBody = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
+          .ticket-box { background: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; }
+          .label { font-weight: bold; color: #667eea; margin-top: 15px; }
+          .value { margin-top: 5px; }
+          .priority { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+          .priority-low { background: #e3f2fd; color: #1976d2; }
+          .priority-normal { background: #fff3e0; color: #f57c00; }
+          .priority-high { background: #ffebee; color: #c62828; }
+          .priority-critical { background: #b71c1c; color: white; }
+          .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 6px; margin-top: 20px; }
+          .footer { text-align: center; color: #666; font-size: 12px; margin-top: 30px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0;">🎟️ New Support Ticket Assigned</h1>
+            <p style="margin: 10px 0 0 0; opacity: 0.9;">Ticket #${ticket.ticketNumber || 'N/A'}</p>
+          </div>
+          <div class="content">
+            <p>A new support ticket has been assigned to you:</p>
+            
+            <div class="ticket-box">
+              <div class="label">Ticket Number:</div>
+              <div class="value" style="font-size: 24px; font-weight: bold; color: #667eea;">#${ticket.ticketNumber || 'N/A'}</div>
+              
+              <div class="label">Subject:</div>
+              <div class="value" style="font-size: 18px;">${ticket.shortDescription}</div>
+              
+              ${ticket.description ? `
+                <div class="label">Description:</div>
+                <div class="value">${ticket.description.replace(/\n/g, '<br>')}</div>
+              ` : ''}
+              
+              <div class="label">Priority:</div>
+              <div class="value">
+                <span class="priority priority-${ticket.priority || 'normal'}">
+                  ${(ticket.priority || 'normal').toUpperCase()}
+                </span>
+              </div>
+              
+              <div class="label">Status:</div>
+              <div class="value">${(ticket.status || 'open').toUpperCase()}</div>
+              
+              ${accountName ? `
+                <div class="label">Account:</div>
+                <div class="value">${accountName}</div>
+              ` : ''}
+              
+              ${contactName ? `
+                <div class="label">Contact:</div>
+                <div class="value">${contactName}</div>
+              ` : ''}
+              
+              ${ticket.requesterName || ticket.requesterEmail ? `
+                <div class="label">Requester:</div>
+                <div class="value">
+                  ${ticket.requesterName || ''} ${ticket.requesterEmail ? `&lt;${ticket.requesterEmail}&gt;` : ''}
+                </div>
+              ` : ''}
+              
+              ${ticket.slaDueAt ? `
+                <div class="label">SLA Due:</div>
+                <div class="value">${new Date(ticket.slaDueAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+              ` : ''}
+              
+              <div class="label">Created:</div>
+              <div class="value">${timestamp}</div>
+            </div>
+            
+            <div style="text-align: center;">
+              <a href="${ticketUrl}" class="button">View Ticket</a>
+            </div>
+            
+            <div class="footer">
+              <p>This ticket has been assigned to you in the BOAZ-OS Help Desk.</p>
+              <p>© ${now.getFullYear()} Wolf Consulting Group, LLC. All rights reserved.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+        const textBody = `
+New Support Ticket Assigned
+
+Ticket #${ticket.ticketNumber || 'N/A'}
+
+Subject: ${ticket.shortDescription}
+
+${ticket.description ? `Description:\n${ticket.description}\n\n` : ''}
+Priority: ${(ticket.priority || 'normal').toUpperCase()}
+Status: ${(ticket.status || 'open').toUpperCase()}
+${accountName ? `Account: ${accountName}\n` : ''}
+${contactName ? `Contact: ${contactName}\n` : ''}
+${ticket.requesterName || ticket.requesterEmail ? `Requester: ${ticket.requesterName || ''} ${ticket.requesterEmail ? `<${ticket.requesterEmail}>` : ''}\n` : ''}
+${ticket.slaDueAt ? `SLA Due: ${new Date(ticket.slaDueAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}\n` : ''}
+Created: ${timestamp}
+
+View ticket: ${ticketUrl}
+
+This ticket has been assigned to you in the BOAZ-OS Help Desk.
+
+© ${now.getFullYear()} Wolf Consulting Group, LLC. All rights reserved.
+    `;
+        await sendAuthEmail({
+            to: assigneeEmail,
+            subject: `🎟️ Support Ticket #${ticket.ticketNumber || 'N/A'} Assigned: ${ticket.shortDescription}`,
+            html: htmlBody,
+            text: textBody,
+        });
+        console.log(`✅ Ticket notification sent to ${assigneeEmail} for ticket #${ticket.ticketNumber}`);
+    }
+    catch (error) {
+        console.error(`❌ Failed to send ticket notification to ${assigneeEmail}:`, error);
+        // Don't throw - we don't want email failures to prevent ticket creation
+    }
+}
 // GET /api/crm/support/tickets?q=&status=&priority=&accountId=&contactId=&sort=&dir=&breached=&dueWithin=
 supportTicketsRouter.get('/tickets', async (req, res) => {
     const db = await getDb();
@@ -188,6 +352,17 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
         for (let attempt = 0; attempt < 5; attempt++) {
             try {
                 const result = await coll.insertOne(doc);
+                doc._id = result.insertedId;
+                // Send email notification to assignee if assigned
+                if (doc.assignee) {
+                    const assigneeEmail = extractAssigneeEmail(doc.assignee);
+                    if (assigneeEmail) {
+                        // Send email asynchronously (don't wait)
+                        sendTicketNotification(db, doc, assigneeEmail).catch(err => {
+                            console.error('Failed to send ticket notification:', err);
+                        });
+                    }
+                }
                 return res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null });
             }
             catch (errInsert) {
@@ -274,6 +449,17 @@ supportTicketsRouter.post('/portal/tickets', async (req, res) => {
         for (let attempt = 0; attempt < 5; attempt++) {
             try {
                 const result = await coll.insertOne(doc);
+                doc._id = result.insertedId;
+                // Send email notification to assignee if assigned (for portal tickets too)
+                if (doc.assignee) {
+                    const assigneeEmail = extractAssigneeEmail(doc.assignee);
+                    if (assigneeEmail) {
+                        // Send email asynchronously (don't wait)
+                        sendTicketNotification(db, doc, assigneeEmail).catch(err => {
+                            console.error('Failed to send ticket notification:', err);
+                        });
+                    }
+                }
                 return res
                     .status(201)
                     .json({ data: { _id: result.insertedId, ticketNumber: doc.ticketNumber }, error: null });
@@ -338,6 +524,11 @@ supportTicketsRouter.put('/tickets/:id', async (req, res) => {
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     try {
         const _id = new ObjectId(req.params.id);
+        // Get current ticket to check if assignee is changing
+        const currentTicket = await db.collection('support_tickets').findOne({ _id });
+        if (!currentTicket) {
+            return res.status(404).json({ data: null, error: 'ticket_not_found' });
+        }
         const update = { updatedAt: new Date() };
         // Accept both 'shortDescription' and legacy 'title' for compatibility
         if (typeof (req.body ?? {}).shortDescription === 'string')
@@ -358,6 +549,20 @@ supportTicketsRouter.put('/tickets/:id', async (req, res) => {
         if (req.body?.contactId && ObjectId.isValid(req.body.contactId))
             update.contactId = new ObjectId(req.body.contactId);
         await db.collection('support_tickets').updateOne({ _id }, { $set: update });
+        // Send email notification if assignee was added or changed
+        if (update.assignee && update.assignee !== currentTicket.assignee) {
+            const assigneeEmail = extractAssigneeEmail(update.assignee);
+            if (assigneeEmail) {
+                // Get updated ticket with all fields for email
+                const updatedTicket = await db.collection('support_tickets').findOne({ _id });
+                if (updatedTicket) {
+                    // Send email asynchronously (don't wait)
+                    sendTicketNotification(db, updatedTicket, assigneeEmail).catch(err => {
+                        console.error('Failed to send ticket notification on update:', err);
+                    });
+                }
+            }
+        }
         res.json({ data: { ok: true }, error: null });
     }
     catch {
