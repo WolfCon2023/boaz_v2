@@ -6,6 +6,7 @@ import { requireAuth, requirePermission } from '../auth/rbac.js';
 import { sendAuthEmail } from '../auth/email.js';
 import { env } from '../env.js';
 import { createStandardEmailTemplate, createStandardTextEmail, createContentBox, createField } from '../lib/email-templates.js';
+import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
 export const dealsRouter = Router();
 // Debug middleware to log all requests to deals router
 dealsRouter.use((req, _res, next) => {
@@ -761,29 +762,52 @@ dealsRouter.post('/:id/reject', requireAuth, async (req, res) => {
         try {
             const deal = await db.collection('deals').findOne({ _id: dealId });
             const dealData = deal;
+            // Build info items
+            const infoItems = [
+                {
+                    label: 'Deal Number',
+                    value: dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'
+                },
+                {
+                    label: 'Deal Title',
+                    value: dealData?.title || 'Untitled'
+                },
+                {
+                    label: 'Reviewed By',
+                    value: userData.name || userData.email
+                },
+                {
+                    label: 'Reviewed At',
+                    value: formatEmailTimestamp(now)
+                },
+            ];
+            if (reviewNotes) {
+                infoItems.push({
+                    label: 'Review Notes',
+                    value: reviewNotes
+                });
+            }
+            const { html, text } = generateEmailTemplate({
+                header: {
+                    title: 'Deal Rejected',
+                    subtitle: dealData?.dealNumber ? `Deal #${dealData.dealNumber}` : undefined,
+                    icon: '❌',
+                },
+                content: {
+                    message: 'Your deal approval request has been rejected. Please review the feedback below and make any necessary adjustments before resubmitting.',
+                    infoBox: {
+                        title: 'Rejection Details',
+                        items: infoItems,
+                    },
+                    additionalInfo: 'If you have questions about this rejection, please contact the reviewer listed above for clarification and guidance on next steps.',
+                },
+            });
             await sendAuthEmail({
                 to: approvalRequest.requesterEmail,
-                subject: `Deal Rejected: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : dealData?.title || 'Untitled'}`,
+                subject: `❌ Deal Rejected ${dealData?.dealNumber ? `#${dealData.dealNumber}` : ''}: ${dealData?.title || 'Untitled'}`,
                 checkPreferences: true,
-                html: `
-          <h2>Deal Rejected</h2>
-          <p>Your deal has been reviewed and rejected:</p>
-          <ul>
-            <li><strong>Deal:</strong> ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData?.title || 'Untitled'}</li>
-            <li><strong>Reviewed by:</strong> ${userData.name || userData.email}</li>
-            <li><strong>Reviewed at:</strong> ${now.toLocaleString()}</li>
-            ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
-          </ul>
-        `,
-                text: `Deal Rejected
-
-Your deal has been reviewed and rejected:
-
-Deal: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData?.title || 'Untitled'}
-Reviewed by: ${userData.name || userData.email}
-Reviewed at: ${now.toLocaleString()}
-${reviewNotes ? `Notes: ${reviewNotes}` : ''}
-        `,
+                html,
+                text,
             });
         }
         catch (emailErr) {

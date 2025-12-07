@@ -5,6 +5,7 @@ import { requireAuth } from '../auth/rbac.js';
 import { sendAuthEmail } from '../auth/email.js';
 import { env } from '../env.js';
 import { createStandardEmailTemplate, createStandardTextEmail, createContentBox, createField } from '../lib/email-templates.js';
+import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
 export const quotesRouter = Router();
 // Helper function to add history entry
 async function addQuoteHistory(db, quoteId, eventType, description, userId, userName, userEmail, oldValue, newValue, metadata) {
@@ -754,30 +755,52 @@ quotesRouter.post('/:id/reject', requireAuth, async (req, res) => {
         try {
             const quote = await db.collection('quotes').findOne({ _id: quoteId });
             const quoteData = quote;
+            // Build info items
+            const infoItems = [
+                {
+                    label: 'Quote Number',
+                    value: quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'
+                },
+                {
+                    label: 'Quote Title',
+                    value: quoteData?.title || 'Untitled'
+                },
+                {
+                    label: 'Rejected By',
+                    value: userData.name || userData.email
+                },
+                {
+                    label: 'Rejected At',
+                    value: formatEmailTimestamp(now)
+                },
+            ];
+            if (reviewNotes) {
+                infoItems.push({
+                    label: 'Review Notes',
+                    value: reviewNotes
+                });
+            }
+            const { html, text } = generateEmailTemplate({
+                header: {
+                    title: 'Quote Rejected',
+                    subtitle: quoteData?.quoteNumber ? `Quote #${quoteData.quoteNumber}` : undefined,
+                    icon: '❌',
+                },
+                content: {
+                    message: 'Your quote approval request has been rejected. Please review the details below and make any necessary adjustments before resubmitting.',
+                    infoBox: {
+                        title: 'Rejection Details',
+                        items: infoItems,
+                    },
+                    additionalInfo: 'If you have questions about this rejection, please contact the reviewer listed above for clarification.',
+                },
+            });
             await sendAuthEmail({
                 to: approvalRequest.requesterEmail,
-                subject: `Quote Rejected: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData?.title || 'Untitled'}`,
+                subject: `❌ Quote Rejected ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : ''}: ${quoteData?.title || 'Untitled'}`,
                 checkPreferences: true,
-                html: `
-          <h2>Quote Rejected</h2>
-          <p>Your quote has been rejected:</p>
-          <ul>
-            <li><strong>Quote:</strong> ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}</li>
-            <li><strong>Rejected by:</strong> ${userData.name || userData.email}</li>
-            <li><strong>Rejected at:</strong> ${now.toLocaleString()}</li>
-            ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
-          </ul>
-        `,
-                text: `
-Quote Rejected
-
-Your quote has been rejected:
-
-Quote: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}
-Rejected by: ${userData.name || userData.email}
-Rejected at: ${now.toLocaleString()}
-${reviewNotes ? `Notes: ${reviewNotes}` : ''}
-        `,
+                html,
+                text,
             });
         }
         catch (emailErr) {
@@ -836,38 +859,58 @@ quotesRouter.post('/:id/send-to-signer', requireAuth, async (req, res) => {
         const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
         const quoteViewUrl = `${baseUrl}/quotes/view/${signToken}`;
         try {
+            // Build quote info items
+            const infoItems = [
+                {
+                    label: 'Quote Number',
+                    value: quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'
+                },
+                {
+                    label: 'Quote Title',
+                    value: quoteData.title || 'Untitled'
+                },
+                {
+                    label: 'Total Amount',
+                    value: `$${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                },
+                {
+                    label: 'Sent By',
+                    value: senderData.name || senderData.email
+                },
+                {
+                    label: 'Sent At',
+                    value: formatEmailTimestamp(now)
+                },
+            ];
+            const greeting = signerName
+                ? `Hello ${signerName},`
+                : 'Hello,';
+            const { html, text } = generateEmailTemplate({
+                header: {
+                    title: 'Quote for Review',
+                    subtitle: quoteData.quoteNumber ? `Quote #${quoteData.quoteNumber}` : undefined,
+                    icon: '📝',
+                },
+                content: {
+                    greeting,
+                    message: 'You have been sent a quote for review and acceptance. Please review the details below and click the button to view the complete quote with line items.',
+                    infoBox: {
+                        title: 'Quote Summary',
+                        items: infoItems,
+                    },
+                    actionButton: {
+                        text: 'Review & Accept Quote',
+                        url: quoteViewUrl,
+                    },
+                    additionalInfo: 'Once you review the quote, you can accept it directly through the secure link above. If you have any questions, please contact the sender listed above.',
+                },
+            });
             await sendAuthEmail({
                 to: signerEmail,
-                subject: `Quote for Review: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData.title || 'Untitled'}`,
+                subject: `📝 Quote for Review ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : ''}: ${quoteData.title || 'Untitled'}`,
                 checkPreferences: false, // Don't check preferences for external signers
-                html: `
-          <h2>Quote for Review</h2>
-          <p>${signerName ? `Hello ${signerName},` : 'Hello,'}</p>
-          <p>You have been sent a quote for review and signing:</p>
-          <ul>
-            <li><strong>Quote:</strong> ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}</li>
-            <li><strong>Total:</strong> $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
-            <li><strong>Sent by:</strong> ${senderData.name || senderData.email}</li>
-            <li><strong>Sent at:</strong> ${now.toLocaleString()}</li>
-          </ul>
-          <p><a href="${quoteViewUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Review Quote</a></p>
-          <p>Or copy and paste this URL into your browser:</p>
-          <p><code>${quoteViewUrl}</code></p>
-        `,
-                text: `
-Quote for Review
-
-${signerName ? `Hello ${signerName},` : 'Hello,'}
-
-You have been sent a quote for review and signing:
-
-Quote: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}
-Total: $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-Sent by: ${senderData.name || senderData.email}
-Sent at: ${now.toLocaleString()}
-
-Review Quote: ${quoteViewUrl}
-        `,
+                html,
+                text,
             });
         }
         catch (emailErr) {

@@ -4,6 +4,7 @@ import { getDb } from '../db.js'
 import { sendAuthEmail } from '../auth/email.js'
 import { env } from '../env.js'
 import { requireAuth } from '../auth/rbac.js'
+import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js'
 
 type Payment = { amount: number; method: string; paidAt: Date }
 type Refund = { amount: number; reason: string; refundedAt: Date }
@@ -801,43 +802,79 @@ invoicesRouter.post('/:id/send-email', requireAuth, async (req, res) => {
     
     const now = new Date()
     try {
+      // Build invoice info items
+      const infoItems: Array<{ label: string; value: string }> = [
+        { 
+          label: 'Invoice Number', 
+          value: invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : 'N/A' 
+        },
+        { 
+          label: 'Invoice Title', 
+          value: invoiceData.title || 'Untitled' 
+        },
+        { 
+          label: 'Account', 
+          value: accountInfo?.name || accountInfo?.companyName || 'N/A' 
+        },
+        { 
+          label: 'Total Amount', 
+          value: `$${(invoiceData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+        },
+      ]
+      
+      if (invoiceData.dueDate) {
+        infoItems.push({ 
+          label: 'Due Date', 
+          value: new Date(invoiceData.dueDate).toLocaleDateString('en-US', { dateStyle: 'medium' }) 
+        })
+      }
+      
+      infoItems.push({ 
+        label: 'Status', 
+        value: (invoiceData.status || 'draft').toUpperCase() 
+      })
+      
+      infoItems.push({ 
+        label: 'Sent By', 
+        value: senderData.name || senderData.email 
+      })
+      
+      infoItems.push({ 
+        label: 'Sent At', 
+        value: formatEmailTimestamp(now) 
+      })
+      
+      const greeting = accountInfo?.primaryContactName 
+        ? `Hello ${accountInfo.primaryContactName},` 
+        : 'Hello,'
+      
+      const { html, text } = generateEmailTemplate({
+        header: {
+          title: 'Invoice',
+          subtitle: invoiceData.invoiceNumber ? `Invoice #${invoiceData.invoiceNumber}` : undefined,
+          icon: '💰',
+        },
+        content: {
+          greeting,
+          message: 'Please find your invoice details below. Click the button to view the full invoice and make payment if applicable.',
+          infoBox: {
+            title: 'Invoice Details',
+            items: infoItems,
+          },
+          actionButton: {
+            text: 'View Invoice',
+            url: invoiceViewUrl,
+          },
+          additionalInfo: 'If you have any questions about this invoice, please contact us at contactwcg@wolfconsultingnc.com. Thank you for your business!',
+        },
+      })
+      
       await sendAuthEmail({
         to: emailToSend,
-        subject: `Invoice: ${invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : invoiceData.title || 'Untitled'}`,
+        subject: `💰 Invoice ${invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : ''}: ${invoiceData.title || 'Untitled'}`,
         checkPreferences: false, // Don't check preferences for invoice emails
-        html: `
-          <h2>Invoice</h2>
-          <p>${accountInfo?.primaryContactName ? `Hello ${accountInfo.primaryContactName},` : 'Hello,'}</p>
-          <p>Please find your invoice below:</p>
-          <ul>
-            <li><strong>Invoice:</strong> ${invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : 'N/A'} - ${invoiceData.title || 'Untitled'}</li>
-            <li><strong>Account:</strong> ${accountInfo?.name || accountInfo?.companyName || 'N/A'}</li>
-            <li><strong>Total:</strong> $${(invoiceData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
-            ${invoiceData.dueDate ? `<li><strong>Due Date:</strong> ${new Date(invoiceData.dueDate).toLocaleDateString()}</li>` : ''}
-            <li><strong>Status:</strong> ${invoiceData.status || 'draft'}</li>
-            <li><strong>Sent by:</strong> ${senderData.name || senderData.email}</li>
-            <li><strong>Sent at:</strong> ${now.toLocaleString()}</li>
-          </ul>
-          <p><a href="${invoiceViewUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Invoice</a></p>
-          <p>Or copy and paste this URL into your browser:</p>
-          <p><code>${invoiceViewUrl}</code></p>
-        `,
-        text: `
-Invoice
-
-${accountInfo?.primaryContactName ? `Hello ${accountInfo.primaryContactName},` : 'Hello,'}
-
-Please find your invoice below:
-
-Invoice: ${invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : 'N/A'} - ${invoiceData.title || 'Untitled'}
-Account: ${accountInfo?.name || accountInfo?.companyName || 'N/A'}
-Total: $${(invoiceData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-${invoiceData.dueDate ? `Due Date: ${new Date(invoiceData.dueDate).toLocaleDateString()}\n` : ''}Status: ${invoiceData.status || 'draft'}
-Sent by: ${senderData.name || senderData.email}
-Sent at: ${now.toLocaleString()}
-
-View Invoice: ${invoiceViewUrl}
-        `,
+        html,
+        text,
       })
     } catch (emailErr) {
       console.error('Failed to send invoice email:', emailErr)
