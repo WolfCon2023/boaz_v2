@@ -4,6 +4,7 @@ import { ObjectId, Sort, SortDirection } from 'mongodb'
 import { requireAuth } from '../auth/rbac.js'
 import { sendAuthEmail } from '../auth/email.js'
 import { env } from '../env.js'
+import { createStandardEmailTemplate, createStandardTextEmail, createContentBox, createField } from '../lib/email-templates.js'
 
 export const quotesRouter = Router()
 
@@ -572,35 +573,56 @@ quotesRouter.post('/:id/request-approval', requireAuth, async (req, res) => {
     const approvalQueueUrl = `${baseUrl}/apps/crm/quotes/approval-queue`
     
     try {
-      await sendAuthEmail({
-        to: approverEmail,
-        subject: `Quote Approval Request: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData.title}`,
-        checkPreferences: true,
-        html: `
-          <h2>Quote Approval Request</h2>
-          <p>A new quote requires your approval:</p>
-          <ul>
-            <li><strong>Quote:</strong> ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}</li>
-            <li><strong>Requested by:</strong> ${requesterData.name || requesterData.email}</li>
-            <li><strong>Total:</strong> $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
-            <li><strong>Requested:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
-          </ul>
-          <p><a href="${approvalQueueUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Approval Queue</a></p>
-          <p>Or copy and paste this URL into your browser:</p>
-          <p><code>${approvalQueueUrl}</code></p>
-        `,
-        text: `
-Quote Approval Request
+      const quoteDetails = `
+        <div style="font-size: 22px; font-weight: bold; color: #667eea; margin-bottom: 20px;">
+          Quote ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : ''} – ${quoteData.title || 'Untitled'}
+        </div>
+        ${createField('Requested By', requesterData.name || requesterData.email)}
+        ${createField('Total', `$${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+        ${quoteData.accountName ? createField('Account', quoteData.accountName) : ''}
+      `
 
+      const htmlBody = createStandardEmailTemplate({
+        title: 'Quote Approval Request',
+        emoji: '📝',
+        subtitle: `Quote ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : ''}`,
+        bodyContent: `
+          <p>A new quote requires your approval:</p>
+          ${createContentBox(quoteDetails)}
+          <p style="font-size: 13px; color: #6b7280; margin-top: 20px;">
+            Review all pending approval requests in your approval queue.
+          </p>
+        `,
+        buttonText: 'View Approval Queue',
+        buttonUrl: approvalQueueUrl,
+        footerText: 'Please review and approve or reject this quote at your earliest convenience.',
+      })
+
+      const textBody = createStandardTextEmail({
+        title: 'Quote Approval Request',
+        emoji: '📝',
+        subtitle: `Quote ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : ''}`,
+        bodyContent: `
 A new quote requires your approval:
 
 Quote: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData.title || 'Untitled'}
-Requested by: ${requesterData.name || requesterData.email}
+Requested By: ${requesterData.name || requesterData.email}
 Total: $${(quoteData.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-Requested: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
+${quoteData.accountName ? `Account: ${quoteData.accountName}\n` : ''}
 
-View Approval Queue: ${approvalQueueUrl}
+Review all pending approval requests in your approval queue.
         `,
+        buttonText: 'View Approval Queue',
+        buttonUrl: approvalQueueUrl,
+        footerText: 'Please review and approve or reject this quote at your earliest convenience.',
+      })
+
+      await sendAuthEmail({
+        to: approverEmail,
+        subject: `📝 Quote Approval Request: ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData.title}`,
+        checkPreferences: true,
+        html: htmlBody,
+        text: textBody,
       })
     } catch (emailErr) {
       console.error('Failed to send approval request email:', emailErr)
@@ -824,31 +846,61 @@ quotesRouter.post('/:id/approve', requireAuth, async (req, res) => {
     try {
       const quote = await db.collection('quotes').findOne({ _id: quoteId })
       const quoteData = quote as any
-      
-      await sendAuthEmail({
-        to: approvalRequest.requesterEmail,
-        subject: `Quote Approved: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData?.title || 'Untitled'}`,
-        checkPreferences: true,
-        html: `
-          <h2>Quote Approved</h2>
-          <p>Your quote has been approved:</p>
-          <ul>
-            <li><strong>Quote:</strong> ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}</li>
-            <li><strong>Approved by:</strong> ${userData.name || userData.email}</li>
-            <li><strong>Approved at:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
-            ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
-          </ul>
-        `,
-        text: `
-Quote Approved
+      const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+      const quoteUrl = `${baseUrl}/apps/crm/quotes?quote=${quoteId.toHexString()}`
 
-Your quote has been approved:
+      const quoteDetails = `
+        <div style="font-size: 22px; font-weight: bold; color: #10b981; margin-bottom: 20px;">
+          ✅ Quote ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : ''} – ${quoteData?.title || 'Untitled'}
+        </div>
+        ${createField('Approved By', userData.name || userData.email)}
+        ${createField('Total', `$${(quoteData?.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+        ${quoteData?.accountName ? createField('Account', quoteData.accountName) : ''}
+        ${reviewNotes ? createField('Approval Notes', reviewNotes) : ''}
+      `
+
+      const htmlBody = createStandardEmailTemplate({
+        title: 'Quote Approved',
+        emoji: '✅',
+        subtitle: `Quote ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : ''}`,
+        bodyContent: `
+          <p>Great news! Your quote has been approved:</p>
+          ${createContentBox(quoteDetails)}
+          <p style="font-size: 13px; color: #6b7280; margin-top: 20px;">
+            You can now send this quote to your customer.
+          </p>
+        `,
+        buttonText: 'View Quote',
+        buttonUrl: quoteUrl,
+        footerText: 'Your quote has been approved and is ready to be sent.',
+      })
+
+      const textBody = createStandardTextEmail({
+        title: 'Quote Approved',
+        emoji: '✅',
+        subtitle: `Quote ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : ''}`,
+        bodyContent: `
+Great news! Your quote has been approved:
 
 Quote: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : 'N/A'} - ${quoteData?.title || 'Untitled'}
-Approved by: ${userData.name || userData.email}
-Approved at: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
-${reviewNotes ? `Notes: ${reviewNotes}` : ''}
+Approved By: ${userData.name || userData.email}
+Total: $${(quoteData?.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+${quoteData?.accountName ? `Account: ${quoteData.accountName}\n` : ''}
+${reviewNotes ? `Approval Notes: ${reviewNotes}\n` : ''}
+
+You can now send this quote to your customer.
         `,
+        buttonText: 'View Quote',
+        buttonUrl: quoteUrl,
+        footerText: 'Your quote has been approved and is ready to be sent.',
+      })
+
+      await sendAuthEmail({
+        to: approvalRequest.requesterEmail,
+        subject: `✅ Quote Approved: ${quoteData?.quoteNumber ? `#${quoteData.quoteNumber}` : quoteData?.title || 'Untitled'}`,
+        checkPreferences: true,
+        html: htmlBody,
+        text: textBody,
       })
     } catch (emailErr) {
       console.error('Failed to send approval email:', emailErr)

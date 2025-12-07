@@ -5,6 +5,7 @@ import { ObjectId } from 'mongodb';
 import { requireAuth, requirePermission } from '../auth/rbac.js';
 import { sendAuthEmail } from '../auth/email.js';
 import { env } from '../env.js';
+import { createStandardEmailTemplate, createStandardTextEmail, createContentBox, createField } from '../lib/email-templates.js';
 export const dealsRouter = Router();
 // Debug middleware to log all requests to deals router
 dealsRouter.use((req, _res, next) => {
@@ -426,40 +427,55 @@ dealsRouter.post('/:id/request-approval', requireAuth, async (req, res) => {
         const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
         const approvalQueueUrl = `${baseUrl}/apps/crm/deals/approval-queue`;
         try {
-            await sendAuthEmail({
-                to: approverEmail,
-                subject: `Deal Approval Request: ${dealData.dealNumber ? `#${dealData.dealNumber}` : dealData.title}`,
-                checkPreferences: true,
-                html: `
-          <h2>Deal Approval Request</h2>
+            const dealDetails = `
+        <div style="font-size: 22px; font-weight: bold; color: #667eea; margin-bottom: 20px;">
+          Deal ${dealData.dealNumber ? `#${dealData.dealNumber}` : ''} – ${dealData.title || 'Untitled'}
+        </div>
+        ${createField('Requested By', requesterData.name || requesterData.email)}
+        ${createField('Amount', `$${(dealData.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+        ${dealData.stage ? createField('Stage', dealData.stage) : ''}
+        ${dealData.accountName ? createField('Account', dealData.accountName) : ''}
+      `;
+            const htmlBody = createStandardEmailTemplate({
+                title: 'Deal Approval Request',
+                emoji: '💼',
+                subtitle: `Deal ${dealData.dealNumber ? `#${dealData.dealNumber}` : ''}`,
+                bodyContent: `
           <p>A new deal requires your approval:</p>
-          <ul>
-            <li><strong>Deal:</strong> ${dealData.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData.title || 'Untitled'}</li>
-            <li><strong>Requested by:</strong> ${requesterData.name || requesterData.email}</li>
-            <li><strong>Amount:</strong> $${(dealData.amount || 0).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                })}</li>
-            <li><strong>Requested:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
-          </ul>
-          <p><a href="${approvalQueueUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">View Deal Approval Queue</a></p>
-          <p>Or copy and paste this URL into your browser:</p>
-          <p><code>${approvalQueueUrl}</code></p>
+          ${createContentBox(dealDetails)}
+          <p style="font-size: 13px; color: #6b7280; margin-top: 20px;">
+            Review all pending approval requests in your approval queue.
+          </p>
         `,
-                text: `Deal Approval Request
-
+                buttonText: 'View Approval Queue',
+                buttonUrl: approvalQueueUrl,
+                footerText: 'Please review and approve or reject this deal at your earliest convenience.',
+            });
+            const textBody = createStandardTextEmail({
+                title: 'Deal Approval Request',
+                emoji: '💼',
+                subtitle: `Deal ${dealData.dealNumber ? `#${dealData.dealNumber}` : ''}`,
+                bodyContent: `
 A new deal requires your approval:
 
 Deal: ${dealData.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData.title || 'Untitled'}
-Requested by: ${requesterData.name || requesterData.email}
-Amount: $${(dealData.amount || 0).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                })}
-Requested: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
+Requested By: ${requesterData.name || requesterData.email}
+Amount: $${(dealData.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+${dealData.stage ? `Stage: ${dealData.stage}\n` : ''}
+${dealData.accountName ? `Account: ${dealData.accountName}\n` : ''}
 
-View Deal Approval Queue: ${approvalQueueUrl}
+Review all pending approval requests in your approval queue.
         `,
+                buttonText: 'View Approval Queue',
+                buttonUrl: approvalQueueUrl,
+                footerText: 'Please review and approve or reject this deal at your earliest convenience.',
+            });
+            await sendAuthEmail({
+                to: approverEmail,
+                subject: `💼 Deal Approval Request: ${dealData.dealNumber ? `#${dealData.dealNumber}` : dealData.title}`,
+                checkPreferences: true,
+                html: htmlBody,
+                text: textBody,
             });
         }
         catch (emailErr) {
@@ -620,29 +636,57 @@ dealsRouter.post('/:id/approve', requireAuth, async (req, res) => {
         try {
             const deal = await db.collection('deals').findOne({ _id: dealId });
             const dealData = deal;
-            await sendAuthEmail({
-                to: approvalRequest.requesterEmail,
-                subject: `Deal Approved: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : dealData?.title || 'Untitled'}`,
-                checkPreferences: true,
-                html: `
-          <h2>Deal Approved</h2>
-          <p>Your deal has been approved:</p>
-          <ul>
-            <li><strong>Deal:</strong> ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData?.title || 'Untitled'}</li>
-            <li><strong>Approved by:</strong> ${userData.name || userData.email}</li>
-            <li><strong>Approved at:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
-            ${reviewNotes ? `<li><strong>Notes:</strong> ${reviewNotes}</li>` : ''}
-          </ul>
+            const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
+            const dealUrl = `${baseUrl}/apps/crm/deals?deal=${dealId.toHexString()}`;
+            const dealDetails = `
+        <div style="font-size: 22px; font-weight: bold; color: #10b981; margin-bottom: 20px;">
+          ✅ Deal ${dealData?.dealNumber ? `#${dealData.dealNumber}` : ''} – ${dealData?.title || 'Untitled'}
+        </div>
+        ${createField('Approved By', userData.name || userData.email)}
+        ${createField('Amount', `$${(dealData?.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+        ${dealData?.stage ? createField('Stage', dealData.stage) : ''}
+        ${reviewNotes ? createField('Approval Notes', reviewNotes) : ''}
+      `;
+            const htmlBody = createStandardEmailTemplate({
+                title: 'Deal Approved',
+                emoji: '✅',
+                subtitle: `Deal ${dealData?.dealNumber ? `#${dealData.dealNumber}` : ''}`,
+                bodyContent: `
+          <p>Great news! Your deal has been approved:</p>
+          ${createContentBox(dealDetails)}
+          <p style="font-size: 13px; color: #6b7280; margin-top: 20px;">
+            This deal is now in "Approved / Ready for Signature" stage.
+          </p>
         `,
-                text: `Deal Approved
-
-Your deal has been approved:
+                buttonText: 'View Deal',
+                buttonUrl: dealUrl,
+                footerText: 'Your deal has been approved and is ready to move forward.',
+            });
+            const textBody = createStandardTextEmail({
+                title: 'Deal Approved',
+                emoji: '✅',
+                subtitle: `Deal ${dealData?.dealNumber ? `#${dealData.dealNumber}` : ''}`,
+                bodyContent: `
+Great news! Your deal has been approved:
 
 Deal: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData?.title || 'Untitled'}
-Approved by: ${userData.name || userData.email}
-Approved at: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
-${reviewNotes ? `Notes: ${reviewNotes}` : ''}
+Approved By: ${userData.name || userData.email}
+Amount: $${(dealData?.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+${dealData?.stage ? `Stage: ${dealData.stage}\n` : ''}
+${reviewNotes ? `Approval Notes: ${reviewNotes}\n` : ''}
+
+This deal is now in "Approved / Ready for Signature" stage.
         `,
+                buttonText: 'View Deal',
+                buttonUrl: dealUrl,
+                footerText: 'Your deal has been approved and is ready to move forward.',
+            });
+            await sendAuthEmail({
+                to: approvalRequest.requesterEmail,
+                subject: `✅ Deal Approved: ${dealData?.dealNumber ? `#${dealData.dealNumber}` : dealData?.title || 'Untitled'}`,
+                checkPreferences: true,
+                html: htmlBody,
+                text: textBody,
             });
         }
         catch (emailErr) {

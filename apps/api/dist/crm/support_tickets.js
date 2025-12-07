@@ -3,6 +3,7 @@ import { getDb, getNextSequence } from '../db.js';
 import { ObjectId } from 'mongodb';
 import { sendAuthEmail } from '../auth/email.js';
 import { env } from '../env.js';
+import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
 export const supportTicketsRouter = Router();
 // Helper to extract email from assignee string (format: "Name <email>" or just "email")
 function extractAssigneeEmail(assignee) {
@@ -21,12 +22,6 @@ async function sendTicketNotification(db, ticket, assigneeEmail) {
     try {
         const webUrl = env.ORIGIN.split(',')[0].trim(); // Use first origin if multiple
         const ticketUrl = `${webUrl}/apps/crm/support/tickets?ticket=${ticket._id?.toHexString()}`;
-        const now = new Date();
-        const timestamp = now.toLocaleString('en-US', {
-            timeZone: 'America/New_York',
-            dateStyle: 'medium',
-            timeStyle: 'short',
-        });
         // Get account and contact info if available
         let accountName = '';
         let contactName = '';
@@ -40,124 +35,56 @@ async function sendTicketNotification(db, ticket, assigneeEmail) {
             if (contact)
                 contactName = contact.name || contact.email || '';
         }
-        const htmlBody = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
-          .ticket-box { background: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; }
-          .label { font-weight: bold; color: #667eea; margin-top: 15px; }
-          .value { margin-top: 5px; }
-          .priority { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-          .priority-low { background: #e3f2fd; color: #1976d2; }
-          .priority-normal { background: #fff3e0; color: #f57c00; }
-          .priority-high { background: #ffebee; color: #c62828; }
-          .priority-critical { background: #b71c1c; color: white; }
-          .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 6px; margin-top: 20px; }
-          .footer { text-align: center; color: #666; font-size: 12px; margin-top: 30px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1 style="margin: 0;">🎟️ New Support Ticket Assigned</h1>
-            <p style="margin: 10px 0 0 0; opacity: 0.9;">Ticket #${ticket.ticketNumber || 'N/A'}</p>
-          </div>
-          <div class="content">
-            <p>A new support ticket has been assigned to you:</p>
-            
-            <div class="ticket-box">
-              <div class="label">Ticket Number:</div>
-              <div class="value" style="font-size: 24px; font-weight: bold; color: #667eea;">#${ticket.ticketNumber || 'N/A'}</div>
-              
-              <div class="label">Subject:</div>
-              <div class="value" style="font-size: 18px;">${ticket.shortDescription}</div>
-              
-              ${ticket.description ? `
-                <div class="label">Description:</div>
-                <div class="value">${ticket.description.replace(/\n/g, '<br>')}</div>
-              ` : ''}
-              
-              <div class="label">Priority:</div>
-              <div class="value">
-                <span class="priority priority-${ticket.priority || 'normal'}">
-                  ${(ticket.priority || 'normal').toUpperCase()}
-                </span>
-              </div>
-              
-              <div class="label">Status:</div>
-              <div class="value">${(ticket.status || 'open').toUpperCase()}</div>
-              
-              ${accountName ? `
-                <div class="label">Account:</div>
-                <div class="value">${accountName}</div>
-              ` : ''}
-              
-              ${contactName ? `
-                <div class="label">Contact:</div>
-                <div class="value">${contactName}</div>
-              ` : ''}
-              
-              ${ticket.requesterName || ticket.requesterEmail ? `
-                <div class="label">Requester:</div>
-                <div class="value">
-                  ${ticket.requesterName || ''} ${ticket.requesterEmail ? `&lt;${ticket.requesterEmail}&gt;` : ''}
-                </div>
-              ` : ''}
-              
-              ${ticket.slaDueAt ? `
-                <div class="label">SLA Due:</div>
-                <div class="value">${new Date(ticket.slaDueAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</div>
-              ` : ''}
-              
-              <div class="label">Created:</div>
-              <div class="value">${timestamp}</div>
-            </div>
-            
-            <div style="text-align: center;">
-              <a href="${ticketUrl}" class="button">View Ticket</a>
-            </div>
-            
-            <div class="footer">
-              <p>This ticket has been assigned to you in the BOAZ-OS Help Desk.</p>
-              <p>© ${now.getFullYear()} Wolf Consulting Group, LLC. All rights reserved.</p>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-        const textBody = `
-New Support Ticket Assigned
-
-Ticket #${ticket.ticketNumber || 'N/A'}
-
-Subject: ${ticket.shortDescription}
-
-${ticket.description ? `Description:\n${ticket.description}\n\n` : ''}
-Priority: ${(ticket.priority || 'normal').toUpperCase()}
-Status: ${(ticket.status || 'open').toUpperCase()}
-${accountName ? `Account: ${accountName}\n` : ''}
-${contactName ? `Contact: ${contactName}\n` : ''}
-${ticket.requesterName || ticket.requesterEmail ? `Requester: ${ticket.requesterName || ''} ${ticket.requesterEmail ? `<${ticket.requesterEmail}>` : ''}\n` : ''}
-${ticket.slaDueAt ? `SLA Due: ${new Date(ticket.slaDueAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}\n` : ''}
-Created: ${timestamp}
-
-View ticket: ${ticketUrl}
-
-This ticket has been assigned to you in the BOAZ-OS Help Desk.
-
-© ${now.getFullYear()} Wolf Consulting Group, LLC. All rights reserved.
-    `;
+        // Build info box items
+        const infoItems = [
+            { label: 'Ticket Number', value: `#${ticket.ticketNumber || 'N/A'}` },
+            { label: 'Subject', value: ticket.shortDescription },
+        ];
+        if (ticket.description) {
+            infoItems.push({ label: 'Description', value: ticket.description });
+        }
+        const priorityBadge = (ticket.priority || 'normal').toUpperCase();
+        infoItems.push({ label: 'Priority', value: priorityBadge });
+        infoItems.push({ label: 'Status', value: (ticket.status || 'open').toUpperCase() });
+        if (accountName) {
+            infoItems.push({ label: 'Account', value: accountName });
+        }
+        if (contactName) {
+            infoItems.push({ label: 'Contact', value: contactName });
+        }
+        if (ticket.requesterName || ticket.requesterEmail) {
+            const requester = `${ticket.requesterName || ''} ${ticket.requesterEmail ? `<${ticket.requesterEmail}>` : ''}`.trim();
+            infoItems.push({ label: 'Requester', value: requester });
+        }
+        if (ticket.slaDueAt) {
+            infoItems.push({ label: 'SLA Due', value: formatEmailTimestamp(new Date(ticket.slaDueAt)) });
+        }
+        infoItems.push({ label: 'Created', value: formatEmailTimestamp(new Date(ticket.createdAt)) });
+        // Generate email using unified template
+        const { html, text } = generateEmailTemplate({
+            header: {
+                title: 'Support Ticket Assigned',
+                subtitle: `Ticket #${ticket.ticketNumber || 'N/A'}`,
+                icon: '🎟️',
+            },
+            content: {
+                message: 'A new support ticket has been assigned to you. Please review the details below and take appropriate action.',
+                infoBox: {
+                    title: 'Ticket Details',
+                    items: infoItems,
+                },
+                actionButton: {
+                    text: 'View Ticket',
+                    url: ticketUrl,
+                },
+                additionalInfo: 'This ticket has been assigned to you in the BOAZ-OS Help Desk. Click the button above to view full details and respond to the ticket.',
+            },
+        });
         await sendAuthEmail({
             to: assigneeEmail,
             subject: `🎟️ Support Ticket #${ticket.ticketNumber || 'N/A'} Assigned: ${ticket.shortDescription}`,
-            html: htmlBody,
-            text: textBody,
+            html,
+            text,
         });
         console.log(`✅ Ticket notification sent to ${assigneeEmail} for ticket #${ticket.ticketNumber}`);
     }

@@ -7,6 +7,7 @@ import { sendAuthEmail } from '../auth/email.js';
 import { env } from '../env.js';
 import { vendorsRouter } from './vendors.js';
 import { revenueIntelligenceRouter } from './revenue_intelligence.js';
+import { createStandardEmailTemplate, createStandardTextEmail, createContentBox, createField } from '../lib/email-templates.js';
 export const crmRouter = Router();
 // Helper function to add history entry
 async function addContactHistory(db, contactId, eventType, description, userId, userName, userEmail, oldValue, newValue, metadata) {
@@ -249,35 +250,55 @@ crmRouter.post('/deals/:id/request-approval', requireAuth, async (req, res) => {
         const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
         const approvalQueueUrl = `${baseUrl}/apps/crm/deals/approval-queue`;
         try {
-            await sendAuthEmail({
-                to: approverEmail,
-                subject: `Deal Approval Request: ${dealData.dealNumber ? `#${dealData.dealNumber}` : dealData.title}`,
-                checkPreferences: true,
-                html: `
-          <h2>Deal Approval Request</h2>
+            const dealDetails = `
+        <div style="font-size: 22px; font-weight: bold; color: #667eea; margin-bottom: 20px;">
+          Deal ${dealData.dealNumber ? `#${dealData.dealNumber}` : ''} – ${dealData.title || 'Untitled'}
+        </div>
+        ${createField('Requested By', requesterData.name || requesterData.email)}
+        ${createField('Amount', `$${(dealData.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)}
+        ${dealData.stage ? createField('Stage', dealData.stage) : ''}
+        ${dealData.accountName ? createField('Account', dealData.accountName) : ''}
+      `;
+            const htmlBody = createStandardEmailTemplate({
+                title: 'Deal Approval Request',
+                emoji: '💼',
+                subtitle: `Deal ${dealData.dealNumber ? `#${dealData.dealNumber}` : ''}`,
+                bodyContent: `
           <p>A new deal requires your approval:</p>
-          <ul>
-            <li><strong>Deal:</strong> ${dealData.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData.title || 'Untitled'}</li>
-            <li><strong>Requested by:</strong> ${requesterData.name || requesterData.email}</li>
-            <li><strong>Amount:</strong> $${(dealData.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</li>
-            <li><strong>Requested:</strong> ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}</li>
-          </ul>
-          <p><a href="${approvalQueueUrl}" style="display:inline-block;padding:10px 20px;background-color:#007bff;color:#ffffff;text-decoration:none;border-radius:5px;">View Deal Approval Queue</a></p>
-          <p>Or copy and paste this URL into your browser:</p>
-          <p><code>${approvalQueueUrl}</code></p>
+          ${createContentBox(dealDetails)}
+          <p style="font-size: 13px; color: #6b7280; margin-top: 20px;">
+            Review all pending approval requests in your approval queue.
+          </p>
         `,
-                text: `
-Deal Approval Request
-
+                buttonText: 'View Approval Queue',
+                buttonUrl: approvalQueueUrl,
+                footerText: 'Please review and approve or reject this deal at your earliest convenience.',
+            });
+            const textBody = createStandardTextEmail({
+                title: 'Deal Approval Request',
+                emoji: '💼',
+                subtitle: `Deal ${dealData.dealNumber ? `#${dealData.dealNumber}` : ''}`,
+                bodyContent: `
 A new deal requires your approval:
 
 Deal: ${dealData.dealNumber ? `#${dealData.dealNumber}` : 'N/A'} - ${dealData.title || 'Untitled'}
-Requested by: ${requesterData.name || requesterData.email}
+Requested By: ${requesterData.name || requesterData.email}
 Amount: $${(dealData.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-Requested: ${now.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}
+${dealData.stage ? `Stage: ${dealData.stage}\n` : ''}
+${dealData.accountName ? `Account: ${dealData.accountName}\n` : ''}
 
-View Deal Approval Queue: ${approvalQueueUrl}
+Review all pending approval requests in your approval queue.
         `,
+                buttonText: 'View Approval Queue',
+                buttonUrl: approvalQueueUrl,
+                footerText: 'Please review and approve or reject this deal at your earliest convenience.',
+            });
+            await sendAuthEmail({
+                to: approverEmail,
+                subject: `💼 Deal Approval Request: ${dealData.dealNumber ? `#${dealData.dealNumber}` : dealData.title}`,
+                checkPreferences: true,
+                html: htmlBody,
+                text: textBody,
             });
         }
         catch (err) {
