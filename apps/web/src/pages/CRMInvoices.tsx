@@ -8,6 +8,7 @@ import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
 import { Plus, X, Package, Send, Printer } from 'lucide-react'
+import { CustomerPortalAccessWidget } from '@/components/CustomerPortalAccessWidget'
 
 type Invoice = { 
   _id: string
@@ -1421,6 +1422,15 @@ export default function CRMInvoices() {
                     {accounts.map((a) => (<option key={a._id} value={a._id}>{(a.accountNumber ?? '-')} - {a.name ?? 'Account'}</option>))}
                   </select>
                 </label>
+
+                {/* Customer Portal Access */}
+                <div className="col-span-full">
+                  <CustomerPortalAccessWidget 
+                    accountId={editing.accountId}
+                    showInline={true}
+                  />
+                </div>
+
                 <div className="col-span-full mt-2 flex items-center gap-2">
                   <input id="payAmount" type="number" step="0.01" placeholder="Payment amount" className="w-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => {

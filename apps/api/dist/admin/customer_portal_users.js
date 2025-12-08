@@ -17,6 +17,36 @@ import { env } from '../env.js';
 import { generateEmailTemplate } from '../lib/email-templates.js';
 import { sendAuthEmail } from '../auth/email.js';
 export const adminCustomerPortalUsersRouter = Router();
+// GET /api/admin/customer-portal-users/by-account/:accountId - Get portal users for an account
+adminCustomerPortalUsersRouter.get('/by-account/:accountId', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const { accountId } = req.params;
+        if (!ObjectId.isValid(accountId)) {
+            return res.status(400).json({ data: null, error: 'invalid_account_id' });
+        }
+        const users = await db.collection('customer_portal_users')
+            .find({
+            accountId: new ObjectId(accountId),
+            active: { $ne: false }
+        })
+            .sort({ name: 1 })
+            .toArray();
+        const formattedUsers = users.map((user) => ({
+            id: user._id.toHexString(),
+            email: user.email,
+            name: user.name,
+            emailVerified: user.emailVerified || false,
+        }));
+        res.json({ data: formattedUsers, error: null });
+    }
+    catch (err) {
+        console.error('Get portal users by account error:', err);
+        res.status(500).json({ data: null, error: err.message || 'failed_to_get_users' });
+    }
+});
 // GET /api/admin/customer-portal-users - List all customer portal users
 adminCustomerPortalUsersRouter.get('/', async (req, res) => {
     const db = await getDb();
@@ -89,6 +119,98 @@ adminCustomerPortalUsersRouter.get('/', async (req, res) => {
     catch (err) {
         console.error('Get customer portal users error:', err);
         res.status(500).json({ data: null, error: err.message || 'failed_to_get_users' });
+    }
+});
+// POST /api/admin/customer-portal-users/quick-invite - Quick invite from quote/invoice
+adminCustomerPortalUsersRouter.post('/quick-invite', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const { email, name, accountId } = req.body;
+        if (!email || !name || !accountId) {
+            return res.status(400).json({ data: null, error: 'missing_required_fields' });
+        }
+        if (!ObjectId.isValid(accountId)) {
+            return res.status(400).json({ data: null, error: 'invalid_account_id' });
+        }
+        // Check if email already exists
+        const existingUser = await db.collection('customer_portal_users').findOne({ email: email.toLowerCase() });
+        if (existingUser) {
+            // If user exists but not linked to this account, link them
+            if (!existingUser.accountId || existingUser.accountId.toHexString() !== accountId) {
+                await db.collection('customer_portal_users').updateOne({ _id: existingUser._id }, { $set: { accountId: new ObjectId(accountId) } });
+            }
+            return res.json({
+                data: {
+                    id: existingUser._id.toHexString(),
+                    email: existingUser.email,
+                    name: existingUser.name,
+                    existed: true
+                },
+                error: null
+            });
+        }
+        // Generate temporary password
+        const tempPassword = crypto.randomBytes(8).toString('hex');
+        const passwordHash = await bcrypt.hash(tempPassword, 10);
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        // Create user
+        const newUser = {
+            email: email.toLowerCase(),
+            passwordHash,
+            name,
+            company: null,
+            phone: null,
+            accountId: new ObjectId(accountId),
+            emailVerified: false,
+            verificationToken,
+            resetToken: null,
+            resetTokenExpiry: null,
+            active: true,
+            createdAt: new Date(),
+            lastLoginAt: null,
+        };
+        const result = await db.collection('customer_portal_users').insertOne(newUser);
+        // Send welcome email with password setup link
+        const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
+        const verifyUrl = `${baseUrl}/customer/verify-email?token=${verificationToken}`;
+        const { html, text } = generateEmailTemplate({
+            header: {
+                title: 'You\'ve Been Invited!',
+                subtitle: 'Customer Portal Access',
+                icon: '🎉',
+            },
+            content: {
+                greeting: `Hello ${name},`,
+                message: 'You\'ve been invited to access the Customer Portal where you can view invoices, support tickets, and quotes. Click below to set up your account.',
+                actionButton: {
+                    text: 'Activate My Account',
+                    url: verifyUrl,
+                },
+                additionalInfo: 'After activating your account, you can set your own password and access your portal.',
+            },
+        });
+        await sendAuthEmail({
+            to: email,
+            subject: 'Welcome to Customer Portal - Activate Your Account',
+            html,
+            text,
+            checkPreferences: false,
+        });
+        res.json({
+            data: {
+                id: result.insertedId.toHexString(),
+                email: newUser.email,
+                name: newUser.name,
+                existed: false
+            },
+            error: null
+        });
+    }
+    catch (err) {
+        console.error('Quick invite error:', err);
+        res.status(500).json({ data: null, error: err.message || 'failed_to_invite' });
     }
 });
 // POST /api/admin/customer-portal-users - Create new customer user

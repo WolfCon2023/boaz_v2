@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { Plus, X, Package, Send } from 'lucide-react'
 import { DocumentsList } from '@/components/DocumentsList'
+import { CustomerPortalAccessWidget } from '@/components/CustomerPortalAccessWidget'
 
 type Quote = {
   _id: string
@@ -1326,13 +1327,26 @@ export default function CRMQuotes() {
                   </>
                 )}
                 <label className="col-span-full text-sm">Account
-                  <select name="accountId" className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+                  <select 
+                    name="accountId" 
+                    id="quote-account-select"
+                    className="ml-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold"
+                  >
                     <option value="">(no change)</option>
                     {accounts.map((a) => (
                       <option key={a._id} value={a._id}>{(a.accountNumber ?? '-')} - {a.name ?? 'Account'}</option>
                     ))}
                   </select>
                 </label>
+                
+                {/* Customer Portal Access */}
+                <div className="col-span-full">
+                  <CustomerPortalAccessWidget 
+                    accountId={editing.accountId}
+                    showInline={true}
+                  />
+                </div>
+
                 <div className="flex gap-2">
                   <select
                     name="approver"
