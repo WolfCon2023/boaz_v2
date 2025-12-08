@@ -405,36 +405,34 @@ customerPortalDataRouter.get('/dashboard', async (req: any, res) => {
   try {
     const { accountId, email } = req.customerAuth
 
-    if (!accountId) {
-      return res.json({ 
-        data: { 
-          invoices: { total: 0, unpaid: 0, overdue: 0 },
-          tickets: { total: 0, open: 0 },
-          quotes: { total: 0, pending: 0 },
-        }, 
-        error: null 
-      })
+    // Get invoice stats (requires account link)
+    let invoiceStats = { total: 0, unpaid: 0, overdue: 0 }
+    if (accountId) {
+      const invoices = await db.collection('invoices')
+        .find({ accountId: new ObjectId(accountId) })
+        .toArray()
+      
+      const now = new Date()
+      invoiceStats = {
+        total: invoices.length,
+        unpaid: invoices.filter((inv: any) => inv.status !== 'paid' && inv.status !== 'void').length,
+        overdue: invoices.filter((inv: any) => 
+          inv.status !== 'paid' && 
+          inv.status !== 'void' && 
+          inv.dueDate && 
+          new Date(inv.dueDate) < now
+        ).length,
+      }
     }
 
-    // Get invoice stats
-    const invoices = await db.collection('invoices')
-      .find({ accountId: new ObjectId(accountId) })
-      .toArray()
+    // Get ticket stats (can use accountId OR email)
+    const ticketQuery: any = {}
+    if (accountId) {
+      ticketQuery.accountId = new ObjectId(accountId)
+    } else if (email) {
+      ticketQuery.requesterEmail = email
+    }
     
-    const now = new Date()
-    const invoiceStats = {
-      total: invoices.length,
-      unpaid: invoices.filter((inv: any) => inv.status !== 'paid' && inv.status !== 'void').length,
-      overdue: invoices.filter((inv: any) => 
-        inv.status !== 'paid' && 
-        inv.status !== 'void' && 
-        inv.dueDate && 
-        new Date(inv.dueDate) < now
-      ).length,
-    }
-
-    // Get ticket stats
-    const ticketQuery: any = { accountId: new ObjectId(accountId) }
     const tickets = await db.collection('support_tickets')
       .find(ticketQuery)
       .toArray()
@@ -444,14 +442,17 @@ customerPortalDataRouter.get('/dashboard', async (req: any, res) => {
       open: tickets.filter((t: any) => t.status === 'open' || t.status === 'in_progress').length,
     }
 
-    // Get quote stats
-    const quotes = await db.collection('quotes')
-      .find({ accountId: new ObjectId(accountId) })
-      .toArray()
-    
-    const quoteStats = {
-      total: quotes.length,
-      pending: quotes.filter((q: any) => q.status === 'sent' || q.status === 'viewed').length,
+    // Get quote stats (requires account link)
+    let quoteStats = { total: 0, pending: 0 }
+    if (accountId) {
+      const quotes = await db.collection('quotes')
+        .find({ accountId: new ObjectId(accountId) })
+        .toArray()
+      
+      quoteStats = {
+        total: quotes.length,
+        pending: quotes.filter((q: any) => q.status === 'sent' || q.status === 'viewed').length,
+      }
     }
 
     res.json({
