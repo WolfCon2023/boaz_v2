@@ -443,10 +443,11 @@ export default function AdminCustomerPortalUsers() {
 
       {/* Create User Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
-          <div className="relative w-full max-w-3xl mx-auto my-8 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 sm:p-8 shadow-xl">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Create Customer User</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-6 lg:p-8">
+          <div className="relative w-full max-w-3xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl">
+            <div className="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Create Customer User</h3>
               <button
                 onClick={() => setShowCreateModal(false)}
                 className="rounded-lg p-1 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
@@ -563,16 +564,18 @@ export default function AdminCustomerPortalUsers() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* Edit User Modal */}
       {showEditModal && editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
-          <div className="relative w-full max-w-3xl mx-auto my-8 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 sm:p-8 shadow-xl">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Edit Customer User</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-6 lg:p-8">
+          <div className="relative w-full max-w-3xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl">
+            <div className="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Edit Customer User</h3>
               <button
                 onClick={() => {
                   setShowEditModal(false)
@@ -673,6 +676,7 @@ export default function AdminCustomerPortalUsers() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
