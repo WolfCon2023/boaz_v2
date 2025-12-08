@@ -59,6 +59,11 @@ import TermsReview from '@/pages/TermsReview'
 import QuoteView from '@/pages/QuoteView'
 import SurveyRespond from '@/pages/SurveyRespond'
 import QuoteAcceptanceQueue from '@/pages/QuoteAcceptanceQueue'
+import CustomerPortalLogin from '@/pages/CustomerPortalLogin'
+import CustomerPortalDashboard from '@/pages/CustomerPortalDashboard'
+import CustomerPortalInvoices from '@/pages/CustomerPortalInvoices'
+import CustomerPortalTickets from '@/pages/CustomerPortalTickets'
+import CustomerPortalQuotes from '@/pages/CustomerPortalQuotes'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
 
 export const router = createBrowserRouter([
@@ -171,6 +176,27 @@ export const router = createBrowserRouter([
   {
     path: '/change-password',
     element: <ChangePassword />,
+  },
+  // Customer Portal (external customer access - no PublicShell for full-page experience)
+  {
+    path: '/portal/login',
+    element: <CustomerPortalLogin />,
+  },
+  {
+    path: '/portal/dashboard',
+    element: <CustomerPortalDashboard />,
+  },
+  {
+    path: '/portal/invoices',
+    element: <CustomerPortalInvoices />,
+  },
+  {
+    path: '/portal/tickets',
+    element: <CustomerPortalTickets />,
+  },
+  {
+    path: '/portal/quotes',
+    element: <CustomerPortalQuotes />,
   },
   // Direct access fallback removed to avoid conflicting route matching
   { path: '*', element: <NotFound /> },

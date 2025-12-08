@@ -1,0 +1,393 @@
+/**
+ * External Customer Portal Data API
+ * 
+ * Provides secure access to customer-specific data:
+ * - Invoices (current and historical)
+ * - Support tickets
+ * - Contracts/quotes
+ */
+
+import { Router } from 'express'
+import { getDb } from '../db.js'
+import { ObjectId } from 'mongodb'
+import { verifyCustomerToken } from './auth.js'
+
+export const customerPortalDataRouter = Router()
+
+// All routes require authentication
+customerPortalDataRouter.use(verifyCustomerToken)
+
+// GET /api/customer-portal/data/invoices - Get customer's invoices
+customerPortalDataRouter.get('/invoices', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const { accountId } = req.customerAuth
+
+    if (!accountId) {
+      return res.json({ data: { items: [] }, error: null })
+    }
+
+    // Get all invoices for this account
+    const invoices = await db.collection('invoices')
+      .find({ accountId: new ObjectId(accountId) })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .toArray()
+
+    // Format invoices for customer view
+    const formattedInvoices = invoices.map((invoice: any) => ({
+      id: invoice._id.toHexString(),
+      invoiceNumber: invoice.invoiceNumber,
+      title: invoice.title || 'Untitled',
+      total: invoice.total || 0,
+      balance: invoice.balance || 0,
+      status: invoice.status || 'draft',
+      dueDate: invoice.dueDate,
+      createdAt: invoice.createdAt,
+      paidAt: invoice.paidAt,
+      items: invoice.items || [],
+      payments: invoice.payments || [],
+      subscriptionActive: invoice.subscription?.active || false,
+    }))
+
+    res.json({ data: { items: formattedInvoices }, error: null })
+  } catch (err: any) {
+    console.error('Get customer invoices error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_invoices' })
+  }
+})
+
+// GET /api/customer-portal/data/invoices/:id - Get specific invoice details
+customerPortalDataRouter.get('/invoices/:id', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const { accountId } = req.customerAuth
+    const invoiceId = req.params.id
+
+    if (!ObjectId.isValid(invoiceId)) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+
+    // Get invoice and verify it belongs to this customer's account
+    const invoice = await db.collection('invoices').findOne({ 
+      _id: new ObjectId(invoiceId),
+      accountId: new ObjectId(accountId)
+    })
+
+    if (!invoice) {
+      return res.status(404).json({ data: null, error: 'invoice_not_found' })
+    }
+
+    // Get account info
+    const account = await db.collection('accounts').findOne({ _id: new ObjectId(accountId) })
+
+    // Format invoice with full details
+    const formattedInvoice = {
+      id: invoice._id.toHexString(),
+      invoiceNumber: invoice.invoiceNumber,
+      title: invoice.title || 'Untitled',
+      total: invoice.total || 0,
+      balance: invoice.balance || 0,
+      status: invoice.status || 'draft',
+      dueDate: invoice.dueDate,
+      createdAt: invoice.createdAt,
+      paidAt: invoice.paidAt,
+      items: invoice.items || [],
+      payments: invoice.payments || [],
+      refunds: invoice.refunds || [],
+      notes: invoice.notes,
+      account: account ? {
+        name: account.name || account.companyName,
+        email: account.email || account.primaryContactEmail,
+        phone: account.phone,
+      } : null,
+      subscription: invoice.subscription || null,
+    }
+
+    res.json({ data: formattedInvoice, error: null })
+  } catch (err: any) {
+    console.error('Get customer invoice detail error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_invoice' })
+  }
+})
+
+// GET /api/customer-portal/data/tickets - Get customer's support tickets
+customerPortalDataRouter.get('/tickets', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const { accountId, email } = req.customerAuth
+
+    // Build query to find tickets by account or email
+    const query: any = {}
+    if (accountId) {
+      query.accountId = new ObjectId(accountId)
+    } else if (email) {
+      // Also match by requester email if no account linked
+      query.requesterEmail = email
+    } else {
+      return res.json({ data: { items: [] }, error: null })
+    }
+
+    // Get tickets
+    const tickets = await db.collection('support_tickets')
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .toArray()
+
+    // Format tickets for customer view
+    const formattedTickets = tickets.map((ticket: any) => ({
+      id: ticket._id.toHexString(),
+      ticketNumber: ticket.ticketNumber,
+      shortDescription: ticket.shortDescription,
+      description: ticket.description,
+      status: ticket.status || 'open',
+      priority: ticket.priority || 'normal',
+      createdAt: ticket.createdAt,
+      updatedAt: ticket.updatedAt,
+      slaDueAt: ticket.slaDueAt,
+      comments: (ticket.comments || []).map((c: any) => ({
+        author: c.author,
+        body: c.body,
+        at: c.at,
+      })),
+    }))
+
+    res.json({ data: { items: formattedTickets }, error: null })
+  } catch (err: any) {
+    console.error('Get customer tickets error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_tickets' })
+  }
+})
+
+// POST /api/customer-portal/data/tickets/:id/comments - Add comment to ticket
+customerPortalDataRouter.post('/tickets/:id/comments', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const { accountId, email, customerId } = req.customerAuth
+    const ticketId = req.params.id
+    const { body } = req.body
+
+    if (!body || typeof body !== 'string') {
+      return res.status(400).json({ data: null, error: 'invalid_comment' })
+    }
+
+    if (!ObjectId.isValid(ticketId)) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+
+    // Verify ticket belongs to this customer
+    const ticket = await db.collection('support_tickets').findOne({ 
+      _id: new ObjectId(ticketId),
+      $or: accountId ? [
+        { accountId: new ObjectId(accountId) },
+        { requesterEmail: email }
+      ] : [
+        { requesterEmail: email }
+      ]
+    })
+
+    if (!ticket) {
+      return res.status(404).json({ data: null, error: 'ticket_not_found' })
+    }
+
+    // Get customer info
+    const customer = await db.collection('customer_portal_users').findOne({ 
+      _id: new ObjectId(customerId) 
+    })
+
+    // Add comment
+    const comment = {
+      author: customer?.name || email,
+      body,
+      at: new Date(),
+    }
+
+    await db.collection('support_tickets').updateOne(
+      { _id: new ObjectId(ticketId) },
+      { 
+        $push: { comments: comment } as any,
+        $set: { updatedAt: new Date() }
+      }
+    )
+
+    res.json({ data: { message: 'Comment added successfully', comment }, error: null })
+  } catch (err: any) {
+    console.error('Add ticket comment error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_add_comment' })
+  }
+})
+
+// GET /api/customer-portal/data/quotes - Get customer's quotes/contracts
+customerPortalDataRouter.get('/quotes', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const { accountId } = req.customerAuth
+
+    if (!accountId) {
+      return res.json({ data: { items: [] }, error: null })
+    }
+
+    // Get all quotes for this account
+    const quotes = await db.collection('quotes')
+      .find({ accountId: new ObjectId(accountId) })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .toArray()
+
+    // Format quotes for customer view
+    const formattedQuotes = quotes.map((quote: any) => ({
+      id: quote._id.toHexString(),
+      quoteNumber: quote.quoteNumber,
+      title: quote.title || 'Untitled',
+      total: quote.total || 0,
+      status: quote.status || 'draft',
+      expiresAt: quote.expiresAt,
+      signedAt: quote.signedAt,
+      signedBy: quote.signedBy,
+      createdAt: quote.createdAt,
+      items: quote.items || [],
+    }))
+
+    res.json({ data: { items: formattedQuotes }, error: null })
+  } catch (err: any) {
+    console.error('Get customer quotes error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_quotes' })
+  }
+})
+
+// GET /api/customer-portal/data/quotes/:id - Get specific quote details
+customerPortalDataRouter.get('/quotes/:id', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const { accountId } = req.customerAuth
+    const quoteId = req.params.id
+
+    if (!ObjectId.isValid(quoteId)) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+
+    // Get quote and verify it belongs to this customer's account
+    const quote = await db.collection('quotes').findOne({ 
+      _id: new ObjectId(quoteId),
+      accountId: new ObjectId(accountId)
+    })
+
+    if (!quote) {
+      return res.status(404).json({ data: null, error: 'quote_not_found' })
+    }
+
+    // Get account info
+    const account = await db.collection('accounts').findOne({ _id: new ObjectId(accountId) })
+
+    // Format quote with full details
+    const formattedQuote = {
+      id: quote._id.toHexString(),
+      quoteNumber: quote.quoteNumber,
+      title: quote.title || 'Untitled',
+      total: quote.total || 0,
+      status: quote.status || 'draft',
+      expiresAt: quote.expiresAt,
+      signedAt: quote.signedAt,
+      signedBy: quote.signedBy,
+      createdAt: quote.createdAt,
+      items: quote.items || [],
+      notes: quote.notes,
+      terms: quote.terms,
+      account: account ? {
+        name: account.name || account.companyName,
+        email: account.email || account.primaryContactEmail,
+        phone: account.phone,
+      } : null,
+    }
+
+    res.json({ data: formattedQuote, error: null })
+  } catch (err: any) {
+    console.error('Get customer quote detail error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_quote' })
+  }
+})
+
+// GET /api/customer-portal/data/dashboard - Get dashboard summary
+customerPortalDataRouter.get('/dashboard', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const { accountId, email } = req.customerAuth
+
+    if (!accountId) {
+      return res.json({ 
+        data: { 
+          invoices: { total: 0, unpaid: 0, overdue: 0 },
+          tickets: { total: 0, open: 0 },
+          quotes: { total: 0, pending: 0 },
+        }, 
+        error: null 
+      })
+    }
+
+    // Get invoice stats
+    const invoices = await db.collection('invoices')
+      .find({ accountId: new ObjectId(accountId) })
+      .toArray()
+    
+    const now = new Date()
+    const invoiceStats = {
+      total: invoices.length,
+      unpaid: invoices.filter((inv: any) => inv.status !== 'paid' && inv.status !== 'void').length,
+      overdue: invoices.filter((inv: any) => 
+        inv.status !== 'paid' && 
+        inv.status !== 'void' && 
+        inv.dueDate && 
+        new Date(inv.dueDate) < now
+      ).length,
+    }
+
+    // Get ticket stats
+    const ticketQuery: any = { accountId: new ObjectId(accountId) }
+    const tickets = await db.collection('support_tickets')
+      .find(ticketQuery)
+      .toArray()
+    
+    const ticketStats = {
+      total: tickets.length,
+      open: tickets.filter((t: any) => t.status === 'open' || t.status === 'in_progress').length,
+    }
+
+    // Get quote stats
+    const quotes = await db.collection('quotes')
+      .find({ accountId: new ObjectId(accountId) })
+      .toArray()
+    
+    const quoteStats = {
+      total: quotes.length,
+      pending: quotes.filter((q: any) => q.status === 'sent' || q.status === 'viewed').length,
+    }
+
+    res.json({
+      data: {
+        invoices: invoiceStats,
+        tickets: ticketStats,
+        quotes: quoteStats,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Get customer dashboard error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_get_dashboard' })
+  }
+})
+
