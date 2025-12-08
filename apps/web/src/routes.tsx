@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Outlet } from 'react-router-dom'
 import App from '@/App'
 // Home removed from initial routes; Dashboard is the index
 import NotFound from '@/pages/NotFound'
@@ -68,6 +68,7 @@ import CustomerPortalQuotes from '@/pages/CustomerPortalQuotes'
 import CustomerPortalVerifyEmail from '@/pages/CustomerPortalVerifyEmail'
 import CustomerPortalResetPassword from '@/pages/CustomerPortalResetPassword'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
+import { ToastProvider } from '@/components/Toast'
 
 export const router = createBrowserRouter([
   {
@@ -181,34 +182,23 @@ export const router = createBrowserRouter([
     path: '/change-password',
     element: <ChangePassword />,
   },
-  // Customer Portal (external customer access - no PublicShell for full-page experience)
+  // Customer Portal (external customer access - wrapped in ToastProvider for notifications)
   {
-    path: '/customer/login',
-    element: <CustomerPortalLogin />,
-  },
-  {
-    path: '/customer/verify-email',
-    element: <CustomerPortalVerifyEmail />,
-  },
-  {
-    path: '/customer/reset-password',
-    element: <CustomerPortalResetPassword />,
-  },
-  {
-    path: '/customer/dashboard',
-    element: <CustomerPortalDashboard />,
-  },
-  {
-    path: '/customer/invoices',
-    element: <CustomerPortalInvoices />,
-  },
-  {
-    path: '/customer/tickets',
-    element: <CustomerPortalTickets />,
-  },
-  {
-    path: '/customer/quotes',
-    element: <CustomerPortalQuotes />,
+    path: '/customer',
+    element: (
+      <ToastProvider>
+        <Outlet />
+      </ToastProvider>
+    ),
+    children: [
+      { path: 'login', element: <CustomerPortalLogin /> },
+      { path: 'verify-email', element: <CustomerPortalVerifyEmail /> },
+      { path: 'reset-password', element: <CustomerPortalResetPassword /> },
+      { path: 'dashboard', element: <CustomerPortalDashboard /> },
+      { path: 'invoices', element: <CustomerPortalInvoices /> },
+      { path: 'tickets', element: <CustomerPortalTickets /> },
+      { path: 'quotes', element: <CustomerPortalQuotes /> },
+    ],
   },
   // Direct access fallback removed to avoid conflicting route matching
   { path: '*', element: <NotFound /> },
