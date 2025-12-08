@@ -55,6 +55,16 @@ export default function AdminCustomerPortalUsers() {
     },
   })
 
+  // Fetch accounts for dropdown
+  const accountsQ = useQuery({
+    queryKey: ['crm-accounts-all'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/accounts', { params: { limit: 1000 } })
+      if (res.data.error) throw new Error(res.data.error)
+      return res.data.data.items as Array<{ _id: string; name: string }>
+    },
+  })
+
   // Create user mutation
   const createUserMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -378,7 +388,7 @@ export default function AdminCustomerPortalUsers() {
       {/* Create User Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="w-full max-w-2xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 sm:p-8 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="mb-6 flex items-center justify-between">
               <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Create Customer User</h3>
               <button
@@ -449,16 +459,22 @@ export default function AdminCustomerPortalUsers() {
               </div>
 
               <label className="block text-sm">
-                <span className="mb-1 block text-[color:var(--color-text-muted)]">Link to Account ID (optional)</span>
-                <input
-                  type="text"
+                <span className="mb-1 block text-[color:var(--color-text-muted)]">Link to CRM Account (optional)</span>
+                <select
                   value={newAccountId}
                   onChange={(e) => setNewAccountId(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  placeholder="MongoDB ObjectId"
-                />
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">No account (customer can register independently)</option>
+                  {accountsQ.isLoading && <option value="">Loading accounts...</option>}
+                  {accountsQ.data?.map((account) => (
+                    <option key={account._id} value={account._id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
                 <span className="mt-1 block text-xs text-[color:var(--color-text-muted)]">
-                  Link this user to an existing CRM account for invoice/ticket access
+                  Link this user to an existing CRM account for invoice/quote/ticket access
                 </span>
               </label>
 
