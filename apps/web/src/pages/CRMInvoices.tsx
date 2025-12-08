@@ -1463,6 +1463,7 @@ export default function CRMInvoices() {
                         CRM Contact
                       </label>
                       <select
+                        key={`contacts-${contacts.length}`}
                         id="invoice-send-contact"
                         disabled={contactsLoading}
                         className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] disabled:opacity-50"
@@ -1482,6 +1483,7 @@ export default function CRMInvoices() {
                         Customer Portal User
                       </label>
                       <select
+                        key={`portal-users-${portalUsers.length}-${editing.accountId}`}
                         id="invoice-send-portal-user"
                         disabled={!editing.accountId}
                         className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] disabled:opacity-50"
