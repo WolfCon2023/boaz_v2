@@ -12,7 +12,7 @@ import { Building2, Mail, Lock, User, Phone, AlertCircle, CheckCircle } from 'lu
 
 export default function CustomerPortalLogin() {
   const navigate = useNavigate()
-  const { addToast } = useToast()
+  const { showToast } = useToast()
   
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login')
   const [loading, setLoading] = useState(false)
@@ -47,13 +47,13 @@ export default function CustomerPortalLogin() {
 
       if (res.data.error) {
         if (res.data.error === 'invalid_credentials') {
-          addToast('Invalid email or password', 'error')
+          showToast('Invalid email or password', 'error')
         } else if (res.data.error === 'email_not_verified') {
-          addToast('Please verify your email before logging in', 'error')
+          showToast('Please verify your email before logging in', 'error')
         } else if (res.data.error === 'account_inactive') {
-          addToast('Your account has been deactivated', 'error')
+          showToast('Your account has been deactivated', 'error')
         } else {
-          addToast('Login failed: ' + res.data.error, 'error')
+          showToast('Login failed: ' + res.data.error, 'error')
         }
         return
       }
@@ -62,11 +62,11 @@ export default function CustomerPortalLogin() {
       localStorage.setItem('customer_portal_token', res.data.data.token)
       localStorage.setItem('customer_portal_user', JSON.stringify(res.data.data.customer))
       
-      addToast('Welcome back!', 'success')
+      showToast('Welcome back!', 'success')
       navigate('/portal/dashboard')
     } catch (err: any) {
       console.error('Login error:', err)
-      addToast('Login failed', 'error')
+      showToast('Login failed', 'error')
     } finally {
       setLoading(false)
     }
@@ -87,18 +87,18 @@ export default function CustomerPortalLogin() {
 
       if (res.data.error) {
         if (res.data.error === 'email_already_registered') {
-          addToast('Email already registered', 'error')
+          showToast('Email already registered', 'error')
         } else {
-          addToast('Registration failed: ' + res.data.error, 'error')
+          showToast('Registration failed: ' + res.data.error, 'error')
         }
         return
       }
 
       setRegSuccess(true)
-      addToast('Registration successful! Check your email to verify your account.', 'success')
+      showToast('Registration successful! Check your email to verify your account.', 'success')
     } catch (err: any) {
       console.error('Registration error:', err)
-      addToast('Registration failed', 'error')
+      showToast('Registration failed', 'error')
     } finally {
       setLoading(false)
     }
@@ -114,10 +114,10 @@ export default function CustomerPortalLogin() {
       })
 
       setForgotSent(true)
-      addToast('Password reset email sent (if account exists)', 'success')
+      showToast('Password reset email sent (if account exists)', 'success')
     } catch (err: any) {
       console.error('Forgot password error:', err)
-      addToast('Failed to send reset email', 'error')
+      showToast('Failed to send reset email', 'error')
     } finally {
       setLoading(false)
     }

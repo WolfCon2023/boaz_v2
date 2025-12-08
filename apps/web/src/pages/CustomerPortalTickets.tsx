@@ -27,7 +27,7 @@ type SupportTicket = {
 
 export default function CustomerPortalTickets() {
   const navigate = useNavigate()
-  const { addToast } = useToast()
+  const { showToast } = useToast()
   const qc = useQueryClient()
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null)
   const [newComment, setNewComment] = useState('')
@@ -65,7 +65,7 @@ export default function CustomerPortalTickets() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['customer-portal-tickets'] })
       setNewComment('')
-      addToast('Comment added successfully', 'success')
+      showToast('Comment added successfully', 'success')
     },
   })
 
