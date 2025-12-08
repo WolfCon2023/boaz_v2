@@ -515,7 +515,13 @@ export default function CRMQuotes() {
     },
     enabled: !!editing?.accountId,
   })
-  const portalUsers = React.useMemo(() => portalUsersData || [], [portalUsersData])
+  const portalUsers = React.useMemo(() => {
+    const users = portalUsersData || []
+    console.log('[CRMQuotes] AccountId:', editing?.accountId)
+    console.log('[CRMQuotes] Portal users raw data:', portalUsersData)
+    console.log('[CRMQuotes] Portal users loaded:', users.length, users)
+    return users
+  }, [portalUsersData, editing?.accountId])
 
 
   // Initialize line items when editing changes

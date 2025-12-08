@@ -541,7 +541,13 @@ export default function CRMInvoices() {
     },
     enabled: !!editing?.accountId,
   })
-  const portalUsers = React.useMemo(() => portalUsersData || [], [portalUsersData])
+  const portalUsers = React.useMemo(() => {
+    const users = portalUsersData || []
+    console.log('[CRMInvoices] AccountId:', editing?.accountId)
+    console.log('[CRMInvoices] Portal users raw data:', portalUsersData)
+    console.log('[CRMInvoices] Portal users loaded:', users.length, users)
+    return users
+  }, [portalUsersData, editing?.accountId])
 
   const editingIdRef = React.useRef<string | null>(null)
   // Recipient email state for "Send Invoice"
