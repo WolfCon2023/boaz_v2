@@ -671,13 +671,24 @@ export default function AdminPortal() {
             Manage users and sessions across the platform
           </p>
         </div>
-        <a
-          href="/admin/customer-portal-users"
-          className="flex items-center space-x-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
-        >
-          <Users className="h-4 w-4" />
-          <span>Customer Portal Users</span>
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href="/apps/crm/support/kb/user-roles-permissions"
+            target="_blank"
+            className="flex items-center space-x-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+            title="View Roles & Permissions Guide"
+          >
+            <FileText className="h-4 w-4" />
+            <span>Roles Guide</span>
+          </a>
+          <a
+            href="/admin/customer-portal-users"
+            className="flex items-center space-x-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+          >
+            <Users className="h-4 w-4" />
+            <span>Customer Portal Users</span>
+          </a>
+        </div>
       </div>
 
       {/* Tabs */}
