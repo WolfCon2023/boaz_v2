@@ -332,74 +332,77 @@ export default function CustomerPortalTickets() {
 
       {/* Create Ticket Modal */}
       {showCreateForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="w-full max-w-3xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-8 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Create New Ticket</h3>
-              <button
-                onClick={() => setShowCreateForm(false)}
-                className="rounded-lg p-1 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateTicket} className="space-y-4">
-              <label className="block text-sm">
-                <span className="mb-1 block text-[color:var(--color-text-muted)]">Subject *</span>
-                <input
-                  type="text"
-                  value={newSubject}
-                  onChange={(e) => setNewSubject(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
-                  placeholder="Brief description of the issue"
-                  required
-                />
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-[color:var(--color-text-muted)]">Description *</span>
-                <textarea
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent p-3 text-sm text-[color:var(--color-text)]"
-                  rows={6}
-                  placeholder="Detailed description of your issue..."
-                  required
-                />
-              </label>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-[color:var(--color-text-muted)]">Priority</span>
-                <select
-                  value={newPriority}
-                  onChange={(e) => setNewPriority(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
-                >
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </label>
-
-              <div className="flex gap-3 pt-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-6 lg:p-8">
+          <div className="relative w-full max-w-4xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl">
+            <div className="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Create New Ticket</h3>
                 <button
                   type="button"
                   onClick={() => setShowCreateForm(false)}
-                  className="flex-1 rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+                  className="rounded-lg p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createTicketMutation.isPending}
-                  className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                >
-                  {createTicketMutation.isPending ? 'Creating...' : 'Create Ticket'}
+                  <X className="h-5 w-5" />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleCreateTicket} className="space-y-5">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Subject *</span>
+                  <input
+                    type="text"
+                    value={newSubject}
+                    onChange={(e) => setNewSubject(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent transition-colors"
+                    placeholder="Brief description of the issue"
+                    required
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Description *</span>
+                  <textarea
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent p-4 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent transition-colors resize-y"
+                    rows={6}
+                    placeholder="Please describe your issue in detail..."
+                    required
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Priority</span>
+                  <select
+                    value={newPriority}
+                    onChange={(e) => setNewPriority(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent transition-colors"
+                  >
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </label>
+
+                <div className="flex gap-3 pt-4 border-t border-[color:var(--color-border)] mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateForm(false)}
+                    className="flex-1 rounded-lg border border-[color:var(--color-border)] px-4 py-2.5 text-sm font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createTicketMutation.isPending}
+                    className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {createTicketMutation.isPending ? 'Creating...' : 'Create Ticket'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
