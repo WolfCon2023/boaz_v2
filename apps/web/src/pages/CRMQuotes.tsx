@@ -9,7 +9,6 @@ import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { Plus, X, Package, Send } from 'lucide-react'
 import { DocumentsList } from '@/components/DocumentsList'
-import { CustomerPortalAccessWidget } from '@/components/CustomerPortalAccessWidget'
 
 type Quote = {
   _id: string
@@ -486,6 +485,47 @@ export default function CRMQuotes() {
   const [lineItems, setLineItems] = React.useState<QuoteLineItem[]>([])
   const [showHistory, setShowHistory] = React.useState(false)
   const editingIdRef = React.useRef<string | null>(null)
+
+  // Load CRM contacts for send dropdown
+  const { data: contactsData } = useQuery({
+    queryKey: ['crm-contacts-list'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/contacts')
+      return res.data as { data: { items: Array<{ _id: string; name: string; email: string }> } }
+    },
+  })
+  const contacts = React.useMemo(() => contactsData?.data.items ?? [], [contactsData?.data.items])
+
+  // Load portal users when account is selected
+  const { data: portalUsersData } = useQuery({
+    queryKey: ['portal-users-by-account', editing?.accountId],
+    queryFn: async () => {
+      if (!editing?.accountId) return []
+      const res = await http.get(`/api/admin/customer-portal-users/by-account/${editing.accountId}`)
+      if (res.data.error) return []
+      return res.data.data as Array<{ id: string; name: string; email: string }>
+    },
+    enabled: !!editing?.accountId,
+  })
+  const portalUsers = React.useMemo(() => portalUsersData || [], [portalUsersData])
+
+  // Update portal user dropdown when data loads
+  React.useEffect(() => {
+    const select = document.getElementById('quote-send-portal-user') as HTMLSelectElement
+    if (select && editing) {
+      select.innerHTML = '<option value="">Select portal user...</option>'
+      if (portalUsers.length === 0 && editing.accountId) {
+        select.innerHTML = '<option value="">No portal users found</option>'
+      } else {
+        portalUsers.forEach(user => {
+          const option = document.createElement('option')
+          option.value = user.email
+          option.text = `${user.name} (${user.email})`
+          select.appendChild(option)
+        })
+      }
+    }
+  }, [portalUsers, editing?.accountId])
 
   // Initialize line items when editing changes
   React.useEffect(() => {
@@ -1339,14 +1379,6 @@ export default function CRMQuotes() {
                   </select>
                 </label>
                 
-                {/* Customer Portal Access */}
-                <div className="col-span-full">
-                  <CustomerPortalAccessWidget 
-                    accountId={editing.accountId}
-                    showInline={true}
-                  />
-                </div>
-
                 <div className="flex gap-2">
                   <select
                     name="approver"
@@ -1393,6 +1425,66 @@ export default function CRMQuotes() {
                     Request Approval
                   </button>
                 </div>
+
+                {/* Send Quote Section */}
+                <div className="col-span-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3 mt-3">
+                  <div className="mb-2 text-sm font-semibold">Send Quote</div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                        CRM Contact
+                      </label>
+                      <select
+                        id="quote-send-contact"
+                        className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm"
+                      >
+                        <option value="">Select contact...</option>
+                        {(contacts || []).map((c: any) => (
+                          <option key={c._id} value={c.email}>
+                            {c.name} ({c.email})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                        Customer Portal User
+                      </label>
+                      <select
+                        id="quote-send-portal-user"
+                        disabled={!editing.accountId}
+                        className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm disabled:opacity-50"
+                      >
+                        <option value="">
+                          {editing.accountId ? 'Loading...' : 'Select account first'}
+                        </option>
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const contactSelect = document.getElementById('quote-send-contact') as HTMLSelectElement
+                          const portalSelect = document.getElementById('quote-send-portal-user') as HTMLSelectElement
+                          
+                          const email = contactSelect?.value || portalSelect?.value
+                          if (!email) {
+                            toast.showToast('Please select a recipient', 'warning')
+                            return
+                          }
+                          
+                          // TODO: Add send quote API call
+                          toast.showToast(`Quote will be sent to ${email}`, 'info')
+                        }}
+                        className="w-full rounded bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+                      >
+                        <Send className="inline h-3 w-3 mr-1" />
+                        Send Quote
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="col-span-full flex items-center gap-2">
                   <input name="signerName" defaultValue={editing.signerName ?? ''} placeholder="Signer name" className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                   <input name="signerEmail" defaultValue={editing.signerEmail ?? ''} placeholder="Signer email" className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />

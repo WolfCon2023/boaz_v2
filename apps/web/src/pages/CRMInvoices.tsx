@@ -8,7 +8,6 @@ import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
 import { Plus, X, Package, Send, Printer } from 'lucide-react'
-import { CustomerPortalAccessWidget } from '@/components/CustomerPortalAccessWidget'
 
 type Invoice = { 
   _id: string
@@ -1423,12 +1422,58 @@ export default function CRMInvoices() {
                   </select>
                 </label>
 
-                {/* Customer Portal Access */}
-                <div className="col-span-full">
-                  <CustomerPortalAccessWidget 
-                    accountId={editing.accountId}
-                    showInline={true}
-                  />
+                {/* Send Invoice Section */}
+                <div className="col-span-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
+                  <div className="mb-2 text-sm font-semibold">Send Invoice</div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                        CRM Contact
+                      </label>
+                      <select
+                        id="invoice-send-contact"
+                        className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm"
+                      >
+                        <option value="">Select contact...</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                        Customer Portal User
+                      </label>
+                      <select
+                        id="invoice-send-portal-user"
+                        disabled={!editing.accountId}
+                        className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm disabled:opacity-50"
+                      >
+                        <option value="">
+                          {editing.accountId ? 'Loading...' : 'Select account first'}
+                        </option>
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const contactSelect = document.getElementById('invoice-send-contact') as HTMLSelectElement
+                          const portalSelect = document.getElementById('invoice-send-portal-user') as HTMLSelectElement
+                          
+                          const email = contactSelect?.value || portalSelect?.value
+                          if (!email) {
+                            toast.showToast('Please select a recipient', 'warning')
+                            return
+                          }
+                          
+                          sendEmail.mutate({ id: editing._id, recipientEmail: email })
+                        }}
+                        disabled={sendEmail.isPending}
+                        className="w-full rounded bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                      >
+                        <Send className="inline h-3 w-3 mr-1" />
+                        Send Invoice
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="col-span-full mt-2 flex items-center gap-2">
