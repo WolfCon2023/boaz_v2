@@ -88,7 +88,7 @@ customerPortalAuthRouter.post('/register', async (req, res) => {
         const customerId = result.insertedId;
         // Send verification email
         const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
-        const verifyUrl = `${baseUrl}/portal/verify-email?token=${verificationToken}`;
+        const verifyUrl = `${baseUrl}/customer/verify-email?token=${verificationToken}`;
         const { html, text } = generateEmailTemplate({
             header: {
                 title: 'Welcome to BOAZ-OS Customer Portal',
@@ -279,7 +279,7 @@ customerPortalAuthRouter.post('/forgot-password', async (req, res) => {
         await db.collection('customer_portal_users').updateOne({ _id: customer._id }, { $set: { resetToken, resetTokenExpiry } });
         // Send reset email
         const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
-        const resetUrl = `${baseUrl}/portal/reset-password?token=${resetToken}`;
+        const resetUrl = `${baseUrl}/customer/reset-password?token=${resetToken}`;
         const { html, text } = generateEmailTemplate({
             header: {
                 title: 'Reset Your Password',

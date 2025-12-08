@@ -64,6 +64,8 @@ import CustomerPortalDashboard from '@/pages/CustomerPortalDashboard'
 import CustomerPortalInvoices from '@/pages/CustomerPortalInvoices'
 import CustomerPortalTickets from '@/pages/CustomerPortalTickets'
 import CustomerPortalQuotes from '@/pages/CustomerPortalQuotes'
+import CustomerPortalVerifyEmail from '@/pages/CustomerPortalVerifyEmail'
+import CustomerPortalResetPassword from '@/pages/CustomerPortalResetPassword'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
 
 export const router = createBrowserRouter([
@@ -181,6 +183,14 @@ export const router = createBrowserRouter([
   {
     path: '/customer/login',
     element: <CustomerPortalLogin />,
+  },
+  {
+    path: '/customer/verify-email',
+    element: <CustomerPortalVerifyEmail />,
+  },
+  {
+    path: '/customer/reset-password',
+    element: <CustomerPortalResetPassword />,
   },
   {
     path: '/customer/dashboard',

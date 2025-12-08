@@ -119,7 +119,7 @@ customerPortalAuthRouter.post('/register', async (req, res) => {
 
     // Send verification email
     const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
-    const verifyUrl = `${baseUrl}/portal/verify-email?token=${verificationToken}`
+    const verifyUrl = `${baseUrl}/customer/verify-email?token=${verificationToken}`
 
     const { html, text } = generateEmailTemplate({
       header: {
@@ -346,7 +346,7 @@ customerPortalAuthRouter.post('/forgot-password', async (req, res) => {
 
     // Send reset email
     const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
-    const resetUrl = `${baseUrl}/portal/reset-password?token=${resetToken}`
+    const resetUrl = `${baseUrl}/customer/reset-password?token=${resetToken}`
 
     const { html, text } = generateEmailTemplate({
       header: {
