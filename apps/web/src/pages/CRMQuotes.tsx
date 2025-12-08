@@ -497,10 +497,11 @@ export default function CRMQuotes() {
   })
   const contacts = React.useMemo(() => {
     const items = contactsData?.data.items ?? []
+    console.log('[CRMQuotes] Raw contacts:', items.length, items)
     // Only show contacts with email addresses
     const withEmail = items.filter((c: any) => c.email && c.email.trim())
     console.log('[CRMQuotes] Contacts with email:', withEmail.length, withEmail)
-    return withEmail
+    return items // Return all for now to debug
   }, [contactsData?.data.items])
 
   // Load portal users when account is selected
@@ -1433,8 +1434,8 @@ export default function CRMQuotes() {
                           {contactsLoading ? 'Loading contacts...' : contacts.length === 0 ? 'No contacts found' : 'Select contact...'}
                         </option>
                         {contacts.map((c: any) => (
-                          <option key={c._id} value={c.email}>
-                            {c.name} ({c.email})
+                          <option key={c._id} value={c.email || c._id}>
+                            {c.name || 'Unnamed'} ({c.email || 'No email'})
                           </option>
                         ))}
                       </select>
