@@ -4,13 +4,13 @@
  * View support tickets and add comments
  */
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '../lib/http'
 import { ArrowLeft, Ticket, MessageSquare, Send, AlertCircle } from 'lucide-react'
 import { formatDateTime } from '../lib/dateFormat'
-import { useToast } from '../components/ToastProvider'
+import { useToast } from '../components/Toast'
 
 type SupportTicket = {
   id: string

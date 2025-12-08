@@ -4,10 +4,10 @@
  * External customer-facing authentication page
  */
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { http } from '../lib/http'
-import { useToast } from '../components/ToastProvider'
+import { useToast } from '../components/Toast'
 import { Building2, Mail, Lock, User, Phone, AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function CustomerPortalLogin() {

@@ -4,11 +4,11 @@
  * Main dashboard for external customers showing their invoices, tickets, and contracts
  */
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '../lib/http'
-import { FileText, Ticket, FileSignature, DollarSign, AlertCircle, LogOut, User, Building2 } from 'lucide-react'
+import { FileText, Ticket, FileSignature, DollarSign, AlertCircle, LogOut, Building2 } from 'lucide-react'
 
 type CustomerUser = {
   id: string

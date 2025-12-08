@@ -4,12 +4,11 @@
  * View and access invoices
  */
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '../lib/http'
-import { ArrowLeft, FileText, Download, Eye, DollarSign, Calendar, AlertCircle, CheckCircle } from 'lucide-react'
-import { formatDateTime } from '../lib/dateFormat'
+import { ArrowLeft, FileText, Eye, Calendar, AlertCircle, CheckCircle } from 'lucide-react'
 
 type Invoice = {
   id: string
@@ -28,7 +27,6 @@ type Invoice = {
 
 export default function CustomerPortalInvoices() {
   const navigate = useNavigate()
-  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [viewingInvoice, setViewingInvoice] = useState<string | null>(null)
 
   useEffect(() => {
