@@ -43,7 +43,7 @@ export default function CustomerPortalDashboard() {
     const userStr = localStorage.getItem('customer_portal_user')
     
     if (!token || !userStr) {
-      navigate('/portal/login')
+      navigate('/customer/login')
       return
     }
 
@@ -51,7 +51,7 @@ export default function CustomerPortalDashboard() {
       const user = JSON.parse(userStr)
       setCustomer(user)
     } catch (err) {
-      navigate('/portal/login')
+      navigate('/customer/login')
     }
   }, [navigate])
 
@@ -71,7 +71,7 @@ export default function CustomerPortalDashboard() {
   function handleLogout() {
     localStorage.removeItem('customer_portal_token')
     localStorage.removeItem('customer_portal_user')
-    navigate('/portal/login')
+    navigate('/customer/login')
   }
 
   if (!customer) {
@@ -135,7 +135,7 @@ export default function CustomerPortalDashboard() {
             <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
               {/* Invoices Card */}
               <Link
-                to="/portal/invoices"
+                to="/customer/invoices"
                 className="block rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 hover:bg-[color:var(--color-muted)] transition-colors"
               >
                 <div className="mb-4 flex items-center justify-between">
@@ -163,7 +163,7 @@ export default function CustomerPortalDashboard() {
 
               {/* Tickets Card */}
               <Link
-                to="/portal/tickets"
+                to="/customer/tickets"
                 className="block rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 hover:bg-[color:var(--color-muted)] transition-colors"
               >
                 <div className="mb-4 flex items-center justify-between">
@@ -185,7 +185,7 @@ export default function CustomerPortalDashboard() {
 
               {/* Quotes Card */}
               <Link
-                to="/portal/quotes"
+                to="/customer/quotes"
                 className="block rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 hover:bg-[color:var(--color-muted)] transition-colors"
               >
                 <div className="mb-4 flex items-center justify-between">
@@ -211,19 +211,19 @@ export default function CustomerPortalDashboard() {
               <h3 className="mb-4 text-lg font-semibold text-[color:var(--color-text)]">Quick Actions</h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <Link
-                  to="/portal/invoices"
+                  to="/customer/invoices"
                   className="flex items-center space-x-3 rounded-lg border border-[color:var(--color-border)] p-4 hover:bg-[color:var(--color-muted)] transition-colors"
                 >
                   <span className="font-medium text-[color:var(--color-text)]">View Invoices</span>
                 </Link>
                 <Link
-                  to="/portal/tickets"
+                  to="/customer/tickets"
                   className="flex items-center space-x-3 rounded-lg border border-[color:var(--color-border)] p-4 hover:bg-[color:var(--color-muted)] transition-colors"
                 >
                   <span className="font-medium text-[color:var(--color-text)]">My Tickets</span>
                 </Link>
                 <Link
-                  to="/portal/quotes"
+                  to="/customer/quotes"
                   className="flex items-center space-x-3 rounded-lg border border-[color:var(--color-border)] p-4 hover:bg-[color:var(--color-muted)] transition-colors"
                 >
                   <span className="font-medium text-[color:var(--color-text)]">My Quotes</span>

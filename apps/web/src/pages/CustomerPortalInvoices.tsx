@@ -32,7 +32,7 @@ export default function CustomerPortalInvoices() {
   useEffect(() => {
     const token = localStorage.getItem('customer_portal_token')
     if (!token) {
-      navigate('/portal/login')
+      navigate('/customer/login')
     }
   }, [navigate])
 
@@ -88,7 +88,7 @@ export default function CustomerPortalInvoices() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link
-                to="/portal/dashboard"
+                to="/customer/dashboard"
                 className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />

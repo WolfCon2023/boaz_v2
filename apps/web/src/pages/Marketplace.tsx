@@ -73,7 +73,7 @@ export default function Marketplace() {
   })
   
   const copyPortalUrl = () => {
-    const url = `${window.location.origin}/portal/login`
+    const url = `${window.location.origin}/customer/login`
     navigator.clipboard.writeText(url).then(() => {
       setCopiedUrl(true)
       showToast('Portal URL copied to clipboard', 'success')
@@ -115,7 +115,7 @@ export default function Marketplace() {
             <div className="mt-4 space-y-2">
               <div className="flex gap-2">
                 <Link
-                  to="/portal/login"
+                  to="/customer/login"
                   target="_blank"
                   className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] transition-colors"
                 >

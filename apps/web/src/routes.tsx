@@ -179,23 +179,23 @@ export const router = createBrowserRouter([
   },
   // Customer Portal (external customer access - no PublicShell for full-page experience)
   {
-    path: '/portal/login',
+    path: '/customer/login',
     element: <CustomerPortalLogin />,
   },
   {
-    path: '/portal/dashboard',
+    path: '/customer/dashboard',
     element: <CustomerPortalDashboard />,
   },
   {
-    path: '/portal/invoices',
+    path: '/customer/invoices',
     element: <CustomerPortalInvoices />,
   },
   {
-    path: '/portal/tickets',
+    path: '/customer/tickets',
     element: <CustomerPortalTickets />,
   },
   {
-    path: '/portal/quotes',
+    path: '/customer/quotes',
     element: <CustomerPortalQuotes />,
   },
   // Direct access fallback removed to avoid conflicting route matching

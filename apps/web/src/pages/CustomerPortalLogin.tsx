@@ -69,7 +69,7 @@ export default function CustomerPortalLogin() {
       localStorage.setItem('customer_portal_user', JSON.stringify(res.data.data.customer))
       
       showToast('Welcome back!', 'success')
-      navigate('/portal/dashboard')
+      navigate('/customer/dashboard')
     } catch (err: any) {
       console.error('Login error:', err)
       showToast('Login failed', 'error')

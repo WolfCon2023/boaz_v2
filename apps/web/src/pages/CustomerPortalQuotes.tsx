@@ -30,7 +30,7 @@ export default function CustomerPortalQuotes() {
   useEffect(() => {
     const token = localStorage.getItem('customer_portal_token')
     if (!token) {
-      navigate('/portal/login')
+      navigate('/customer/login')
     }
   }, [navigate])
 
@@ -82,7 +82,7 @@ export default function CustomerPortalQuotes() {
       <header className="bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center space-x-4">
-            <Link to="/portal/dashboard" className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
+            <Link to="/customer/dashboard" className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
               <ArrowLeft className="w-5 h-5" />
               <span>Back to Dashboard</span>
             </Link>
