@@ -5,6 +5,7 @@
  */
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
@@ -444,7 +445,7 @@ export default function AdminCustomerPortalUsers() {
     </div>
 
       {/* Create User Modal */}
-      {showCreateModal && (
+      {showCreateModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-6 lg:p-8">
           <div className="relative w-full max-w-3xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl">
             <div className="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
@@ -568,11 +569,12 @@ export default function AdminCustomerPortalUsers() {
             </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Edit User Modal */}
-      {showEditModal && editingUser && (
+      {showEditModal && editingUser && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-6 lg:p-8">
           <div className="relative w-full max-w-3xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl">
             <div className="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
@@ -680,7 +682,8 @@ export default function AdminCustomerPortalUsers() {
             </form>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
