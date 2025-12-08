@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
-import { Users, Plus, Mail, CheckCircle, XCircle, RefreshCw, Trash2, ShieldCheck } from 'lucide-react'
+import { Users, Plus, Mail, CheckCircle, XCircle, RefreshCw, Trash2, ShieldCheck, Edit } from 'lucide-react'
 
 type CustomerPortalUser = {
   id: string
@@ -31,6 +31,8 @@ export default function AdminCustomerPortalUsers() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'verified' | 'pending' | 'inactive'>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingUser, setEditingUser] = useState<CustomerPortalUser | null>(null)
   
   // Create form
   const [newEmail, setNewEmail] = useState('')
@@ -40,6 +42,13 @@ export default function AdminCustomerPortalUsers() {
   const [newPhone, setNewPhone] = useState('')
   const [newAccountId, setNewAccountId] = useState('')
   const [sendVerificationEmail, setSendVerificationEmail] = useState(true)
+
+  // Edit form
+  const [editEmail, setEditEmail] = useState('')
+  const [editName, setEditName] = useState('')
+  const [editCompany, setEditCompany] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [editAccountId, setEditAccountId] = useState('')
 
   // Fetch users
   const usersQ = useQuery({
@@ -80,6 +89,24 @@ export default function AdminCustomerPortalUsers() {
     },
     onError: (err: any) => {
       showToast(err.message || 'Failed to create user', 'error')
+    },
+  })
+
+  // Edit user mutation
+  const editUserMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await http.patch(`/api/admin/customer-portal-users/${data.id}`, data)
+      if (res.data.error) throw new Error(res.data.error)
+      return res.data.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-customer-portal-users'] })
+      setShowEditModal(false)
+      setEditingUser(null)
+      showToast('User updated successfully', 'success')
+    },
+    onError: (err: any) => {
+      showToast(err.message || 'Failed to update user', 'error')
     },
   })
 
@@ -154,6 +181,28 @@ export default function AdminCustomerPortalUsers() {
       phone: newPhone || null,
       accountId: newAccountId || null,
       sendVerificationEmail,
+    })
+  }
+
+  function openEditModal(user: CustomerPortalUser) {
+    setEditingUser(user)
+    setEditEmail(user.email)
+    setEditName(user.name)
+    setEditCompany(user.company || '')
+    setEditPhone(user.phone || '')
+    setEditAccountId(user.accountId || '')
+    setShowEditModal(true)
+  }
+
+  function handleEditUser(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingUser) return
+    editUserMutation.mutate({
+      id: editingUser.id,
+      name: editName,
+      company: editCompany || null,
+      phone: editPhone || null,
+      accountId: editAccountId || null,
     })
   }
 
@@ -362,6 +411,13 @@ export default function AdminCustomerPortalUsers() {
                           </>
                         )}
                         <button
+                          onClick={() => openEditModal(user)}
+                          className="rounded p-1 text-blue-600 hover:bg-blue-50"
+                          title="Edit user"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
                           onClick={() => toggleActiveMutation.mutate({ userId: user.id, active: !user.active })}
                           className={`rounded p-1 hover:bg-gray-50 ${user.active ? 'text-yellow-600' : 'text-green-600'}`}
                           title={user.active ? 'Deactivate' : 'Activate'}
@@ -504,6 +560,116 @@ export default function AdminCustomerPortalUsers() {
                   className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
                 >
                   {createUserMutation.isPending ? 'Creating...' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditModal && editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="w-full max-w-3xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 sm:p-8 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="mb-6 flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Edit Customer User</h3>
+              <button
+                onClick={() => {
+                  setShowEditModal(false)
+                  setEditingUser(null)
+                }}
+                className="rounded-lg p-1 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleEditUser} className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Email</span>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    disabled
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-3 py-2 text-sm text-[color:var(--color-text-muted)] cursor-not-allowed"
+                  />
+                  <span className="mt-1 block text-xs text-[color:var(--color-text-muted)]">
+                    Email cannot be changed
+                  </span>
+                </label>
+
+                <label className="block text-sm">
+                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Full Name *</span>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                    required
+                  />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Company</span>
+                  <input
+                    type="text"
+                    value={editCompany}
+                    onChange={(e) => setEditCompany(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  />
+                </label>
+
+                <label className="block text-sm">
+                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Phone</span>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+
+              <label className="block text-sm">
+                <span className="mb-1 block text-[color:var(--color-text-muted)]">Link to CRM Account</span>
+                <select
+                  value={editAccountId}
+                  onChange={(e) => setEditAccountId(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">No account (customer can access independently)</option>
+                  {accountsQ.isLoading && <option value="">Loading accounts...</option>}
+                  {accountsQ.data?.map((account) => (
+                    <option key={account._id} value={account._id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-[color:var(--color-text-muted)]">
+                  Link this user to a CRM account for invoice/quote/ticket access
+                </span>
+              </label>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false)
+                    setEditingUser(null)
+                  }}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editUserMutation.isPending}
+                  className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                >
+                  {editUserMutation.isPending ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>
