@@ -2,10 +2,31 @@
  * Cleanup Script: Remove Problematic Customer Portal User
  * 
  * Use this to remove a customer portal user by email
- * Usage: npx tsx apps/api/src/scripts/cleanup_customer_portal_user.ts <email>
+ * 
+ * Usage:
+ *   MONGO_URL="mongodb+srv://..." npx tsx apps/api/src/scripts/cleanup_customer_portal_user.ts <email>
  */
 
-import { getDb } from '../db.js'
+import { MongoClient } from 'mongodb'
+
+async function getDb() {
+  const mongoUrl = process.env.MONGO_URL
+  if (!mongoUrl) {
+    console.error('❌ MONGO_URL environment variable is not set')
+    console.log('\nUsage:')
+    console.log('  MONGO_URL="mongodb+srv://your-connection-string" npx tsx apps/api/src/scripts/cleanup_customer_portal_user.ts <email>')
+    return null
+  }
+  
+  try {
+    const client = new MongoClient(mongoUrl)
+    await client.connect()
+    return client.db()
+  } catch (err) {
+    console.error('❌ Failed to connect to database:', err)
+    return null
+  }
+}
 
 async function removeCustomerPortalUser(email: string) {
   console.log(`🔧 Attempting to remove customer portal user: ${email}`)

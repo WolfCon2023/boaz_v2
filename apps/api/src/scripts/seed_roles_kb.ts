@@ -2,10 +2,33 @@
  * Seed Knowledge Base: Roles & Permissions Guide
  * 
  * Creates a comprehensive KB article explaining all system roles
- * Usage: npx tsx apps/api/src/scripts/seed_roles_kb.ts
+ * 
+ * Usage:
+ *   npx tsx apps/api/src/scripts/seed_roles_kb.ts
+ *   Or with connection string:
+ *   MONGO_URL="mongodb+srv://..." npx tsx apps/api/src/scripts/seed_roles_kb.ts
  */
 
-import { getDb } from '../db.js'
+import { MongoClient } from 'mongodb'
+
+async function getDb() {
+  const mongoUrl = process.env.MONGO_URL
+  if (!mongoUrl) {
+    console.error('❌ MONGO_URL environment variable is not set')
+    console.log('\nUsage:')
+    console.log('  MONGO_URL="mongodb+srv://your-connection-string" npx tsx apps/api/src/scripts/seed_roles_kb.ts')
+    return null
+  }
+  
+  try {
+    const client = new MongoClient(mongoUrl)
+    await client.connect()
+    return client.db()
+  } catch (err) {
+    console.error('❌ Failed to connect to database:', err)
+    return null
+  }
+}
 
 const ROLES_KB_ARTICLE = {
   title: 'User Roles & Permissions Guide',
