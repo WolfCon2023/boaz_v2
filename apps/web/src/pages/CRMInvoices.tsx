@@ -1456,13 +1456,13 @@ export default function CRMInvoices() {
                       </label>
                       <select
                         id="invoice-send-contact"
-                        className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm"
+                        className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)]"
                       >
-                        <option value="">
+                        <option value="" className="text-gray-900">
                           {contacts.length === 0 ? 'Loading contacts...' : 'Select contact...'}
                         </option>
                         {contacts.map((c: any) => (
-                          <option key={c._id} value={c.email}>
+                          <option key={c._id} value={c.email} className="text-gray-900">
                             {c.name} ({c.email})
                           </option>
                         ))}
@@ -1475,9 +1475,9 @@ export default function CRMInvoices() {
                       <select
                         id="invoice-send-portal-user"
                         disabled={!editing.accountId}
-                        className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-2 text-sm disabled:opacity-50"
+                        className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] disabled:opacity-50"
                       >
-                        <option value="">
+                        <option value="" className="text-gray-900">
                           {!editing.accountId 
                             ? 'Select account first' 
                             : portalUsers.length === 0 
@@ -1485,7 +1485,7 @@ export default function CRMInvoices() {
                             : 'Select portal user...'}
                         </option>
                         {portalUsers.map((user: any) => (
-                          <option key={user.id} value={user.email}>
+                          <option key={user.id} value={user.email} className="text-gray-900">
                             {user.name} ({user.email})
                           </option>
                         ))}
