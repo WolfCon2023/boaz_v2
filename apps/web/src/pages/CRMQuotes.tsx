@@ -487,10 +487,10 @@ export default function CRMQuotes() {
   const editingIdRef = React.useRef<string | null>(null)
 
   // Load CRM contacts for send dropdown
-  const { data: contactsData } = useQuery({
+  const { data: contactsData, isLoading: contactsLoading } = useQuery({
     queryKey: ['crm-contacts-list'],
     queryFn: async () => {
-      const res = await http.get('/api/crm/contacts')
+      const res = await http.get('/api/crm/contacts', { params: { limit: 100 } })
       return res.data as { data: { items: Array<{ _id: string; name: string; email: string }> } }
     },
   })
@@ -1419,13 +1419,14 @@ export default function CRMQuotes() {
                       </label>
                       <select
                         id="quote-send-contact"
-                        className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)]"
+                        disabled={contactsLoading}
+                        className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] disabled:opacity-50"
                       >
-                        <option value="" className="text-gray-900">
-                          {contacts.length === 0 ? 'Loading contacts...' : 'Select contact...'}
+                        <option value="">
+                          {contactsLoading ? 'Loading contacts...' : contacts.length === 0 ? 'No contacts found' : 'Select contact...'}
                         </option>
-                        {(contacts || []).map((c: any) => (
-                          <option key={c._id} value={c.email} className="text-gray-900">
+                        {contacts.map((c: any) => (
+                          <option key={c._id} value={c.email}>
                             {c.name} ({c.email})
                           </option>
                         ))}
@@ -1440,7 +1441,7 @@ export default function CRMQuotes() {
                         disabled={!editing.accountId}
                         className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] disabled:opacity-50"
                       >
-                        <option value="" className="text-gray-900">
+                        <option value="">
                           {!editing.accountId 
                             ? 'Select account first' 
                             : portalUsers.length === 0 
@@ -1448,7 +1449,7 @@ export default function CRMQuotes() {
                             : 'Select portal user...'}
                         </option>
                         {portalUsers.map((user: any) => (
-                          <option key={user.id} value={user.email} className="text-gray-900">
+                          <option key={user.id} value={user.email}>
                             {user.name} ({user.email})
                           </option>
                         ))}
