@@ -509,20 +509,39 @@ export default function CRMQuotes() {
   })
   const portalUsers = React.useMemo(() => portalUsersData || [], [portalUsersData])
 
+  // Update contact dropdown when contacts load
+  React.useEffect(() => {
+    const select = document.getElementById('quote-send-contact') as HTMLSelectElement
+    if (select && contacts.length > 0) {
+      select.innerHTML = '<option value="">Select contact...</option>'
+      contacts.forEach(contact => {
+        const option = document.createElement('option')
+        option.value = contact.email
+        option.text = `${contact.name} (${contact.email})`
+        select.appendChild(option)
+      })
+    }
+  }, [contacts])
+
   // Update portal user dropdown when data loads
   React.useEffect(() => {
     const select = document.getElementById('quote-send-portal-user') as HTMLSelectElement
     if (select && editing) {
-      select.innerHTML = '<option value="">Select portal user...</option>'
-      if (portalUsers.length === 0 && editing.accountId) {
+      if (!editing.accountId) {
+        select.innerHTML = '<option value="">Select account first</option>'
+        select.disabled = true
+      } else if (portalUsers.length === 0) {
         select.innerHTML = '<option value="">No portal users found</option>'
+        select.disabled = false
       } else {
+        select.innerHTML = '<option value="">Select portal user...</option>'
         portalUsers.forEach(user => {
           const option = document.createElement('option')
           option.value = user.email
           option.text = `${user.name} (${user.email})`
           select.appendChild(option)
         })
+        select.disabled = false
       }
     }
   }, [portalUsers, editing?.accountId])
