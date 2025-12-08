@@ -2,38 +2,45 @@
  * Customer Portal Login & Registration
  * 
  * External customer-facing authentication page
+ * Matches BOAZ-OS design system
  */
 
-import { useState } from 'react'
+import * as React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
-import { Building2, Mail, Lock, User, Phone, AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function CustomerPortalLogin() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login')
-  const [loading, setLoading] = useState(false)
+  const [mode, setMode] = React.useState<'login' | 'register' | 'forgot'>('login')
+  const [loading, setLoading] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false)
+  const [showPwd, setShowPwd] = React.useState(false)
   
   // Login form
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginPassword, setLoginPassword] = useState('')
+  const [loginEmail, setLoginEmail] = React.useState('')
+  const [loginPassword, setLoginPassword] = React.useState('')
   
   // Register form
-  const [regEmail, setRegEmail] = useState('')
-  const [regPassword, setRegPassword] = useState('')
-  const [regName, setRegName] = useState('')
-  const [regCompany, setRegCompany] = useState('')
-  const [regPhone, setRegPhone] = useState('')
+  const [regEmail, setRegEmail] = React.useState('')
+  const [regPassword, setRegPassword] = React.useState('')
+  const [regName, setRegName] = React.useState('')
+  const [regCompany, setRegCompany] = React.useState('')
+  const [regPhone, setRegPhone] = React.useState('')
   
   // Forgot password
-  const [forgotEmail, setForgotEmail] = useState('')
-  const [forgotSent, setForgotSent] = useState(false)
+  const [forgotEmail, setForgotEmail] = React.useState('')
+  const [forgotSent, setForgotSent] = React.useState(false)
   
   // Registration success
-  const [regSuccess, setRegSuccess] = useState(false)
+  const [regSuccess, setRegSuccess] = React.useState(false)
+
+  React.useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -58,7 +65,6 @@ export default function CustomerPortalLogin() {
         return
       }
 
-      // Store token
       localStorage.setItem('customer_portal_token', res.data.data.token)
       localStorage.setItem('customer_portal_user', JSON.stringify(res.data.data.customer))
       
@@ -124,306 +130,266 @@ export default function CustomerPortalLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
+    <div className="relative overflow-hidden flex min-h-screen items-center justify-center bg-[color:var(--color-bg)]">
+      {/* Animated background - matching BOAZ design */}
+      <style>{`
+        @keyframes floatX { 0%{transform:translateX(-20%)} 50%{transform:translateX(20%)} 100%{transform:translateX(-20%)} }
+        @keyframes floatY { 0%{transform:translateY(-10%)} 50%{transform:translateY(10%)} 100%{transform:translateY(-10%)} }
+      `}</style>
+      <div className="pointer-events-none absolute inset-0 opacity-30" aria-hidden="true">
+        <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full blur-3xl" style={{ background: 'radial-gradient(40% 40% at 50% 50%, #22c55e55, transparent 70%)', animation: 'floatX 9s ease-in-out infinite' }} />
+        <div className="absolute -bottom-24 -right-24 h-80 w-80 rounded-full blur-3xl" style={{ background: 'radial-gradient(40% 40% at 50% 50%, #3b82f655, transparent 70%)', animation: 'floatY 11s ease-in-out infinite' }} />
+        <div className="absolute top-1/3 -right-20 h-64 w-64 rounded-full blur-3xl" style={{ background: 'radial-gradient(40% 40% at 50% 50%, #a855f755, transparent 70%)', animation: 'floatX 13s ease-in-out infinite' }} />
+      </div>
+
+      <div className={`w-[min(90vw,28rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-lg transition-all duration-300 ${mounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-3 scale-[0.98]'}`}>
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl mb-4 shadow-lg">
-            <Building2 className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Customer Portal
-          </h1>
-          <p className="text-gray-600">
-            Access your invoices, tickets, and contracts
-          </p>
+        <div className="mb-6 text-center">
+          <div className="mb-1 text-2xl font-semibold text-[color:var(--color-text)]">Customer Portal</div>
+          <div className="text-sm text-[color:var(--color-text-muted)]">Access your invoices, tickets, and contracts</div>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          {/* Tabs */}
-          {!regSuccess && !forgotSent && (
-            <div className="flex border-b mb-6">
-              <button
-                onClick={() => setMode('login')}
-                className={`flex-1 py-3 font-medium transition-colors ${
-                  mode === 'login'
-                    ? 'border-b-2 border-indigo-600 text-indigo-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Login
-              </button>
-              <button
-                onClick={() => setMode('register')}
-                className={`flex-1 py-3 font-medium transition-colors ${
-                  mode === 'register'
-                    ? 'border-b-2 border-indigo-600 text-indigo-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Register
-              </button>
-            </div>
-          )}
+        {/* Tabs */}
+        {!regSuccess && !forgotSent && (
+          <div className="mb-6 flex border-b border-[color:var(--color-border)]">
+            <button
+              onClick={() => setMode('login')}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                mode === 'login'
+                  ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+                  : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+              }`}
+            >
+              Login
+            </button>
+            <button
+              onClick={() => setMode('register')}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                mode === 'register'
+                  ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+                  : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+              }`}
+            >
+              Register
+            </button>
+          </div>
+        )}
 
-          {/* Login Form */}
-          {mode === 'login' && !forgotSent && (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="email"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="you@company.com"
-                    required
-                  />
-                </div>
-              </div>
+        {/* Login Form */}
+        {mode === 'login' && !forgotSent && (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Email Address</span>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+                placeholder="you@company.com"
+                required
+              />
+            </label>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="text-right">
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Password</span>
+              <div className="relative">
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 pr-16 text-sm text-[color:var(--color-text)]"
+                  placeholder="••••••••"
+                  required
+                />
                 <button
                   type="button"
-                  onClick={() => setMode('forgot')}
-                  className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                  onClick={() => setShowPwd(!showPwd)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
                 >
-                  Forgot password?
+                  {showPwd ? 'Hide' : 'Show'}
                 </button>
               </div>
+            </label>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
-              >
-                {loading ? 'Logging in...' : 'Login'}
-              </button>
-            </form>
-          )}
-
-          {/* Register Form */}
-          {mode === 'register' && !regSuccess && (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name *
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="John Doe"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address *
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="email"
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="you@company.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password * (min. 8 characters)
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="password"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="••••••••"
-                    minLength={8}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Company Name
-                </label>
-                <div className="relative">
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={regCompany}
-                    onChange={(e) => setRegCompany(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="Acme Corp"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone Number
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="tel"
-                    value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="(555) 123-4567"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
-              >
-                {loading ? 'Creating Account...' : 'Create Account'}
-              </button>
-            </form>
-          )}
-
-          {/* Registration Success */}
-          {regSuccess && (
-            <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                <CheckCircle className="w-8 h-8 text-green-600" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Check Your Email
-              </h3>
-              <p className="text-gray-600 mb-6">
-                We've sent a verification link to <strong>{regEmail}</strong>. 
-                Please click the link to verify your account and login.
-              </p>
-              <button
-                onClick={() => {
-                  setRegSuccess(false)
-                  setMode('login')
-                }}
-                className="text-indigo-600 hover:text-indigo-700 font-medium"
-              >
-                Back to Login
-              </button>
-            </div>
-          )}
-
-          {/* Forgot Password Form */}
-          {mode === 'forgot' && !forgotSent && (
-            <form onSubmit={handleForgotPassword} className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                <div className="flex">
-                  <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
-                  <div className="text-sm text-blue-800">
-                    Enter your email address and we'll send you a link to reset your password.
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="email"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    placeholder="you@company.com"
-                    required
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
-              >
-                {loading ? 'Sending...' : 'Send Reset Link'}
-              </button>
-
+            <div className="text-right">
               <button
                 type="button"
-                onClick={() => setMode('login')}
-                className="w-full text-sm text-gray-600 hover:text-gray-800"
+                onClick={() => setMode('forgot')}
+                className="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)] underline"
               >
-                Back to Login
-              </button>
-            </form>
-          )}
-
-          {/* Forgot Password Success */}
-          {forgotSent && (
-            <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                <CheckCircle className="w-8 h-8 text-green-600" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Check Your Email
-              </h3>
-              <p className="text-gray-600 mb-6">
-                If an account exists with that email, we've sent a password reset link.
-              </p>
-              <button
-                onClick={() => {
-                  setForgotSent(false)
-                  setMode('login')
-                }}
-                className="text-indigo-600 hover:text-indigo-700 font-medium"
-              >
-                Back to Login
+                Forgot password?
               </button>
             </div>
-          )}
-        </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'Logging in...' : 'Login'}
+            </button>
+          </form>
+        )}
+
+        {/* Register Form */}
+        {mode === 'register' && !regSuccess && (
+          <form onSubmit={handleRegister} className="space-y-4">
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Full Name *</span>
+              <input
+                type="text"
+                value={regName}
+                onChange={(e) => setRegName(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+                placeholder="John Doe"
+                required
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Email Address *</span>
+              <input
+                type="email"
+                value={regEmail}
+                onChange={(e) => setRegEmail(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+                placeholder="you@company.com"
+                required
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Password * (min. 8 characters)</span>
+              <input
+                type="password"
+                value={regPassword}
+                onChange={(e) => setRegPassword(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+                placeholder="••••••••"
+                minLength={8}
+                required
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Company Name</span>
+              <input
+                type="text"
+                value={regCompany}
+                onChange={(e) => setRegCompany(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+                placeholder="Acme Corp"
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Phone Number</span>
+              <input
+                type="tel"
+                value={regPhone}
+                onChange={(e) => setRegPhone(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+                placeholder="(555) 123-4567"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'Creating Account...' : 'Create Account'}
+            </button>
+          </form>
+        )}
+
+        {/* Registration Success */}
+        {regSuccess && (
+          <div className="text-center py-6">
+            <div className="text-4xl mb-3">✉️</div>
+            <h3 className="text-lg font-semibold text-[color:var(--color-text)] mb-2">
+              Check Your Email
+            </h3>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-6">
+              We've sent a verification link to <strong className="text-[color:var(--color-text)]">{regEmail}</strong>. 
+              Please click the link to verify your account and login.
+            </p>
+            <button
+              onClick={() => {
+                setRegSuccess(false)
+                setMode('login')
+              }}
+              className="text-sm text-[color:var(--color-primary-600)] hover:text-[color:var(--color-primary-700)] underline"
+            >
+              Back to Login
+            </button>
+          </div>
+        )}
+
+        {/* Forgot Password Form */}
+        {mode === 'forgot' && !forgotSent && (
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div className="mb-4 text-sm text-[color:var(--color-text-muted)]">
+              Enter your email address and we'll send you a link to reset your password.
+            </div>
+
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Email Address</span>
+              <input
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+                placeholder="you@company.com"
+                required
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className="w-full text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)] underline"
+            >
+              Back to Login
+            </button>
+          </form>
+        )}
+
+        {/* Forgot Password Success */}
+        {forgotSent && (
+          <div className="text-center py-6">
+            <div className="text-4xl mb-3">✉️</div>
+            <h3 className="text-lg font-semibold text-[color:var(--color-text)] mb-2">
+              Check Your Email
+            </h3>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-6">
+              If an account exists with that email, we've sent a password reset link.
+            </p>
+            <button
+              onClick={() => {
+                setForgotSent(false)
+                setMode('login')
+              }}
+              className="text-sm text-[color:var(--color-primary-600)] hover:text-[color:var(--color-primary-700)] underline"
+            >
+              Back to Login
+            </button>
+          </div>
+        )}
 
         {/* Footer */}
-        <div className="text-center mt-6 text-sm text-gray-600">
+        <div className="mt-6 text-center text-xs text-[color:var(--color-text-muted)]">
           © 2025 Wolf Consulting Group, LLC
         </div>
       </div>
     </div>
   )
 }
-
