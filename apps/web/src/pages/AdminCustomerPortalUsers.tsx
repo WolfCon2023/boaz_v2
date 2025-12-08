@@ -4,7 +4,7 @@
  * Manage external customer portal users
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '../lib/http'
@@ -34,6 +34,37 @@ export default function AdminCustomerPortalUsers() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingUser, setEditingUser] = useState<CustomerPortalUser | null>(null)
+  
+  const [createPortalEl, setCreatePortalEl] = useState<HTMLElement | null>(null)
+  const [editPortalEl, setEditPortalEl] = useState<HTMLElement | null>(null)
+
+  // Portal setup for create modal
+  useEffect(() => {
+    if (!showCreateModal) return
+    const el = document.createElement('div')
+    el.setAttribute('data-overlay', 'create-customer-user')
+    Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' })
+    document.body.appendChild(el)
+    setCreatePortalEl(el)
+    return () => {
+      try { document.body.removeChild(el) } catch {}
+      setCreatePortalEl(null)
+    }
+  }, [showCreateModal])
+
+  // Portal setup for edit modal
+  useEffect(() => {
+    if (!showEditModal || !editingUser) return
+    const el = document.createElement('div')
+    el.setAttribute('data-overlay', 'edit-customer-user')
+    Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' })
+    document.body.appendChild(el)
+    setEditPortalEl(el)
+    return () => {
+      try { document.body.removeChild(el) } catch {}
+      setEditPortalEl(null)
+    }
+  }, [showEditModal, editingUser])
   
   // Create form
   const [newEmail, setNewEmail] = useState('')
@@ -445,19 +476,12 @@ export default function AdminCustomerPortalUsers() {
     </div>
 
       {/* Create User Modal */}
-      {showCreateModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-6 lg:p-8">
-          <div className="relative w-full max-w-3xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl">
-            <div className="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
-              <div className="mb-6 flex items-center justify-between">
-                <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Create Customer User</h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="rounded-lg p-1 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
-              >
-                ×
-              </button>
-            </div>
+      {showCreateModal && createPortalEl && createPortal(
+        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
+              <div className="mb-4 text-lg font-semibold text-[color:var(--color-text)]">Create Customer User</div>
 
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -567,29 +591,22 @@ export default function AdminCustomerPortalUsers() {
                 </button>
               </div>
             </form>
-            </div>
           </div>
+        </div>
         </div>,
-        document.body
+        createPortalEl
       )}
 
       {/* Edit User Modal */}
-      {showEditModal && editingUser && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-6 lg:p-8">
-          <div className="relative w-full max-w-3xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl">
-            <div className="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
-              <div className="mb-6 flex items-center justify-between">
-                <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Edit Customer User</h3>
-              <button
-                onClick={() => {
-                  setShowEditModal(false)
-                  setEditingUser(null)
-                }}
-                className="rounded-lg p-1 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
-              >
-                ×
-              </button>
-            </div>
+      {showEditModal && editingUser && editPortalEl && createPortal(
+        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
+          <div className="absolute inset-0 bg-black/60" onClick={() => {
+            setShowEditModal(false)
+            setEditingUser(null)
+          }} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
+              <div className="mb-4 text-lg font-semibold text-[color:var(--color-text)]">Edit Customer User</div>
 
             <form onSubmit={handleEditUser} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -680,10 +697,10 @@ export default function AdminCustomerPortalUsers() {
                 </button>
               </div>
             </form>
-            </div>
           </div>
+        </div>
         </div>,
-        document.body
+        editPortalEl
       )}
     </>
   )
