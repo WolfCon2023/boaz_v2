@@ -260,15 +260,24 @@ export default function CustomerPortalLogin() {
 
             <label className="block text-sm">
               <span className="mb-1 block text-[color:var(--color-text-muted)]">Password * (min. 8 characters)</span>
-              <input
-                type="password"
-                value={regPassword}
-                onChange={(e) => setRegPassword(e.target.value)}
-                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
-                placeholder="••••••••"
-                minLength={8}
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 pr-16 text-sm text-[color:var(--color-text)]"
+                  placeholder="••••••••"
+                  minLength={8}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd(!showPwd)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
+                >
+                  {showPwd ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </label>
 
             <label className="block text-sm">

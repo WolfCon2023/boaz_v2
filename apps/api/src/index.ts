@@ -47,6 +47,7 @@ import { contractsPublicRouter } from './crm/contracts_public.js'
 import { projectsRouter } from './crm/projects.js'
 import { customerPortalAuthRouter } from './customer_portal/auth.js'
 import { customerPortalDataRouter } from './customer_portal/data.js'
+import { adminCustomerPortalUsersRouter } from './admin/customer_portal_users.js'
 
 const app = express()
 const normalize = (s: string) => s.trim().replace(/\/$/, '').toLowerCase()
@@ -132,6 +133,8 @@ app.use('/api', viewsRouter)
 // Customer Portal (external customer access)
 app.use('/api/customer-portal/auth', customerPortalAuthRouter)
 app.use('/api/customer-portal/data', customerPortalDataRouter)
+// Admin: Customer Portal User Management
+app.use('/api/admin/customer-portal-users', adminCustomerPortalUsersRouter)
 
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))
