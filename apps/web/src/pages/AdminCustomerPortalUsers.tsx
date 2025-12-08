@@ -221,6 +221,7 @@ export default function AdminCustomerPortalUsers() {
   }
 
   return (
+    <>
     <div className="mx-auto w-full max-w-screen-2xl space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -440,6 +441,7 @@ export default function AdminCustomerPortalUsers() {
           </div>
         )}
       </div>
+    </div>
 
       {/* Create User Modal */}
       {showCreateModal && (
@@ -680,6 +682,6 @@ export default function AdminCustomerPortalUsers() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
