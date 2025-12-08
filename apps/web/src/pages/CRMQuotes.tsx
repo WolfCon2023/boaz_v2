@@ -491,10 +491,17 @@ export default function CRMQuotes() {
     queryKey: ['crm-contacts-list'],
     queryFn: async () => {
       const res = await http.get('/api/crm/contacts', { params: { limit: 100 } })
+      console.log('[CRMQuotes] Contacts loaded:', res.data?.data?.items?.length || 0)
       return res.data as { data: { items: Array<{ _id: string; name: string; email: string }> } }
     },
   })
-  const contacts = React.useMemo(() => contactsData?.data.items ?? [], [contactsData?.data.items])
+  const contacts = React.useMemo(() => {
+    const items = contactsData?.data.items ?? []
+    // Only show contacts with email addresses
+    const withEmail = items.filter((c: any) => c.email && c.email.trim())
+    console.log('[CRMQuotes] Contacts with email:', withEmail.length, withEmail)
+    return withEmail
+  }, [contactsData?.data.items])
 
   // Load portal users when account is selected
   const { data: portalUsersData } = useQuery({
