@@ -12,6 +12,7 @@ import Enroll from '@/pages/Enroll'
 import Settings from '@/pages/Settings'
 import AdminPortal from '@/pages/AdminPortal'
 import AdminCustomerPortalUsers from '@/pages/AdminCustomerPortalUsers'
+import AdminDataSeeding from '@/pages/AdminDataSeeding'
 import Dashboard from '@/pages/Dashboard'
 import Marketplace from '@/pages/Marketplace'
 import Workspace from '@/pages/Workspace'
@@ -82,6 +83,7 @@ export const router = createBrowserRouter([
       { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
       { path: 'admin', element: <RequireAuth><AdminPortal /></RequireAuth> },
       { path: 'admin/customer-portal-users', element: <RequireAuth><AdminCustomerPortalUsers /></RequireAuth> },
+      { path: 'admin/seed-data', element: <RequireAuth><AdminDataSeeding /></RequireAuth> },
       // login is defined as a top-level route wrapped in PublicShell
       { path: 'register', element: <Register /> },
       { path: 'dashboard', element: <RequireAuth><RequireApplication appKey="dashboard"><Dashboard /></RequireApplication></RequireAuth> },

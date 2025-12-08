@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download, Database } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 
@@ -672,6 +672,14 @@ export default function AdminPortal() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <a
+            href="/admin/seed-data"
+            className="flex items-center space-x-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+            title="Data Seeding Tools"
+          >
+            <Database className="h-4 w-4" />
+            <span>Seed Data</span>
+          </a>
           <a
             href="/apps/crm/support/kb/user-roles-permissions"
             target="_blank"

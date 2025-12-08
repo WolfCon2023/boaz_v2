@@ -7,6 +7,50 @@ export const DEFAULT_ROLES = [
     { name: 'manager', permissions: ['users.read', 'users.write', 'roles.read'] },
     { name: 'staff', permissions: ['users.read'] },
     { name: 'customer', permissions: [] },
+    {
+        name: 'it',
+        permissions: [
+            'support.read',
+            'support.write',
+            'kb.read',
+            'kb.write',
+            'assets.read',
+            'assets.write',
+            'vendors.read',
+            'vendors.write',
+            'projects.read',
+            'slas.read',
+            'contacts.read',
+            'accounts.read',
+            'products.read',
+        ]
+    },
+    {
+        name: 'it_manager',
+        permissions: [
+            'support.read',
+            'support.write',
+            'kb.read',
+            'kb.write',
+            'assets.read',
+            'assets.write',
+            'vendors.read',
+            'vendors.write',
+            'projects.read',
+            'slas.read',
+            'slas.write',
+            'contacts.read',
+            'accounts.read',
+            'products.read',
+            'users.read',
+            'roles.read',
+            'quotes.read',
+            'quotes.approve',
+            'invoices.read',
+            'deals.read',
+            'renewals.read',
+        ]
+    },
 ];
 export async function ensureDefaultRoles() {
     const db = await getDb();
