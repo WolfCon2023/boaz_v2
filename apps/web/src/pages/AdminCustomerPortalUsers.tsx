@@ -269,6 +269,7 @@ export default function AdminCustomerPortalUsers() {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-muted)] uppercase">User</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-muted)] uppercase">Account</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-muted)] uppercase">Role</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-muted)] uppercase">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-muted)] uppercase">Created</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-[color:var(--color-text-muted)] uppercase">Last Login</th>
@@ -297,6 +298,11 @@ export default function AdminCustomerPortalUsers() {
                           <span className="text-[color:var(--color-text-muted)]">No account</span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">
+                        Customer
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
