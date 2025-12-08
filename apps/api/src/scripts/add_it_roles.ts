@@ -4,32 +4,10 @@
  * Adds the new IT and IT Manager roles to existing databases
  * Safe to run multiple times - will skip if roles already exist
  * 
- * Usage: 
- *   npx tsx apps/api/src/scripts/add_it_roles.ts
- *   Or with connection string:
- *   MONGO_URL="mongodb+srv://..." npx tsx apps/api/src/scripts/add_it_roles.ts
+ * Usage: npx tsx apps/api/src/scripts/add_it_roles.ts
  */
 
-import { MongoClient } from 'mongodb'
-
-async function getDb() {
-  const mongoUrl = process.env.MONGO_URL
-  if (!mongoUrl) {
-    console.error('❌ MONGO_URL environment variable is not set')
-    console.log('\nUsage:')
-    console.log('  MONGO_URL="mongodb+srv://your-connection-string" npx tsx apps/api/src/scripts/add_it_roles.ts')
-    return null
-  }
-  
-  try {
-    const client = new MongoClient(mongoUrl)
-    await client.connect()
-    return client.db()
-  } catch (err) {
-    console.error('❌ Failed to connect to database:', err)
-    return null
-  }
-}
+import { getDb } from '../db.js'
 
 const IT_ROLE = {
   name: 'it',
