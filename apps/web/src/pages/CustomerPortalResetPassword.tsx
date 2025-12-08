@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
-import { CheckCircle, XCircle, Lock } from 'lucide-react'
+import { CheckCircle, XCircle } from 'lucide-react'
 
 export default function CustomerPortalResetPassword() {
   const navigate = useNavigate()

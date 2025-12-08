@@ -166,6 +166,83 @@ customerPortalDataRouter.get('/tickets', async (req: any, res) => {
   }
 })
 
+// POST /api/customer-portal/data/tickets - Create new support ticket
+customerPortalDataRouter.post('/tickets', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const { accountId, email, customerId } = req.customerAuth
+    const { shortDescription, description, priority } = req.body
+
+    if (!shortDescription || !description) {
+      return res.status(400).json({ data: null, error: 'missing_required_fields' })
+    }
+
+    // Get customer info
+    const customer = await db.collection('customer_portal_users').findOne({ 
+      _id: new ObjectId(customerId) 
+    })
+
+    // Get next ticket number
+    const lastTicket = await db.collection('support_tickets')
+      .find({})
+      .sort({ ticketNumber: -1 })
+      .limit(1)
+      .toArray()
+    
+    const ticketNumber = (lastTicket[0]?.ticketNumber || 0) + 1
+
+    // Calculate SLA due date based on priority
+    const now = new Date()
+    const slaHours: Record<string, number> = {
+      critical: 4,
+      high: 8,
+      normal: 24,
+      low: 48,
+    }
+    const slaDueAt = new Date(now.getTime() + (slaHours[priority || 'normal'] || 24) * 60 * 60 * 1000)
+
+    // Create ticket
+    const newTicket = {
+      ticketNumber,
+      shortDescription,
+      description,
+      status: 'open',
+      priority: priority || 'normal',
+      type: 'external',
+      requesterName: customer?.name || 'Customer',
+      requesterEmail: email,
+      accountId: accountId ? new ObjectId(accountId) : null,
+      assigneeId: null,
+      comments: [],
+      tags: [],
+      createdAt: now,
+      updatedAt: now,
+      slaDueAt,
+      history: [{
+        action: 'created',
+        by: customer?.name || email,
+        at: now,
+      }],
+    }
+
+    const result = await db.collection('support_tickets').insertOne(newTicket)
+
+    res.json({ 
+      data: { 
+        ticketNumber,
+        ticketId: result.insertedId.toHexString(),
+        message: 'Ticket created successfully' 
+      }, 
+      error: null 
+    })
+  } catch (err: any) {
+    console.error('Create customer ticket error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_create_ticket' })
+  }
+})
+
 // POST /api/customer-portal/data/tickets/:id/comments - Add comment to ticket
 customerPortalDataRouter.post('/tickets/:id/comments', async (req: any, res) => {
   const db = await getDb()

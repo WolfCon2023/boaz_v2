@@ -73,6 +73,24 @@ export default function SupportPortal() {
         <div className="mt-2 text-sm text-[color:var(--color-text-muted)]">Submit a ticket or check your ticket status</div>
       </div>
 
+      {/* Customer Portal Banner */}
+      <div className="rounded-xl border border-[color:var(--color-primary-600)] bg-gradient-to-r from-blue-50 to-indigo-50 p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h3 className="mb-1 text-base font-semibold text-gray-900">Have a customer account?</h3>
+            <p className="mb-3 text-sm text-gray-700">
+              Login to your customer portal to view all your tickets, invoices, quotes, and more in one place.
+            </p>
+            <a
+              href="/customer/login"
+              className="inline-flex items-center rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)] transition-colors"
+            >
+              Go to Customer Portal →
+            </a>
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
         <div className="mb-4 text-base font-semibold">Submit a ticket</div>
         <form className="space-y-3" onSubmit={submitTicket}>

@@ -2,13 +2,14 @@
  * Customer Portal Tickets
  * 
  * View support tickets and add comments
+ * Now includes ability to create new tickets
  */
 
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '../lib/http'
-import { ArrowLeft, Ticket, MessageSquare, Send, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Ticket, MessageSquare, Send, AlertCircle, Plus, X } from 'lucide-react'
 import { formatDateTime } from '../lib/dateFormat'
 import { useToast } from '../components/Toast'
 
@@ -31,6 +32,12 @@ export default function CustomerPortalTickets() {
   const qc = useQueryClient()
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null)
   const [newComment, setNewComment] = useState('')
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  
+  // New ticket form
+  const [newSubject, setNewSubject] = useState('')
+  const [newDescription, setNewDescription] = useState('')
+  const [newPriority, setNewPriority] = useState('normal')
 
   useEffect(() => {
     const token = localStorage.getItem('customer_portal_token')
@@ -69,10 +76,41 @@ export default function CustomerPortalTickets() {
     },
   })
 
+  const createTicketMutation = useMutation({
+    mutationFn: async (data: { shortDescription: string; description: string; priority: string }) => {
+      const token = localStorage.getItem('customer_portal_token')
+      const res = await http.post(
+        '/api/customer-portal/data/tickets',
+        data,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (res.data.error) throw new Error(res.data.error)
+      return res.data.data
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['customer-portal-tickets'] })
+      setShowCreateForm(false)
+      setNewSubject('')
+      setNewDescription('')
+      setNewPriority('normal')
+      showToast(`Ticket #${data.ticketNumber} created successfully`, 'success')
+    },
+  })
+
   function handleAddComment(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedTicket || !newComment.trim()) return
     addCommentMutation.mutate({ ticketId: selectedTicket, body: newComment })
+  }
+
+  function handleCreateTicket(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newSubject.trim() || !newDescription.trim()) return
+    createTicketMutation.mutate({
+      shortDescription: newSubject,
+      description: newDescription,
+      priority: newPriority,
+    })
   }
 
   function getStatusBadge(status: string) {
@@ -106,59 +144,88 @@ export default function CustomerPortalTickets() {
   const ticket = ticketsQ.data?.find(t => t.id === selectedTicket)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
-      <header className="bg-white border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center space-x-4">
-            <Link to="/customer/dashboard" className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Dashboard</span>
-            </Link>
-            <div className="hidden sm:block w-px h-6 bg-gray-300"></div>
-            <h1 className="text-xl font-bold text-gray-900 hidden sm:block">My Tickets</h1>
+    <div className="min-h-screen bg-[color:var(--color-bg)]">
+      <header className="border-b border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Link to="/customer/dashboard" className="flex items-center space-x-2 text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]">
+                <ArrowLeft className="h-5 w-5" />
+                <span>Back to Dashboard</span>
+              </Link>
+              <div className="hidden sm:block h-6 w-px bg-[color:var(--color-border)]"></div>
+              <h1 className="text-xl font-semibold text-[color:var(--color-text)] hidden sm:block">My Tickets</h1>
+            </div>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              <span>New Ticket</span>
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        {/* Info Banner */}
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm text-blue-900">
+            💡 <strong>Tip:</strong> Need quick anonymous support? Visit our{' '}
+            <a href="/portal" target="_blank" className="underline font-medium">
+              Support Portal
+            </a>{' '}
+            to submit tickets without logging in.
+          </p>
+        </div>
+
         {ticketsQ.isLoading ? (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-            <p className="mt-2 text-gray-600">Loading tickets...</p>
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-[color:var(--color-primary-600)]"></div>
+            <p className="mt-2 text-[color:var(--color-text-muted)]">Loading tickets...</p>
           </div>
         ) : ticketsQ.error ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
             <div className="flex">
-              <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 mr-2" />
-              <p className="text-red-800">Failed to load tickets</p>
+              <AlertCircle className="mt-0.5 mr-2 h-5 w-5 flex-shrink-0 text-red-600" />
+              <p className="text-sm text-red-800">Failed to load tickets</p>
             </div>
           </div>
         ) : !ticketsQ.data || ticketsQ.data.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-md p-12 text-center">
-            <Ticket className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Tickets Found</h3>
-            <p className="text-gray-600">You don't have any support tickets yet.</p>
+          <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-12 text-center">
+            <Ticket className="mx-auto mb-4 h-16 w-16 text-[color:var(--color-text-muted)] opacity-50" />
+            <h3 className="mb-2 text-lg font-semibold text-[color:var(--color-text)]">No Tickets Found</h3>
+            <p className="mb-4 text-[color:var(--color-text-muted)]">You don't have any support tickets yet.</p>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="inline-flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Create Your First Ticket</span>
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Tickets List */}
             <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">All Tickets</h2>
+              <h2 className="mb-4 text-2xl font-semibold text-[color:var(--color-text)]">All Tickets</h2>
               
               {ticketsQ.data.map((t) => (
                 <div
                   key={t.id}
-                  className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border cursor-pointer ${
-                    selectedTicket === t.id ? 'border-indigo-500 ring-2 ring-indigo-200' : 'border-gray-200'
+                  className={`cursor-pointer rounded-lg border p-6 transition-all ${
+                    selectedTicket === t.id 
+                      ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-panel)] ring-2 ring-[color:var(--color-primary-600)] ring-opacity-20' 
+                      : 'border-[color:var(--color-border)] bg-[color:var(--color-panel)] hover:border-[color:var(--color-primary-600)]'
                   }`}
                   onClick={() => setSelectedTicket(t.id)}
                 >
-                  <div className="flex items-start justify-between mb-3">
+                  <div className="mb-3 flex items-start justify-between">
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900">
+                      <h3 className="text-lg font-semibold text-[color:var(--color-text)]">
                         Ticket #{t.ticketNumber}
                       </h3>
-                      <p className="text-sm text-gray-600">{t.shortDescription}</p>
+                      <p className="text-sm text-[color:var(--color-text-muted)]">{t.shortDescription}</p>
                     </div>
                     <div className="flex flex-col items-end space-y-1">
                       {getStatusBadge(t.status)}
@@ -166,13 +233,13 @@ export default function CustomerPortalTickets() {
                     </div>
                   </div>
 
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">{t.description}</p>
+                  <p className="mb-3 line-clamp-2 text-sm text-[color:var(--color-text-muted)]">{t.description}</p>
 
-                  <div className="flex items-center justify-between text-xs text-gray-500">
+                  <div className="flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
                     <span>Created: {new Date(t.createdAt).toLocaleDateString()}</span>
                     {t.comments.length > 0 && (
                       <span className="flex items-center">
-                        <MessageSquare className="w-3 h-3 mr-1" />
+                        <MessageSquare className="mr-1 h-3 w-3" />
                         {t.comments.length} {t.comments.length === 1 ? 'comment' : 'comments'}
                       </span>
                     )}
@@ -184,20 +251,20 @@ export default function CustomerPortalTickets() {
             {/* Ticket Detail */}
             <div className="lg:sticky lg:top-4 lg:self-start">
               {ticket ? (
-                <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
                   <div className="mb-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl font-bold text-gray-900">Ticket #{ticket.ticketNumber}</h3>
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Ticket #{ticket.ticketNumber}</h3>
                       <div className="flex flex-col items-end space-y-1">
                         {getStatusBadge(ticket.status)}
                         {getPriorityBadge(ticket.priority)}
                       </div>
                     </div>
                     
-                    <h4 className="text-lg font-semibold text-gray-900 mb-2">{ticket.shortDescription}</h4>
-                    <p className="text-gray-700 mb-4">{ticket.description}</p>
+                    <h4 className="mb-2 text-lg font-semibold text-[color:var(--color-text)]">{ticket.shortDescription}</h4>
+                    <p className="mb-4 text-[color:var(--color-text-muted)]">{ticket.description}</p>
 
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-[color:var(--color-text-muted)]">
                       <p>Created: {formatDateTime(new Date(ticket.createdAt))}</p>
                       <p>Last Updated: {formatDateTime(new Date(ticket.updatedAt))}</p>
                       {ticket.slaDueAt && (
@@ -207,22 +274,22 @@ export default function CustomerPortalTickets() {
                   </div>
 
                   {/* Comments */}
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold text-gray-900 mb-3">Comments</h4>
+                  <div className="border-t border-[color:var(--color-border)] pt-4">
+                    <h4 className="mb-3 font-semibold text-[color:var(--color-text)]">Comments</h4>
                     
                     {ticket.comments.length === 0 ? (
-                      <p className="text-sm text-gray-500 mb-4">No comments yet</p>
+                      <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">No comments yet</p>
                     ) : (
-                      <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
+                      <div className="mb-4 max-h-96 space-y-3 overflow-y-auto">
                         {ticket.comments.map((comment, idx) => (
-                          <div key={idx} className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-medium text-sm text-gray-900">{comment.author}</span>
-                              <span className="text-xs text-gray-500">
+                          <div key={idx} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
+                            <div className="mb-1 flex items-center justify-between">
+                              <span className="text-sm font-medium text-[color:var(--color-text)]">{comment.author}</span>
+                              <span className="text-xs text-[color:var(--color-text-muted)]">
                                 {new Date(comment.at).toLocaleDateString()}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-700">{comment.body}</p>
+                            <p className="text-sm text-[color:var(--color-text-muted)]">{comment.body}</p>
                           </div>
                         ))}
                       </div>
@@ -230,13 +297,13 @@ export default function CustomerPortalTickets() {
 
                     {/* Add Comment Form */}
                     <form onSubmit={handleAddComment} className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">
                         Add a Comment
                       </label>
                       <textarea
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent p-3 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent"
                         rows={3}
                         placeholder="Type your comment here..."
                         required
@@ -244,25 +311,98 @@ export default function CustomerPortalTickets() {
                       <button
                         type="submit"
                         disabled={addCommentMutation.isPending || !newComment.trim()}
-                        className="mt-2 flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="mt-2 flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                       >
-                        <Send className="w-4 h-4" />
+                        <Send className="h-4 w-4" />
                         <span>{addCommentMutation.isPending ? 'Sending...' : 'Send Comment'}</span>
                       </button>
                     </form>
                   </div>
                 </div>
               ) : (
-                <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
-                  <Ticket className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-600">Select a ticket to view details</p>
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-12 text-center">
+                  <Ticket className="mx-auto mb-3 h-12 w-12 text-[color:var(--color-text-muted)] opacity-50" />
+                  <p className="text-[color:var(--color-text-muted)]">Select a ticket to view details</p>
                 </div>
               )}
             </div>
           </div>
         )}
       </main>
+
+      {/* Create Ticket Modal */}
+      {showCreateForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="w-full max-w-2xl rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
+            <div className="mb-6 flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Create New Ticket</h3>
+              <button
+                onClick={() => setShowCreateForm(false)}
+                className="rounded-lg p-1 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTicket} className="space-y-4">
+              <label className="block text-sm">
+                <span className="mb-1 block text-[color:var(--color-text-muted)]">Subject *</span>
+                <input
+                  type="text"
+                  value={newSubject}
+                  onChange={(e) => setNewSubject(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+                  placeholder="Brief description of the issue"
+                  required
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block text-[color:var(--color-text-muted)]">Description *</span>
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent p-3 text-sm text-[color:var(--color-text)]"
+                  rows={6}
+                  placeholder="Detailed description of your issue..."
+                  required
+                />
+              </label>
+
+              <label className="block text-sm">
+                <span className="mb-1 block text-[color:var(--color-text-muted)]">Priority</span>
+                <select
+                  value={newPriority}
+                  onChange={(e) => setNewPriority(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </label>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  className="flex-1 rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createTicketMutation.isPending}
+                  className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                >
+                  {createTicketMutation.isPending ? 'Creating...' : 'Create Ticket'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-
