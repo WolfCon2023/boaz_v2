@@ -15,8 +15,8 @@ import { ObjectId } from 'mongodb'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { env } from '../env.js'
-import { createStandardEmailTemplate, createStandardTextEmail } from '../lib/email-templates.js'
-import { sendEmail } from '../lib/sendgrid.js'
+import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js'
+import { sendAuthEmail } from '../auth/email.js'
 
 export const adminCustomerPortalUsersRouter = Router()
 
@@ -150,50 +150,37 @@ adminCustomerPortalUsersRouter.post('/', async (req, res) => {
       const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
       const verifyUrl = `${baseUrl}/customer/verify-email?token=${verificationToken}`
 
-      const htmlBody = createStandardEmailTemplate({
-        greeting: `Hello ${name}`,
-        introText: 'Welcome to our Customer Portal! Your account has been created by an administrator.',
-        contentBoxes: [
-          {
+      const { html, text } = generateEmailTemplate({
+        header: {
+          title: 'Welcome to Customer Portal',
+          subtitle: 'Verify Your Email',
+          icon: '🔐',
+        },
+        content: {
+          greeting: `Hello ${name},`,
+          message: 'Welcome to our Customer Portal! Your account has been created by an administrator.',
+          infoBox: {
             title: 'Account Details',
-            fields: [
+            items: [
               { label: 'Email', value: email },
               { label: 'Name', value: name },
               ...(company ? [{ label: 'Company', value: company }] : []),
             ],
           },
-        ],
-        actionButton: {
-          text: 'Verify Email & Set Password',
-          url: verifyUrl,
-        },
-        closingText: 'Once verified, you can login to access your invoices, support tickets, and contracts.',
-        footerText: 'If you did not expect this email, please contact our support team.',
-      })
-
-      const textBody = createStandardTextEmail({
-        greeting: `Hello ${name}`,
-        introText: 'Welcome to our Customer Portal! Your account has been created by an administrator.',
-        sections: [
-          {
-            title: 'Account Details',
-            lines: [
-              `Email: ${email}`,
-              `Name: ${name}`,
-              ...(company ? [`Company: ${company}`] : []),
-            ],
+          actionButton: {
+            text: 'Verify Email & Set Password',
+            url: verifyUrl,
           },
-        ],
-        actionText: `Verify your email: ${verifyUrl}`,
-        closingText: 'Once verified, you can login to access your invoices, support tickets, and contracts.',
-        footerText: 'If you did not expect this email, please contact our support team.',
+          additionalInfo: 'Once verified, you can login to access your invoices, support tickets, and contracts. If you did not expect this email, please contact our support team.',
+        },
       })
 
-      await sendEmail({
+      await sendAuthEmail({
         to: email,
         subject: 'Welcome to Customer Portal - Verify Your Email',
-        html: htmlBody,
-        text: textBody,
+        html,
+        text,
+        checkPreferences: false,
       })
     }
 
@@ -381,28 +368,29 @@ adminCustomerPortalUsersRouter.post('/:id/resend-verification', async (req, res)
     const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
     const verifyUrl = `${baseUrl}/customer/verify-email?token=${verificationToken}`
 
-    const htmlBody = createStandardEmailTemplate({
-      greeting: `Hello ${user.name}`,
-      introText: 'Please verify your email address to activate your Customer Portal account.',
-      actionButton: {
-        text: 'Verify Email Address',
-        url: verifyUrl,
+    const { html, text } = generateEmailTemplate({
+      header: {
+        title: 'Verify Your Email',
+        subtitle: 'Customer Portal',
+        icon: '✉️',
       },
-      closingText: 'Once verified, you can login to access your invoices, support tickets, and contracts.',
+      content: {
+        greeting: `Hello ${user.name},`,
+        message: 'Please verify your email address to activate your Customer Portal account.',
+        actionButton: {
+          text: 'Verify Email Address',
+          url: verifyUrl,
+        },
+        additionalInfo: 'Once verified, you can login to access your invoices, support tickets, and contracts.',
+      },
     })
 
-    const textBody = createStandardTextEmail({
-      greeting: `Hello ${user.name}`,
-      introText: 'Please verify your email address to activate your Customer Portal account.',
-      actionText: `Verify your email: ${verifyUrl}`,
-      closingText: 'Once verified, you can login to access your invoices, support tickets, and contracts.',
-    })
-
-    await sendEmail({
+    await sendAuthEmail({
       to: user.email,
       subject: 'Verify Your Email - Customer Portal',
-      html: htmlBody,
-      text: textBody,
+      html,
+      text,
+      checkPreferences: false,
     })
 
     res.json({ data: { message: 'Verification email sent' }, error: null })
