@@ -89,6 +89,7 @@ export default function CustomerPortalTickets() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['customer-portal-tickets'] })
+      qc.invalidateQueries({ queryKey: ['customer-portal-dashboard'] })
       setShowCreateForm(false)
       setNewSubject('')
       setNewDescription('')

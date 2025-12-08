@@ -27,7 +27,6 @@ export default function CustomerPortalLogin() {
   const [regEmail, setRegEmail] = React.useState('')
   const [regPassword, setRegPassword] = React.useState('')
   const [regName, setRegName] = React.useState('')
-  const [regCompany, setRegCompany] = React.useState('')
   const [regPhone, setRegPhone] = React.useState('')
   
   // Forgot password
@@ -87,7 +86,6 @@ export default function CustomerPortalLogin() {
         email: regEmail,
         password: regPassword,
         name: regName,
-        company: regCompany,
         phone: regPhone,
       })
 
@@ -278,17 +276,6 @@ export default function CustomerPortalLogin() {
                   {showPwd ? 'Hide' : 'Show'}
                 </button>
               </div>
-            </label>
-
-            <label className="block text-sm">
-              <span className="mb-1 block text-[color:var(--color-text-muted)]">Company Name</span>
-              <input
-                type="text"
-                value={regCompany}
-                onChange={(e) => setRegCompany(e.target.value)}
-                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
-                placeholder="Acme Corp"
-              />
             </label>
 
             <label className="block text-sm">
