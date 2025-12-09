@@ -267,6 +267,8 @@ export default function CRMInvoices() {
   })
   const sendEmail = useMutation({
     mutationFn: async ({ id, recipientEmail }: { id: string; recipientEmail?: string }) => {
+      console.log('[CRMInvoices] Sending invoice:', id, 'to:', recipientEmail)
+      console.log('[CRMInvoices] Invoice accountId:', editing?.accountId)
       const res = await http.post(`/api/crm/invoices/${id}/send-email`, { recipientEmail })
       return res.data
     },

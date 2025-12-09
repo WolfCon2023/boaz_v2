@@ -403,7 +403,8 @@ customerPortalDataRouter.get('/dashboard', async (req: any, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   try {
-    const { accountId, email } = req.customerAuth
+    const { accountId, email, customerId } = req.customerAuth
+    console.log('[CustomerPortal] Dashboard request - accountId:', accountId, 'email:', email, 'customerId:', customerId)
 
     // Get invoice stats (requires account link)
     let invoiceStats = { total: 0, unpaid: 0, overdue: 0 }
@@ -411,6 +412,16 @@ customerPortalDataRouter.get('/dashboard', async (req: any, res) => {
       const invoices = await db.collection('invoices')
         .find({ accountId: new ObjectId(accountId) })
         .toArray()
+      
+      console.log('[CustomerPortal] Found', invoices.length, 'invoices for accountId:', accountId)
+      if (invoices.length > 0) {
+        console.log('[CustomerPortal] Sample invoice:', {
+          id: invoices[0]._id,
+          accountId: invoices[0].accountId,
+          status: invoices[0].status,
+          total: invoices[0].total
+        })
+      }
       
       const now = new Date()
       invoiceStats = {
@@ -423,6 +434,8 @@ customerPortalDataRouter.get('/dashboard', async (req: any, res) => {
           new Date(inv.dueDate) < now
         ).length,
       }
+    } else {
+      console.log('[CustomerPortal] No accountId, skipping invoice stats')
     }
 
     // Get ticket stats (can use accountId OR email)
@@ -449,10 +462,22 @@ customerPortalDataRouter.get('/dashboard', async (req: any, res) => {
         .find({ accountId: new ObjectId(accountId) })
         .toArray()
       
+      console.log('[CustomerPortal] Found', quotes.length, 'quotes for accountId:', accountId)
+      if (quotes.length > 0) {
+        console.log('[CustomerPortal] Sample quote:', {
+          id: quotes[0]._id,
+          accountId: quotes[0].accountId,
+          status: quotes[0].status,
+          total: quotes[0].total
+        })
+      }
+      
       quoteStats = {
         total: quotes.length,
         pending: quotes.filter((q: any) => q.status === 'sent' || q.status === 'viewed').length,
       }
+    } else {
+      console.log('[CustomerPortal] No accountId, skipping quote stats')
     }
 
     res.json({
