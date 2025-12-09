@@ -24,8 +24,15 @@ export const http = axios.create({ baseURL })
 export const apiBaseURL = baseURL
 
 http.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
+  // Don't add admin token to customer portal requests
+  // Customer portal pages manually set their own Authorization header
+  const isCustomerPortalRequest = config.url?.includes('/customer-portal/')
+  
+  if (!isCustomerPortalRequest) {
+    const token = localStorage.getItem('token')
+    if (token) config.headers.Authorization = `Bearer ${token}`
+  }
+  
   return config
 })
 
