@@ -91,7 +91,7 @@ customerPortalAuthRouter.post('/register', async (req, res) => {
         const verifyUrl = `${baseUrl}/customer/verify-email?token=${verificationToken}`;
         const { html, text } = generateEmailTemplate({
             header: {
-                title: 'Welcome to BOAZ-OS Customer Portal',
+                title: 'Welcome to the BOAZ-OS Customer Portal',
                 subtitle: 'Verify your email to get started',
                 icon: '👋',
             },
@@ -116,7 +116,7 @@ customerPortalAuthRouter.post('/register', async (req, res) => {
         });
         await sendAuthEmail({
             to: body.email,
-            subject: '👋 Welcome to BOAZ-OS Customer Portal - Verify Your Email',
+            subject: '👋 Welcome to the BOAZ-OS Customer Portal - Verify Your Email',
             html,
             text,
         });
