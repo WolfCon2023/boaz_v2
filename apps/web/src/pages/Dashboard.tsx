@@ -18,7 +18,7 @@ export default function Dashboard() {
   const { data: meData } = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: async () => {
-      const res = await http.get('/auth/me')
+      const res = await http.get('/api/auth/me')
       return res.data
     },
   })
