@@ -64,6 +64,9 @@ export default function CustomerPortalLogin() {
         return
       }
 
+      // Clear admin token to prevent conflicts
+      localStorage.removeItem('token')
+      
       localStorage.setItem('customer_portal_token', res.data.data.token)
       localStorage.setItem('customer_portal_user', JSON.stringify(res.data.data.customer))
       

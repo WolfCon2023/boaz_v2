@@ -33,6 +33,11 @@ export default function Login() {
       return
     }
     const data = (await res.json()) as AuthResponse & { passwordChangeRequired?: boolean }
+    
+    // Clear customer portal tokens to prevent conflicts
+    localStorage.removeItem('customer_portal_token')
+    localStorage.removeItem('customer_portal_user')
+    
     localStorage.setItem('token', data.token)
     setLoading(false)
     
