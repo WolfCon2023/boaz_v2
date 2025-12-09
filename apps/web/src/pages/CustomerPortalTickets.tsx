@@ -38,6 +38,8 @@ export default function CustomerPortalTickets() {
   const [newSubject, setNewSubject] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [newPriority, setNewPriority] = useState('normal')
+  const [newRequesterName, setNewRequesterName] = useState('')
+  const [newRequesterPhone, setNewRequesterPhone] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('customer_portal_token')
@@ -77,7 +79,7 @@ export default function CustomerPortalTickets() {
   })
 
   const createTicketMutation = useMutation({
-    mutationFn: async (data: { shortDescription: string; description: string; priority: string }) => {
+    mutationFn: async (data: { shortDescription: string; description: string; priority: string; requesterName: string; requesterPhone: string }) => {
       const token = localStorage.getItem('customer_portal_token')
       const res = await http.post(
         '/api/customer-portal/data/tickets',
@@ -94,6 +96,8 @@ export default function CustomerPortalTickets() {
       setNewSubject('')
       setNewDescription('')
       setNewPriority('normal')
+      setNewRequesterName('')
+      setNewRequesterPhone('')
       showToast(`Ticket #${data.ticketNumber} created successfully`, 'success')
     },
   })
@@ -106,11 +110,13 @@ export default function CustomerPortalTickets() {
 
   function handleCreateTicket(e: React.FormEvent) {
     e.preventDefault()
-    if (!newSubject.trim() || !newDescription.trim()) return
+    if (!newSubject.trim() || !newDescription.trim() || !newRequesterName.trim() || !newRequesterPhone.trim()) return
     createTicketMutation.mutate({
       shortDescription: newSubject,
       description: newDescription,
       priority: newPriority,
+      requesterName: newRequesterName,
+      requesterPhone: newRequesterPhone,
     })
   }
 
@@ -348,6 +354,30 @@ export default function CustomerPortalTickets() {
               </div>
 
               <form onSubmit={handleCreateTicket} className="space-y-5">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Your Name *</span>
+                  <input
+                    type="text"
+                    value={newRequesterName}
+                    onChange={(e) => setNewRequesterName(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent transition-colors"
+                    placeholder="Your full name"
+                    required
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Phone Number *</span>
+                  <input
+                    type="tel"
+                    value={newRequesterPhone}
+                    onChange={(e) => setNewRequesterPhone(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent transition-colors"
+                    placeholder="(123) 456-7890"
+                    required
+                  />
+                </label>
+
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Subject *</span>
                   <input

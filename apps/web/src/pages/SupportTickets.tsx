@@ -27,6 +27,7 @@ type Ticket = {
   comments?: { author?: string; body?: string; at?: string }[]
   requesterName?: string | null
   requesterEmail?: string | null
+  requesterPhone?: string | null
   type?: string | null
 }
 
@@ -896,11 +897,26 @@ export default function SupportTickets() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3">
                 <div className="text-base font-semibold">Edit ticket</div>
-                {(editing.requesterName || editing.requesterEmail) && (
-                  <div className="text-xs text-[color:var(--color-text-muted)]">
-                    Submitted by: <span className="font-medium text-[color:var(--color-text)]">{editing.requesterName || editing.requesterEmail}</span>
+                {(editing.requesterName || editing.requesterEmail || editing.requesterPhone) && (
+                  <div className="mt-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-3 text-xs">
+                    <div className="font-semibold text-[color:var(--color-text)] mb-1">Customer Contact Information</div>
+                    {editing.requesterName && (
+                      <div className="text-[color:var(--color-text-muted)]">
+                        <span className="font-medium">Name:</span> {editing.requesterName}
+                      </div>
+                    )}
+                    {editing.requesterEmail && (
+                      <div className="text-[color:var(--color-text-muted)]">
+                        <span className="font-medium">Email:</span> {editing.requesterEmail}
+                      </div>
+                    )}
+                    {editing.requesterPhone && (
+                      <div className="text-[color:var(--color-text-muted)]">
+                        <span className="font-medium">Phone:</span> {editing.requesterPhone}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

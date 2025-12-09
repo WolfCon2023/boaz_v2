@@ -270,6 +270,7 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
             updatedAt: new Date(),
             requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
             requesterEmail: typeof raw.requesterEmail === 'string' ? raw.requesterEmail : null,
+            requesterPhone: typeof raw.requesterPhone === 'string' ? raw.requesterPhone : null,
             type: typeof raw.type === 'string' ? raw.type : 'internal',
         };
         try {
@@ -341,7 +342,7 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
     }
 });
 // PUBLIC PORTAL
-// POST /api/crm/support/portal/tickets { shortDescription, description, requesterName, requesterEmail }
+// POST /api/crm/support/portal/tickets { shortDescription, description, requesterName, requesterEmail, requesterPhone }
 supportTicketsRouter.post('/portal/tickets', async (req, res) => {
     const db = await getDb();
     if (!db)
@@ -349,9 +350,12 @@ supportTicketsRouter.post('/portal/tickets', async (req, res) => {
     try {
         const raw = req.body ?? {};
         const shortDescription = typeof raw.shortDescription === 'string' ? raw.shortDescription.trim() : '';
+        const requesterName = typeof raw.requesterName === 'string' ? raw.requesterName.trim() : '';
         const requesterEmail = typeof raw.requesterEmail === 'string' ? raw.requesterEmail.trim() : '';
-        if (!shortDescription || !requesterEmail) {
-            return res.status(400).json({ data: null, error: 'invalid_payload' });
+        const requesterPhone = typeof raw.requesterPhone === 'string' ? raw.requesterPhone.trim() : '';
+        // Validate required fields
+        if (!shortDescription || !requesterName || !requesterEmail || !requesterPhone) {
+            return res.status(400).json({ data: null, error: 'missing_required_fields' });
         }
         const description = typeof raw.description === 'string' ? raw.description.slice(0, 2500) : '';
         const doc = {
@@ -369,8 +373,9 @@ supportTicketsRouter.post('/portal/tickets', async (req, res) => {
             comments: [],
             createdAt: new Date(),
             updatedAt: new Date(),
-            requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
+            requesterName,
             requesterEmail,
+            requesterPhone,
             type: 'external',
         };
         try {
