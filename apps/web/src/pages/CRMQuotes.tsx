@@ -299,6 +299,8 @@ export default function CRMQuotes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quotes'] })
       qc.invalidateQueries({ queryKey: ['quote-history'] })
+      qc.invalidateQueries({ queryKey: ['customer-portal-dashboard'] })
+      qc.invalidateQueries({ queryKey: ['customer-portal-quotes'] })
       // Toast message will be shown in the button's onClick handler with signer email
     },
     onError: (err: any) => {

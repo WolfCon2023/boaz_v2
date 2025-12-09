@@ -272,6 +272,8 @@ export default function CRMInvoices() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invoices'] })
+      qc.invalidateQueries({ queryKey: ['customer-portal-dashboard'] })
+      qc.invalidateQueries({ queryKey: ['customer-portal-invoices'] })
       toast.showToast('Invoice sent via email', 'success')
     },
     onError: (err: any) => {
