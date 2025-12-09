@@ -21,7 +21,7 @@ export default function Dashboard() {
       const [invoicesRes, quotesRes, ticketsRes, dealsRes] = await Promise.all([
         http.get('/api/crm/invoices', { params: { limit: 1000 } }),
         http.get('/api/crm/quotes', { params: { limit: 1000 } }),
-        http.get('/api/crm/support', { params: { limit: 1000 } }),
+        http.get('/api/crm/support/tickets', { params: { limit: 1000 } }),
         http.get('/api/crm/deals', { params: { limit: 1000 } }),
       ])
       
