@@ -582,4 +582,98 @@ supportTicketsRouter.delete('/tickets/:id', async (req, res) => {
   }
 })
 
+// POST /api/crm/support/tickets/:id/notify-customer - Send update email to customer
+supportTicketsRouter.post('/tickets/:id/notify-customer', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  try {
+    const _id = new ObjectId(req.params.id)
+    const { message, ccEmails } = req.body
+    
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ data: null, error: 'message_required' })
+    }
+    
+    // Get ticket details
+    const ticket = await db.collection<TicketDoc>('support_tickets').findOne({ _id })
+    if (!ticket) {
+      return res.status(404).json({ data: null, error: 'ticket_not_found' })
+    }
+    
+    if (!ticket.requesterEmail) {
+      return res.status(400).json({ data: null, error: 'no_requester_email' })
+    }
+    
+    // Send email
+    const webUrl = env.ORIGIN.split(',')[0].trim()
+    const ticketUrl = `${webUrl}/customer/tickets`
+    
+    const { html, text } = generateEmailTemplate({
+      header: {
+        title: 'Ticket Update',
+        subtitle: `Ticket #${ticket.ticketNumber || 'N/A'}`,
+        icon: '📬',
+      },
+      content: {
+        greeting: `Hello ${ticket.requesterName || 'Customer'},`,
+        message: message,
+        infoBox: {
+          title: 'Ticket Details',
+          items: [
+            { label: 'Ticket Number', value: `#${ticket.ticketNumber || 'N/A'}` },
+            { label: 'Subject', value: ticket.shortDescription },
+            { label: 'Status', value: (ticket.status || 'open').toUpperCase() },
+            { label: 'Priority', value: (ticket.priority || 'normal').toUpperCase() },
+          ],
+        },
+        actionButton: {
+          text: 'View Ticket',
+          url: ticketUrl,
+        },
+        additionalInfo: 'You can view the full ticket details and add comments by logging into the customer portal.',
+      },
+    })
+    
+    // Prepare recipients
+    const recipients = [ticket.requesterEmail]
+    if (ccEmails && typeof ccEmails === 'string') {
+      const ccList = ccEmails.split(',').map(e => e.trim()).filter(Boolean)
+      recipients.push(...ccList)
+    }
+    
+    // Send to all recipients
+    for (const recipient of recipients) {
+      await sendAuthEmail({
+        to: recipient,
+        subject: `📬 Ticket Update: #${ticket.ticketNumber || 'N/A'} - ${ticket.shortDescription}`,
+        html,
+        text,
+      })
+    }
+    
+    // Add a system comment to the ticket
+    const comment = {
+      author: 'system',
+      body: `Update sent to customer (${recipients.join(', ')}): ${message}`,
+      at: new Date(),
+    }
+    
+    await db.collection<TicketDoc>('support_tickets').updateOne(
+      { _id },
+      {
+        $push: { comments: comment as TicketComment },
+        $set: { updatedAt: new Date() },
+      }
+    )
+    
+    console.log(`✅ Customer update sent for ticket #${ticket.ticketNumber} to ${recipients.join(', ')}`)
+    
+    res.json({ data: { ok: true, recipients }, error: null })
+  } catch (err: any) {
+    console.error('Send customer update error:', err)
+    res.status(500).json({ data: null, error: err.message || 'send_failed' })
+  }
+})
+
 

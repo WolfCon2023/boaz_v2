@@ -356,7 +356,7 @@ export default function SupportTickets() {
       recipientEmail: string
       ticketId: string
     }) => {
-      const { programId, ...rest } = payload
+      const { programId, ...rest} = payload
       const res = await http.post(`/api/crm/surveys/programs/${programId}/send-email`, rest)
       return res.data
     },
@@ -365,6 +365,28 @@ export default function SupportTickets() {
     },
     onError: () => {
       toast.showToast('Failed to send survey email.', 'error')
+    },
+  })
+
+  const sendCustomerUpdate = useMutation({
+    mutationFn: async (payload: {
+      ticketId: string
+      message: string
+      ccEmails?: string
+    }) => {
+      const res = await http.post(`/api/crm/support/tickets/${payload.ticketId}/notify-customer`, {
+        message: payload.message,
+        ccEmails: payload.ccEmails,
+      })
+      return res.data
+    },
+    onSuccess: () => {
+      toast.showToast('Update sent to customer.', 'success')
+      setCustomerUpdateMessage('')
+      setCustomerUpdateCc('')
+    },
+    onError: () => {
+      toast.showToast('Failed to send update to customer.', 'error')
     },
   })
 
@@ -623,6 +645,10 @@ export default function SupportTickets() {
   const [surveyComment, setSurveyComment] = React.useState('')
   const [surveyRecipientName, setSurveyRecipientName] = React.useState('')
   const [surveyRecipientEmail, setSurveyRecipientEmail] = React.useState('')
+  
+  // Customer notification state
+  const [customerUpdateMessage, setCustomerUpdateMessage] = React.useState('')
+  const [customerUpdateCc, setCustomerUpdateCc] = React.useState('')
   React.useEffect(() => {
     if (!editing) {
       setSurveyProgramId('')
@@ -630,6 +656,8 @@ export default function SupportTickets() {
       setSurveyComment('')
       setSurveyRecipientName('')
       setSurveyRecipientEmail('')
+      setCustomerUpdateMessage('')
+      setCustomerUpdateCc('')
     }
   }, [editing])
 
@@ -1223,6 +1251,62 @@ export default function SupportTickets() {
                     </div>
                   </div>
                 )}
+
+                {/* Send Update to Customer */}
+                {(editing.requesterEmail) && (
+                  <div className="sm:col-span-2 mt-2 rounded-lg border border-[color:var(--color-border)] p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold">Send Update to Customer</div>
+                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                        Email notification to {editing.requesterName || editing.requesterEmail}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Update Message *</span>
+                        <textarea
+                          value={customerUpdateMessage}
+                          onChange={(e) => setCustomerUpdateMessage(e.target.value)}
+                          rows={4}
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                          placeholder="Enter the message you want to send to the customer..."
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">CC Additional Recipients (optional)</span>
+                        <input
+                          type="text"
+                          value={customerUpdateCc}
+                          onChange={(e) => setCustomerUpdateCc(e.target.value)}
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                          placeholder="email1@example.com, email2@example.com"
+                        />
+                        <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                          Separate multiple email addresses with commas
+                        </div>
+                      </label>
+
+                      <button
+                        type="button"
+                        className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                        disabled={!customerUpdateMessage.trim() || sendCustomerUpdate.isPending}
+                        onClick={() => {
+                          if (!editing || !customerUpdateMessage.trim()) return
+                          sendCustomerUpdate.mutate({
+                            ticketId: editing._id,
+                            message: customerUpdateMessage,
+                            ccEmails: customerUpdateCc.trim() || undefined,
+                          })
+                        }}
+                      >
+                        {sendCustomerUpdate.isPending ? 'Sending...' : 'Send Update to Customer'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="col-span-full mt-2 flex items-center justify-between gap-2">
                   <button 
                     type="button" 

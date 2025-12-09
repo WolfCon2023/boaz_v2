@@ -10,6 +10,9 @@ import { Router } from 'express';
 import { getDb } from '../db.js';
 import { ObjectId } from 'mongodb';
 import { verifyCustomerToken } from './auth.js';
+import { sendAuthEmail } from '../auth/email.js';
+import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
+import { env } from '../env.js';
 export const customerPortalDataRouter = Router();
 // All routes require authentication
 customerPortalDataRouter.use(verifyCustomerToken);
@@ -209,6 +212,48 @@ customerPortalDataRouter.post('/tickets', async (req, res) => {
                 }],
         };
         const result = await db.collection('support_tickets').insertOne(newTicket);
+        // Send confirmation email to customer
+        try {
+            const webUrl = env.ORIGIN.split(',')[0].trim();
+            const ticketUrl = `${webUrl}/customer/tickets`;
+            const { html, text } = generateEmailTemplate({
+                header: {
+                    title: 'Ticket Received',
+                    subtitle: `Ticket #${ticketNumber}`,
+                    icon: '🎟️',
+                },
+                content: {
+                    greeting: `Hello ${requesterName},`,
+                    message: `Thank you for contacting us. We have received your support ticket and our team will review it shortly.`,
+                    infoBox: {
+                        title: 'Ticket Details',
+                        items: [
+                            { label: 'Ticket Number', value: `#${ticketNumber}` },
+                            { label: 'Subject', value: shortDescription },
+                            { label: 'Priority', value: (priority || 'normal').toUpperCase() },
+                            { label: 'Status', value: 'OPEN' },
+                            { label: 'Created', value: formatEmailTimestamp(now) },
+                        ],
+                    },
+                    actionButton: {
+                        text: 'View Ticket',
+                        url: ticketUrl,
+                    },
+                    additionalInfo: 'You can track the status of your ticket and add comments by logging into the customer portal. We will notify you of any updates.',
+                },
+            });
+            await sendAuthEmail({
+                to: requesterEmail,
+                subject: `🎟️ Ticket #${ticketNumber} Received: ${shortDescription}`,
+                html,
+                text,
+            });
+            console.log(`✅ Ticket confirmation sent to ${requesterEmail} for ticket #${ticketNumber}`);
+        }
+        catch (emailErr) {
+            console.error(`❌ Failed to send ticket confirmation email:`, emailErr);
+            // Don't fail the ticket creation if email fails
+        }
         res.json({
             data: {
                 ticketNumber,
