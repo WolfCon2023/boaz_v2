@@ -858,6 +858,10 @@ quotesRouter.post('/:id/send-to-signer', requireAuth, async (req, res) => {
         // Send email to signer
         const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
         const quoteViewUrl = `${baseUrl}/quotes/view/${signToken}`;
+        console.log('[Quote Email] Preparing to send quote email to:', signerEmail);
+        console.log('[Quote Email] Quote ID:', quoteId.toString());
+        console.log('[Quote Email] Sender:', senderData.email);
+        console.log('[Quote Email] View URL:', quoteViewUrl);
         try {
             // Build quote info items
             const infoItems = [
@@ -905,6 +909,7 @@ quotesRouter.post('/:id/send-to-signer', requireAuth, async (req, res) => {
                     additionalInfo: 'Once you review the quote, you can accept it directly through the secure link above. If you have any questions, please contact the sender listed above.',
                 },
             });
+            console.log('[Quote Email] Calling sendAuthEmail...');
             await sendAuthEmail({
                 to: signerEmail,
                 subject: `📝 Quote for Review ${quoteData.quoteNumber ? `#${quoteData.quoteNumber}` : ''}: ${quoteData.title || 'Untitled'}`,
@@ -912,10 +917,18 @@ quotesRouter.post('/:id/send-to-signer', requireAuth, async (req, res) => {
                 html,
                 text,
             });
+            console.log('[Quote Email] ✅ Email sent successfully to:', signerEmail);
         }
         catch (emailErr) {
-            console.error('Failed to send quote to signer email:', emailErr);
-            // Don't fail the request if email fails, but log it
+            console.error('❌ [Quote Email] Failed to send quote to signer email:', emailErr);
+            console.error('❌ [Quote Email] Error details:', {
+                message: emailErr.message,
+                stack: emailErr.stack,
+                code: emailErr.code,
+                response: emailErr.response?.body
+            });
+            // Return error instead of silently failing
+            return res.status(500).json({ data: null, error: 'failed_to_send_email', details: emailErr.message });
         }
         res.json({ data: { message: 'Quote sent to signer', signToken }, error: null });
     }

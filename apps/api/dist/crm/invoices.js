@@ -594,6 +594,9 @@ invoicesRouter.post('/:id/send-email', requireAuth, async (req, res) => {
         // Send email
         const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
         const invoiceViewUrl = `${baseUrl}/apps/crm/invoices/${invoiceId.toString()}/print`;
+        console.log('[Invoice Email] Preparing to send invoice email to:', emailToSend);
+        console.log('[Invoice Email] Invoice ID:', invoiceId.toString());
+        console.log('[Invoice Email] Sender:', senderData.email);
         const now = new Date();
         try {
             // Build invoice info items
@@ -656,6 +659,7 @@ invoicesRouter.post('/:id/send-email', requireAuth, async (req, res) => {
                     additionalInfo: 'If you have any questions about this invoice, please contact us at contactwcg@wolfconsultingnc.com. Thank you for your business!',
                 },
             });
+            console.log('[Invoice Email] Calling sendAuthEmail...');
             await sendAuthEmail({
                 to: emailToSend,
                 subject: `💰 Invoice ${invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : ''}: ${invoiceData.title || 'Untitled'}`,
@@ -663,10 +667,17 @@ invoicesRouter.post('/:id/send-email', requireAuth, async (req, res) => {
                 html,
                 text,
             });
+            console.log('[Invoice Email] ✅ Email sent successfully to:', emailToSend);
         }
         catch (emailErr) {
-            console.error('Failed to send invoice email:', emailErr);
-            return res.status(500).json({ data: null, error: 'failed_to_send_email' });
+            console.error('❌ [Invoice Email] Failed to send invoice email:', emailErr);
+            console.error('❌ [Invoice Email] Error details:', {
+                message: emailErr.message,
+                stack: emailErr.stack,
+                code: emailErr.code,
+                response: emailErr.response?.body
+            });
+            return res.status(500).json({ data: null, error: 'failed_to_send_email', details: emailErr.message });
         }
         // Add history entry
         await addInvoiceHistory(db, invoiceId, 'field_changed', `Invoice sent via email to ${emailToSend}`, auth.userId, senderData.name, auth.email, null, null, { recipientEmail: emailToSend, sentAt: now });
