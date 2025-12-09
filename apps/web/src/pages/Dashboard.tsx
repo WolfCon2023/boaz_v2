@@ -1,9 +1,10 @@
 import * as React from 'react'
-import { CalendarDays, CheckCircle2, ListTodo, BarChart3, Sun, Moon } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ListTodo, BarChart3, Sun, Moon, DollarSign, FileText, Ticket, Briefcase, TrendingUp } from 'lucide-react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { getInstalledApps } from '../lib/apps'
 import { getMetricsSummary } from '../lib/api'
 import { http } from '@/lib/http'
+import { Link } from 'react-router-dom'
 
 export default function Dashboard() {
   const { data: installed = [] } = useQuery({ queryKey: ['installedApps'], queryFn: async () => getInstalledApps() })
@@ -11,6 +12,56 @@ export default function Dashboard() {
   const prefsQ = useQuery<{ data: { preferences: { theme?: 'light'|'dark'; layout?: 'default'|'compact' } } }>({
     queryKey: ['preferences','me'],
     queryFn: async () => (await http.get('/api/preferences/me')).data,
+  })
+
+  // Fetch CRM dashboard data
+  const crmDashboardQ = useQuery({
+    queryKey: ['crm-dashboard-summary'],
+    queryFn: async () => {
+      const [invoicesRes, quotesRes, ticketsRes, dealsRes] = await Promise.all([
+        http.get('/api/crm/invoices', { params: { limit: 1000 } }),
+        http.get('/api/crm/quotes', { params: { limit: 1000 } }),
+        http.get('/api/crm/support', { params: { limit: 1000 } }),
+        http.get('/api/crm/deals', { params: { limit: 1000 } }),
+      ])
+      
+      const invoices = invoicesRes.data.data.items || []
+      const quotes = quotesRes.data.data.items || []
+      const tickets = ticketsRes.data.data.items || []
+      const deals = dealsRes.data.data.items || []
+      
+      const now = new Date()
+      
+      return {
+        invoices: {
+          total: invoices.length,
+          unpaid: invoices.filter((inv: any) => inv.status !== 'paid' && inv.status !== 'void').length,
+          overdue: invoices.filter((inv: any) => 
+            inv.status !== 'paid' && 
+            inv.status !== 'void' && 
+            inv.dueDate && 
+            new Date(inv.dueDate) < now
+          ).length,
+        },
+        quotes: {
+          total: quotes.length,
+          pending: quotes.filter((q: any) => q.status === 'sent' || q.status === 'viewed').length,
+          draft: quotes.filter((q: any) => q.status === 'draft').length,
+        },
+        tickets: {
+          total: tickets.length,
+          open: tickets.filter((t: any) => t.status === 'open').length,
+          inProgress: tickets.filter((t: any) => t.status === 'in_progress').length,
+        },
+        deals: {
+          total: deals.length,
+          open: deals.filter((d: any) => d.stage !== 'won' && d.stage !== 'lost').length,
+          value: deals
+            .filter((d: any) => d.stage !== 'lost')
+            .reduce((sum: number, d: any) => sum + (d.amount || 0), 0),
+        },
+      }
+    },
   })
   const [themeState, setThemeState] = React.useState<'light'|'dark'>('dark')
   const [layoutState, setLayoutState] = React.useState<'default'|'compact'>('default')
@@ -81,6 +132,87 @@ export default function Dashboard() {
             <div className="mt-2 text-3xl font-semibold">{metrics?.data.tasksCompletedToday ?? 0}</div>
             <div className="mt-3 text-xs text-[color:var(--color-text-muted)]">Completed today</div>
           </div>
+        </div>
+      </section>
+
+      {/* CRM Overview */}
+      <section aria-label="CRM Overview" className="space-y-6">
+        <h2 className="text-xl font-semibold text-center">CRM Overview</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-5" style={{ gap: 'var(--dashboard-gap, 1.5rem)' }}>
+          {/* Invoices */}
+          <Link to="/apps/crm/invoices" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
+            <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
+              <DollarSign className="h-5 w-5" /> 
+              Invoices
+            </div>
+            <div className="mt-2 text-3xl font-semibold">{crmDashboardQ.data?.invoices.unpaid ?? '...'}</div>
+            <div className="mt-1 text-sm text-yellow-500">
+              {crmDashboardQ.data?.invoices.overdue ?? 0} overdue
+            </div>
+            <div className="mt-3 text-xs text-[color:var(--color-text-muted)]">
+              {crmDashboardQ.data?.invoices.total ?? 0} total
+            </div>
+          </Link>
+
+          {/* Quotes */}
+          <Link to="/apps/crm/quotes" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
+            <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
+              <FileText className="h-5 w-5" /> 
+              Quotes
+            </div>
+            <div className="mt-2 text-3xl font-semibold">{crmDashboardQ.data?.quotes.pending ?? '...'}</div>
+            <div className="mt-1 text-sm text-blue-500">
+              {crmDashboardQ.data?.quotes.draft ?? 0} drafts
+            </div>
+            <div className="mt-3 text-xs text-[color:var(--color-text-muted)]">
+              {crmDashboardQ.data?.quotes.total ?? 0} total
+            </div>
+          </Link>
+
+          {/* Tickets */}
+          <Link to="/apps/crm/support" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
+            <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
+              <Ticket className="h-5 w-5" /> 
+              Tickets
+            </div>
+            <div className="mt-2 text-3xl font-semibold">{crmDashboardQ.data?.tickets.open ?? '...'}</div>
+            <div className="mt-1 text-sm text-orange-500">
+              {crmDashboardQ.data?.tickets.inProgress ?? 0} in progress
+            </div>
+            <div className="mt-3 text-xs text-[color:var(--color-text-muted)]">
+              {crmDashboardQ.data?.tickets.total ?? 0} total
+            </div>
+          </Link>
+
+          {/* Deals */}
+          <Link to="/apps/crm/deals" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
+            <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
+              <Briefcase className="h-5 w-5" /> 
+              Deals
+            </div>
+            <div className="mt-2 text-3xl font-semibold">{crmDashboardQ.data?.deals.open ?? '...'}</div>
+            <div className="mt-1 text-sm text-green-500">
+              ${((crmDashboardQ.data?.deals.value ?? 0) / 1000).toFixed(0)}K pipeline
+            </div>
+            <div className="mt-3 text-xs text-[color:var(--color-text-muted)]">
+              {crmDashboardQ.data?.deals.total ?? 0} total
+            </div>
+          </Link>
+
+          {/* Revenue Intelligence */}
+          <Link to="/apps/crm/revenue-intelligence" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
+            <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
+              <TrendingUp className="h-5 w-5" /> 
+              Revenue Intel
+            </div>
+            <div className="mt-2 text-3xl font-semibold">View</div>
+            <div className="mt-1 text-sm text-purple-500">
+              Forecasting & AI
+            </div>
+            <div className="mt-3 text-xs text-[color:var(--color-text-muted)]">
+              Insights →
+            </div>
+          </Link>
         </div>
       </section>
 
