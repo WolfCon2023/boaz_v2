@@ -316,8 +316,8 @@ export default function AdminCustomerPortalUsers() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap gap-2">
           {(['all', 'verified', 'pending', 'inactive'] as const).map((filter) => (
             <button
               key={filter}
@@ -338,7 +338,7 @@ export default function AdminCustomerPortalUsers() {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search by name, email, or company..."
-          className="w-full max-w-md rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
+          className="w-full lg:w-96 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-2.5 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent"
         />
       </div>
 
