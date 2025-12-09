@@ -363,18 +363,32 @@ customerPortalDataRouter.get('/dashboard', async (req, res) => {
         // Get invoice stats (requires account link)
         let invoiceStats = { total: 0, unpaid: 0, overdue: 0 };
         if (accountId) {
+            console.log('[CustomerPortal] Querying invoices with accountId:', accountId, 'type:', typeof accountId);
+            console.log('[CustomerPortal] accountId as ObjectId:', new ObjectId(accountId).toString());
             const invoices = await db.collection('invoices')
                 .find({ accountId: new ObjectId(accountId) })
                 .toArray();
             console.log('[CustomerPortal] Found', invoices.length, 'invoices for accountId:', accountId);
             if (invoices.length > 0) {
                 console.log('[CustomerPortal] Sample invoice:', {
-                    id: invoices[0]._id,
-                    accountId: invoices[0].accountId,
+                    id: invoices[0]._id.toString(),
+                    accountId: invoices[0].accountId?.toString(),
+                    accountIdType: typeof invoices[0].accountId,
                     status: invoices[0].status,
                     total: invoices[0].total
                 });
             }
+            // Also try to see ALL invoices in the collection (for debugging)
+            const allInvoices = await db.collection('invoices').find({}).limit(5).toArray();
+            console.log('[CustomerPortal] Sample of ALL invoices in database (first 5):');
+            allInvoices.forEach((inv) => {
+                console.log('  -', {
+                    id: inv._id.toString(),
+                    accountId: inv.accountId?.toString(),
+                    accountIdType: typeof inv.accountId,
+                    status: inv.status
+                });
+            });
             const now = new Date();
             invoiceStats = {
                 total: invoices.length,
@@ -406,18 +420,31 @@ customerPortalDataRouter.get('/dashboard', async (req, res) => {
         // Get quote stats (requires account link)
         let quoteStats = { total: 0, pending: 0 };
         if (accountId) {
+            console.log('[CustomerPortal] Querying quotes with accountId:', accountId, 'type:', typeof accountId);
             const quotes = await db.collection('quotes')
                 .find({ accountId: new ObjectId(accountId) })
                 .toArray();
             console.log('[CustomerPortal] Found', quotes.length, 'quotes for accountId:', accountId);
             if (quotes.length > 0) {
                 console.log('[CustomerPortal] Sample quote:', {
-                    id: quotes[0]._id,
-                    accountId: quotes[0].accountId,
+                    id: quotes[0]._id.toString(),
+                    accountId: quotes[0].accountId?.toString(),
+                    accountIdType: typeof quotes[0].accountId,
                     status: quotes[0].status,
                     total: quotes[0].total
                 });
             }
+            // Also try to see ALL quotes in the collection (for debugging)
+            const allQuotes = await db.collection('quotes').find({}).limit(5).toArray();
+            console.log('[CustomerPortal] Sample of ALL quotes in database (first 5):');
+            allQuotes.forEach((q) => {
+                console.log('  -', {
+                    id: q._id.toString(),
+                    accountId: q.accountId?.toString(),
+                    accountIdType: typeof q.accountId,
+                    status: q.status
+                });
+            });
             quoteStats = {
                 total: quotes.length,
                 pending: quotes.filter((q) => q.status === 'sent' || q.status === 'viewed').length,
