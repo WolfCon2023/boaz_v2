@@ -1476,7 +1476,7 @@ export default function CRMQuotes() {
                     <div className="flex items-end">
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           const contactSelect = document.getElementById('quote-send-contact') as HTMLSelectElement
                           const portalSelect = document.getElementById('quote-send-portal-user') as HTMLSelectElement
                           
@@ -1485,14 +1485,42 @@ export default function CRMQuotes() {
                             toast.showToast('Please select a recipient', 'warning')
                             return
                           }
+
+                          if (!editing._id) {
+                            toast.showToast('Please save the quote first', 'error')
+                            return
+                          }
+
+                          // Update the signerEmail if it's different
+                          if (editing.signerEmail !== email) {
+                            try {
+                              await update.mutateAsync({ 
+                                _id: editing._id, 
+                                signerEmail: email
+                              })
+                            } catch (err: any) {
+                              toast.showToast('Failed to save recipient. Please try again.', 'error')
+                              return
+                            }
+                          }
                           
-                          // TODO: Add send quote API call
-                          toast.showToast(`Quote will be sent to ${email}`, 'info')
+                          const confirmed = await confirm(`Send quote to ${email}?`)
+                          if (confirmed) {
+                            sendToSigner.mutate(editing._id, {
+                              onSuccess: () => {
+                                toast.showToast(`Quote sent to ${email}`, 'success')
+                              },
+                              onError: (err: any) => {
+                                toast.showToast(err.message || 'Failed to send quote', 'error')
+                              }
+                            })
+                          }
                         }}
-                        className="w-full rounded bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+                        disabled={sendToSigner.isPending || !editing._id}
+                        className="w-full rounded bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
                       >
                         <Send className="inline h-3 w-3 mr-1" />
-                        Send Quote
+                        {sendToSigner.isPending ? 'Sending...' : 'Send Quote'}
                       </button>
                     </div>
                   </div>
