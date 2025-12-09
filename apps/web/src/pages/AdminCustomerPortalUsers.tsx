@@ -338,7 +338,7 @@ export default function AdminCustomerPortalUsers() {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Search by name, email, or company..."
-          className="w-full max-w-xs rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+          className="w-full max-w-md rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
         />
       </div>
 

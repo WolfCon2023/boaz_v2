@@ -248,6 +248,13 @@ customerPortalAuthRouter.post('/login', async (req, res) => {
     )
 
     // Generate JWT token
+    console.log('[CustomerPortal Login] Creating JWT for:', {
+      email: customer.email,
+      customerId: customer._id!.toHexString(),
+      accountId: customer.accountId?.toHexString() || null,
+      hasAccountId: !!customer.accountId
+    })
+    
     const token = jwt.sign(
       {
         customerId: customer._id!.toHexString(),

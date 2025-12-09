@@ -197,6 +197,12 @@ customerPortalAuthRouter.post('/login', async (req, res) => {
         // Update last login
         await db.collection('customer_portal_users').updateOne({ _id: customer._id }, { $set: { lastLoginAt: new Date() } });
         // Generate JWT token
+        console.log('[CustomerPortal Login] Creating JWT for:', {
+            email: customer.email,
+            customerId: customer._id.toHexString(),
+            accountId: customer.accountId?.toHexString() || null,
+            hasAccountId: !!customer.accountId
+        });
         const token = jwt.sign({
             customerId: customer._id.toHexString(),
             email: customer.email,
