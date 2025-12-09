@@ -170,7 +170,7 @@ export default function Dashboard() {
           </Link>
 
           {/* Tickets */}
-          <Link to="/apps/crm/support" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
+          <Link to="/apps/crm/support/tickets" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
             <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
               <Ticket className="h-5 w-5" /> 
               Tickets
