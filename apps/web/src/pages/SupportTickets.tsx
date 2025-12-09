@@ -13,17 +13,21 @@ type Ticket = {
   title?: string
   shortDescription?: string
   description?: string
-  status?: 'open' | 'pending' | 'resolved' | 'closed' | 'canceled'
+  status?: 'open' | 'pending' | 'in_progress' | 'resolved' | 'closed' | 'canceled'
   priority?: 'low' | 'normal' | 'high' | 'urgent'
   accountId?: string | null
   contactId?: string | null
   assignee?: string | null
+  assigneeId?: string | null
+  owner?: string | null
+  ownerId?: string | null
   slaDueAt?: string | null
   createdAt?: string
   updatedAt?: string
   comments?: { author?: string; body?: string; at?: string }[]
   requesterName?: string | null
   requesterEmail?: string | null
+  type?: string | null
 }
 
 type TicketSurveyStatusSummary = {
@@ -145,6 +149,11 @@ export default function SupportTickets() {
   const [showEditAssigneeDropdown, setShowEditAssigneeDropdown] = React.useState(false)
   const [selectedEditAssignee, setSelectedEditAssignee] = React.useState<{ name: string; email: string } | null>(null)
   
+  // State for owner search (edit form)
+  const [editOwnerSearch, setEditOwnerSearch] = React.useState('')
+  const [showEditOwnerDropdown, setShowEditOwnerDropdown] = React.useState(false)
+  const [selectedEditOwner, setSelectedEditOwner] = React.useState<{ name: string; email: string } | null>(null)
+  
   const filteredContacts = React.useMemo(() => {
     if (!assigneeSearch.trim()) return contacts
     const lower = assigneeSearch.toLowerCase()
@@ -163,13 +172,25 @@ export default function SupportTickets() {
     )
   }, [editAssigneeSearch, contacts])
 
-  // Close assignee dropdown when clicking outside
+  const filteredEditOwners = React.useMemo(() => {
+    if (!editOwnerSearch.trim()) return contacts
+    const lower = editOwnerSearch.toLowerCase()
+    return contacts.filter((c) => 
+      c.name?.toLowerCase().includes(lower) || 
+      c.email?.toLowerCase().includes(lower)
+    )
+  }, [editOwnerSearch, contacts])
+
+  // Close assignee and owner dropdowns when clicking outside
   React.useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as HTMLElement
       if (!target.closest('.assignee-search-container') && !target.closest('.edit-assignee-search-container')) {
         setShowAssigneeDropdown(false)
         setShowEditAssigneeDropdown(false)
+      }
+      if (!target.closest('.edit-owner-search-container')) {
+        setShowEditOwnerDropdown(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -269,6 +290,17 @@ export default function SupportTickets() {
   const addComment = useMutation({
     mutationFn: async (payload: { _id: string, body: string }) => { const res = await http.post(`/api/crm/support/tickets/${payload._id}/comments`, { body: payload.body }); return res.data },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['support-tickets'] }),
+  })
+  const deleteTicket = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await http.delete(`/api/crm/support/tickets/${id}`)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['support-tickets'] })
+      toast.showToast('BOAZ says: Ticket deleted.', 'success')
+      setEditing(null)
+    },
   })
 
   const logSurvey = useMutation({
@@ -547,21 +579,41 @@ export default function SupportTickets() {
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   React.useEffect(() => { if (!editing) return; const el = document.createElement('div'); el.setAttribute('data-overlay', 'ticket-editor'); Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' }); document.body.appendChild(el); setPortalEl(el); return () => { try { document.body.removeChild(el) } catch {}; setPortalEl(null) } }, [editing])
 
-  // Initialize edit assignee when editing starts
+  // Initialize edit assignee and owner when editing starts
   React.useEffect(() => {
-    if (editing && editing.assignee) {
-      // Try to parse "Name <email>" format
-      const match = editing.assignee.match(/^(.+?)\s*<(.+?)>$/)
-      if (match) {
-        setSelectedEditAssignee({ name: match[1].trim(), email: match[2].trim() })
+    if (editing) {
+      // Parse assignee
+      if (editing.assignee) {
+        const match = editing.assignee.match(/^(.+?)\s*<(.+?)>$/)
+        if (match) {
+          setSelectedEditAssignee({ name: match[1].trim(), email: match[2].trim() })
+        } else {
+          setSelectedEditAssignee({ name: editing.assignee, email: '' })
+        }
+        setEditAssigneeSearch('')
       } else {
-        // Fallback: just use the assignee string as-is
-        setSelectedEditAssignee({ name: editing.assignee, email: '' })
+        setSelectedEditAssignee(null)
+        setEditAssigneeSearch('')
       }
-      setEditAssigneeSearch('')
+      
+      // Parse owner
+      if (editing.owner) {
+        const match = editing.owner.match(/^(.+?)\s*<(.+?)>$/)
+        if (match) {
+          setSelectedEditOwner({ name: match[1].trim(), email: match[2].trim() })
+        } else {
+          setSelectedEditOwner({ name: editing.owner, email: '' })
+        }
+        setEditOwnerSearch('')
+      } else {
+        setSelectedEditOwner(null)
+        setEditOwnerSearch('')
+      }
     } else {
       setSelectedEditAssignee(null)
       setEditAssigneeSearch('')
+      setSelectedEditOwner(null)
+      setEditOwnerSearch('')
     }
   }, [editing])
 
@@ -643,6 +695,7 @@ export default function SupportTickets() {
             <option value="">All status</option>
             <option value="open">open</option>
             <option value="pending">pending</option>
+            <option value="in_progress">in progress</option>
             <option value="resolved">resolved</option>
             <option value="closed">closed</option>
             <option value="canceled">canceled</option>
@@ -709,7 +762,7 @@ export default function SupportTickets() {
         )}
         <form ref={createFormRef} className="grid items-start gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const shortDescription = String(fd.get('shortDescription')||''); const description = String(fd.get('description')||''); const assignee = selectedAssignee ? `${selectedAssignee.name} <${selectedAssignee.email}>` : ''; const status = String(fd.get('status')||'') || 'open'; const priority = String(fd.get('priority')||'') || 'normal'; const rawSla = createSlaValue || String(fd.get('slaDueAt')||''); const slaDueAt = rawSla ? new Date(rawSla).toISOString() : undefined; const requesterName = String(fd.get('requesterName')||'') || undefined; const requesterEmail = String(fd.get('requesterEmail')||'') || undefined; create.mutate({ shortDescription, description, assignee, status, priority, slaDueAt, requesterName, requesterEmail }); (e.currentTarget as HTMLFormElement).reset(); setCreateSlaValue(''); setSelectedAssignee(null); setAssigneeSearch('') }}>
           <input name="shortDescription" required placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <select name="status" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option><option>canceled</option></select>
+          <select name="status" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>in_progress</option><option>resolved</option><option>closed</option><option>canceled</option></select>
           <div className="relative assignee-search-container">
             <input 
               type="text"
@@ -843,12 +896,19 @@ export default function SupportTickets() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 text-base font-semibold">Edit ticket</div>
-              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const assignee = selectedEditAssignee ? `${selectedEditAssignee.name} <${selectedEditAssignee.email}>` : ''; const payload: any = { _id: editing._id, shortDescription: String(fd.get('shortDescription')||'')||undefined, status: String(fd.get('status')||'')||undefined, priority: String(fd.get('priority')||'')||undefined, assignee: assignee || undefined, description: String(fd.get('description')||'')||undefined }; const sla = String(fd.get('slaDueAt')||''); if (sla) payload.slaDueAt = new Date(sla).toISOString(); update.mutate(payload); setEditing(null) }}>
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-base font-semibold">Edit ticket</div>
+                {(editing.requesterName || editing.requesterEmail) && (
+                  <div className="text-xs text-[color:var(--color-text-muted)]">
+                    Submitted by: <span className="font-medium text-[color:var(--color-text)]">{editing.requesterName || editing.requesterEmail}</span>
+                  </div>
+                )}
+              </div>
+              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const assignee = selectedEditAssignee ? `${selectedEditAssignee.name} <${selectedEditAssignee.email}>` : ''; const owner = selectedEditOwner ? `${selectedEditOwner.name} <${selectedEditOwner.email}>` : ''; const payload: any = { _id: editing._id, shortDescription: String(fd.get('shortDescription')||'')||undefined, status: String(fd.get('status')||'')||undefined, priority: String(fd.get('priority')||'')||undefined, assignee: assignee || undefined, owner: owner || undefined, description: String(fd.get('description')||'')||undefined }; const sla = String(fd.get('slaDueAt')||''); if (sla) payload.slaDueAt = new Date(sla).toISOString(); update.mutate(payload); setEditing(null) }}>
                 <label className="text-xs text-[color:var(--color-text-muted)]">Short description</label>
                 <input name="shortDescription" defaultValue={editing.shortDescription ?? editing.title ?? ''} placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <label className="text-xs text-[color:var(--color-text-muted)]">Status</label>
-                <select name="status" defaultValue={editing.status ?? 'open'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>resolved</option><option>closed</option><option>canceled</option></select>
+                <select name="status" defaultValue={editing.status ?? 'open'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>open</option><option>pending</option><option>in_progress</option><option>resolved</option><option>closed</option><option>canceled</option></select>
                 <label className="text-xs text-[color:var(--color-text-muted)]">Priority</label>
                 <select name="priority" defaultValue={editing.priority ?? 'normal'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold"><option>low</option><option>normal</option><option>high</option><option>urgent</option></select>
                 <label className="text-xs text-[color:var(--color-text-muted)]">Assignee</label>
@@ -899,6 +959,59 @@ export default function SupportTickets() {
                       }}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
                       title="Clear assignee"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <label className="text-xs text-[color:var(--color-text-muted)]">Owner</label>
+                <div className="relative edit-owner-search-container">
+                  <input 
+                    type="text"
+                    value={selectedEditOwner ? `${selectedEditOwner.name || selectedEditOwner.email}` : editOwnerSearch}
+                    onChange={(e) => {
+                      setEditOwnerSearch(e.target.value)
+                      setSelectedEditOwner(null)
+                      setShowEditOwnerDropdown(true)
+                    }}
+                    onFocus={() => setShowEditOwnerDropdown(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        setShowEditOwnerDropdown(false)
+                        setEditOwnerSearch('')
+                      }
+                    }}
+                    placeholder="Search owner..."
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-[color:var(--color-text)] px-3 py-2 text-sm"
+                  />
+                  {showEditOwnerDropdown && filteredEditOwners.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-lg">
+                      {filteredEditOwners.slice(0, 50).map((contact) => (
+                        <button
+                          key={contact._id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedEditOwner({ name: contact.name || '', email: contact.email || '' })
+                            setEditOwnerSearch('')
+                            setShowEditOwnerDropdown(false)
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] border-b border-[color:var(--color-border-soft)] last:border-b-0"
+                        >
+                          <div className="font-medium">{contact.name || 'No name'}</div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">{contact.email}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {selectedEditOwner && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEditOwner(null)
+                        setEditOwnerSearch('')
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]"
+                      title="Clear owner"
                     >
                       ✕
                     </button>
@@ -1094,9 +1207,22 @@ export default function SupportTickets() {
                     </div>
                   </div>
                 )}
-                <div className="col-span-full mt-2 flex items-center justify-end gap-2">
-                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
-                  <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
+                <div className="col-span-full mt-2 flex items-center justify-between gap-2">
+                  <button 
+                    type="button" 
+                    className="rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-2 text-sm text-red-400 hover:bg-red-500/20" 
+                    onClick={() => {
+                      if (confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) {
+                        deleteTicket.mutate(editing._id)
+                      }
+                    }}
+                  >
+                    Delete Ticket
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
+                    <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
+                  </div>
                 </div>
               </form>
             </div>

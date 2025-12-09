@@ -261,12 +261,16 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
             accountId: ObjectId.isValid(raw.accountId) ? new ObjectId(raw.accountId) : null,
             contactId: ObjectId.isValid(raw.contactId) ? new ObjectId(raw.contactId) : null,
             assignee: raw.assignee || null,
+            assigneeId: ObjectId.isValid(raw.assigneeId) ? new ObjectId(raw.assigneeId) : null,
+            owner: raw.owner || null,
+            ownerId: ObjectId.isValid(raw.ownerId) ? new ObjectId(raw.ownerId) : null,
             slaDueAt: raw.slaDueAt ? new Date(raw.slaDueAt) : null,
             comments: [],
             createdAt: new Date(),
             updatedAt: new Date(),
             requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
             requesterEmail: typeof raw.requesterEmail === 'string' ? raw.requesterEmail : null,
+            type: typeof raw.type === 'string' ? raw.type : 'internal',
         };
         try {
             doc.ticketNumber = await getNextSequence('ticketNumber');
@@ -358,12 +362,16 @@ supportTicketsRouter.post('/portal/tickets', async (req, res) => {
             accountId: null,
             contactId: null,
             assignee: null,
+            assigneeId: null,
+            owner: null,
+            ownerId: null,
             slaDueAt: null,
             comments: [],
             createdAt: new Date(),
             updatedAt: new Date(),
             requesterName: typeof raw.requesterName === 'string' ? raw.requesterName : null,
             requesterEmail,
+            type: 'external',
         };
         try {
             doc.ticketNumber = await getNextSequence('ticketNumber');
@@ -462,7 +470,7 @@ supportTicketsRouter.put('/tickets/:id', async (req, res) => {
             update.shortDescription = req.body.shortDescription;
         else if (typeof (req.body ?? {}).title === 'string')
             update.shortDescription = req.body.title;
-        for (const k of ['status', 'priority', 'assignee'])
+        for (const k of ['status', 'priority', 'assignee', 'owner'])
             if (typeof (req.body ?? {})[k] === 'string')
                 update[k] = req.body[k];
         if (typeof (req.body ?? {}).description === 'string') {
@@ -475,6 +483,10 @@ supportTicketsRouter.put('/tickets/:id', async (req, res) => {
             update.accountId = new ObjectId(req.body.accountId);
         if (req.body?.contactId && ObjectId.isValid(req.body.contactId))
             update.contactId = new ObjectId(req.body.contactId);
+        if (req.body?.assigneeId && ObjectId.isValid(req.body.assigneeId))
+            update.assigneeId = new ObjectId(req.body.assigneeId);
+        if (req.body?.ownerId && ObjectId.isValid(req.body.ownerId))
+            update.ownerId = new ObjectId(req.body.ownerId);
         await db.collection('support_tickets').updateOne({ _id }, { $set: update });
         // Send email notification if assignee was added or changed
         if (update.assignee && update.assignee !== currentTicket.assignee) {
@@ -505,6 +517,23 @@ supportTicketsRouter.post('/tickets/:id/comments', async (req, res) => {
         const _id = new ObjectId(req.params.id);
         const comment = { author: (req.body?.author || 'system'), body: String(req.body?.body || ''), at: new Date() };
         await db.collection('support_tickets').updateOne({ _id }, { $push: { comments: comment }, $set: { updatedAt: new Date() } });
+        res.json({ data: { ok: true }, error: null });
+    }
+    catch {
+        res.status(400).json({ data: null, error: 'invalid_id' });
+    }
+});
+// DELETE /api/crm/support/tickets/:id - Delete a ticket (admin only)
+supportTicketsRouter.delete('/tickets/:id', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const _id = new ObjectId(req.params.id);
+        const result = await db.collection('support_tickets').deleteOne({ _id });
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ data: null, error: 'ticket_not_found' });
+        }
         res.json({ data: { ok: true }, error: null });
     }
     catch {

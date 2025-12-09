@@ -14,9 +14,20 @@ export default function Dashboard() {
     queryFn: async () => (await http.get('/api/preferences/me')).data,
   })
 
+  // Get current user email for filtering tickets
+  const { data: meData } = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: async () => {
+      const res = await http.get('/auth/me')
+      return res.data
+    },
+  })
+  const userEmail = meData?.email || ''
+
   // Fetch CRM dashboard data
   const crmDashboardQ = useQuery({
-    queryKey: ['crm-dashboard-summary'],
+    queryKey: ['crm-dashboard-summary', userEmail],
+    enabled: !!userEmail,
     queryFn: async () => {
       const [invoicesRes, quotesRes, ticketsRes, dealsRes] = await Promise.all([
         http.get('/api/crm/invoices', { params: { limit: 1000 } }),
@@ -31,6 +42,24 @@ export default function Dashboard() {
       const deals = dealsRes.data.data.items || []
       
       const now = new Date()
+      
+      // Helper to extract email from "Name <email>" format
+      const extractEmail = (field: string | null | undefined): string => {
+        if (!field) return ''
+        const match = field.match(/<(.+?)>/)
+        return match ? match[1].trim() : field.trim()
+      }
+      
+      // Filter tickets by assignee and owner
+      const ticketsAssigned = tickets.filter((t: any) => {
+        const assigneeEmail = extractEmail(t.assignee)
+        return assigneeEmail.toLowerCase() === userEmail.toLowerCase()
+      })
+      
+      const ticketsOwned = tickets.filter((t: any) => {
+        const ownerEmail = extractEmail(t.owner)
+        return ownerEmail.toLowerCase() === userEmail.toLowerCase()
+      })
       
       return {
         invoices: {
@@ -52,6 +81,14 @@ export default function Dashboard() {
           total: tickets.length,
           open: tickets.filter((t: any) => t.status === 'open').length,
           inProgress: tickets.filter((t: any) => t.status === 'in_progress').length,
+        },
+        ticketsAssigned: {
+          total: ticketsAssigned.length,
+          open: ticketsAssigned.filter((t: any) => t.status === 'open' || t.status === 'in_progress').length,
+        },
+        ticketsOwned: {
+          total: ticketsOwned.length,
+          open: ticketsOwned.filter((t: any) => t.status === 'open' || t.status === 'in_progress').length,
         },
         deals: {
           total: deals.length,
@@ -138,7 +175,7 @@ export default function Dashboard() {
       {/* CRM Overview */}
       <section aria-label="CRM Overview" className="space-y-6">
         <h2 className="text-xl font-semibold text-center">CRM Overview</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5" style={{ gap: 'var(--dashboard-gap, 1.5rem)' }}>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-6" style={{ gap: 'var(--dashboard-gap, 1.5rem)' }}>
           {/* Invoices */}
           <Link to="/apps/crm/invoices" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
             <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
@@ -169,18 +206,33 @@ export default function Dashboard() {
             </div>
           </Link>
 
-          {/* Tickets */}
+          {/* Tickets Assigned */}
           <Link to="/apps/crm/support/tickets" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
             <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
               <Ticket className="h-5 w-5" /> 
-              Tickets
+              Tickets Assigned
             </div>
-            <div className="mt-2 text-3xl font-semibold">{crmDashboardQ.data?.tickets.open ?? '...'}</div>
+            <div className="mt-2 text-3xl font-semibold">{crmDashboardQ.data?.ticketsAssigned.open ?? '...'}</div>
             <div className="mt-1 text-sm text-orange-500">
-              {crmDashboardQ.data?.tickets.inProgress ?? 0} in progress
+              Open/In Progress
             </div>
             <div className="mt-3 text-xs text-[color:var(--color-text-muted)]">
-              {crmDashboardQ.data?.tickets.total ?? 0} total
+              {crmDashboardQ.data?.ticketsAssigned.total ?? 0} total assigned
+            </div>
+          </Link>
+
+          {/* Tickets Owned */}
+          <Link to="/apps/crm/support/tickets" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
+            <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
+              <Ticket className="h-5 w-5" /> 
+              Tickets Owned
+            </div>
+            <div className="mt-2 text-3xl font-semibold">{crmDashboardQ.data?.ticketsOwned.open ?? '...'}</div>
+            <div className="mt-1 text-sm text-purple-500">
+              Open/In Progress
+            </div>
+            <div className="mt-3 text-xs text-[color:var(--color-text-muted)]">
+              {crmDashboardQ.data?.ticketsOwned.total ?? 0} total owned
             </div>
           </Link>
 
