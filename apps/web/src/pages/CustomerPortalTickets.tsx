@@ -39,6 +39,7 @@ export default function CustomerPortalTickets() {
   const [newDescription, setNewDescription] = useState('')
   const [newPriority, setNewPriority] = useState('normal')
   const [newRequesterName, setNewRequesterName] = useState('')
+  const [newRequesterEmail, setNewRequesterEmail] = useState('')
   const [newRequesterPhone, setNewRequesterPhone] = useState('')
 
   useEffect(() => {
@@ -79,7 +80,7 @@ export default function CustomerPortalTickets() {
   })
 
   const createTicketMutation = useMutation({
-    mutationFn: async (data: { shortDescription: string; description: string; priority: string; requesterName: string; requesterPhone: string }) => {
+    mutationFn: async (data: { shortDescription: string; description: string; priority: string; requesterName: string; requesterEmail: string; requesterPhone: string }) => {
       const token = localStorage.getItem('customer_portal_token')
       const res = await http.post(
         '/api/customer-portal/data/tickets',
@@ -97,6 +98,7 @@ export default function CustomerPortalTickets() {
       setNewDescription('')
       setNewPriority('normal')
       setNewRequesterName('')
+      setNewRequesterEmail('')
       setNewRequesterPhone('')
       showToast(`Ticket #${data.ticketNumber} created successfully`, 'success')
     },
@@ -110,12 +112,13 @@ export default function CustomerPortalTickets() {
 
   function handleCreateTicket(e: React.FormEvent) {
     e.preventDefault()
-    if (!newSubject.trim() || !newDescription.trim() || !newRequesterName.trim() || !newRequesterPhone.trim()) return
+    if (!newSubject.trim() || !newDescription.trim() || !newRequesterName.trim() || !newRequesterEmail.trim() || !newRequesterPhone.trim()) return
     createTicketMutation.mutate({
       shortDescription: newSubject,
       description: newDescription,
       priority: newPriority,
       requesterName: newRequesterName,
+      requesterEmail: newRequesterEmail,
       requesterPhone: newRequesterPhone,
     })
   }
@@ -362,6 +365,18 @@ export default function CustomerPortalTickets() {
                     onChange={(e) => setNewRequesterName(e.target.value)}
                     className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent transition-colors"
                     placeholder="Your full name"
+                    required
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Email Address *</span>
+                  <input
+                    type="email"
+                    value={newRequesterEmail}
+                    onChange={(e) => setNewRequesterEmail(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent transition-colors"
+                    placeholder="your.email@example.com"
                     required
                   />
                 </label>

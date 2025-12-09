@@ -173,9 +173,9 @@ customerPortalDataRouter.post('/tickets', async (req: any, res) => {
 
   try {
     const { accountId, email, customerId } = req.customerAuth
-    const { shortDescription, description, priority, requesterName, requesterPhone } = req.body
+    const { shortDescription, description, priority, requesterName, requesterEmail, requesterPhone } = req.body
 
-    if (!shortDescription || !description || !requesterName || !requesterPhone) {
+    if (!shortDescription || !description || !requesterName || !requesterEmail || !requesterPhone) {
       return res.status(400).json({ data: null, error: 'missing_required_fields' })
     }
 
@@ -212,7 +212,7 @@ customerPortalDataRouter.post('/tickets', async (req: any, res) => {
       priority: priority || 'normal',
       type: 'external',
       requesterName: requesterName || customer?.name || 'Customer',
-      requesterEmail: email,
+      requesterEmail: requesterEmail || email,
       requesterPhone: requesterPhone || null,
       accountId: accountId ? new ObjectId(accountId) : null,
       assigneeId: null,
