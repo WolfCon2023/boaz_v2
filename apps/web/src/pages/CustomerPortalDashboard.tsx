@@ -132,7 +132,7 @@ export default function CustomerPortalDashboard() {
         ) : (
           <>
             {/* Summary Cards */}
-            <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
               {/* Invoices Card */}
               <Link
                 to="/customer/invoices"
@@ -204,12 +204,39 @@ export default function CustomerPortalDashboard() {
                   View all quotes →
                 </div>
               </Link>
+
+              {/* Payments Card */}
+              <Link
+                to="/customer/payments"
+                className="block rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 hover:bg-[color:var(--color-muted)] transition-colors"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase text-[color:var(--color-text-muted)]">Payments</span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-green-600 bg-green-50 px-2 py-0.5 text-[8px] font-semibold text-green-700">
+                    🔒 SECURE
+                  </span>
+                </div>
+                <h3 className="mb-2 text-2xl font-semibold text-[color:var(--color-text)]">
+                  Pay Invoices
+                </h3>
+                <div className="space-y-1">
+                  <div className="text-xs text-[color:var(--color-text-muted)]">
+                    Secure online payment processing
+                  </div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">
+                    PCI DSS compliant • 256-bit encryption
+                  </div>
+                </div>
+                <div className="mt-4 text-sm font-medium text-[color:var(--color-primary-600)]">
+                  Make a payment →
+                </div>
+              </Link>
             </div>
 
             {/* Quick Actions */}
             <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
               <h3 className="mb-4 text-lg font-semibold text-[color:var(--color-text)]">Quick Actions</h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Link
                   to="/customer/invoices"
                   className="flex items-center space-x-3 rounded-lg border border-[color:var(--color-border)] p-4 hover:bg-[color:var(--color-muted)] transition-colors"
@@ -227,6 +254,12 @@ export default function CustomerPortalDashboard() {
                   className="flex items-center space-x-3 rounded-lg border border-[color:var(--color-border)] p-4 hover:bg-[color:var(--color-muted)] transition-colors"
                 >
                   <span className="font-medium text-[color:var(--color-text)]">My Quotes</span>
+                </Link>
+                <Link
+                  to="/customer/payments"
+                  className="flex items-center space-x-3 rounded-lg border border-green-500 bg-green-50 p-4 hover:bg-green-100 transition-colors"
+                >
+                  <span className="font-medium text-green-900">🔒 Make Payment</span>
                 </Link>
               </div>
             </div>

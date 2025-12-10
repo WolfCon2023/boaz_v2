@@ -67,6 +67,7 @@ import CustomerPortalDashboard from '@/pages/CustomerPortalDashboard'
 import CustomerPortalInvoices from '@/pages/CustomerPortalInvoices'
 import CustomerPortalTickets from '@/pages/CustomerPortalTickets'
 import CustomerPortalQuotes from '@/pages/CustomerPortalQuotes'
+import CustomerPortalPayments from '@/pages/CustomerPortalPayments'
 import CustomerPortalVerifyEmail from '@/pages/CustomerPortalVerifyEmail'
 import CustomerPortalResetPassword from '@/pages/CustomerPortalResetPassword'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
@@ -202,6 +203,7 @@ export const router = createBrowserRouter([
       { path: 'invoices', element: <CustomerPortalInvoices /> },
       { path: 'tickets', element: <CustomerPortalTickets /> },
       { path: 'quotes', element: <CustomerPortalQuotes /> },
+      { path: 'payments', element: <CustomerPortalPayments /> },
     ],
   },
   // Direct access fallback removed to avoid conflicting route matching
