@@ -30,6 +30,7 @@ import CRMApprovalQueue from '@/pages/CRMApprovalQueue'
 import CRMDealApprovalQueue from '@/pages/CRMDealApprovalQueue'
 import CRMInvoices from '@/pages/CRMInvoices'
 import PaymentPortal from '@/pages/PaymentPortal'
+import SecurePaymentCheckout from '@/pages/SecurePaymentCheckout'
 import CRMProducts from '@/pages/CRMProducts'
 import CRMVendors from '@/pages/CRMVendors'
 import CRMAssets from '@/pages/CRMAssets'
@@ -70,6 +71,8 @@ import CustomerPortalQuotes from '@/pages/CustomerPortalQuotes'
 import CustomerPortalPayments from '@/pages/CustomerPortalPayments'
 import CustomerPortalVerifyEmail from '@/pages/CustomerPortalVerifyEmail'
 import CustomerPortalResetPassword from '@/pages/CustomerPortalResetPassword'
+import SecureCheckout from '@/pages/SecureCheckout'
+import PaymentSuccess from '@/pages/PaymentSuccess'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
 import { ToastProvider } from '@/components/Toast'
 
@@ -99,6 +102,8 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/invoices', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoices /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices/:id/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoicePrint /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/payments', element: <RequireAuth><RequireApplication appKey="crm"><PaymentPortal /></RequireApplication></RequireAuth> },
+      { path: 'checkout', element: <SecureCheckout /> },
+      { path: 'payment/checkout', element: <SecurePaymentCheckout /> },
       { path: 'apps/crm/deals', element: <RequireAuth><RequireApplication appKey="crm"><CRMDeals /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/projects', element: <RequireAuth><RequireApplication appKey="crm"><CRMProjects /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/projects/report', element: <RequireAuth><RequireApplication appKey="crm"><CRMProjectsReport /></RequireApplication></RequireAuth> },
@@ -146,6 +151,14 @@ export const router = createBrowserRouter([
   {
     path: '/portal',
     element: <PublicShell><SupportPortal /></PublicShell>,
+  },
+  {
+    path: '/payment-success',
+    element: <PaymentSuccess />,
+  },
+  {
+    path: '/checkout',
+    element: <SecureCheckout />,
   },
   {
     path: '/login',
@@ -204,6 +217,8 @@ export const router = createBrowserRouter([
       { path: 'tickets', element: <CustomerPortalTickets /> },
       { path: 'quotes', element: <CustomerPortalQuotes /> },
       { path: 'payments', element: <CustomerPortalPayments /> },
+      { path: 'checkout', element: <SecureCheckout /> },
+      { path: 'payment-success', element: <PaymentSuccess /> },
     ],
   },
   // Direct access fallback removed to avoid conflicting route matching

@@ -11,6 +11,7 @@ import { requireAuth } from '../auth/rbac.js'
 import { sendAuthEmail } from '../auth/email.js'
 import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js'
 import { env } from '../env.js'
+import Stripe from 'stripe'
 
 export const paymentPortalRouter = Router()
 
@@ -333,6 +334,99 @@ paymentPortalRouter.get('/stats', async (req, res) => {
   } catch (err: any) {
     console.error('Get payment stats error:', err)
     res.status(500).json({ data: null, error: err.message || 'failed_to_get_payment_stats' })
+  }
+})
+
+// POST /api/payments/create-checkout-session - Create Stripe or PayPal checkout session
+paymentPortalRouter.post('/create-checkout-session', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const { invoiceId, amount, method, customerInfo } = req.body
+
+    if (!invoiceId || !amount || !method) {
+      return res.status(400).json({ 
+        data: null, 
+        error: 'missing_required_fields',
+        details: 'invoiceId, amount, and method are required' 
+      })
+    }
+
+    const invoiceObjectId = new ObjectId(invoiceId)
+    const invoice = await db.collection('invoices').findOne({ _id: invoiceObjectId })
+
+    if (!invoice) {
+      return res.status(404).json({ data: null, error: 'invoice_not_found' })
+    }
+
+    const paymentAmount = parseFloat(amount)
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      return res.status(400).json({ data: null, error: 'invalid_amount' })
+    }
+
+    if (method === 'stripe') {
+      // Initialize Stripe
+      const stripe = new Stripe(env.STRIPE_SECRET_KEY || '', {
+        apiVersion: '2024-04-10',
+      })
+
+      const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+
+      // Create Stripe Checkout Session
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Invoice #${invoice.invoiceNumber || invoice._id.toHexString().slice(-6)}`,
+                description: invoice.title || 'Invoice Payment',
+              },
+              unit_amount: Math.round(paymentAmount * 100), // Stripe expects cents
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/customer/payments?cancelled=true`,
+        customer_email: customerInfo?.email,
+        metadata: {
+          invoiceId: invoiceId,
+          invoiceNumber: String(invoice.invoiceNumber || ''),
+        },
+        billing_address_collection: 'required',
+        phone_number_collection: {
+          enabled: true,
+        },
+      })
+
+      res.json({ 
+        data: { 
+          url: session.url,
+          sessionId: session.id 
+        }, 
+        error: null 
+      })
+    } else if (method === 'paypal') {
+      // For PayPal, you would create a PayPal order here
+      // For now, return a placeholder
+      const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'
+      res.json({ 
+        data: { 
+          url: `${baseUrl}/paypal-checkout?invoice=${invoiceId}&amount=${paymentAmount}`,
+          orderId: 'paypal_order_placeholder'
+        }, 
+        error: null 
+      })
+    } else {
+      res.status(400).json({ data: null, error: 'invalid_payment_method' })
+    }
+  } catch (err: any) {
+    console.error('Create checkout session error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_create_checkout_session' })
   }
 })
 
