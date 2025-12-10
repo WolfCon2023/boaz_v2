@@ -17,6 +17,7 @@ export type EmailTemplateOptions = {
       title?: string
       items: Array<{ label: string; value: string | number }>
     }
+    customHtml?: string // Custom HTML to insert after infoBox
     actionButton?: {
       text: string
       url: string
@@ -222,6 +223,8 @@ export function generateEmailTemplate(options: EmailTemplateOptions): { html: st
           `).join('')}
         </div>
       ` : ''}
+      
+      ${options.content.customHtml || ''}
       
       ${options.content.actionButton ? `
         <div class="button-container">

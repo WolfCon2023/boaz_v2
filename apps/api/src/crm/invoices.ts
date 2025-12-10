@@ -5,6 +5,12 @@ import { sendAuthEmail } from '../auth/email.js'
 import { env } from '../env.js'
 import { requireAuth } from '../auth/rbac.js'
 import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js'
+import { 
+  generatePaymentLinks, 
+  getEnabledPaymentOptions, 
+  formatPaymentInstructions,
+  type PaymentMethod 
+} from '../lib/payment-providers.js'
 
 type Payment = { amount: number; method: string; paidAt: Date }
 type Refund = { amount: number; reason: string; refundedAt: Date }
@@ -17,6 +23,8 @@ type InvoiceDoc = {
   subscription?: { interval: 'monthly' | 'annual'; active: boolean; startedAt?: Date; canceledAt?: Date; nextInvoiceAt?: Date }
   dunningState?: 'none' | 'first_notice' | 'second_notice' | 'final_notice' | 'collections'
   lastDunningAt?: Date
+  paymentMethods?: PaymentMethod[] // Enabled payment methods for this invoice
+  preferredPaymentMethod?: PaymentMethod // Preferred payment method
 }
 
 // Types for invoice history
@@ -852,6 +860,64 @@ invoicesRouter.post('/:id/send-email', requireAuth, async (req, res) => {
         ? `Hello ${accountInfo.primaryContactName},` 
         : 'Hello,'
       
+      // Generate payment links
+      const paymentLinks = generatePaymentLinks(
+        invoiceId.toString(),
+        invoiceData.total || 0,
+        invoiceData.invoiceNumber ? `#${invoiceData.invoiceNumber}` : undefined,
+        invoiceData.title,
+        emailToSend
+      )
+      
+      // Get enabled payment options
+      const enabledPaymentOptions = getEnabledPaymentOptions()
+      
+      // Build payment options HTML
+      let paymentOptionsHtml = `
+        <div style="margin: 24px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+          <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: #212529;">💳 Payment Options</h3>
+      `
+      
+      // Add quick payment links
+      if (paymentLinks.length > 0) {
+        paymentOptionsHtml += `<div style="margin-bottom: 20px;">`
+        for (const link of paymentLinks) {
+          paymentOptionsHtml += `
+            <a href="${link.url}" style="display: inline-block; margin: 4px 8px 4px 0; padding: 12px 24px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 14px;">
+              ${link.buttonText}
+            </a>
+          `
+        }
+        paymentOptionsHtml += `</div>`
+      }
+      
+      // Add other payment methods
+      paymentOptionsHtml += `<div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #dee2e6;">`
+      paymentOptionsHtml += `<p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 500; color: #495057;">Other Payment Methods:</p>`
+      
+      for (const option of enabledPaymentOptions) {
+        if (option.method !== 'credit_card' && option.method !== 'paypal') {
+          paymentOptionsHtml += `
+            <div style="margin-bottom: 16px; padding: 12px; background-color: white; border-radius: 6px; border: 1px solid #dee2e6;">
+              <div style="margin-bottom: 8px;">
+                <strong style="font-size: 14px; color: #212529;">${option.icon} ${option.displayName}</strong>
+                <span style="margin-left: 8px; font-size: 12px; color: #6c757d;">${option.estimatedTime} • ${option.processingFee}</span>
+              </div>
+              <p style="margin: 4px 0; font-size: 13px; color: #495057;">${option.description}</p>
+            </div>
+          `
+        }
+      }
+      paymentOptionsHtml += `</div>`
+      
+      // Add instructions note
+      paymentOptionsHtml += `
+        <p style="margin: 16px 0 0 0; font-size: 12px; color: #6c757d;">
+          📄 For detailed payment instructions, click "View Invoice" below.
+        </p>
+      </div>
+      `
+      
       const { html, text } = generateEmailTemplate({
         header: {
           title: 'Invoice',
@@ -860,16 +926,17 @@ invoicesRouter.post('/:id/send-email', requireAuth, async (req, res) => {
         },
         content: {
           greeting,
-          message: 'Please find your invoice details below. Click the button to view the full invoice and make payment if applicable.',
+          message: 'Please find your invoice details below. Choose your preferred payment method to complete the payment.',
           infoBox: {
             title: 'Invoice Details',
             items: infoItems,
           },
+          customHtml: paymentOptionsHtml,
           actionButton: {
-            text: 'View Invoice',
+            text: 'View Full Invoice & Payment Instructions',
             url: invoiceViewUrl,
           },
-          additionalInfo: 'If you have any questions about this invoice, please contact us at contactwcg@wolfconsultingnc.com. Thank you for your business!',
+          additionalInfo: 'If you have any questions about this invoice or payment options, please contact us at contactwcg@wolfconsultingnc.com. Thank you for your business!',
         },
       })
       

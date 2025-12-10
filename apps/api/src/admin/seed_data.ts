@@ -1586,6 +1586,418 @@ Focus on the specific factors bringing it down: increase engagement, resolve sup
   }
 })
 
+// POST /api/admin/seed/payment-portal-kb - Add Payment Portal KB article
+adminSeedDataRouter.post('/payment-portal-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const PAYMENT_PORTAL_KB_ARTICLE = {
+      title: 'Payment Portal Guide',
+      category: 'Finance',
+      slug: 'payment-portal-guide',
+      tags: ['payments', 'invoices', 'billing', 'portal', 'online payments', 'reconciliation'],
+      body: `# Payment Portal Guide
+
+Complete guide to using the Payment Portal for processing payments, recording transactions, and managing payment reconciliation.
+
+---
+
+## 📋 **Overview**
+
+The Payment Portal is a comprehensive payment management system that allows you to:
+- **Accept online payments** from customers via credit card or PayPal
+- **Record manual payments** received by phone, mail, or in person
+- **View payment history** with filtering and search
+- **Automatic reconciliation** via webhooks from payment providers
+
+---
+
+## 🎯 **Who Uses the Payment Portal?**
+
+### **Customers**
+- Pay invoices online with credit card or PayPal
+- View payment instructions for offline methods (ACH, wire, check)
+- Receive instant payment confirmations
+
+### **Internal Staff**
+- Record phone payments from customers
+- Enter mailed-in check/cash payments
+- View complete payment history
+- Track reconciliation status
+
+---
+
+## 💳 **Tab 1: Make Payment (Customer-Facing)**
+
+### **How Customers Pay Invoices:**
+
+1. **Select an Invoice**
+   - View all outstanding invoices with balances
+   - See due dates (overdue invoices highlighted in red)
+   - Click an invoice to select it
+
+2. **Enter Payment Amount**
+   - Default amount is the full balance
+   - Can pay partial amounts if needed
+   - Maximum is the invoice balance
+
+3. **Choose Payment Method**
+   - **Credit/Debit Card** - Instant processing via Stripe
+   - **PayPal** - Instant processing via PayPal
+   - **ACH Transfer** - 2-3 days, bank transfer instructions provided
+   - **Wire Transfer** - 1-5 days, international/domestic instructions
+   - **Check** - 7-10 days, mailing instructions provided
+
+4. **Complete Payment**
+   - For online methods (card/PayPal): Click to be redirected to secure payment page
+   - For offline methods: Follow the displayed instructions
+
+### **Payment Confirmation:**
+- Customers receive immediate email confirmation for online payments
+- Email includes transaction ID, payment details, and new balance
+- For offline payments, confirmation sent when payment is recorded by staff
+
+---
+
+## 📞 **Tab 2: Record Payment (Internal Staff)**
+
+For payments received by phone, mail, or in person, staff must manually record them in the system.
+
+### **Step-by-Step Process:**
+
+1. **Search for Invoice**
+   - Type invoice number, customer name, or account name
+   - Select the correct invoice from search results
+
+2. **Enter Payment Details**
+   - **Payment Amount** (required): Enter the amount received
+   - **Payment Method** (required): Select how payment was received:
+     - Check
+     - Cash
+     - Credit Card (Phone)
+     - ACH Transfer
+     - Wire Transfer
+     - PayPal
+   - **Reference Number** (required): Check number, transaction ID, or confirmation code
+   - **Payment Date** (required): Date payment was received (defaults to today)
+   - **Notes** (optional): Any additional information about the payment
+
+3. **Record Payment**
+   - Click "Record Payment" button
+   - System automatically:
+     - Updates invoice balance
+     - Marks invoice as paid if balance reaches $0
+     - Creates payment history entry
+     - Sends confirmation email to customer
+     - Flags payment as needing reconciliation
+
+### **Required Information:**
+
+| Field | Required | Description | Example |
+|-------|----------|-------------|---------|
+| **Invoice** | ✅ Yes | Invoice being paid | Invoice #1234 |
+| **Amount** | ✅ Yes | Payment amount | $500.00 |
+| **Method** | ✅ Yes | How paid | Check |
+| **Reference** | ✅ Yes | Check #, Transaction ID | Check #5678 |
+| **Date** | ✅ Yes | Payment received date | 12/10/2024 |
+| **Notes** | ❌ No | Additional details | Received via FedEx |
+
+### **Best Practices:**
+
+1. ✅ **Record payments immediately** upon receipt
+2. ✅ **Include detailed reference numbers** for tracking
+3. ✅ **Verify invoice number** before recording
+4. ✅ **Double-check amount** matches payment received
+5. ✅ **Use correct payment date** (when received, not when recorded)
+6. ✅ **Add notes** for unusual circumstances
+
+---
+
+## 📊 **Tab 3: Payment History**
+
+View all recorded payments with powerful filtering and search capabilities.
+
+### **Filter Options:**
+
+- **Search**: Find by invoice number or reference number
+- **Status**:
+  - All Payments
+  - Reconciled (verified and confirmed)
+  - Pending Reconciliation (awaiting verification)
+- **Date Range**: Filter by payment date
+
+### **Payment Information Displayed:**
+
+- **Date**: When payment was received
+- **Invoice**: Invoice number paid
+- **Method**: How payment was made (with icon)
+- **Reference**: Transaction ID or check number
+- **Amount**: Payment amount
+- **Status**: Reconciled or Pending badge
+
+### **Reconciliation Status:**
+
+**✅ Reconciled (Green)**
+- Payment verified and confirmed
+- Bank/payment processor records match
+- No action needed
+
+**⚠️ Pending (Yellow)**
+- Manual payment awaiting bank verification
+- Review bank statement to confirm
+- Mark as reconciled once verified
+
+### **Export to CSV:**
+Click "Export to CSV" to download payment history for accounting/reporting.
+
+---
+
+## 🔄 **Automatic Reconciliation**
+
+The Payment Portal uses webhooks to automatically reconcile online payments from Stripe and PayPal.
+
+### **How It Works:**
+
+1. **Customer Pays Online**
+   - Customer submits payment via Stripe or PayPal
+   - Payment processor charges card/account
+
+2. **Webhook Notification**
+   - Stripe/PayPal sends webhook to BOAZ-OS
+   - System verifies webhook signature (security)
+
+3. **Automatic Recording**
+   - Payment automatically recorded in system
+   - Invoice balance updated immediately
+   - Payment marked as "Reconciled"
+   - Customer receives confirmation email
+
+4. **No Manual Entry Needed**
+   - Zero data entry for staff
+   - Instant reconciliation
+   - Reduced errors
+
+### **Manual vs. Automatic:**
+
+| Aspect | Manual Recording | Automatic (Webhook) |
+|--------|-----------------|---------------------|
+| **Entry Time** | ~2-3 minutes | Instant |
+| **Reconciliation** | Requires bank verification | Automatic |
+| **Error Risk** | Human error possible | Near zero |
+| **Staff Time** | Required | None |
+| **Confirmation** | After recording | Instant |
+
+---
+
+## 🛠️ **Setting Up Payment Methods**
+
+### **For Admins: Configuring Payment Options**
+
+See the **Payment Setup Guide** in the API documentation at:
+\`apps/api/docs/PAYMENT_SETUP.md\`
+
+### **Stripe Setup (Credit Cards):**
+
+1. **Create Stripe Account**
+   - Sign up at https://stripe.com
+   - Complete business verification
+   - Get API keys from Dashboard
+
+2. **Add to Environment Variables**
+   \`\`\`
+   STRIPE_SECRET_KEY=sk_live_...
+   STRIPE_PUBLISHABLE_KEY=pk_live_...
+   STRIPE_WEBHOOK_SECRET=whsec_...
+   \`\`\`
+
+3. **Configure Webhook**
+   - URL: \`https://your-domain.com/api/webhooks/stripe\`
+   - Events:
+     - \`checkout.session.completed\`
+     - \`payment_intent.succeeded\`
+     - \`payment_intent.payment_failed\`
+     - \`charge.refunded\`
+
+4. **Test Mode**
+   - Use test keys for development
+   - Test card: \`4242 4242 4242 4242\`
+   - Switch to live keys when ready
+
+### **PayPal Setup:**
+
+1. **Create PayPal Business Account**
+   - Sign up at https://www.paypal.com/business
+   - Complete verification
+
+2. **Quick Setup (PayPal.me)**
+   - Create PayPal.me link at https://www.paypal.me
+   - Update in payment providers config
+
+3. **Advanced Setup (Full Integration)**
+   - Get Client ID and Secret from PayPal Developer
+   - Add to environment variables:
+   \`\`\`
+   PAYPAL_CLIENT_ID=your_client_id
+   PAYPAL_CLIENT_SECRET=your_client_secret
+   PAYPAL_WEBHOOK_ID=your_webhook_id
+   \`\`\`
+
+4. **Configure Webhook**
+   - URL: \`https://your-domain.com/api/webhooks/paypal\`
+   - Events:
+     - \`PAYMENT.CAPTURE.COMPLETED\`
+     - \`PAYMENT.CAPTURE.DENIED\`
+     - \`PAYMENT.CAPTURE.REFUNDED\`
+
+### **Bank Account Details (ACH/Wire):**
+
+Update in \`apps/api/src/lib/payment-providers.ts\`:
+
+\`\`\`typescript
+bankAccountDetails: {
+  bankName: 'Your Bank Name',
+  routingNumber: 'YOUR_ROUTING',
+  accountNumber: '****LAST4', // Masked!
+  accountName: 'Your Company Name',
+  swiftCode: 'YOUR_SWIFT',
+}
+\`\`\`
+
+---
+
+## 🔒 **Security Features**
+
+### **Payment Security:**
+- ✅ PCI-compliant payment processing (Stripe/PayPal)
+- ✅ No card data stored in BOAZ-OS
+- ✅ All payment pages use HTTPS
+- ✅ Webhook signature verification
+- ✅ Account numbers masked (show last 4 only)
+
+### **Access Control:**
+- ✅ Authentication required for all payment operations
+- ✅ Role-based permissions
+- ✅ Audit trail in payment history
+- ✅ "Processed By" tracked for manual payments
+
+---
+
+## 📧 **Email Notifications**
+
+### **Customers Receive:**
+- ✅ Payment confirmation email
+- ✅ Transaction ID and reference
+- ✅ Updated invoice balance
+- ✅ Receipt for records
+
+### **Staff Notifications:**
+- ⚠️ Payment failures (admin alert)
+- ⚠️ Disputed payments
+- ⚠️ Refunds processed
+
+---
+
+## ❓ **Common Questions**
+
+### **Why is a payment showing "Pending Reconciliation"?**
+Manual payments (phone, mail, cash) require bank verification. Once you confirm the payment cleared your bank, you can mark it as reconciled.
+
+### **Can customers pay partial amounts?**
+Yes! Customers can enter any amount up to the invoice balance. The remaining balance will still show as due.
+
+### **What if a payment fails?**
+Failed payments are logged in the system. Staff receives a notification. Customer can try again or use a different payment method.
+
+### **How long do online payments take?**
+Credit card and PayPal payments process instantly. The customer receives immediate confirmation and the invoice is updated in real-time.
+
+### **Can I export payment history for accounting?**
+Yes! Click "Export to CSV" in the Payment History tab to download all payment data for your accounting software.
+
+### **What if someone pays the wrong invoice?**
+Contact an admin to process a refund and re-apply the payment to the correct invoice. All refunds are tracked in the system.
+
+### **Do webhooks work in development?**
+Use tools like ngrok to expose your local server, or test webhooks in Stripe/PayPal test mode.
+
+---
+
+## 🔧 **Troubleshooting**
+
+### **Payment not showing in history**
+- Check filters (may be filtered out)
+- Verify payment was recorded (check invoice)
+- Refresh the page
+
+### **Can't find invoice to record payment**
+- Check spelling of invoice number
+- Try searching by account name
+- Verify invoice exists in Invoices app
+
+### **Reconciliation not automatic**
+- Verify webhook is configured correctly
+- Check webhook secret matches environment variable
+- Review webhook logs in Stripe/PayPal dashboard
+- Ensure webhook URL is publicly accessible
+
+### **Customer didn't receive confirmation email**
+- Check spam/junk folder
+- Verify email address in account record
+- Check system email logs
+
+---
+
+## 📞 **Support**
+
+For technical issues with the Payment Portal:
+- **Email**: support@wolfconsultingnc.com
+- **Phone**: (704) 555-1234
+
+For payment processing issues:
+- **Stripe**: https://support.stripe.com
+- **PayPal**: https://www.paypal.com/support
+
+---
+
+**Last Updated:** December 2024  
+**Version:** 2.0
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existingArticle = await db.collection('kb_articles').findOne({ slug: 'payment-portal-guide' })
+    const result = existingArticle ? 'updated' : 'created'
+    
+    if (existingArticle) {
+      await db.collection('kb_articles').updateOne(
+        { slug: 'payment-portal-guide' },
+        { $set: { ...PAYMENT_PORTAL_KB_ARTICLE, updatedAt: new Date() } }
+      )
+    } else {
+      await db.collection('kb_articles').insertOne(PAYMENT_PORTAL_KB_ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: PAYMENT_PORTAL_KB_ARTICLE.title,
+        slug: PAYMENT_PORTAL_KB_ARTICLE.slug,
+        url: `/apps/crm/support/kb/${PAYMENT_PORTAL_KB_ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed payment portal KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
 // DELETE /api/admin/customer-portal-users/:email - Remove customer by email
 adminSeedDataRouter.delete('/customer-portal-user/:email', async (req, res) => {
   const db = await getDb()

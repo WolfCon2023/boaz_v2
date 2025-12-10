@@ -49,6 +49,8 @@ import { customerPortalAuthRouter } from './customer_portal/auth.js'
 import { customerPortalDataRouter } from './customer_portal/data.js'
 import { adminCustomerPortalUsersRouter } from './admin/customer_portal_users.js'
 import { adminSeedDataRouter } from './admin/seed_data.js'
+import { paymentPortalRouter } from './payments/payment_portal.js'
+import { webhooksRouter } from './payments/webhooks.js'
 
 const app = express()
 const normalize = (s: string) => s.trim().replace(/\/$/, '').toLowerCase()
@@ -138,6 +140,10 @@ app.use('/api/customer-portal/data', customerPortalDataRouter)
 app.use('/api/admin/customer-portal-users', adminCustomerPortalUsersRouter)
 // Admin: Seed Data Endpoints
 app.use('/api/admin/seed', adminSeedDataRouter)
+// Payment Portal
+app.use('/api/payments', paymentPortalRouter)
+// Webhooks (no auth required - verified by signature)
+app.use('/api/webhooks', webhooksRouter)
 
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))
