@@ -82,8 +82,11 @@ export default function CustomerPortalPayments() {
       })
       if (res.data.error) throw new Error(res.data.error)
       const items = res.data.data.items ?? []
+      console.log('Fetched invoices from API:', items)
       // Filter unpaid invoices
-      return items.filter((inv: Invoice) => (inv.balance ?? inv.total ?? 0) > 0)
+      const unpaidInvoices = items.filter((inv: Invoice) => (inv.balance ?? inv.total ?? 0) > 0)
+      console.log('Unpaid invoices:', unpaidInvoices)
+      return unpaidInvoices
     }
   })
 
@@ -118,8 +121,16 @@ export default function CustomerPortalPayments() {
       return
     }
 
+    // Debug: Check if invoice ID exists
+    if (!selectedInvoice.id) {
+      console.error('Invoice ID is missing:', selectedInvoice)
+      showToast('Error: Invoice ID is missing. Please try again.', 'error')
+      return
+    }
+
     // For credit card payments, redirect to secure checkout page
     if (paymentMethod === 'credit_card') {
+      console.log('Redirecting to checkout with invoice ID:', selectedInvoice.id)
       navigate(`/customer/checkout?invoice=${selectedInvoice.id}&amount=${amount}&method=credit_card`)
       return
     }
@@ -273,6 +284,7 @@ export default function CustomerPortalPayments() {
                         <button
                           key={invoice.id}
                           onClick={() => {
+                            console.log('Selected invoice:', invoice)
                             setSelectedInvoice(invoice)
                             setPaymentAmount(String(invoice.balance ?? invoice.total ?? 0))
                             setShowInstructions(false)
