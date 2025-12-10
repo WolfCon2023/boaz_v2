@@ -97,7 +97,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/deals/approval-queue', element: <RequireAuth><RequireApplication appKey="crm"><CRMDealApprovalQueue /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoices /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices/:id/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoicePrint /></RequireApplication></RequireAuth> },
-      { path: 'apps/payments', element: <RequireAuth><PaymentPortal /></RequireAuth> },
+      { path: 'apps/crm/payments', element: <RequireAuth><RequireApplication appKey="crm"><PaymentPortal /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/deals', element: <RequireAuth><RequireApplication appKey="crm"><CRMDeals /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/projects', element: <RequireAuth><RequireApplication appKey="crm"><CRMProjects /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/projects/report', element: <RequireAuth><RequireApplication appKey="crm"><CRMProjectsReport /></RequireApplication></RequireAuth> },

@@ -44,6 +44,7 @@ export default function CRMHub() {
     { label: 'Knowledge Base', desc: 'Articles and self‑service help', href: '/apps/crm/support/kb' },
     { label: 'Marketing', desc: 'Campaigns, segments, analytics', href: '/apps/crm/marketing' },
     { label: 'Outreach', desc: 'Email/SMS templates, sequences, events', href: '/apps/crm/outreach/templates' },
+    { label: 'Payment Portal', desc: 'Process online payments, record phone/mail payments, and view payment history', href: '/apps/crm/payments' },
     { label: 'Products', desc: 'Product catalog, bundles, discounts, and terms', href: '/apps/crm/products' },
     {
       label: 'Vendors',
