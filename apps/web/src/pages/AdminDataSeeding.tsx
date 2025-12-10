@@ -22,6 +22,7 @@ export default function AdminDataSeeding() {
   const [seedingPaymentPortalKB, setSeedingPaymentPortalKB] = useState(false)
   const [seedingOutreachSequencesKB, setSeedingOutreachSequencesKB] = useState(false)
   const [seedingOutreachTemplatesKB, setSeedingOutreachTemplatesKB] = useState(false)
+  const [seedingAll, setSeedingAll] = useState(false)
   
   const [rolesResult, setRolesResult] = useState<any>(null)
   const [kbResult, setKBResult] = useState<any>(null)
@@ -33,6 +34,8 @@ export default function AdminDataSeeding() {
   const [paymentPortalKBResult, setPaymentPortalKBResult] = useState<any>(null)
   const [outreachSequencesKBResult, setOutreachSequencesKBResult] = useState<any>(null)
   const [outreachTemplatesKBResult, setOutreachTemplatesKBResult] = useState<any>(null)
+  const [seedAllResult, setSeedAllResult] = useState<any>(null)
+  const [seedAllProgress, setSeedAllProgress] = useState<string>('')
 
   async function seedITRoles() {
     setSeedingRoles(true)
@@ -214,6 +217,59 @@ export default function AdminDataSeeding() {
     }
   }
 
+  async function seedAllKB() {
+    setSeedingAll(true)
+    setSeedAllResult(null)
+    setSeedAllProgress('')
+    
+    const results: any[] = []
+    const seedFunctions = [
+      { name: 'Roles & Permissions KB', fn: seedRolesKB },
+      { name: 'Support Tickets KB', fn: seedTicketsKB },
+      { name: 'Approval Queue KB', fn: seedApprovalQueueKB },
+      { name: 'Acceptance Queue KB', fn: seedAcceptanceQueueKB },
+      { name: 'Deal Approval KB', fn: seedDealApprovalKB },
+      { name: 'Customer Success KB', fn: seedCustomerSuccessKB },
+      { name: 'Payment Portal KB', fn: seedPaymentPortalKB },
+      { name: 'Outreach Sequences KB', fn: seedOutreachSequencesKB },
+      { name: 'Outreach Templates KB', fn: seedOutreachTemplatesKB },
+    ]
+
+    let successCount = 0
+    let failCount = 0
+
+    for (let i = 0; i < seedFunctions.length; i++) {
+      const { name, fn } = seedFunctions[i]
+      setSeedAllProgress(`Seeding ${i + 1}/${seedFunctions.length}: ${name}...`)
+      
+      try {
+        await fn()
+        results.push({ name, status: 'success' })
+        successCount++
+      } catch (err: any) {
+        results.push({ name, status: 'failed', error: err.message })
+        failCount++
+      }
+    }
+
+    setSeedAllProgress('')
+    setSeedAllResult({
+      message: `Completed! ${successCount} succeeded, ${failCount} failed`,
+      results,
+      total: seedFunctions.length,
+      success: successCount,
+      failed: failCount,
+    })
+
+    if (failCount === 0) {
+      showToast(`All ${successCount} KB articles seeded successfully!`, 'success')
+    } else {
+      showToast(`Seeded ${successCount} articles, ${failCount} failed`, 'error')
+    }
+
+    setSeedingAll(false)
+  }
+
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
       <div>
@@ -221,6 +277,86 @@ export default function AdminDataSeeding() {
         <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
           Trigger data seeding operations for roles and knowledge base articles
         </p>
+      </div>
+
+      {/* Seed All KB Articles - Master Button */}
+      <div className="rounded-lg border-2 border-[color:var(--color-primary-600)] bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Database className="h-6 w-6 text-[color:var(--color-primary-600)]" />
+              <h3 className="text-xl font-bold text-[color:var(--color-text)]">🚀 Seed All KB Articles</h3>
+            </div>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
+              Seed all 9 knowledge base articles at once. This will create or update: Roles & Permissions, Support Tickets, Approval Queue, Acceptance Queue, Deal Approval, Customer Success, Payment Portal, Outreach Sequences, and Outreach Templates guides.
+            </p>
+            <button
+              onClick={seedAllKB}
+              disabled={seedingAll}
+              className="flex items-center space-x-2 rounded-lg bg-gradient-to-r from-[color:var(--color-primary-600)] to-[color:var(--color-primary-700)] px-6 py-3 text-base font-semibold text-white shadow-lg hover:from-[color:var(--color-primary-700)] hover:to-[color:var(--color-primary-800)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {seedingAll ? (
+                <>
+                  <Loader className="h-5 w-5 animate-spin" />
+                  <span>Seeding All Articles...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-5 w-5" />
+                  <span>Seed All KB Articles Now</span>
+                </>
+              )}
+            </button>
+            {seedAllProgress && (
+              <p className="mt-3 text-sm font-medium text-[color:var(--color-primary-700)]">
+                {seedAllProgress}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {seedAllResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900 mb-2">{seedAllResult.message}</p>
+                <div className="text-xs text-green-800">
+                  <p className="mb-2">
+                    <strong>Total:</strong> {seedAllResult.total} | 
+                    <strong className="ml-2 text-green-700">✓ Success:</strong> {seedAllResult.success} | 
+                    {seedAllResult.failed > 0 && <strong className="ml-2 text-red-700">✗ Failed:</strong>} {seedAllResult.failed > 0 && seedAllResult.failed}
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {seedAllResult.results.map((r: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        {r.status === 'success' ? (
+                          <span className="text-green-600">✓</span>
+                        ) : (
+                          <span className="text-red-600">✗</span>
+                        )}
+                        <span>{r.name}</span>
+                        {r.error && <span className="text-red-600 text-xs">({r.error})</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-[color:var(--color-border)]"></div>
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="bg-[color:var(--color-bg)] px-4 text-[color:var(--color-text-muted)]">
+            Or seed individual articles
+          </span>
+        </div>
       </div>
 
       {/* Seed IT Roles */}
