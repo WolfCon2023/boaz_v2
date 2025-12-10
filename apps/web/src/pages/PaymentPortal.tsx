@@ -260,7 +260,7 @@ export default function PaymentPortal() {
           </div>
         </div>
         <a
-          href="/apps/crm/support/kb?tag=payment-portal"
+          href="/apps/crm/support/kb?tag=payments"
           className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-muted)]"
           title="View Payment Portal Guide & Security Information"
         >
@@ -647,7 +647,7 @@ export default function PaymentPortal() {
                       <span>•</span>
                       <span>PCI DSS SAQ A Compliant</span>
                       <span>•</span>
-                      <a href="/apps/crm/support/kb?tag=payment-portal" className="underline hover:text-[color:var(--color-text)]">
+                      <a href="/apps/crm/support/kb?tag=payments" className="underline hover:text-[color:var(--color-text)]">
                         Security Info
                       </a>
                     </div>
