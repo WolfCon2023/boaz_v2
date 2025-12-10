@@ -296,7 +296,11 @@ export default function CustomerPortalInvoices() {
                   {/* Actions */}
                   <div className="pt-4 border-t">
                     <p className="text-sm text-gray-600 mb-4">
-                      Need to make a payment or have questions? Contact us at{' '}
+                      Need to make a payment? Visit our{' '}
+                      <Link to="/customer/payments" className="text-indigo-600 hover:text-indigo-700 font-medium">
+                        secure payment portal
+                      </Link>
+                      . Have questions? Contact us at{' '}
                       <a href="mailto:contactwcg@wolfconsultingnc.com" className="text-indigo-600 hover:text-indigo-700">
                         contactwcg@wolfconsultingnc.com
                       </a>
