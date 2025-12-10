@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
+import { useConfirm } from '../components/ConfirmDialog'
 import { CRMNav } from '../components/CRMNav'
 import { 
   CreditCard, 
@@ -63,6 +64,7 @@ type Payment = {
 
 export default function PaymentPortal() {
   const { showToast } = useToast()
+  const { confirm, ConfirmDialog } = useConfirm()
   const qc = useQueryClient()
 
   // Tabs
@@ -1053,8 +1055,12 @@ export default function PaymentPortal() {
                         <td className="px-4 py-3 text-center">
                           {!payment.reconciled && (
                             <button
-                              onClick={() => {
-                                if (window.confirm('Mark this payment as reconciled? This confirms that the funds have been verified in your bank account.')) {
+                              onClick={async () => {
+                                const confirmed = await confirm('Mark this payment as reconciled? This confirms that the funds have been verified in your bank account.', {
+                                  confirmText: 'Mark as Reconciled',
+                                  confirmColor: 'success'
+                                })
+                                if (confirmed) {
                                   reconcilePaymentMutation.mutate(payment._id)
                                 }
                               }}
@@ -1089,6 +1095,7 @@ export default function PaymentPortal() {
           </div>
         </div>
       )}
+      {ConfirmDialog}
     </div>
   )
 }
