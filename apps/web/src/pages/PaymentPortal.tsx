@@ -9,6 +9,7 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
 import { 
@@ -29,7 +30,9 @@ import {
   Info,
   HelpCircle,
   Shield,
-  Lock
+  Lock,
+  ArrowLeft,
+  Home
 } from 'lucide-react'
 import { formatDate } from '../lib/dateFormat'
 
@@ -61,6 +64,7 @@ type Payment = {
 }
 
 export default function PaymentPortal() {
+  const navigate = useNavigate()
   const { showToast } = useToast()
   const qc = useQueryClient()
 
@@ -241,6 +245,26 @@ export default function PaymentPortal() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
+      {/* Navigation Buttons */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm font-medium hover:bg-[color:var(--color-muted)]"
+          title="Go back"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+        <button
+          onClick={() => navigate('/apps/crm')}
+          className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm font-medium hover:bg-[color:var(--color-muted)]"
+          title="Return to CRM Hub"
+        >
+          <Home className="h-4 w-4" />
+          CRM Hub
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
