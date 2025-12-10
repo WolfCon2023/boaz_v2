@@ -82,10 +82,19 @@ Daily or weekly, your accounting team:
 2. Reviews payment processor reports (Stripe, PayPal)
 3. Matches recorded payments with actual deposits
 
-### Step 3: Mark as Reconciled
-Once verified, the payment is marked as **"Reconciled"**:
-- This confirms the money was actually received
-- The payment is now part of your verified financial records
+### Step 3: Mark as Reconciled (NEW UI!)
+Once verified, mark the payment as **"Reconciled"** using the new UI:
+
+1. Go to **Payment Portal → Payment History**
+2. Find the payment you've verified (you can filter by "Pending Reconciliation")
+3. Click the green **"Reconcile"** button in the Actions column
+4. Confirm the action in the popup dialog
+5. ✅ The payment is now marked as **"Reconciled"** with:
+   - Timestamp of when it was reconciled
+   - Who reconciled it (your name/email)
+   - Permanent record in the system
+
+**Note:** The "Reconcile" button only appears for payments that haven't been reconciled yet. Once reconciled, the button disappears and shows "-" in the Actions column.
 
 ### Step 4: Handle Discrepancies
 If a payment doesn't reconcile:
