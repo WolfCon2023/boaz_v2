@@ -1146,6 +1146,7 @@ documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
 
     // Surface the actual error message (including string throws/objects) to help diagnose 500s in dev
     let errorMessage = 'deletion_request_failed'
+    let debugDetails: any = undefined
     if (typeof e === 'string') {
       errorMessage = e
     } else if (e && typeof e === 'object') {
@@ -1153,6 +1154,7 @@ documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
         errorMessage = (e as any).message
       } else {
         try {
+          debugDetails = e
           errorMessage = JSON.stringify(e)
         } catch {
           // keep default
@@ -1160,7 +1162,7 @@ documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
       }
     }
 
-    res.status(500).json({ data: null, error: errorMessage })
+    res.status(500).json({ data: null, error: errorMessage, details: debugDetails, handlerVersion: 'request-deletion-v2' })
   }
 })
 
