@@ -36,6 +36,12 @@ export default function CustomerPortalInvoices() {
     }
   }, [navigate])
 
+  function handleLogout() {
+    localStorage.removeItem('customer_portal_token')
+    localStorage.removeItem('customer_portal_user')
+    navigate('/customer/login')
+  }
+
   // Fetch invoices
   const invoicesQ = useQuery({
     queryKey: ['customer-portal-invoices'],
@@ -97,6 +103,12 @@ export default function CustomerPortalInvoices() {
               <div className="hidden sm:block w-px h-6 bg-gray-300"></div>
               <h1 className="text-xl font-bold text-gray-900 hidden sm:block">My Invoices</h1>
             </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </header>

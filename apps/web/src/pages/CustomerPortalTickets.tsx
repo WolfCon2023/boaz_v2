@@ -49,6 +49,12 @@ export default function CustomerPortalTickets() {
     }
   }, [navigate])
 
+  function handleLogout() {
+    localStorage.removeItem('customer_portal_token')
+    localStorage.removeItem('customer_portal_user')
+    navigate('/customer/login')
+  }
+
   const ticketsQ = useQuery({
     queryKey: ['customer-portal-tickets'],
     queryFn: async () => {
@@ -166,13 +172,21 @@ export default function CustomerPortalTickets() {
               <div className="hidden sm:block h-6 w-px bg-[color:var(--color-border)]"></div>
               <h1 className="text-xl font-semibold text-[color:var(--color-text)] hidden sm:block">My Tickets</h1>
             </div>
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              <span>New Ticket</span>
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleLogout}
+                className="rounded-lg px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
+              >
+                Logout
+              </button>
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                <span>New Ticket</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>

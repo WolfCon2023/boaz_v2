@@ -34,6 +34,12 @@ export default function CustomerPortalQuotes() {
     }
   }, [navigate])
 
+  function handleLogout() {
+    localStorage.removeItem('customer_portal_token')
+    localStorage.removeItem('customer_portal_user')
+    navigate('/customer/login')
+  }
+
   const quotesQ = useQuery({
     queryKey: ['customer-portal-quotes'],
     queryFn: async () => {
@@ -81,13 +87,21 @@ export default function CustomerPortalQuotes() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
       <header className="bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center space-x-4">
-            <Link to="/customer/dashboard" className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Dashboard</span>
-            </Link>
-            <div className="hidden sm:block w-px h-6 bg-gray-300"></div>
-            <h1 className="text-xl font-bold text-gray-900 hidden sm:block">My Quotes</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Link to="/customer/dashboard" className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
+                <ArrowLeft className="w-5 h-5" />
+                <span>Back to Dashboard</span>
+              </Link>
+              <div className="hidden sm:block w-px h-6 bg-gray-300"></div>
+              <h1 className="text-xl font-bold text-gray-900 hidden sm:block">My Quotes</h1>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </header>

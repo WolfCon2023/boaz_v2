@@ -63,6 +63,12 @@ export default function CustomerPortalPayments() {
     }
   }, [navigate])
 
+  function handleLogout() {
+    localStorage.removeItem('customer_portal_token')
+    localStorage.removeItem('customer_portal_user')
+    navigate('/customer/login')
+  }
+
   // Tabs
   const [activeTab, setActiveTab] = useState<'pay' | 'history'>('pay')
 
@@ -188,7 +194,13 @@ export default function CustomerPortalPayments() {
                 <h1 className="text-xl font-semibold text-[color:var(--color-text)]">Payments</h1>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleLogout}
+                className="rounded-lg px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
+              >
+                Logout
+              </button>
               <div className="flex items-center gap-1 rounded-full border border-green-600 bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">
                 <Shield className="h-3 w-3" />
                 PCI DSS Compliant
