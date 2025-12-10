@@ -157,7 +157,8 @@ async function hasPermission(
   if (document.isPublic && requiredPermission === 'view') return true
 
   // Check explicit permissions
-  const userPerm = document.permissions.find(p => String(p.userId) === userId)
+  const perms = Array.isArray(document.permissions) ? document.permissions : []
+  const userPerm = perms.find(p => String(p.userId) === userId)
   if (!userPerm) return false
 
   const permLevels = { view: 1, edit: 2, delete: 3 }
@@ -1142,7 +1143,8 @@ documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
     if (e?.message?.includes('ObjectId')) {
       return res.status(400).json({ data: null, error: 'invalid_id' })
     }
-    res.status(500).json({ data: null, error: 'deletion_request_failed' })
+    // Surface the actual error message to help diagnose 500s in dev
+    res.status(500).json({ data: null, error: e?.message || 'deletion_request_failed' })
   }
 })
 
