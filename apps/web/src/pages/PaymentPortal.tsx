@@ -168,6 +168,21 @@ export default function PaymentPortal() {
     }
   })
 
+  // Reconcile payment mutation
+  const reconcilePaymentMutation = useMutation({
+    mutationFn: async (paymentId: string) => {
+      const res = await http.post(`/api/payments/reconcile/${paymentId}`)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payment-history'] })
+      showToast('Payment marked as reconciled', 'success')
+    },
+    onError: (error: any) => {
+      showToast(error.response?.data?.error || 'Failed to reconcile payment', 'error')
+    }
+  })
+
   const handleProcessPayment = () => {
     if (!selectedInvoice) {
       showToast('Please select an invoice', 'error')
@@ -978,18 +993,21 @@ export default function PaymentPortal() {
                     <th className="px-4 py-3 text-center font-medium text-[color:var(--color-text)]">
                       Status
                     </th>
+                    <th className="px-4 py-3 text-center font-medium text-[color:var(--color-text)]">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {paymentsQuery.isLoading ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
+                      <td colSpan={7} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
                         Loading payment history...
                       </td>
                     </tr>
                   ) : (paymentsQuery.data?.length ?? 0) === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
+                      <td colSpan={7} className="px-4 py-8 text-center text-[color:var(--color-text-muted)]">
                         No payment history found
                       </td>
                     </tr>
@@ -1029,6 +1047,28 @@ export default function PaymentPortal() {
                             <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-700">
                               <AlertCircle className="h-3 w-3" />
                               Pending
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {!payment.reconciled && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm('Mark this payment as reconciled? This confirms that the funds have been verified in your bank account.')) {
+                                  reconcilePaymentMutation.mutate(payment._id)
+                                }
+                              }}
+                              disabled={reconcilePaymentMutation.isPending}
+                              className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Mark as reconciled"
+                            >
+                              <CheckCircle className="h-3 w-3" />
+                              Reconcile
+                            </button>
+                          )}
+                          {payment.reconciled && (
+                            <span className="text-xs text-[color:var(--color-text-muted)]">
+                              -
                             </span>
                           )}
                         </td>
