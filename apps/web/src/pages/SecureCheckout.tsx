@@ -60,6 +60,12 @@ export default function SecureCheckout() {
   const isCustomerPortal = window.location.pathname.startsWith('/customer/')
   const customerToken = localStorage.getItem('customer_portal_token')
 
+  function handleCustomerLogout() {
+    localStorage.removeItem('customer_portal_token')
+    localStorage.removeItem('customer_portal_user')
+    navigate('/customer/login')
+  }
+
   // Fetch invoice details
   const invoiceQuery = useQuery({
     queryKey: ['invoice-checkout', invoiceId, isCustomerPortal],
@@ -234,9 +240,19 @@ export default function SecureCheckout() {
               <div className="h-6 w-px bg-[color:var(--color-border)]"></div>
               <h1 className="text-xl font-semibold text-[color:var(--color-text)]">Secure Checkout</h1>
             </div>
-            <div className="flex items-center gap-2">
-              <Lock className="h-5 w-5 text-green-600" />
-              <span className="text-sm font-medium text-green-600">Secure Payment</span>
+            <div className="flex items-center gap-3">
+              {isCustomerPortal && (
+                <button
+                  onClick={handleCustomerLogout}
+                  className="rounded-lg px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
+                >
+                  Logout
+                </button>
+              )}
+              <div className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-green-600" />
+                <span className="text-sm font-medium text-green-600">Secure Payment</span>
+              </div>
             </div>
           </div>
         </div>

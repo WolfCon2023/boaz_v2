@@ -13,6 +13,13 @@ export default function PaymentSuccess() {
   const navigate = useNavigate()
   const sessionId = searchParams.get('session_id')
   const [countdown, setCountdown] = useState(10)
+  const isCustomerPortal = window.location.pathname.startsWith('/customer/')
+
+  function handleCustomerLogout() {
+    localStorage.removeItem('customer_portal_token')
+    localStorage.removeItem('customer_portal_user')
+    navigate('/customer/login')
+  }
 
   useEffect(() => {
     if (!sessionId) {
@@ -94,6 +101,15 @@ export default function PaymentSuccess() {
               <Home className="h-4 w-4" />
               Back to Dashboard
             </Link>
+            {isCustomerPortal && (
+              <button
+                type="button"
+                onClick={handleCustomerLogout}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-6 py-3 text-sm font-medium text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+              >
+                Logout
+              </button>
+            )}
           </div>
 
           {/* Auto-redirect notice */}
