@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '../lib/http'
+import { CustomerPortalThemeToggle } from '../components/CustomerPortalThemeToggle'
 
 type CustomerUser = {
   id: string
@@ -96,6 +97,7 @@ export default function CustomerPortalDashboard() {
                 <p className="text-sm font-medium text-[color:var(--color-text)]">{customer.name}</p>
                 <p className="text-xs text-[color:var(--color-text-muted)]">{customer.email}</p>
               </div>
+              <CustomerPortalThemeToggle />
               <button
                 onClick={handleLogout}
                 className="rounded-lg px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"

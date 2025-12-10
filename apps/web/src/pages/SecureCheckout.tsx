@@ -10,6 +10,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
+import { CustomerPortalThemeToggle } from '../components/CustomerPortalThemeToggle'
 import { 
   CreditCard, 
   Lock,
@@ -241,6 +242,7 @@ export default function SecureCheckout() {
               <h1 className="text-xl font-semibold text-[color:var(--color-text)]">Secure Checkout</h1>
             </div>
             <div className="flex items-center gap-3">
+              {isCustomerPortal && <CustomerPortalThemeToggle />}
               {isCustomerPortal && (
                 <button
                   onClick={handleCustomerLogout}

@@ -9,6 +9,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '../lib/http'
 import { ArrowLeft, FileSignature, Eye, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { CustomerPortalThemeToggle } from '../components/CustomerPortalThemeToggle'
 
 type Quote = {
   id: string
@@ -96,12 +97,15 @@ export default function CustomerPortalQuotes() {
               <div className="hidden sm:block w-px h-6 bg-[color:var(--color-border)]"></div>
               <h1 className="text-xl font-semibold text-[color:var(--color-text)] hidden sm:block">My Quotes</h1>
             </div>
-            <button
-              onClick={handleLogout}
-              className="rounded-lg px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
-            >
-              Logout
-            </button>
+            <div className="flex items-center space-x-3">
+              <CustomerPortalThemeToggle />
+              <button
+                onClick={handleLogout}
+                className="rounded-lg px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>

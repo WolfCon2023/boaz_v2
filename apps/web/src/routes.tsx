@@ -75,6 +75,7 @@ import SecureCheckout from '@/pages/SecureCheckout'
 import PaymentSuccess from '@/pages/PaymentSuccess'
 import { RequireAuth, RequireApplication } from '@/components/Auth'
 import { ToastProvider } from '@/components/Toast'
+import { CustomerPortalThemeProvider } from '@/components/CustomerPortalThemeProvider'
 
 export const router = createBrowserRouter([
   {
@@ -204,9 +205,11 @@ export const router = createBrowserRouter([
   {
     path: '/customer',
     element: (
-      <ToastProvider>
-        <Outlet />
-      </ToastProvider>
+      <CustomerPortalThemeProvider>
+        <ToastProvider>
+          <Outlet />
+        </ToastProvider>
+      </CustomerPortalThemeProvider>
     ),
     children: [
       { path: 'login', element: <CustomerPortalLogin /> },

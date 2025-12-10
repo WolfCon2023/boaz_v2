@@ -12,6 +12,7 @@ import { http } from '../lib/http'
 import { ArrowLeft, Ticket, MessageSquare, Send, AlertCircle, Plus, X } from 'lucide-react'
 import { formatDateTime } from '../lib/dateFormat'
 import { useToast } from '../components/Toast'
+import { CustomerPortalThemeToggle } from '../components/CustomerPortalThemeToggle'
 
 type SupportTicket = {
   id: string
@@ -173,6 +174,7 @@ export default function CustomerPortalTickets() {
               <h1 className="text-xl font-semibold text-[color:var(--color-text)] hidden sm:block">My Tickets</h1>
             </div>
             <div className="flex items-center space-x-3">
+              <CustomerPortalThemeToggle />
               <button
                 onClick={handleLogout}
                 className="rounded-lg px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"

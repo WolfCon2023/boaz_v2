@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
+import { CustomerPortalThemeToggle } from '../components/CustomerPortalThemeToggle'
 import { 
   CreditCard, 
   DollarSign, 
@@ -195,6 +196,7 @@ export default function CustomerPortalPayments() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <CustomerPortalThemeToggle />
               <button
                 onClick={handleLogout}
                 className="rounded-lg px-4 py-2 text-sm text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
