@@ -1107,13 +1107,15 @@ documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
     const userName = (user as any)?.name || auth.email
 
     // Create helpdesk ticket
-    const { getNextSequence } = await import('../db.js')
-    let ticketNumber: number
-    try {
-      ticketNumber = await getNextSequence('ticketNumber')
-    } catch {
-      ticketNumber = 200001
-    }
+    // Reuse the simpler sequence strategy from the customer portal tickets API
+    // to avoid any issues with counter state while still keeping numbers monotonic.
+    const lastTicket = await db.collection('support_tickets')
+      .find({})
+      .sort({ ticketNumber: -1 })
+      .limit(1)
+      .toArray()
+
+    const ticketNumber = (lastTicket[0]?.ticketNumber || 200000) + 1
 
     const ticketDoc = {
       shortDescription: `Document Deletion Request: ${document.name}`,
@@ -1136,7 +1138,8 @@ documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
 
     res.json({ data: { ok: true, ticketNumber }, error: null })
   } catch (e: any) {
-    if (e.message?.includes('ObjectId')) {
+    console.error('Document deletion request error:', e)
+    if (e?.message?.includes('ObjectId')) {
       return res.status(400).json({ data: null, error: 'invalid_id' })
     }
     res.status(500).json({ data: null, error: 'deletion_request_failed' })
