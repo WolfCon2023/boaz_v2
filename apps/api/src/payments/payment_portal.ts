@@ -368,7 +368,7 @@ paymentPortalRouter.post('/create-checkout-session', async (req, res) => {
     if (method === 'stripe') {
       // Initialize Stripe
       const stripe = new Stripe(env.STRIPE_SECRET_KEY || '', {
-        apiVersion: '2024-04-10',
+        apiVersion: '2025-02-24.acacia',
       })
 
       const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173'

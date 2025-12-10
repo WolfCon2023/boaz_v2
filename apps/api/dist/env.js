@@ -61,6 +61,14 @@ const EnvSchema = z.object({
     TWILIO_AUTH_TOKEN: z.string().optional(),
     TWILIO_FROM_NUMBER: z.string().optional(),
     DB_BACKUP_WEBHOOK_URL: z.string().url().optional(),
+    // Payment provider credentials
+    STRIPE_SECRET_KEY: z.string().optional(),
+    STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().optional(),
+    PAYPAL_CLIENT_ID: z.string().optional(),
+    PAYPAL_CLIENT_SECRET: z.string().optional(),
+    PAYPAL_WEBHOOK_ID: z.string().optional(),
+    PAYPAL_MODE: z.enum(['sandbox', 'live']).optional(),
 });
 const parsed = EnvSchema.safeParse(process.env);
 if (!parsed.success) {
