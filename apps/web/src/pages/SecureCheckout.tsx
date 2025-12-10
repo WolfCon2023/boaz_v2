@@ -37,6 +37,10 @@ export default function SecureCheckout() {
   const invoiceId = searchParams.get('invoice')
   const amount = searchParams.get('amount')
   const method = searchParams.get('method') // 'stripe' or 'paypal'
+  
+  // Debug logging
+  console.log('SecureCheckout - URL params:', { invoiceId, amount, method })
+  console.log('SecureCheckout - Full URL:', window.location.href)
 
   // Form state
   const [cardholderName, setCardholderName] = useState('')
@@ -60,18 +64,29 @@ export default function SecureCheckout() {
   const invoiceQuery = useQuery({
     queryKey: ['invoice-checkout', invoiceId, isCustomerPortal],
     queryFn: async () => {
-      if (!invoiceId) throw new Error('No invoice ID provided')
+      console.log('SecureCheckout - Query function called with invoiceId:', invoiceId)
+      if (!invoiceId || invoiceId === 'undefined') {
+        console.error('SecureCheckout - Invalid invoice ID:', invoiceId)
+        throw new Error('No invoice ID provided')
+      }
       
       // Use appropriate API endpoint based on portal type
       if (isCustomerPortal && customerToken) {
+        console.log('SecureCheckout - Fetching invoices for customer portal')
         // Customer portal: fetch invoice using customer portal API
         const res = await http.get(`/api/customer-portal/data/invoices`, {
           headers: { Authorization: `Bearer ${customerToken}` }
         })
         if (res.data.error) throw new Error(res.data.error)
         const invoices = res.data.data.items as any[]
+        console.log('SecureCheckout - Fetched invoices:', invoices)
+        console.log('SecureCheckout - Looking for invoice ID:', invoiceId)
         // Customer portal invoices use 'id' field instead of '_id'
-        const invoice = invoices.find((inv: any) => inv.id === invoiceId)
+        const invoice = invoices.find((inv: any) => {
+          console.log('SecureCheckout - Checking invoice:', inv.id, 'against', invoiceId, 'match:', inv.id === invoiceId)
+          return inv.id === invoiceId
+        })
+        console.log('SecureCheckout - Found invoice:', invoice)
         if (!invoice) throw new Error('Invoice not found')
         // Convert to expected format with _id for consistency
         return {
@@ -88,11 +103,18 @@ export default function SecureCheckout() {
         return res.data.data as Invoice
       }
     },
-    enabled: !!invoiceId
+    enabled: !!invoiceId && invoiceId !== 'undefined'
   })
+
+  console.log('SecureCheckout - Query enabled:', !!invoiceId && invoiceId !== 'undefined')
+  console.log('SecureCheckout - Query status:', invoiceQuery.status)
+  console.log('SecureCheckout - Query error:', invoiceQuery.error)
 
   const invoice = invoiceQuery.data
   const paymentAmount = parseFloat(amount || '0')
+  
+  console.log('SecureCheckout - Invoice data:', invoice)
+  console.log('SecureCheckout - Payment amount:', paymentAmount)
 
   useEffect(() => {
     if (!invoiceId || !amount) {
