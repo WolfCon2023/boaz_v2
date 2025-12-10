@@ -120,14 +120,14 @@ export default function CustomerPortalPayments() {
 
     // For credit card payments, redirect to secure checkout page
     if (paymentMethod === 'credit_card') {
-      window.location.href = `/payment/checkout?invoice=${selectedInvoice._id}&amount=${amount}&method=credit_card&return=/customer/invoices`
+      navigate(`/customer/checkout?invoice=${selectedInvoice._id}&amount=${amount}&method=credit_card`)
       return
     }
 
     // For PayPal, redirect to PayPal checkout
     if (paymentMethod === 'paypal') {
       showToast('Redirecting to PayPal...', 'info')
-      window.location.href = `/payment/checkout?invoice=${selectedInvoice._id}&amount=${amount}&method=paypal&return=/customer/invoices`
+      navigate(`/customer/checkout?invoice=${selectedInvoice._id}&amount=${amount}&method=paypal`)
       return
     }
 

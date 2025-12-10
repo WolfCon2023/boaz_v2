@@ -52,13 +52,32 @@ export default function SecureCheckout() {
   const [authorizeCharge, setAuthorizeCharge] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
+  // Check if user is from customer portal
+  const isCustomerPortal = window.location.pathname.startsWith('/customer/')
+  const customerToken = localStorage.getItem('customer_portal_token')
+
   // Fetch invoice details
   const invoiceQuery = useQuery({
-    queryKey: ['invoice-checkout', invoiceId],
+    queryKey: ['invoice-checkout', invoiceId, isCustomerPortal],
     queryFn: async () => {
       if (!invoiceId) throw new Error('No invoice ID provided')
-      const res = await http.get(`/api/crm/invoices/${invoiceId}`)
-      return res.data.data as Invoice
+      
+      // Use appropriate API endpoint based on portal type
+      if (isCustomerPortal && customerToken) {
+        // Customer portal: fetch invoice using customer portal API
+        const res = await http.get(`/api/customer-portal/data/invoices`, {
+          headers: { Authorization: `Bearer ${customerToken}` }
+        })
+        if (res.data.error) throw new Error(res.data.error)
+        const invoices = res.data.data.items as Invoice[]
+        const invoice = invoices.find((inv: Invoice) => inv._id === invoiceId)
+        if (!invoice) throw new Error('Invoice not found')
+        return invoice
+      } else {
+        // Internal portal: use CRM API (requires auth)
+        const res = await http.get(`/api/crm/invoices/${invoiceId}`)
+        return res.data.data as Invoice
+      }
     },
     enabled: !!invoiceId
   })
@@ -90,6 +109,11 @@ export default function SecureCheckout() {
 
     try {
       // Create Stripe Checkout Session or PayPal Order
+      // Include customer portal auth headers if accessing from customer portal
+      const headers = isCustomerPortal && customerToken
+        ? { Authorization: `Bearer ${customerToken}` }
+        : {}
+      
       const res = await http.post('/api/payments/create-checkout-session', {
         invoiceId,
         amount: paymentAmount,
@@ -107,7 +131,7 @@ export default function SecureCheckout() {
             country
           }
         }
-      })
+      }, { headers })
 
       if (res.data.error) {
         throw new Error(res.data.error)
