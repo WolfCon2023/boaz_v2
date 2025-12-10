@@ -1140,11 +1140,19 @@ documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
     res.json({ data: { ok: true, ticketNumber }, error: null })
   } catch (e: any) {
     console.error('Document deletion request error:', e)
-    if (e?.message?.includes('ObjectId')) {
+    if (e && typeof e === 'object' && typeof e.message === 'string' && e.message.includes('ObjectId')) {
       return res.status(400).json({ data: null, error: 'invalid_id' })
     }
-    // Surface the actual error message to help diagnose 500s in dev
-    res.status(500).json({ data: null, error: e?.message || 'deletion_request_failed' })
+
+    // Surface the actual error message (including string throws) to help diagnose 500s in dev
+    let errorMessage = 'deletion_request_failed'
+    if (typeof e === 'string') {
+      errorMessage = e
+    } else if (e && typeof e === 'object' && typeof e.message === 'string') {
+      errorMessage = e.message
+    }
+
+    res.status(500).json({ data: null, error: errorMessage })
   }
 })
 
