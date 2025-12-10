@@ -818,14 +818,17 @@ export default function PaymentPortal() {
                 <select
                   value={recordMethod}
                   onChange={(e) => setRecordMethod(e.target.value as Payment['method'])}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-4 py-2 text-[color:var(--color-text)]"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-2 text-[color:var(--color-text)]"
+                  style={{
+                    colorScheme: 'dark',
+                  }}
                 >
-                  <option value="check">Check</option>
-                  <option value="cash">Cash</option>
-                  <option value="credit_card">Credit Card (Phone)</option>
-                  <option value="ach">ACH Transfer</option>
-                  <option value="wire">Wire Transfer</option>
-                  <option value="paypal">PayPal</option>
+                  <option value="check" className="bg-[color:var(--color-panel)] text-[color:var(--color-text)]">Check</option>
+                  <option value="cash" className="bg-[color:var(--color-panel)] text-[color:var(--color-text)]">Cash</option>
+                  <option value="credit_card" className="bg-[color:var(--color-panel)] text-[color:var(--color-text)]">Credit Card (Phone)</option>
+                  <option value="ach" className="bg-[color:var(--color-panel)] text-[color:var(--color-text)]">ACH Transfer</option>
+                  <option value="wire" className="bg-[color:var(--color-panel)] text-[color:var(--color-text)]">Wire Transfer</option>
+                  <option value="paypal" className="bg-[color:var(--color-panel)] text-[color:var(--color-text)]">PayPal</option>
                 </select>
               </div>
 
@@ -914,11 +917,14 @@ export default function PaymentPortal() {
                 <select
                   value={historyFilter}
                   onChange={(e) => setHistoryFilter(e.target.value as any)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-4 py-2 text-sm text-[color:var(--color-text)]"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-2 text-sm text-[color:var(--color-text)]"
+                  style={{
+                    colorScheme: 'dark',
+                  }}
                 >
-                  <option value="all">All Payments</option>
-                  <option value="reconciled">Reconciled</option>
-                  <option value="unreconciled">Pending Reconciliation</option>
+                  <option value="all" className="bg-[color:var(--color-panel)] text-[color:var(--color-text)]">All Payments</option>
+                  <option value="reconciled" className="bg-[color:var(--color-panel)] text-[color:var(--color-text)]">Reconciled</option>
+                  <option value="unreconciled" className="bg-[color:var(--color-panel)] text-[color:var(--color-text)]">Pending Reconciliation</option>
                 </select>
               </div>
 
