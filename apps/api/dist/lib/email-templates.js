@@ -197,6 +197,8 @@ export function generateEmailTemplate(options) {
         </div>
       ` : ''}
       
+      ${options.content.customHtml || ''}
+      
       ${options.content.actionButton ? `
         <div class="button-container">
           <a href="${options.content.actionButton.url}" class="button">${options.content.actionButton.text}</a>

@@ -1586,6 +1586,733 @@ Focus on the specific factors bringing it down: increase engagement, resolve sup
   }
 })
 
+// POST /api/admin/seed/outreach-sequences-kb - Add Outreach Sequences KB article
+adminSeedDataRouter.post('/outreach-sequences-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const OUTREACH_SEQUENCES_KB_ARTICLE = {
+      title: 'Outreach Sequences Guide',
+      category: 'CRM',
+      slug: 'outreach-sequences-guide',
+      tags: ['outreach', 'sequences', 'automation', 'email', 'crm'],
+      body: `# Outreach Sequences Guide
+
+Complete guide to creating and managing automated outreach sequences in BOAZ-OS.
+
+---
+
+## 📋 **Overview**
+
+Outreach Sequences allow you to automate multi-step email campaigns to contacts, ensuring consistent follow-up and engagement without manual effort.
+
+---
+
+## 🎯 **What is an Outreach Sequence?**
+
+An outreach sequence is a series of automated emails sent to contacts over time. Each sequence consists of multiple steps, with each step sending a template at a specific time delay.
+
+**Example Sequence:**
+1. Day 1: Introduction email
+2. Day 3: Follow-up with value proposition
+3. Day 7: Case study or social proof
+4. Day 14: Final call to action
+
+---
+
+## 🆕 **Creating a Sequence**
+
+### **Step 1: Navigate to Sequences**
+- Go to **CRM** > **Outreach** > **Sequences**
+- Click **Create Sequence**
+
+### **Step 2: Basic Information**
+- **Name**: Give your sequence a descriptive name (e.g., "New Lead Nurture")
+- **Description**: Optional details about the sequence purpose
+- **Status**: Active (sends emails) or Inactive (paused)
+
+### **Step 3: Add Sequence Steps**
+Each step represents an email in the sequence:
+
+1. **Step Number**: Order of the email (1, 2, 3, etc.)
+2. **Template**: Select an existing email template
+3. **Delay**: How long to wait after the previous step (in days)
+   - Step 1 always starts immediately (0 days)
+   - Step 2 might be +3 days after Step 1
+   - Step 3 might be +4 days after Step 2 (7 days total)
+
+4. Click **Add Step** to create additional emails
+
+### **Step 4: Save Sequence**
+- Click **Create Sequence**
+- Your sequence is now ready to enroll contacts
+
+---
+
+## 👥 **Enrolling Contacts**
+
+### **Manual Enrollment:**
+1. Go to **Contacts** app
+2. Select a contact
+3. Click **Enroll in Sequence**
+4. Choose the sequence
+5. Confirm enrollment
+
+### **Bulk Enrollment:**
+1. Go to **Outreach** > **Enrollments**
+2. Click **Bulk Enroll**
+3. Select contacts (by segment, tag, or manual selection)
+4. Choose sequence
+5. Confirm bulk enrollment
+
+### **Automatic Enrollment:**
+- Contacts can be auto-enrolled based on triggers:
+  - New lead created
+  - Deal stage changed
+  - Contact tagged
+  - Form submitted
+
+---
+
+## 📊 **Sequence Steps**
+
+Each step in a sequence has:
+
+**Step Number**: Order in the sequence  
+**Template**: Which email template to send  
+**Delay Days**: Days to wait before sending  
+**Status**: Active or Inactive
+
+**Example Sequence Steps:**
+
+| Step | Template | Delay | Description |
+|------|----------|-------|-------------|
+| 1 | "Introduction" | 0 days | Sent immediately |
+| 2 | "Follow-Up" | 3 days | Sent 3 days after step 1 |
+| 3 | "Case Study" | 4 days | Sent 7 days after enrollment (3+4) |
+| 4 | "Final CTA" | 7 days | Sent 14 days after enrollment (3+4+7) |
+
+---
+
+## 🔄 **Managing Enrollments**
+
+### **View Enrollments:**
+- Go to **Outreach** > **Enrollments**
+- See all contacts enrolled in sequences
+- Filter by sequence, status, or contact
+
+### **Enrollment Status:**
+- **Active**: Currently receiving emails
+- **Paused**: Temporarily stopped
+- **Completed**: Finished all steps
+- **Unsubscribed**: Contact opted out
+- **Bounced**: Email delivery failed
+
+### **Pause/Resume Enrollment:**
+- Click on an enrollment
+- Click **Pause** to stop emails temporarily
+- Click **Resume** to continue
+
+### **Unenroll Contact:**
+- Click **Unenroll** to remove contact from sequence
+- All future emails will be cancelled
+- Past emails already sent remain in history
+
+---
+
+## 📧 **Email Sending**
+
+### **When Emails Send:**
+- Emails are queued based on step delays
+- Sent during business hours (9 AM - 5 PM local time)
+- Respects contact timezone if available
+- Skips weekends and holidays (optional)
+
+### **Send Limits:**
+- Maximum emails per day per user
+- Respects email provider limits
+- Prevents spam complaints
+
+### **Email Tracking:**
+- Opens tracked automatically
+- Clicks tracked automatically
+- Replies detected and stop sequence
+- Bounces logged and enrollment paused
+
+---
+
+## 🛑 **Stopping Sequences**
+
+### **Automatic Stops:**
+Sequences automatically stop when:
+- Contact replies to any email
+- Contact unsubscribes
+- Email bounces (hard bounce)
+- Contact is marked "Do Not Contact"
+- All steps completed
+
+### **Manual Stops:**
+- Unenroll individual contacts
+- Pause entire sequence (affects all enrollments)
+- Deactivate sequence (stops new enrollments)
+
+---
+
+## 📊 **Sequence Analytics**
+
+### **Performance Metrics:**
+- **Enrollment Count**: Total contacts in sequence
+- **Open Rate**: % of emails opened
+- **Click Rate**: % of links clicked
+- **Reply Rate**: % who replied
+- **Conversion Rate**: % who took desired action
+- **Unsubscribe Rate**: % who opted out
+
+### **Step-by-Step Analysis:**
+- See performance for each step
+- Identify which emails perform best
+- Optimize underperforming steps
+
+---
+
+## ✅ **Best Practices**
+
+1. **Start Simple**: Begin with 3-4 steps, add more as needed
+2. **Test Templates**: Ensure templates are personalized and relevant
+3. **Space Out Steps**: Don't overwhelm contacts with daily emails
+4. **Monitor Replies**: Respond quickly to engagement
+5. **A/B Test**: Try different templates and timing
+6. **Respect Unsubscribes**: Always include unsubscribe links
+7. **Update Regularly**: Refresh content to keep it relevant
+8. **Segment Contacts**: Different sequences for different audiences
+9. **Track Performance**: Review analytics monthly
+10. **Clean Your List**: Remove bounced/unsubscribed contacts
+
+---
+
+## 🎨 **Sequence Templates**
+
+### **Lead Nurture Sequence:**
+- Step 1: Welcome email
+- Step 2: Educational content
+- Step 3: Case study
+- Step 4: Demo offer
+- Step 5: Final follow-up
+
+### **Re-engagement Sequence:**
+- Step 1: "We miss you" email
+- Step 2: Feature updates
+- Step 3: Special offer
+- Step 4: Feedback request
+
+### **Onboarding Sequence:**
+- Step 1: Welcome and next steps
+- Step 2: Getting started guide
+- Step 3: Tips and tricks
+- Step 4: Check-in and support offer
+
+---
+
+## ❓ **Common Questions**
+
+### **Can I edit a sequence after enrolling contacts?**
+Yes, but changes only affect new enrollments. Existing enrollments continue with the original steps.
+
+### **What happens if I delete a template used in a sequence?**
+The sequence step will fail. Always update the sequence to use a different template before deleting.
+
+### **Can contacts be in multiple sequences?**
+Yes, but be careful not to overwhelm them. Monitor total email volume per contact.
+
+### **How do I know if someone replied?**
+Check the **Enrollments** page. Replied enrollments are automatically marked and stopped.
+
+### **Can I schedule sequences to start at a specific time?**
+Not currently. Sequences start immediately upon enrollment, then follow the delay schedule.
+
+---
+
+## 🛠️ **Troubleshooting**
+
+### **Emails not sending**
+- Check sequence status (must be Active)
+- Verify contact has valid email
+- Check enrollment status (must be Active)
+- Review email sending limits
+
+### **Low open rates**
+- Test different subject lines
+- Send at different times
+- Verify email deliverability
+- Check spam score of templates
+
+### **High unsubscribe rate**
+- Review email frequency (too many emails?)
+- Ensure content is relevant
+- Improve targeting and segmentation
+- Make unsubscribe process clear
+
+---
+
+**Last Updated:** December 2024  
+**Version:** 2.0
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existingArticle = await db.collection('kb_articles').findOne({ slug: 'outreach-sequences-guide' })
+    const result = existingArticle ? 'updated' : 'created'
+    
+    if (existingArticle) {
+      await db.collection('kb_articles').updateOne(
+        { slug: 'outreach-sequences-guide' },
+        { $set: { ...OUTREACH_SEQUENCES_KB_ARTICLE, updatedAt: new Date() } }
+      )
+    } else {
+      await db.collection('kb_articles').insertOne(OUTREACH_SEQUENCES_KB_ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: OUTREACH_SEQUENCES_KB_ARTICLE.title,
+        slug: OUTREACH_SEQUENCES_KB_ARTICLE.slug,
+        url: `/apps/crm/support/kb/${OUTREACH_SEQUENCES_KB_ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed outreach sequences KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
+// POST /api/admin/seed/outreach-templates-kb - Add Outreach Templates KB article
+adminSeedDataRouter.post('/outreach-templates-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const OUTREACH_TEMPLATES_KB_ARTICLE = {
+      title: 'Outreach Templates Guide',
+      category: 'CRM',
+      slug: 'outreach-templates-guide',
+      tags: ['outreach', 'templates', 'email', 'crm', 'personalization'],
+      body: `# Outreach Templates Guide
+
+Complete guide to creating, managing, and using email templates for outreach campaigns.
+
+---
+
+## 📋 **Overview**
+
+Outreach Templates are reusable email templates that can be used in sequences, one-off emails, and marketing campaigns. They support personalization, HTML formatting, and dynamic content.
+
+---
+
+## 🎯 **What is an Outreach Template?**
+
+An email template is a pre-written email with:
+- Subject line
+- Email body (text and/or HTML)
+- Personalization variables
+- Reusable content
+
+Templates save time and ensure consistent messaging across your outreach efforts.
+
+---
+
+## 🆕 **Creating a Template**
+
+### **Step 1: Navigate to Templates**
+- Go to **CRM** > **Outreach** > **Templates**
+- Click **Create Template**
+
+### **Step 2: Template Details**
+- **Name**: Internal name for the template (e.g., "Lead Introduction")
+- **Subject**: Email subject line
+  - Can include personalization: \`Hello {{firstName}}!\`
+- **Category**: Optional grouping (Prospecting, Follow-up, Re-engagement, etc.)
+
+### **Step 3: Email Body**
+Write your email content:
+- Plain text or HTML
+- Use personalization variables
+- Keep it concise and actionable
+- Include clear call-to-action
+
+### **Step 4: Save Template**
+- Click **Save**
+- Template is now available for use
+
+---
+
+## 🎨 **Personalization Variables**
+
+Make emails feel personal by using variables that auto-fill with contact data:
+
+### **Available Variables:**
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| \`{{firstName}}\` | Contact's first name | John |
+| \`{{lastName}}\` | Contact's last name | Smith |
+| \`{{fullName}}\` | Full name | John Smith |
+| \`{{email}}\` | Email address | john@example.com |
+| \`{{company}}\` | Company name | Acme Corp |
+| \`{{title}}\` | Job title | Marketing Director |
+| \`{{phone}}\` | Phone number | (555) 123-4567 |
+
+### **Usage Example:**
+
+**Template:**
+\`\`\`
+Subject: Quick question for {{company}}
+
+Hi {{firstName}},
+
+I noticed {{company}} is growing quickly in the {{industry}} space. 
+I'd love to chat about how we can help with {{challenge}}.
+
+Are you available for a quick 15-minute call this week?
+
+Best,
+[Your Name]
+\`\`\`
+
+**Rendered:**
+\`\`\`
+Subject: Quick question for Acme Corp
+
+Hi John,
+
+I noticed Acme Corp is growing quickly in the SaaS space.
+I'd love to chat about how we can help with customer retention.
+
+Are you available for a quick 15-minute call this week?
+
+Best,
+[Your Name]
+\`\`\`
+
+---
+
+## 📝 **Template Types**
+
+### **1. Introduction Templates**
+First contact with a prospect
+- Keep it short (under 100 words)
+- Personalize with their company/role
+- Clear value proposition
+- Easy call-to-action
+
+### **2. Follow-Up Templates**
+After initial contact
+- Reference previous email/conversation
+- Add new information or value
+- Different angle or benefit
+- Gentle reminder
+
+### **3. Re-Engagement Templates**
+Reconnect with cold leads
+- Acknowledge the gap
+- Share something new
+- Ask if still interested
+- Easy out (permission-based)
+
+### **4. Meeting Request Templates**
+Schedule calls or demos
+- Specific time options
+- Clear agenda
+- Short and direct
+- Calendar link
+
+### **5. Thank You Templates**
+After meetings or interactions
+- Express gratitude
+- Summarize next steps
+- Share resources
+- Keep momentum
+
+---
+
+## ✏️ **Editing Templates**
+
+### **Update Existing Template:**
+1. Go to **Templates** page
+2. Click on template to edit
+3. Make changes to subject, body, or category
+4. Click **Save**
+
+### **Important Notes:**
+- Changes affect future uses only
+- Emails already sent are not changed
+- Sequences using template will use updated version
+
+---
+
+## 📋 **Using Templates**
+
+### **In Sequences:**
+1. Create or edit a sequence
+2. Select template for each step
+3. Template is sent automatically per schedule
+
+### **One-Off Emails:**
+1. Go to **Contacts**
+2. Select a contact
+3. Click **Send Email**
+4. Choose **Load from Template**
+5. Select template
+6. Customize if needed
+7. Send
+
+### **In Marketing Campaigns:**
+1. Create marketing campaign
+2. Click **Load from Template**
+3. Select outreach template
+4. Adapt for campaign audience
+5. Send or schedule
+
+---
+
+## 🎯 **Best Practices**
+
+### **Subject Lines:**
+1. **Keep it short** (under 50 characters)
+2. **Personalize** when possible
+3. **Avoid spam words** (Free, Guaranteed, Act Now)
+4. **Create curiosity** without being clickbait
+5. **Test variations** to see what works
+
+**Good Subject Lines:**
+- "Quick question about {{company}}"
+- "{{firstName}}, thoughts on [topic]?"
+- "Ideas for improving [specific metric]"
+- "Following up from [event]"
+
+**Bad Subject Lines:**
+- "FREE OFFER - ACT NOW!!!"
+- "You won't believe this"
+- "RE: RE: Important"
+- Generic subjects with no personalization
+
+### **Email Body:**
+1. **Start with why** - Why are you reaching out?
+2. **Make it about them** - Not about your product
+3. **One clear CTA** - Don't confuse with multiple asks
+4. **Keep it short** - Respect their time
+5. **Professional tone** - Match their communication style
+6. **Proofread** - Typos hurt credibility
+
+### **Call-to-Action:**
+- Be specific: "Are you free for a 15-min call on Tuesday?"
+- Not vague: "Let me know if you're interested"
+- Make it easy: Include calendar link or specific times
+- Low commitment: Start with small ask
+
+---
+
+## 📊 **Template Performance**
+
+### **Track Metrics:**
+- **Usage Count**: How often template is used
+- **Open Rate**: % of emails opened
+- **Click Rate**: % of links clicked
+- **Reply Rate**: % who responded
+- **Bounce Rate**: % of failed deliveries
+
+### **Optimize Templates:**
+1. **A/B Test**: Try different versions
+2. **Analyze Data**: Which templates perform best?
+3. **Iterate**: Update based on results
+4. **Retire**: Delete templates that don't work
+
+---
+
+## 🗂️ **Organizing Templates**
+
+### **Categories:**
+Group templates by purpose:
+- **Prospecting**: Initial outreach
+- **Follow-Up**: Second and third touches
+- **Re-Engagement**: Win back cold leads
+- **Meeting**: Schedule calls
+- **Post-Meeting**: Follow-up after calls
+- **Thank You**: Appreciation emails
+- **Referral**: Ask for introductions
+
+### **Naming Conventions:**
+Use clear, descriptive names:
+- Good: "Intro - SaaS Decision Maker"
+- Good: "Follow-Up 1 - No Response"
+- Bad: "Template 1"
+- Bad: "New email"
+
+---
+
+## 🔍 **Testing Templates**
+
+### **Before Using:**
+1. **Send test email** to yourself
+2. **Check all variables** render correctly
+3. **Test on mobile** - 50%+ open on mobile
+4. **Check spam score** using online tools
+5. **Verify links** all work
+
+### **Spam Checklist:**
+- Avoid ALL CAPS
+- Don't use excessive exclamation points!!!
+- No misleading subject lines
+- Include company address
+- Have clear unsubscribe link
+- Balance text and images
+- Use proper HTML formatting
+
+---
+
+## 💡 **Template Examples**
+
+### **Cold Outreach:**
+\`\`\`
+Subject: Quick question for {{company}}
+
+Hi {{firstName}},
+
+I noticed {{company}} recently [specific observation].
+Congrats on the growth!
+
+We help companies like yours [specific benefit].
+Would you be open to a quick 10-minute call to explore if
+we could help {{company}} achieve [specific goal]?
+
+Best,
+[Your Name]
+\`\`\`
+
+### **Follow-Up (No Response):**
+\`\`\`
+Subject: Re: Quick question for {{company}}
+
+Hi {{firstName}},
+
+I know you're busy, so I'll keep this brief.
+
+I'd love to share how [specific benefit] could help {{company}}.
+Are you the right person to discuss this, or should I connect
+with someone else on your team?
+
+Thanks,
+[Your Name]
+\`\`\`
+
+### **Meeting Request:**
+\`\`\`
+Subject: 15 minutes to discuss [specific topic]?
+
+Hi {{firstName}},
+
+Based on our conversation, I think a quick call would be valuable.
+
+I can share [specific outcome] and answer any questions about
+[specific topic].
+
+Are you available any of these times?
+- Tuesday 2 PM
+- Wednesday 10 AM
+- Thursday 3 PM
+
+Or pick a time that works for you: [calendar link]
+
+Looking forward to it!
+[Your Name]
+\`\`\`
+
+---
+
+## ❓ **Common Questions**
+
+### **Can I use HTML in templates?**
+Yes! You can use basic HTML formatting for bold, links, lists, etc.
+
+### **What if contact doesn't have a value for a variable?**
+The variable will be blank. Always include fallback text or check data quality.
+
+### **Can I share templates with my team?**
+Yes, all templates are shared across the organization. Use clear naming so others can find them.
+
+### **How do I delete a template?**
+Click the template, then click **Delete**. Warning: If used in active sequences, update those sequences first.
+
+---
+
+## 🛠️ **Troubleshooting**
+
+### **Variables not rendering**
+- Check spelling: \`{{firstName}}\` not \`{{firstname}}\`
+- Ensure contact has data for that field
+- Test with a contact that has complete data
+
+### **Emails going to spam**
+- Improve subject line (avoid spam words)
+- Include unsubscribe link
+- Verify sender authentication (SPF, DKIM)
+- Don't use URL shorteners
+- Balance text and images
+
+### **Low response rates**
+- Personalize more (research recipient)
+- Shorten email (under 150 words)
+- Clearer call-to-action
+- Better timing (Tuesday-Thursday, 10 AM - 2 PM)
+- Improve targeting (right audience?)
+
+---
+
+**Last Updated:** December 2024  
+**Version:** 2.0
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existingArticle = await db.collection('kb_articles').findOne({ slug: 'outreach-templates-guide' })
+    const result = existingArticle ? 'updated' : 'created'
+    
+    if (existingArticle) {
+      await db.collection('kb_articles').updateOne(
+        { slug: 'outreach-templates-guide' },
+        { $set: { ...OUTREACH_TEMPLATES_KB_ARTICLE, updatedAt: new Date() } }
+      )
+    } else {
+      await db.collection('kb_articles').insertOne(OUTREACH_TEMPLATES_KB_ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: OUTREACH_TEMPLATES_KB_ARTICLE.title,
+        slug: OUTREACH_TEMPLATES_KB_ARTICLE.slug,
+        url: `/apps/crm/support/kb/${OUTREACH_TEMPLATES_KB_ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed outreach templates KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
 // POST /api/admin/seed/payment-portal-kb - Add Payment Portal KB article
 adminSeedDataRouter.post('/payment-portal-kb', async (req, res) => {
   const db = await getDb()
