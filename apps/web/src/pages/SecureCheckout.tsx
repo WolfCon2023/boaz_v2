@@ -69,10 +69,19 @@ export default function SecureCheckout() {
           headers: { Authorization: `Bearer ${customerToken}` }
         })
         if (res.data.error) throw new Error(res.data.error)
-        const invoices = res.data.data.items as Invoice[]
-        const invoice = invoices.find((inv: Invoice) => inv._id === invoiceId)
+        const invoices = res.data.data.items as any[]
+        // Customer portal invoices use 'id' field instead of '_id'
+        const invoice = invoices.find((inv: any) => inv.id === invoiceId)
         if (!invoice) throw new Error('Invoice not found')
-        return invoice
+        // Convert to expected format with _id for consistency
+        return {
+          _id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          title: invoice.title,
+          total: invoice.total,
+          balance: invoice.balance,
+          accountName: invoice.accountName
+        } as Invoice
       } else {
         // Internal portal: use CRM API (requires auth)
         const res = await http.get(`/api/crm/invoices/${invoiceId}`)

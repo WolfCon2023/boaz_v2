@@ -29,7 +29,7 @@ import {
 import { formatDate } from '../lib/dateFormat'
 
 type Invoice = {
-  _id: string
+  id: string
   invoiceNumber?: number
   title?: string
   total?: number
@@ -120,14 +120,14 @@ export default function CustomerPortalPayments() {
 
     // For credit card payments, redirect to secure checkout page
     if (paymentMethod === 'credit_card') {
-      navigate(`/customer/checkout?invoice=${selectedInvoice._id}&amount=${amount}&method=credit_card`)
+      navigate(`/customer/checkout?invoice=${selectedInvoice.id}&amount=${amount}&method=credit_card`)
       return
     }
 
     // For PayPal, redirect to PayPal checkout
     if (paymentMethod === 'paypal') {
       showToast('Redirecting to PayPal...', 'info')
-      navigate(`/customer/checkout?invoice=${selectedInvoice._id}&amount=${amount}&method=paypal`)
+      navigate(`/customer/checkout?invoice=${selectedInvoice.id}&amount=${amount}&method=paypal`)
       return
     }
 
@@ -271,14 +271,14 @@ export default function CustomerPortalPayments() {
                     <div className="space-y-2 max-h-96 overflow-y-auto">
                       {invoicesQuery.data?.map((invoice: Invoice) => (
                         <button
-                          key={invoice._id}
+                          key={invoice.id}
                           onClick={() => {
                             setSelectedInvoice(invoice)
                             setPaymentAmount(String(invoice.balance ?? invoice.total ?? 0))
                             setShowInstructions(false)
                           }}
                           className={`w-full rounded-lg border p-4 text-left transition-colors ${
-                            selectedInvoice?._id === invoice._id
+                            selectedInvoice?.id === invoice.id
                               ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-primary-50)]'
                               : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]'
                           }`}
@@ -286,7 +286,7 @@ export default function CustomerPortalPayments() {
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="font-semibold text-[color:var(--color-text)]">
-                                Invoice #{invoice.invoiceNumber ?? invoice._id.slice(-6)}
+                                Invoice #{invoice.invoiceNumber ?? invoice.id.slice(-6)}
                               </div>
                               <div className="text-sm text-[color:var(--color-text-muted)]">
                                 {invoice.title}
@@ -327,7 +327,7 @@ export default function CustomerPortalPayments() {
                           Selected Invoice
                         </div>
                         <div className="mt-1 font-semibold text-[color:var(--color-text)]">
-                          #{selectedInvoice.invoiceNumber ?? selectedInvoice._id.slice(-6)}
+                          #{selectedInvoice.invoiceNumber ?? selectedInvoice.id.slice(-6)}
                         </div>
                         <div className="mt-2 text-2xl font-bold text-[color:var(--color-text)]">
                           ${(selectedInvoice.balance ?? selectedInvoice.total ?? 0).toLocaleString()}
