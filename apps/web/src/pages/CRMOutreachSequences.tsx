@@ -63,6 +63,7 @@ export default function CRMOutreachSequences() {
   const [editName, setEditName] = React.useState('')
   const [editAB, setEditAB] = React.useState('')
   const [editSteps, setEditSteps] = React.useState('[]')
+  const [showGuide, setShowGuide] = React.useState(false)
 
   React.useEffect(() => {
     if (!editing) return

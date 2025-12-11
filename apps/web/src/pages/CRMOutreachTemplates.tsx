@@ -10,8 +10,6 @@ export default function CRMOutreachTemplates() {
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'updatedAt'|'name'|'channel'>('updatedAt')
   const [dir, setDir] = React.useState<'asc'|'desc'>('desc')
-  const [showDef, setShowDef] = React.useState(true)
-  const [showGuide, setShowGuide] = React.useState(true)
   const { data, isFetching } = useQuery({
     queryKey: ['outreach-templates', q, sort, dir],
     queryFn: async () => {
