@@ -46,35 +46,17 @@ export default function CRMOutreachTemplates() {
   return (
     <div className="space-y-4">
       <CRMNav />
-      <h1 className="text-xl font-semibold">Outreach Templates</h1>
-      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-sm">
-        <button type="button" onClick={() => setShowDef((v) => !v)} aria-expanded={showDef} className="w-full px-4 py-3 font-semibold hover:bg-[color:var(--color-muted)] flex items-center justify-between">
-          <span>What is a Template?</span>
-          <span aria-hidden="true">{showDef ? '▾' : '▸'}</span>
-        </button>
-        {showDef && (
-          <div className="px-4 pb-4">
-            A template is a reusable message for Email or SMS. It defines the subject (email only) and body you send to contacts. Use templates to standardize outreach and to run A/B tests via the optional Variant tag.
-          </div>
-        )}
-      </div>
-      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-sm">
-        <button type="button" onClick={() => setShowGuide((v) => !v)} aria-expanded={showGuide} className="w-full px-4 py-3 font-semibold hover:bg-[color:var(--color-muted)] flex items-center justify-between">
-          <span>How templates work</span>
-          <span aria-hidden="true">{showGuide ? '▾' : '▸'}</span>
-        </button>
-        {showGuide && (
-          <div className="px-4 pb-4">
-            <ul className="list-disc pl-5 space-y-1">
-              <li><span className="font-semibold">Name</span>: internal name shown in the app.</li>
-              <li><span className="font-semibold">Channel</span>: choose <span className="font-semibold">Email</span> or <span className="font-semibold">SMS</span>.</li>
-              <li><span className="font-semibold">Subject</span>: email only; leave blank for SMS.</li>
-              <li><span className="font-semibold">Body</span>: message content (supports plain text).</li>
-              <li><span className="font-semibold">Variant</span>: optional A/B tag like "A" or "B" for experiments. Create multiple templates with the same name but different variants to split traffic and compare performance.</li>
-            </ul>
-            <div className="mt-2 text-[color:var(--color-text-muted)]">Tip: record the variant in deliveries/events so you can report open/click/reply rates per variant.</div>
-          </div>
-        )}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Outreach Templates</h1>
+        <a
+          href="/apps/crm/support/kb?tag=crm:outreach-templates"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+        >
+          <span className="text-[color:var(--color-primary-600)] font-semibold">?</span>
+          <span>KB</span>
+        </a>
       </div>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
