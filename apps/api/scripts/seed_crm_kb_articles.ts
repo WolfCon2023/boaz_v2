@@ -404,6 +404,91 @@ The **Documents** app stores files related to CRM entities (Accounts, Deals, Quo
 - Use consistent naming conventions so documents are easy to find
 - Prefer linking documents to **Accounts** and **Deals** as the primary anchor.`,
   },
+  {
+    title: 'Using Outreach Sequences in BOAZ‑OS CRM',
+    tags: ['crm', 'crm:outreach-sequences', 'outreach', 'email'],
+    category: 'Marketing',
+    body: `# Outreach Sequences – Automated multi‑step outreach
+
+## Purpose
+Outreach Sequences automate multi‑step outreach (emails with delays) so reps get consistent follow‑ups with tracking.
+
+## Where to find it
+- Go to Outreach Events → Outreach Sequences
+- Or open a Contact/Account and choose Enroll in sequence
+
+## Creating a sequence
+- Click New Sequence → add steps (Email, Wait) with delays (e.g., wait 2 days)
+- Use templates per step; personalize with tokens like {{contact.name}} and {{account.name}}
+- Set sending window and activate
+
+## Enrolling people
+- From Contacts: select rows → Enroll in sequence
+- From the sequence detail: Enroll and pick contacts
+
+## Monitoring
+- See sends, opens, clicks, replies, and unsubscribes on the sequence detail
+- Pause/resume a sequence or a single enrollment
+
+## Best practices
+- Keep 3–5 steps; concise copy with one CTA
+- Test tokens on yourself before enrolling customers
+- Avoid heavy HTML to improve deliverability`,
+  },
+  {
+    title: 'Using Outreach Templates in BOAZ‑OS CRM',
+    tags: ['crm', 'crm:outreach-templates', 'outreach', 'email'],
+    category: 'Marketing',
+    body: `# Outreach Templates – Reusable, on‑brand messaging
+
+## Purpose
+Templates speed one‑off emails and sequence steps while keeping copy on‑brand.
+
+## Where to find it
+- Go to Outreach Events → Outreach Templates
+- Available inside the email composer and sequence steps
+
+## Creating a template
+- Click New Template → add Name, Subject, Body
+- Insert tokens (e.g., {{contact.name}}, {{account.name}}, {{user.name}})
+- Save; it becomes selectable in sequences and one‑off emails
+
+## Using templates
+- In a sequence step: pick a template to prefill subject/body, then tweak
+- In a contact email: choose Templates, select, then send
+
+## Best practices
+- Keep it short and skimmable with a clear CTA
+- Maintain a small library (intro, follow‑up, renewal, handoff) and review quarterly
+- Avoid spammy keywords; prefer simple HTML/plain text`,
+  },
+  {
+    title: 'Using the Tickets app in BOAZ‑OS CRM (KB)',
+    tags: ['crm', 'crm:tickets', 'support', 'knowledge-base'],
+    category: 'Support',
+    body: `# Tickets – Intake, triage, and SLA management
+
+## Purpose
+Use Tickets to capture customer issues, assign owners, and track status/priority/SLA through resolution.
+
+## Where to find it
+- CRM Hub → Tickets
+- From related records (Account/Contact) via Tickets links
+
+## Creating and working tickets
+- New Ticket → add Short description, Description, Priority, Requester info
+- Update status (open, pending, in progress, resolved, closed, canceled) and priority
+- Add comments for handoffs; attach documents if needed
+
+## SLA awareness
+- View SLA due and breach risk; breached tickets highlight for faster triage
+- Use filters for SLA, status, priority, assignee
+
+## Best practices
+- Keep Short description crisp; add repro steps in Description
+- Adjust priority based on impact/urgency; close with a clear resolution note
+- Link to related Account/Contact so context stays connected`,
+  },
 ]
 
 async function main() {
