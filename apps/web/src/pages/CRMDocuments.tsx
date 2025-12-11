@@ -915,7 +915,7 @@ export default function CRMDocuments() {
                   ) : (
                     <button
                       onClick={() => {
-                        if (confirm('Request deletion of this document? A helpdesk ticket will be created for review.')) {
+                        if (confirm('Are you sure you want to request deletion of this document? A helpdesk ticket will be created and routed for review.')) {
                           requestDeletion.mutate(doc)
                         }
                       }}
