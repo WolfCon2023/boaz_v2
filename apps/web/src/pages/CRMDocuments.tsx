@@ -207,6 +207,26 @@ export default function CRMDocuments() {
     return map
   }, [invoicesData])
 
+  // Helper to get best-guess customer contact info for a document
+  const getCustomerContactInfo = (doc: Document): { name?: string; email?: string } => {
+    // If the document is directly related to a contact, prefer that contact
+    if (doc.relatedTo?.type === 'contact' && contactsData?.data.items) {
+      const contact = contactsData.data.items.find(c => c._id === doc.relatedTo!.id)
+      if (contact) {
+        return {
+          name: contact.name || contact.email,
+          email: contact.email,
+        }
+      }
+    }
+
+    // Fall back to document owner info, which is often the customer contact
+    return {
+      name: doc.ownerName || doc.ownerEmail,
+      email: doc.ownerEmail,
+    }
+  }
+
   // Helper function to get related entity name
   const getRelatedEntityName = (doc: Document) => {
     if (!doc.relatedTo) return null
@@ -464,10 +484,22 @@ export default function CRMDocuments() {
   // Deletion request mutation
   // Instead of relying on the dedicated documents request-deletion endpoint (which has been flaky),
   // create a standard support ticket using the existing, well-tested /api/crm/support/tickets API.
+  // We also include Customer Contact Information so it appears at the top of the ticket like other flows.
   const requestDeletion = useMutation({
     mutationFn: async (doc: Document) => {
       const shortDescription = `Document Deletion Request: ${doc.name}`
-      const descriptionLines = [
+      const { name: customerName, email: customerEmail } = getCustomerContactInfo(doc)
+
+      const descriptionLines: string[] = []
+
+      if (customerName || customerEmail) {
+        descriptionLines.push('Customer Contact Information:')
+        if (customerName) descriptionLines.push(`- Name: ${customerName}`)
+        if (customerEmail) descriptionLines.push(`- Email: ${customerEmail}`)
+        descriptionLines.push('') // blank line separator
+      }
+
+      descriptionLines.push(
         `Request to delete document "${doc.name}" (ID: ${doc._id})`,
         '',
         'Document Details:',
@@ -475,7 +507,7 @@ export default function CRMDocuments() {
         `- Category: ${doc.category || 'N/A'}`,
         `- Owner: ${doc.ownerName || doc.ownerEmail || 'N/A'}`,
         `- Versions: ${doc.versionCount}`,
-      ]
+      )
 
       if (doc.relatedTo) {
         descriptionLines.push(`- Related To: ${doc.relatedTo.type} (${doc.relatedTo.id})`)
@@ -486,6 +518,8 @@ export default function CRMDocuments() {
         description: descriptionLines.join('\n'),
         status: 'open',
         priority: 'normal',
+        requesterName: customerName || undefined,
+        requesterEmail: customerEmail || undefined,
         // Type is optional; default is 'internal' in the API, so no need to set explicitly
       }
 
