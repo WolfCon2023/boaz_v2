@@ -63,7 +63,7 @@ export default function CRMOutreachSequences() {
   const [editName, setEditName] = React.useState('')
   const [editAB, setEditAB] = React.useState('')
   const [editSteps, setEditSteps] = React.useState('[]')
-  const [showGuide, setShowGuide] = React.useState(false)
+  // Help accordion removed in favor of KB; no local help state needed.
 
   React.useEffect(() => {
     if (!editing) return
@@ -94,22 +94,7 @@ export default function CRMOutreachSequences() {
           <span>KB</span>
         </a>
       </div>
-      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-sm">
-        <button type="button" onClick={() => setShowGuide((v) => !v)} aria-expanded={showGuide} className="w-full px-4 py-3 font-semibold hover:bg-[color:var(--color-muted)] flex items-center justify-between">
-          <span>How sequences work</span>
-          <span aria-hidden="true">{showGuide ? '▾' : '▸'}</span>
-        </button>
-        {showGuide && (
-          <div className="px-4 pb-4">
-            <ul className="list-disc pl-5 space-y-1">
-              <li><span className="font-semibold">Name</span>: internal sequence name.</li>
-              <li><span className="font-semibold">A/B Group</span>: optional grouping to compare full sequence variants (A vs B).</li>
-              <li><span className="font-semibold">Steps</span>: JSON array of steps. Each step has <span className="font-semibold">dayOffset</span> (0 = send now, 1 = 1 day later, etc.), <span className="font-semibold">channel</span> (email or sms), and optional <span className="font-semibold">templateId</span>.</li>
-            </ul>
-            <div className="mt-2 text-[color:var(--color-text-muted)]">Example: [{'{'}"dayOffset":0,"channel":"email"{'}'},{'{'}"dayOffset":2,"channel":"sms"{'}'}]</div>
-          </div>
-        )}
-      </div>
+      {/* Help accordion removed; see KB link above for guidance. */}
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search sequences..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />

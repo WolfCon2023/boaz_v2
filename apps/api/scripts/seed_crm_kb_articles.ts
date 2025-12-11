@@ -368,6 +368,27 @@ The **Surveys & Feedback** app manages NPS/CSAT programs and post‑interaction 
 - Combine survey data with **Renewals** and **Assets** to prioritize retention work.`,
   },
   {
+    title: 'Using the Customer Success app in BOAZ‑OS CRM',
+    tags: ['crm', 'crm:success', 'customer-success'],
+    category: 'Customer Success',
+    body: `# Customer Success – Health, renewals risk, and proactive follow‑up
+
+## Purpose
+The **Customer Success** app provides a single view of account health using key signals like surveys, ticket load, project status, and license/renewal alerts.
+
+## What you can do
+- Search and filter accounts by **health**
+- Spot accounts with **open/high/breached** tickets
+- Identify accounts with **at‑risk** projects
+- Monitor **license expiration / renewal** signals
+- Use saved views to track your portfolio
+
+## Best practices
+- Review high‑risk accounts weekly and create Tasks for follow‑ups
+- Use Outreach (Templates/Sequences) for renewal and QBR campaigns
+- Use ticket and survey context to time outreach appropriately`,
+  },
+  {
     title: 'Using the Support Tickets app in BOAZ‑OS CRM',
     tags: ['crm', 'crm:tickets', 'support'],
     category: 'Support',
