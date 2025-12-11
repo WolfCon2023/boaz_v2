@@ -462,13 +462,43 @@ export default function CRMDocuments() {
   })
 
   // Deletion request mutation
+  // Instead of relying on the dedicated documents request-deletion endpoint (which has been flaky),
+  // create a standard support ticket using the existing, well-tested /api/crm/support/tickets API.
   const requestDeletion = useMutation({
-    mutationFn: async (docId: string) => {
-      const res = await http.post(`/api/crm/documents/${docId}/request-deletion`)
-      return res.data as { data: { ok: boolean; ticketNumber: number } }
+    mutationFn: async (doc: Document) => {
+      const shortDescription = `Document Deletion Request: ${doc.name}`
+      const descriptionLines = [
+        `Request to delete document "${doc.name}" (ID: ${doc._id})`,
+        '',
+        'Document Details:',
+        `- Name: ${doc.name}`,
+        `- Category: ${doc.category || 'N/A'}`,
+        `- Owner: ${doc.ownerName || doc.ownerEmail || 'N/A'}`,
+        `- Versions: ${doc.versionCount}`,
+      ]
+
+      if (doc.relatedTo) {
+        descriptionLines.push(`- Related To: ${doc.relatedTo.type} (${doc.relatedTo.id})`)
+      }
+
+      const payload = {
+        shortDescription,
+        description: descriptionLines.join('\n'),
+        status: 'open',
+        priority: 'normal',
+        // Type is optional; default is 'internal' in the API, so no need to set explicitly
+      }
+
+      const res = await http.post('/api/crm/support/tickets', payload)
+      return res.data as { data: { ticketNumber?: number; _id?: string } }
     },
     onSuccess: (data) => {
-      toast.showToast(`Deletion request submitted. Ticket #${data.data.ticketNumber} created.`, 'success')
+      const ticketNumber = data.data.ticketNumber
+      if (ticketNumber) {
+        toast.showToast(`Deletion request submitted. Ticket #${ticketNumber} created.`, 'success')
+      } else {
+        toast.showToast('Deletion request submitted and ticket created.', 'success')
+      }
     },
     onError: (err: any) => {
       toast.showToast(`Failed to submit deletion request: ${err?.response?.data?.error || 'Unknown error'}`, 'error')
@@ -852,7 +882,7 @@ export default function CRMDocuments() {
                     <button
                       onClick={() => {
                         if (confirm('Request deletion of this document? A helpdesk ticket will be created for review.')) {
-                          requestDeletion.mutate(doc._id)
+                          requestDeletion.mutate(doc)
                         }
                       }}
                       className="p-2 rounded hover:bg-[color:var(--color-muted)] text-orange-400"
