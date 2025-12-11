@@ -58,8 +58,6 @@ export default function CRMOutreachSequences() {
   })
 
   const [editing, setEditing] = React.useState<Sequence | null>(null)
-  const [showDef, setShowDef] = React.useState(true)
-  const [showGuide, setShowGuide] = React.useState(true)
   const [createError, setCreateError] = React.useState<string | null>(null)
   const [editError, setEditError] = React.useState<string | null>(null)
   const [editName, setEditName] = React.useState('')
@@ -83,17 +81,17 @@ export default function CRMOutreachSequences() {
   return (
     <div className="space-y-4">
       <CRMNav />
-      <h1 className="text-xl font-semibold">Outreach Sequences</h1>
-      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-sm">
-        <button type="button" onClick={() => setShowDef((v) => !v)} aria-expanded={showDef} className="w-full px-4 py-3 font-semibold hover:bg-[color:var(--color-muted)] flex items-center justify-between">
-          <span>What is a Sequence?</span>
-          <span aria-hidden="true">{showDef ? '▾' : '▸'}</span>
-        </button>
-        {showDef && (
-          <div className="px-4 pb-4">
-            A sequence is a scheduled series of outreach steps (Email or SMS) that run over time. Each step specifies when to send and which channel/template to use, enabling multi-touch campaigns.
-          </div>
-        )}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Outreach Sequences</h1>
+        <a
+          href="/apps/crm/support/kb?tag=crm:outreach-sequences"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+        >
+          <span className="text-[color:var(--color-primary-600)] font-semibold">?</span>
+          <span>KB</span>
+        </a>
       </div>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] text-sm">
         <button type="button" onClick={() => setShowGuide((v) => !v)} aria-expanded={showGuide} className="w-full px-4 py-3 font-semibold hover:bg-[color:var(--color-muted)] flex items-center justify-between">
