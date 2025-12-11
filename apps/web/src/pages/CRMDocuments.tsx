@@ -73,7 +73,7 @@ type User = {
 export default function CRMDocuments() {
   const qc = useQueryClient()
   const toast = useToast()
-  const { confirm, ConfirmDialog } = useConfirm()
+  const { confirm } = useConfirm()
   const [q, setQ] = React.useState('')
   const [category, setCategory] = React.useState('')
   const [tag, setTag] = React.useState('')
@@ -1234,13 +1234,20 @@ export default function CRMDocuments() {
                   // Always show check-in button, but enable/disable based on state
                   return (
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         if (isCheckedOutByMe) {
-                          if (confirm('Check in this document?')) {
+                          const ok = await confirm('Check in this document?', {
+                            confirmText: 'Check in',
+                          })
+                          if (ok) {
                             checkin.mutate(docDetail.data._id)
                           }
                         } else if (isCheckedOutByOther && isAdmin) {
-                          if (confirm(`Force check-in? This document is checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}.`)) {
+                          const ok = await confirm(
+                            `Force check-in? This document is checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}.`,
+                            { confirmText: 'Force check-in', confirmColor: 'danger' }
+                          )
+                          if (ok) {
                             checkin.mutate(docDetail.data._id)
                           }
                         }
@@ -1514,8 +1521,12 @@ export default function CRMDocuments() {
                         </div>
                       </div>
                       <button
-                        onClick={() => {
-                          if (confirm('Remove this permission?')) {
+                        onClick={async () => {
+                          const ok = await confirm('Remove this permission?', {
+                            confirmText: 'Remove',
+                            confirmColor: 'danger',
+                          })
+                          if (ok) {
                             removePermission.mutate({ docId: selectedDoc._id, userId: perm.userId })
                           }
                         }}

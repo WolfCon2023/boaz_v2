@@ -50,7 +50,7 @@ type SurveyProgramPick = {
 export default function SupportTickets() {
   const qc = useQueryClient()
   const toast = useToast()
-  const { confirm, ConfirmDialog } = useConfirm()
+  const { confirm } = useConfirm()
   const location = useLocation()
   const createFormRef = React.useRef<HTMLFormElement | null>(null)
   type ColumnDef = { key: string; visible: boolean; label: string }
@@ -1388,8 +1388,31 @@ export default function SupportTickets() {
                 <div className="space-y-1">
                   {savedViews.map((v) => (
                     <div key={v.id} className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] p-2 text-sm">
-                      <button type="button" className="flex-1 text-left hover:underline" onClick={() => { loadView(v); setShowSaveViewDialog(false) }}>{v.name}</button>
-                      <button type="button" className="ml-2 rounded-lg border border-red-400 text-red-400 px-2 py-1 text-xs hover:bg-red-50" onClick={() => { if (confirm(`Delete \"${v.name}\"?`)) deleteView(v.id) }}>Delete</button>
+                      <button
+                        type="button"
+                        className="flex-1 text-left hover:underline"
+                        onClick={() => {
+                          loadView(v)
+                          setShowSaveViewDialog(false)
+                        }}
+                      >
+                        {v.name}
+                      </button>
+                      <button
+                        type="button"
+                        className="ml-2 rounded-lg border border-red-400 text-red-400 px-2 py-1 text-xs hover:bg-red-50"
+                        onClick={async () => {
+                          const ok = await confirm(`Delete "${v.name}"?`, {
+                            confirmText: 'Delete view',
+                            confirmColor: 'danger',
+                          })
+                          if (ok) {
+                            deleteView(v.id)
+                          }
+                        }}
+                      >
+                        Delete
+                      </button>
                     </div>
                   ))}
                 </div>
