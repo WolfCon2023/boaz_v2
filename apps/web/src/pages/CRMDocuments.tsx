@@ -4,6 +4,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { useConfirm } from '@/components/ConfirmDialog'
 import { FileText, Upload, Download, Trash2, Eye, Users, Plus, X, Search, History, Lock, Unlock, HelpCircle, BookOpen } from 'lucide-react'
 
 type DocumentVersion = {
@@ -72,6 +73,7 @@ type User = {
 export default function CRMDocuments() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { confirm, ConfirmDialog } = useConfirm()
   const [q, setQ] = React.useState('')
   const [category, setCategory] = React.useState('')
   const [tag, setTag] = React.useState('')
@@ -839,8 +841,11 @@ export default function CRMDocuments() {
                     if (isCheckedOutByMe) {
                       return (
                         <button
-                          onClick={() => {
-                            if (confirm('Check in this document?')) {
+                          onClick={async () => {
+                            const ok = await confirm('Check in this document?', {
+                              confirmText: 'Check in',
+                            })
+                            if (ok) {
                               checkin.mutate(doc._id)
                             }
                           }}
@@ -853,8 +858,12 @@ export default function CRMDocuments() {
                     } else if (isCheckedOutByOther && isAdmin) {
                       return (
                         <button
-                          onClick={() => {
-                            if (confirm(`Force check-in? This document is checked out by ${doc.checkedOutByName || doc.checkedOutByEmail}.`)) {
+                          onClick={async () => {
+                            const ok = await confirm(
+                              `Force check-in? This document is checked out by ${doc.checkedOutByName || doc.checkedOutByEmail}.`,
+                              { confirmText: 'Force check-in', confirmColor: 'danger' }
+                            )
+                            if (ok) {
                               checkin.mutate(doc._id)
                             }
                           }}
@@ -902,8 +911,12 @@ export default function CRMDocuments() {
                   </button>
                   {isAdmin ? (
                     <button
-                      onClick={() => {
-                        if (confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                      onClick={async () => {
+                        const ok = await confirm(
+                          'Are you sure you want to delete this document? This action cannot be undone.',
+                          { confirmText: 'Delete document', confirmColor: 'danger' }
+                        )
+                        if (ok) {
                           remove.mutate(doc._id)
                         }
                       }}
@@ -914,8 +927,12 @@ export default function CRMDocuments() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => {
-                        if (confirm('Are you sure you want to request deletion of this document? A helpdesk ticket will be created and routed for review.')) {
+                      onClick={async () => {
+                        const ok = await confirm(
+                          'Are you sure you want to request deletion of this document? A helpdesk ticket will be created and routed for review.',
+                          { confirmText: 'Request deletion', confirmColor: 'primary' }
+                        )
+                        if (ok) {
                           requestDeletion.mutate(doc)
                         }
                       }}

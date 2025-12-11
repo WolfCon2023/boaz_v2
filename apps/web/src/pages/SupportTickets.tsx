@@ -6,6 +6,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 type Ticket = {
   _id: string
@@ -49,6 +50,7 @@ type SurveyProgramPick = {
 export default function SupportTickets() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { confirm, ConfirmDialog } = useConfirm()
   const location = useLocation()
   const createFormRef = React.useRef<HTMLFormElement | null>(null)
   type ColumnDef = { key: string; visible: boolean; label: string }
@@ -1311,8 +1313,12 @@ export default function SupportTickets() {
                   <button 
                     type="button" 
                     className="rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-2 text-sm text-red-400 hover:bg-red-500/20" 
-                    onClick={() => {
-                      if (confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) {
+                    onClick={async () => {
+                      const ok = await confirm(
+                        'Are you sure you want to delete this ticket? This action cannot be undone.',
+                        { confirmText: 'Delete ticket', confirmColor: 'danger' }
+                      )
+                      if (ok) {
                         deleteTicket.mutate(editing._id)
                       }
                     }}
