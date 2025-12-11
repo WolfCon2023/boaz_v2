@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 
 type Account = {
   _id: string
@@ -450,13 +451,7 @@ export default function CRMSuccess() {
           <div className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--color-border)] px-2 py-1">
             <span className="h-2 w-2 rounded-full bg-amber-500" /> <span>{medCount} medium‑risk</span>
           </div>
-          <a
-            href="/apps/crm/support/kb?tag=crm:success"
-            className="inline-flex items-center gap-1 rounded-xl border border-[color:var(--color-border)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)]"
-          >
-            <span className="text-xs">Help</span>
-            <span className="text-[10px]">?</span>
-          </a>
+          <CRMHelpButton tag="crm:success" className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]" />
           <button
             type="button"
             onClick={exportCsv}

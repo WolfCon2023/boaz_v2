@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 
@@ -91,13 +92,7 @@ export default function CRMVendors() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <a
-            href="/apps/crm/support/kb?tag=crm:vendors"
-            className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-          >
-            <span className="text-xs">Help</span>
-            <span className="text-[10px]">?</span>
-          </a>
+          <CRMHelpButton tag="crm:vendors" />
           <input
             type="text"
             value={q}

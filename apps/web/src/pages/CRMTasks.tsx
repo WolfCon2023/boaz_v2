@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
@@ -417,13 +418,7 @@ export default function CRMTasks() {
           </p>
         </div>
         <div className="flex items-center gap-2 px-0.5">
-          <a
-            href="/apps/crm/support/kb?tag=crm:tasks"
-            className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-          >
-            <span className="text-xs">Help</span>
-            <span className="text-[10px]">?</span>
-          </a>
+          <CRMHelpButton tag="crm:tasks" />
         </div>
       </header>
 

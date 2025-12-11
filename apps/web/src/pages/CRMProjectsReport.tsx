@@ -5,6 +5,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { formatDate } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 
 type ProjectRow = {
   _id: string
@@ -241,12 +242,10 @@ export default function CRMProjectsReport() {
           >
             Export CSV
           </button>
-          <a
-            href="/apps/crm/support/kb?tag=crm:projects"
-            className="inline-flex items-center rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
-          >
-            Help
-          </a>
+          <CRMHelpButton
+            tag="crm:projects"
+            className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+          />
         </div>
       </header>
 

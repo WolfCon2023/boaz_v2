@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 
 type Sequence = { _id: string; name?: string; steps?: Array<{ dayOffset: number; channel: 'email'|'sms'; templateId?: string }>; abGroup?: 'A'|'B'|null }
 
@@ -84,15 +85,7 @@ export default function CRMOutreachSequences() {
       <CRMNav />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Outreach Sequences</h1>
-        <a
-          href="/apps/crm/support/kb?tag=crm:outreach-sequences"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
-        >
-          <span className="text-[color:var(--color-primary-600)] font-semibold">?</span>
-          <span>KB</span>
-        </a>
+        <CRMHelpButton tag="crm:outreach-sequences" />
       </div>
       {/* Help accordion removed; see KB link above for guidance. */}
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">

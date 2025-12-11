@@ -5,6 +5,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 
 type SurveyQuestion = {
   id: string
@@ -337,13 +338,7 @@ export default function CRMSurveys() {
               Configure NPS and CSAT programs, and send post‑interaction surveys after tickets, demos, and other touchpoints.
             </p>
           </div>
-          <a
-            href="/apps/crm/support/kb?tag=crm:surveys"
-            className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
-          >
-            <span>Help</span>
-            <span className="text-[10px]">?</span>
-          </a>
+          <CRMHelpButton tag="crm:surveys" />
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">

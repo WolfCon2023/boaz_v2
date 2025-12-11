@@ -7,6 +7,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { Plus, X, Package, Send } from 'lucide-react'
 import { DocumentsList } from '@/components/DocumentsList'
 
@@ -719,13 +720,7 @@ export default function CRMQuotes() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold">Quotes</h1>
-            <a
-              href="/apps/crm/support/kb?tag=crm:quotes"
-              className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-            >
-              <span className="text-xs">Help</span>
-              <span className="text-[10px]">?</span>
-            </a>
+            <CRMHelpButton tag="crm:quotes" />
           </div>
           {isManager && (
             <Link

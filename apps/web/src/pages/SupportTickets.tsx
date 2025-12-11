@@ -7,6 +7,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 
 type Ticket = {
   _id: string
@@ -719,7 +720,10 @@ export default function SupportTickets() {
     {ConfirmDialog}
     <div className="space-y-4">
       <CRMNav />
-      <h1 className="text-xl font-semibold">Support Tickets</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Support Tickets</h1>
+        <CRMHelpButton tag="crm:tickets" />
+      </div>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tickets..." className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />

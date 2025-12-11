@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useAccessToken } from './Auth'
@@ -7,7 +7,6 @@ const base = 'inline-flex items-center rounded-xl border border-[color:var(--col
 
 export function CRMNav() {
   const token = useAccessToken()
-  const location = useLocation()
   
   // Check if user has manager role
   const { data: rolesData } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
@@ -23,47 +22,6 @@ export function CRMNav() {
   })
 
   const isManager = rolesData?.roles?.some(r => r.name === 'manager') || rolesData?.isAdmin || false
-
-  const kbTag = (() => {
-    const p = location.pathname
-    if (!p.startsWith('/apps/crm')) return null
-    if (p.startsWith('/apps/crm/support/kb')) return null
-    // Normalize to a stable first segment after /apps/crm
-    const rest = p.replace('/apps/crm', '')
-    const segs = rest.split('/').filter(Boolean)
-    const first = segs[0] || ''
-    const second = segs[1] || ''
-
-    if (first === '') return 'crm'
-    if (first === 'support' && second === 'tickets') return 'crm:tickets'
-    if (first === 'outreach' && second === 'events') return 'crm:outreach'
-    if (first === 'outreach' && second === 'sequences') return 'crm:outreach-sequences'
-    if (first === 'outreach' && second === 'templates') return 'crm:outreach-templates'
-
-    const map: Record<string, string> = {
-      accounts: 'crm:accounts',
-      assets: 'crm:assets',
-      contacts: 'crm:contacts',
-      deals: 'crm:deals',
-      documents: 'crm:documents',
-      invoices: 'crm:invoices',
-      marketing: 'crm:marketing',
-      payments: 'crm:payments',
-      products: 'crm:products',
-      projects: 'crm:projects',
-      quotes: 'crm:quotes',
-      renewals: 'crm:renewals',
-      'revenue-intelligence': 'crm:revenue-intelligence',
-      slas: 'crm:slas',
-      success: 'crm:success',
-      surveys: 'crm:surveys',
-      tasks: 'crm:tasks',
-      vendors: 'crm:vendors',
-    }
-    return map[first] || 'crm'
-  })()
-
-  const kbHref = kbTag ? `/apps/crm/support/kb?tag=${encodeURIComponent(kbTag)}` : null
 
   return (
     <div className="flex flex-wrap items-center gap-2 p-4">
@@ -98,19 +56,6 @@ export function CRMNav() {
         </>
       )}
       <NavLink to="/apps/crm/support/tickets" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Tickets</NavLink>
-      {kbHref && (
-        <a
-          href={kbHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-          aria-label="Open Knowledge Base for this page"
-          title="Knowledge Base"
-        >
-          <span className="text-[color:var(--color-primary-600)] font-semibold">?</span>
-          <span className="hidden sm:inline">KB</span>
-        </a>
-      )}
     </div>
   )
 }

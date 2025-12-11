@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { formatDateOnly } from '@/lib/dateFormat'
 
@@ -241,13 +242,7 @@ export default function CRMRevenueIntelligence() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href="/apps/crm/support/kb?tag=crm:revenue-intelligence"
-            className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-          >
-            <span className="text-xs">Help</span>
-            <span className="text-[10px]">?</span>
-          </a>
+          <CRMHelpButton tag="crm:revenue-intelligence" />
         </div>
       </header>
 

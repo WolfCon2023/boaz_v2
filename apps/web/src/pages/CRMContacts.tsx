@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
@@ -538,13 +539,7 @@ export default function CRMContacts() {
       <CRMNav />
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Contacts</h1>
-        <a
-          href="/apps/crm/support/kb?tag=crm:contacts"
-          className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-        >
-          <span className="text-xs">Help</span>
-          <span className="text-[10px]">?</span>
-        </a>
+        <CRMHelpButton tag="crm:contacts" />
       </div>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <form className="flex flex-wrap items-center gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ name: String(fd.get('name')||''), email: String(fd.get('email')||'' )|| undefined, company: String(fd.get('company')||'')|| undefined, mobilePhone: String(fd.get('mobilePhone')||'')|| undefined, officePhone: String(fd.get('officePhone')||'')|| undefined, isPrimary: fd.get('isPrimary') === 'on', primaryPhone: (fd.get('primaryPhone') as 'mobile'|'office'|null) || undefined }); (e.currentTarget as HTMLFormElement).reset() }}>

@@ -3,6 +3,7 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { formatDateTime } from '@/lib/dateFormat'
 import { Package, Layers, Tag, FileText, TrendingUp, Download, TrendingDown, DollarSign, PackageIcon, BarChart3, PieChart, FileDown } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, Legend } from 'recharts'
@@ -625,13 +626,7 @@ export default function CRMProducts() {
       <CRMNav />
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Product Catalog &amp; Pricing</h1>
-        <a
-          href="/apps/crm/support/kb?tag=crm:products"
-          className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-        >
-          <span className="text-xs">Help</span>
-          <span className="text-[10px]">?</span>
-        </a>
+        <CRMHelpButton tag="crm:products" />
       </div>
 
       {/* Tabs */}

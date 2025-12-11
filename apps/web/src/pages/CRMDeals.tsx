@@ -4,6 +4,7 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
@@ -843,13 +844,7 @@ export default function CRMDeals() {
       <CRMNav />
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Deals</h1>
-        <a
-          href="/apps/crm/support/kb?tag=crm:deals"
-          className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-        >
-          <span className="text-xs">Help</span>
-          <span className="text-[10px]">?</span>
-        </a>
+        <CRMHelpButton tag="crm:deals" />
       </div>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="flex flex-wrap items-center gap-2 p-4">

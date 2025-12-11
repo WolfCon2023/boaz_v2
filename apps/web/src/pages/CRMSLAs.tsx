@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http, getApiUrl } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { formatDate } from '@/lib/dateFormat'
@@ -857,13 +858,7 @@ export default function CRMSLAs() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href="/apps/crm/support/kb?tag=crm:slas"
-            className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-          >
-            <span className="text-xs">Help</span>
-            <span className="text-[10px]">?</span>
-          </a>
+          <CRMHelpButton tag="crm:slas" />
           <button
             type="button"
             onClick={openNew}

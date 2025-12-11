@@ -3,6 +3,7 @@ import * as React from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { formatDate } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { HelpCircle } from 'lucide-react'
@@ -289,13 +290,7 @@ export default function CRMRenewals() {
       <CRMNav />
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Renewals &amp; Subscriptions</h1>
-        <a
-          href="/apps/crm/support/kb?tag=crm:renewals"
-          className="inline-flex items-center gap-1 rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-        >
-          <span className="text-xs">Help</span>
-          <span className="text-[10px]">?</span>
-        </a>
+        <CRMHelpButton tag="crm:renewals" />
       </div>
 
       {metricsData?.data && (
