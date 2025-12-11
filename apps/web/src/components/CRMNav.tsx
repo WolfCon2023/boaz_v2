@@ -103,7 +103,7 @@ export function CRMNav() {
           href={kbHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-auto inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+          className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
           aria-label="Open Knowledge Base for this page"
           title="Knowledge Base"
         >
