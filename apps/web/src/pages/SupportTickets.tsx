@@ -50,7 +50,7 @@ type SurveyProgramPick = {
 export default function SupportTickets() {
   const qc = useQueryClient()
   const toast = useToast()
-  const { confirm } = useConfirm()
+  const { confirm, ConfirmDialog } = useConfirm()
   const location = useLocation()
   const createFormRef = React.useRef<HTMLFormElement | null>(null)
   type ColumnDef = { key: string; visible: boolean; label: string }
@@ -715,6 +715,8 @@ export default function SupportTickets() {
   }, [createSlaOpen])
 
   return (
+    <>
+    {ConfirmDialog}
     <div className="space-y-4">
       <CRMNav />
       <h1 className="text-xl font-semibold">Support Tickets</h1>
@@ -1422,6 +1424,7 @@ export default function SupportTickets() {
         </div>
       )}
     </div>
+    </>
   )
 }
 

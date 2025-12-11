@@ -73,7 +73,7 @@ type User = {
 export default function CRMDocuments() {
   const qc = useQueryClient()
   const toast = useToast()
-  const { confirm } = useConfirm()
+  const { confirm, ConfirmDialog } = useConfirm()
   const [q, setQ] = React.useState('')
   const [category, setCategory] = React.useState('')
   const [tag, setTag] = React.useState('')
@@ -651,9 +651,11 @@ export default function CRMDocuments() {
   }
 
   return (
-    <div className="min-h-screen bg-[color:var(--color-bg)]">
-      <CRMNav />
-      <div className="p-6 max-w-[1600px] mx-auto">
+    <>
+      {ConfirmDialog}
+      <div className="min-h-screen bg-[color:var(--color-bg)]">
+        <CRMNav />
+        <div className="p-6 max-w-[1600px] mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Documents & Files</h1>
           <button
@@ -1593,6 +1595,7 @@ export default function CRMDocuments() {
         </div>
       )}
     </div>
+    </>
   )
 }
 
