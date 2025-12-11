@@ -109,6 +109,10 @@ export default function CRMQuotes() {
   const qc = useQueryClient()
   const toast = useToast()
   const { confirm, ConfirmDialog } = useConfirm()
+  const invalidateCrmDashboard = React.useCallback(() => {
+    // Dashboard query key is ['crm-dashboard-summary', userEmail]; invalidate by prefix.
+    qc.invalidateQueries({ queryKey: ['crm-dashboard-summary'] })
+  }, [qc])
   const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = React.useState('')
   const [sort, setSort] = React.useState<'quoteNumber'|'title'|'total'|'status'|'updatedAt'>('updatedAt')
@@ -261,6 +265,7 @@ export default function CRMQuotes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quotes'] })
       qc.invalidateQueries({ queryKey: ['quote-history'] })
+      invalidateCrmDashboard()
     },
   })
   const update = useMutation({
@@ -272,6 +277,7 @@ export default function CRMQuotes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quotes'] })
       qc.invalidateQueries({ queryKey: ['quote-history'] })
+      invalidateCrmDashboard()
       toast.showToast('BOAZ says: Quote saved.', 'success')
     },
   })
@@ -284,6 +290,7 @@ export default function CRMQuotes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quotes'] })
       qc.invalidateQueries({ queryKey: ['quote-history'] })
+      invalidateCrmDashboard()
       toast.showToast('Approval request sent successfully!', 'success')
     },
     onError: (err: any) => {
@@ -300,6 +307,7 @@ export default function CRMQuotes() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quotes'] })
       qc.invalidateQueries({ queryKey: ['quote-history'] })
+      invalidateCrmDashboard()
       qc.invalidateQueries({ queryKey: ['customer-portal-dashboard'] })
       qc.invalidateQueries({ queryKey: ['customer-portal-quotes'] })
       // Toast message will be shown in the button's onClick handler with signer email
@@ -1580,7 +1588,22 @@ export default function CRMQuotes() {
                   </button>
                 </div>
                 <div className="col-span-full mt-2 flex items-center justify-end gap-2">
-                  <button type="button" className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]" onClick={() => { if (editing?._id) http.delete(`/api/crm/quotes/${editing._id}`).then(() => { qc.invalidateQueries({ queryKey: ['quotes'] }); setEditing(null) }) }}>Delete</button>
+                  <button
+                    type="button"
+                    className="mr-auto rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-red-600 hover:bg-[color:var(--color-muted)]"
+                    onClick={() => {
+                      if (editing?._id) {
+                        http.delete(`/api/crm/quotes/${editing._id}`).then(() => {
+                          qc.invalidateQueries({ queryKey: ['quotes'] })
+                          qc.invalidateQueries({ queryKey: ['quote-history'] })
+                          invalidateCrmDashboard()
+                          setEditing(null)
+                        })
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setShowHistory((v) => !v)}>{showHistory ? 'Hide history' : 'View history'}</button>
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>

@@ -74,8 +74,25 @@ export default function Dashboard() {
         },
         quotes: {
           total: quotes.length,
-          pending: quotes.filter((q: any) => q.status === 'sent' || q.status === 'viewed').length,
-          draft: quotes.filter((q: any) => q.status === 'draft').length,
+          // Status values in BOAZ are Title Case (e.g., "Draft", "Submitted for Review", "Sent for Signature")
+          // Normalize to lower-case for dashboard bucketing (and keep backwards-compat for legacy "sent/viewed").
+          pending: quotes.filter((q: any) => {
+            // Some older records/environments may surface deal-shaped fields (e.g. `stage`) here.
+            // Treat `stage` as a fallback so the dashboard stays accurate even if the payload differs.
+            const s = String(q?.status ?? q?.stage ?? '').trim().toLowerCase()
+            return (
+              s === 'submitted for review' ||
+              s === 'approved' ||
+              s === 'approved / ready for signature' ||
+              s === 'sent for signature' ||
+              s === 'sent' ||
+              s === 'viewed'
+            )
+          }).length,
+          draft: quotes.filter((q: any) => {
+            const s = String(q?.status ?? q?.stage ?? '').trim().toLowerCase()
+            return s === 'draft'
+          }).length,
         },
         tickets: {
           total: tickets.length,
@@ -92,9 +109,20 @@ export default function Dashboard() {
         },
         deals: {
           total: deals.length,
-          open: deals.filter((d: any) => d.stage !== 'won' && d.stage !== 'lost').length,
+          open: deals.filter((d: any) => {
+            const s = String(d?.stage ?? '').toLowerCase()
+            const isWon = s.includes('won')
+            const isLost = s.includes('lost')
+            return !isWon && !isLost
+          }).length,
           value: deals
-            .filter((d: any) => d.stage !== 'lost')
+            .filter((d: any) => {
+              const s = String(d?.stage ?? '').toLowerCase()
+              const isWon = s.includes('won')
+              const isLost = s.includes('lost')
+              // Pipeline value should represent active opportunities only.
+              return !isWon && !isLost
+            })
             .reduce((sum: number, d: any) => sum + (d.amount || 0), 0),
         },
       }
