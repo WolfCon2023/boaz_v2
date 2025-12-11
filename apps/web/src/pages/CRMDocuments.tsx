@@ -529,9 +529,9 @@ export default function CRMDocuments() {
     onSuccess: (data) => {
       const ticketNumber = data.data.ticketNumber
       if (ticketNumber) {
-        toast.showToast(`Deletion request submitted. Ticket #${ticketNumber} created.`, 'success')
+        toast.showToast(`Ticket #${ticketNumber} created successfully`, 'success')
       } else {
-        toast.showToast('Deletion request submitted and ticket created.', 'success')
+        toast.showToast('Ticket created successfully', 'success')
       }
     },
     onError: (err: any) => {
