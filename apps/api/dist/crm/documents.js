@@ -68,7 +68,8 @@ async function hasPermission(db, document, userId, requiredPermission) {
     if (document.isPublic && requiredPermission === 'view')
         return true;
     // Check explicit permissions
-    const userPerm = document.permissions.find(p => String(p.userId) === userId);
+    const perms = Array.isArray(document.permissions) ? document.permissions : [];
+    const userPerm = perms.find(p => String(p.userId) === userId);
     if (!userPerm)
         return false;
     const permLevels = { view: 1, edit: 2, delete: 3 };
@@ -823,14 +824,14 @@ documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
         const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
         const userName = user?.name || auth.email;
         // Create helpdesk ticket
-        const { getNextSequence } = await import('../db.js');
-        let ticketNumber;
-        try {
-            ticketNumber = await getNextSequence('ticketNumber');
-        }
-        catch {
-            ticketNumber = 200001;
-        }
+        // Reuse the simpler sequence strategy from the customer portal tickets API
+        // to avoid any issues with counter state while still keeping numbers monotonic.
+        const lastTicket = await db.collection('support_tickets')
+            .find({})
+            .sort({ ticketNumber: -1 })
+            .limit(1)
+            .toArray();
+        const ticketNumber = (lastTicket[0]?.ticketNumber || 200000) + 1;
         const ticketDoc = {
             shortDescription: `Document Deletion Request: ${document.name}`,
             description: `Request to delete document "${document.name}" (ID: ${document._id})\n\nDocument Details:\n- Name: ${document.name}\n- Category: ${document.category || 'N/A'}\n- Owner: ${document.ownerName || document.ownerEmail}\n- Created: ${document.createdAt}\n- Versions: ${document.versions.length}\n\nRequested by: ${userName} (${auth.email})`,
@@ -851,10 +852,31 @@ documentsRouter.post('/:id/request-deletion', requireAuth, async (req, res) => {
         res.json({ data: { ok: true, ticketNumber }, error: null });
     }
     catch (e) {
-        if (e.message?.includes('ObjectId')) {
+        console.error('Document deletion request error:', e);
+        if (e && typeof e === 'object' && typeof e.message === 'string' && e.message.includes('ObjectId')) {
             return res.status(400).json({ data: null, error: 'invalid_id' });
         }
-        res.status(500).json({ data: null, error: 'deletion_request_failed' });
+        // Surface the actual error message (including string throws/objects) to help diagnose 500s in dev
+        let errorMessage = 'deletion_request_failed';
+        let debugDetails = undefined;
+        if (typeof e === 'string') {
+            errorMessage = e;
+        }
+        else if (e && typeof e === 'object') {
+            if (typeof e.message === 'string') {
+                errorMessage = e.message;
+            }
+            else {
+                try {
+                    debugDetails = e;
+                    errorMessage = JSON.stringify(e);
+                }
+                catch {
+                    // keep default
+                }
+            }
+        }
+        res.status(500).json({ data: null, error: errorMessage, details: debugDetails, handlerVersion: 'request-deletion-v2' });
     }
 });
 // DELETE /api/crm/documents/:id - Delete document (admin only)

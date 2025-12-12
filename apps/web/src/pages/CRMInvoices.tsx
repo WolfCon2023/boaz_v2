@@ -951,16 +951,18 @@ export default function CRMInvoices() {
                 const manualTax = fd.get('tax') ? Number(fd.get('tax')) : null
                 
                 if (lineItems.length > 0) {
-                  // Use calculated totals from line items
-                  payload.subtotal = calculatedTotals.subtotalAfterDiscount
+                  // Use calculated totals from line items (and discount, if selected)
+                  // NOTE: `subtotal` remains the pre-discount subtotal; discount is stored separately.
+                  payload.subtotal = calculatedTotals.subtotal
                   payload.tax = calculatedTotals.tax
                   payload.total = calculatedTotals.total
                   payload.balance = calculatedTotals.total - (editing.balance ? (editing.total || 0) - (editing.balance || 0) : 0)
-                  if (calculatedTotals.discountAmount > 0 && appliedDiscount) {
-                    payload.discountCode = appliedDiscount.code || appliedDiscount.name
-                    payload.discountAmount = calculatedTotals.discountAmount
-                    payload.discountId = appliedDiscount._id
-                  }
+
+                  // Always send discount fields so clearing a discount persists correctly.
+                  payload.discountId = appliedDiscount?._id ?? null
+                  payload.discountCode = appliedDiscount ? (appliedDiscount.code || appliedDiscount.name) : null
+                  payload.discountAmount = calculatedTotals.discountAmount || 0
+
                   payload.items = lineItems.map(item => ({
                     productId: item.productId,
                     productName: item.productName,
@@ -976,10 +978,14 @@ export default function CRMInvoices() {
                     isBundle: item.isBundle,
                   }))
                 } else if (manualSubtotal != null || manualTax != null) {
-                  // Use manual totals
+                  // Use manual totals (and apply discount, if selected)
                   payload.subtotal = manualSubtotal ?? editing.subtotal ?? 0
                   payload.tax = manualTax ?? editing.tax ?? 0
-                  payload.total = (payload.subtotal || 0) + (payload.tax || 0)
+                  const manualDiscountAmount = appliedDiscount ? calculatedTotals.discountAmount : 0
+                  payload.discountId = appliedDiscount?._id ?? null
+                  payload.discountCode = appliedDiscount ? (appliedDiscount.code || appliedDiscount.name) : null
+                  payload.discountAmount = manualDiscountAmount || 0
+                  payload.total = Math.max(0, (payload.subtotal || 0) - (payload.discountAmount || 0)) + (payload.tax || 0)
                   payload.balance = payload.total - (editing.balance ? (editing.total || 0) - (editing.balance || 0) : 0)
                   payload.items = []
                 }
@@ -1349,36 +1355,47 @@ export default function CRMInvoices() {
                         </table>
                       </div>
 
-                      {/* Discount Code Input */}
-                      <div className="mt-3 flex gap-2">
-                        <input
-                          type="text"
-                          value={discountCode}
-                          onChange={(e) => {
-                            const code = e.target.value.toUpperCase().trim()
-                            setDiscountCode(code)
-                            if (code) {
-                              const discount = discounts.find((d: Discount) => d.code?.toUpperCase() === code)
-                              setAppliedDiscount(discount || null)
-                            } else {
-                              setAppliedDiscount(null)
-                            }
-                          }}
-                          placeholder="Enter discount code"
-                          className="flex-1 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
-                        />
-                        {appliedDiscount && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDiscountCode('')
-                              setAppliedDiscount(null)
+                      {/* Discount dropdown */}
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <label className="text-xs text-[color:var(--color-text-muted)] sm:w-36">
+                          Discount
+                        </label>
+                        <div className="flex flex-1 items-center gap-2">
+                          <select
+                            value={appliedDiscount?._id ?? ''}
+                            onChange={(e) => {
+                              const id = e.target.value
+                              if (!id) {
+                                setAppliedDiscount(null)
+                                setDiscountCode('')
+                                return
+                              }
+                              const d = discounts.find((x: Discount) => x._id === id) || null
+                              setAppliedDiscount(d)
+                              setDiscountCode(d?.code || d?.name || '')
                             }}
-                            className="rounded border border-red-400 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                            className="flex-1 rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-xs text-[color:var(--color-text)]"
                           >
-                            Remove
-                          </button>
-                        )}
+                            <option value="">No discount</option>
+                            {discounts.map((d: Discount) => (
+                              <option key={d._id} value={d._id}>
+                                {(d.code ? `${d.code} — ` : '')}{d.name}
+                              </option>
+                            ))}
+                          </select>
+                          {appliedDiscount && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAppliedDiscount(null)
+                                setDiscountCode('')
+                              }}
+                              className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {appliedDiscount && (
                         <div className="rounded-lg border border-green-400 bg-green-50 p-2 text-xs">

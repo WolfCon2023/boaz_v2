@@ -6,6 +6,33 @@ import { env } from '../env.js';
 import { requireAuth } from '../auth/rbac.js';
 import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
 import { generatePaymentLinks, getEnabledPaymentOptions } from '../lib/payment-providers.js';
+function computeDiscountAmount(discount, subtotal) {
+    if (!(subtotal > 0))
+        return 0;
+    if (discount.isActive === false)
+        return 0;
+    const now = new Date();
+    const start = discount.startDate ? new Date(discount.startDate) : null;
+    const end = discount.endDate ? new Date(discount.endDate) : null;
+    if (start && now < start)
+        return 0;
+    if (end && now > end)
+        return 0;
+    if (typeof discount.minAmount === 'number' && subtotal < discount.minAmount)
+        return 0;
+    if (discount.type === 'percentage') {
+        let amt = (subtotal * (Number(discount.value) || 0)) / 100;
+        if (typeof discount.maxDiscount === 'number')
+            amt = Math.min(amt, discount.maxDiscount);
+        return Math.max(0, Math.min(amt, subtotal));
+    }
+    if (discount.type === 'fixed') {
+        const amt = Number(discount.value) || 0;
+        return Math.max(0, Math.min(amt, subtotal));
+    }
+    // Tiered discounts are not yet supported for invoices; treat as no-op for now.
+    return 0;
+}
 // Helper function to add history entry
 async function addInvoiceHistory(db, invoiceId, eventType, description, userId, userName, userEmail, oldValue, newValue, metadata) {
     try {
@@ -178,7 +205,22 @@ invoicesRouter.post('/', async (req, res) => {
     const now = new Date();
     const subtotal = Number(raw.subtotal) || 0;
     const tax = Number(raw.tax) || 0;
-    const total = Number(raw.total) || subtotal + tax;
+    // Discount (optional) is stored separately and applied as a deduction to subtotal.
+    let discountId = null;
+    let discountCode = null;
+    let discountAmount = 0;
+    if (raw.discountId && typeof raw.discountId === 'string' && ObjectId.isValid(raw.discountId)) {
+        discountId = new ObjectId(raw.discountId);
+        const d = await db.collection('discounts').findOne({ _id: discountId });
+        if (d) {
+            discountCode = (d.code || d.name) ?? null;
+            discountAmount = computeDiscountAmount(d, subtotal);
+        }
+        else {
+            discountId = null;
+        }
+    }
+    const total = Math.max(0, subtotal - discountAmount) + tax;
     const currency = raw.currency || 'USD';
     const status = raw.status || 'draft'; // draft, open, paid, void, uncollectible
     const dueDate = raw.dueDate ? new Date(raw.dueDate) : null;
@@ -188,6 +230,9 @@ invoicesRouter.post('/', async (req, res) => {
         accountId,
         items: Array.isArray(raw.items) ? raw.items : [],
         subtotal,
+        discountId,
+        discountCode,
+        discountAmount,
         tax,
         total,
         balance: total,
@@ -313,13 +358,56 @@ invoicesRouter.put('/:id', async (req, res) => {
         }
         if (raw.issuedAt != null)
             update.issuedAt = raw.issuedAt ? new Date(raw.issuedAt) : null;
-        // Track total/items changes
-        if (Array.isArray(raw.items)) {
+        const hasOwn = (k) => Object.prototype.hasOwnProperty.call(raw, k);
+        const wantsTotalsUpdate = Array.isArray(raw.items) ||
+            hasOwn('subtotal') ||
+            hasOwn('tax') ||
+            hasOwn('discountId') ||
+            hasOwn('discountCode') ||
+            hasOwn('discountAmount');
+        // Track total/items/discount changes
+        if (wantsTotalsUpdate) {
             const oldTotal = currentInvoice.total ?? 0;
-            update.items = raw.items;
-            update.subtotal = Number(raw.subtotal) || 0;
-            update.tax = Number(raw.tax) || 0;
-            update.total = Number(raw.total) || (update.subtotal + update.tax);
+            if (Array.isArray(raw.items))
+                update.items = raw.items;
+            const nextSubtotal = hasOwn('subtotal') ? (Number(raw.subtotal) || 0) : Number(currentInvoice.subtotal || 0);
+            const nextTax = hasOwn('tax') ? (Number(raw.tax) || 0) : Number(currentInvoice.tax || 0);
+            // Discount handling:
+            // - If discountId is explicitly provided (including null/''), honor it.
+            // - Otherwise keep the existing discountId.
+            let nextDiscountId = currentInvoice.discountId && ObjectId.isValid(String(currentInvoice.discountId))
+                ? new ObjectId(String(currentInvoice.discountId))
+                : null;
+            if (hasOwn('discountId')) {
+                const did = raw.discountId;
+                if (!did) {
+                    nextDiscountId = null;
+                }
+                else if (typeof did === 'string' && ObjectId.isValid(did)) {
+                    nextDiscountId = new ObjectId(did);
+                }
+                else {
+                    nextDiscountId = null;
+                }
+            }
+            let nextDiscountCode = null;
+            let nextDiscountAmount = 0;
+            if (nextDiscountId) {
+                const d = await db.collection('discounts').findOne({ _id: nextDiscountId });
+                if (d) {
+                    nextDiscountCode = (d.code || d.name) ?? null;
+                    nextDiscountAmount = computeDiscountAmount(d, nextSubtotal);
+                }
+                else {
+                    nextDiscountId = null;
+                }
+            }
+            update.subtotal = nextSubtotal;
+            update.tax = nextTax;
+            update.discountId = nextDiscountId;
+            update.discountCode = nextDiscountCode;
+            update.discountAmount = nextDiscountAmount;
+            update.total = Math.max(0, nextSubtotal - nextDiscountAmount) + nextTax;
             // Adjust balance if payments exist: balance = total - sum(payments) + sum(refunds)
             const inv = await db.collection('invoices').findOne({ _id }, { projection: { payments: 1, refunds: 1 } });
             const paid = (inv?.payments ?? []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -333,7 +421,7 @@ invoicesRouter.put('/:id', async (req, res) => {
             update.accountId = new ObjectId(raw.accountId);
         await db.collection('invoices').updateOne({ _id }, { $set: update });
         // Add general update entry if no specific changes were tracked
-        if (!update.status && !update.title && raw.dueDate === undefined && !Array.isArray(raw.items)) {
+        if (!update.status && !update.title && raw.dueDate === undefined && !wantsTotalsUpdate) {
             await addInvoiceHistory(db, _id, 'updated', 'Invoice updated', auth?.userId, user?.name, auth?.email);
         }
         res.json({ data: { ok: true }, error: null });
