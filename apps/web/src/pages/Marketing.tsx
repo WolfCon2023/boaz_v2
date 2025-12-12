@@ -20,8 +20,62 @@ type Campaign = {
   mjml?: string
   previewText?: string
   surveyProgramId?: string | null
+  fontFamily?: string | null
 }
 type Template = { key: string; name: string; mjml: string }
+
+const MARKETING_FONT_OPTIONS: Array<{ label: string; value: string }> = [
+  { label: 'System (default)', value: `system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif` },
+  { label: 'Arial', value: `Arial, Helvetica, sans-serif` },
+  { label: 'Helvetica', value: `Helvetica, Arial, sans-serif` },
+  { label: 'Georgia', value: `Georgia, "Times New Roman", serif` },
+  { label: 'Times New Roman', value: `"Times New Roman", Times, serif` },
+  { label: 'Trebuchet MS', value: `"Trebuchet MS", Arial, sans-serif` },
+  { label: 'Verdana', value: `Verdana, Geneva, sans-serif` },
+  { label: 'Courier New (mono)', value: `"Courier New", Courier, monospace` },
+]
+
+function applyFontFamilyToMjml(mjml: string, fontFamily: string) {
+  const ff = String(fontFamily || '').trim()
+  if (!ff) return mjml
+  const escaped = ff.replaceAll('"', '&quot;')
+
+  // If caller already has mj-attributes, don't try to rewrite it.
+  if (/<mj-attributes[\s>]/i.test(mjml)) return mjml
+
+  // If mj-head exists, inject attributes into it.
+  if (/<mj-head[\s>]/i.test(mjml)) {
+    return mjml.replace(/<mj-head[^>]*>/i, (m) => (
+      m + `\n    <mj-attributes>\n      <mj-all font-family="${escaped}" />\n    </mj-attributes>\n`
+    ))
+  }
+
+  // Otherwise create mj-head right after <mjml>
+  if (/<mjml[\s>]/i.test(mjml)) {
+    return mjml.replace(/<mjml[^>]*>/i, (m) => (
+      m +
+      `\n  <mj-head>\n    <mj-attributes>\n      <mj-all font-family="${escaped}" />\n    </mj-attributes>\n  </mj-head>`
+    ))
+  }
+
+  return mjml
+}
+
+function applyFontFamilyToHtml(html: string, fontFamily: string) {
+  const ff = String(fontFamily || '').trim()
+  if (!ff) return html
+
+  const css = `body, table, td, p, a, div, span { font-family: ${ff} !important; }`
+  const styleTag = `<style>${css}</style>`
+
+  if (/<head[\s>]/i.test(html)) {
+    return html.replace(/<head[^>]*>/i, (m) => m + styleTag)
+  }
+  if (/<html[\s>]/i.test(html)) {
+    return html.replace(/<html[^>]*>/i, (m) => m + `<head>${styleTag}</head>`)
+  }
+  return `<html><head>${styleTag}</head><body>${html}</body></html>`
+}
 
 export default function Marketing() {
   const [tab, setTab] = React.useState<'campaigns'|'segments'|'analytics'|'unsubscribes'>('campaigns')
@@ -959,6 +1013,7 @@ function CampaignsTab() {
       previewText?: string
       segmentId?: string
       surveyProgramId?: string | null
+      fontFamily?: string | null
     }) => http.post('/api/marketing/campaigns', payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['mkt-campaigns'] }),
   })
@@ -971,6 +1026,7 @@ function CampaignsTab() {
       html?: string
       segmentId?: string
       surveyProgramId?: string | null
+      fontFamily?: string | null
     }) => http.put(`/api/marketing/campaigns/${payload.id}`, payload),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['mkt-campaigns'] })
@@ -999,6 +1055,7 @@ function CampaignsTab() {
   const [previewText, setPreviewText] = React.useState<string>('')
   const [segmentId, setSegmentId] = React.useState<string>('')
   const [surveyProgramId, setSurveyProgramId] = React.useState<string>('')
+  const [fontFamily, setFontFamily] = React.useState<string>(MARKETING_FONT_OPTIONS[0]?.value || '')
   
   // Simple builder state
   type SimpleBlock = {
@@ -1022,6 +1079,7 @@ function CampaignsTab() {
       setMjml(editing.mjml || '')
       setSegmentId(String(editing.segmentId || ''))
       setSurveyProgramId(String(editing.surveyProgramId || ''))
+      setFontFamily(editing.fontFamily || MARKETING_FONT_OPTIONS[0]?.value || '')
       
       // Try to parse existing MJML into simple blocks if possible
       if (editing.mjml && builderMode === 'simple') {
@@ -1039,6 +1097,7 @@ function CampaignsTab() {
     } else {
       setSimpleBlocks([])
       setSurveyProgramId('')
+      setFontFamily(MARKETING_FONT_OPTIONS[0]?.value || '')
     }
   }, [editing, builderMode])
   
@@ -1046,7 +1105,7 @@ function CampaignsTab() {
   const [footerText, setFooterText] = React.useState<string>('')
   
   // Convert simple blocks to MJML
-  function blocksToMjml(blocks: SimpleBlock[], footer: string = ''): string {
+  function blocksToMjml(blocks: SimpleBlock[], footer: string = '', font: string = ''): string {
     if (blocks.length === 0) {
       return '<mjml>\n  <mj-body>\n  </mj-body>\n</mjml>'
     }
@@ -1110,7 +1169,7 @@ function CampaignsTab() {
     }).filter(Boolean).join('\n')
     
     const footerDisplay = footer.trim() ? ` ${footer.trim()}` : ''
-    return `<mjml>
+    const baseMjml = `<mjml>
   <mj-body>
 ${sections}
     <mj-section>
@@ -1120,6 +1179,7 @@ ${sections}
     </mj-section>
   </mj-body>
 </mjml>`
+    return applyFontFamilyToMjml(baseMjml, font)
   }
   
   function escapeHtml(text: string): string {
@@ -1197,10 +1257,10 @@ ${sections}
   // Update MJML when simple blocks or footer text change
   React.useEffect(() => {
     if (builderMode === 'simple' && simpleBlocks.length > 0) {
-      const generatedMjml = blocksToMjml(simpleBlocks, footerText)
+      const generatedMjml = blocksToMjml(simpleBlocks, footerText, fontFamily)
       setMjml(generatedMjml)
     }
-  }, [simpleBlocks, builderMode, footerText])
+  }, [simpleBlocks, builderMode, footerText, fontFamily])
   const [testTo, setTestTo] = React.useState<string>('')
   const [testing, setTesting] = React.useState<boolean>(false)
   const [sending, setSending] = React.useState<boolean>(false)
@@ -1211,8 +1271,9 @@ ${sections}
       return
     }
     try {
-      const res = await http.post('/api/marketing/mjml/preview', { mjml })
-      setPreviewHtml(String(res.data?.data?.html || ''))
+      const res = await http.post('/api/marketing/mjml/preview', { mjml: applyFontFamilyToMjml(mjml, fontFamily) })
+      const html = String(res.data?.data?.html || '')
+      setPreviewHtml(applyFontFamilyToHtml(html, fontFamily))
     } catch (e) {
       toast.showToast('Failed to render MJML. Please check your template syntax.', 'error')
     }
@@ -1222,7 +1283,12 @@ ${sections}
     if (!testTo || !/.+@.+\..+/.test(testTo)) { toast.showToast('Enter a valid test email', 'warning'); return }
     setTesting(true)
     try {
-      await http.post(`/api/marketing/campaigns/${editing._id}/test-send`, { to: testTo, mjml, subject: subject || editing.subject || editing.name })
+      await http.post(`/api/marketing/campaigns/${editing._id}/test-send`, {
+        to: testTo,
+        mjml,
+        subject: subject || editing.subject || editing.name,
+        fontFamily,
+      })
       toast.showToast('Test email sent (if SMTP is configured).', 'success')
     } catch (e: any) {
       const msg = e?.response?.data?.error || 'Failed to send test email.'
@@ -1235,16 +1301,20 @@ ${sections}
     if (!editing) return
     let html: string | undefined = undefined
     if (mjml) {
-      try { const r = await http.post('/api/marketing/mjml/preview', { mjml }); html = String(r.data?.data?.html || '') } catch {}
+      try {
+        const r = await http.post('/api/marketing/mjml/preview', { mjml: applyFontFamilyToMjml(mjml, fontFamily) })
+        html = String(r.data?.data?.html || '')
+      } catch {}
     }
     await save.mutateAsync({
       id: editing._id,
       subject,
       previewText,
-      mjml,
+      mjml: applyFontFamilyToMjml(mjml, fontFamily),
       html,
       segmentId: segmentId || undefined,
       surveyProgramId: surveyProgramId || null,
+      fontFamily: fontFamily || null,
     })
     toast.showToast('Saved', 'success')
   }
@@ -1258,16 +1328,20 @@ ${sections}
       // Compile and save latest content before sending
       let html: string | undefined = undefined
       if (mjml) {
-        try { const r = await http.post('/api/marketing/mjml/preview', { mjml }); html = String(r.data?.data?.html || '') } catch {}
+        try {
+          const r = await http.post('/api/marketing/mjml/preview', { mjml: applyFontFamilyToMjml(mjml, fontFamily) })
+          html = String(r.data?.data?.html || '')
+        } catch {}
       }
       await save.mutateAsync({
         id: editing._id,
         subject,
         previewText,
-        mjml,
+        mjml: applyFontFamilyToMjml(mjml, fontFamily),
         html,
         segmentId: segmentId || undefined,
         surveyProgramId: surveyProgramId || null,
+        fontFamily: fontFamily || null,
       })
       const res = await http.post(`/api/marketing/campaigns/${editing._id}/send`, { dryRun })
       const result = res.data?.data || null
@@ -1326,6 +1400,7 @@ ${sections}
             subject: String(fd.get('subject') || ''),
             html: String(fd.get('html') || ''),
             segmentId: String(fd.get('segmentId') || '') || undefined,
+            fontFamily: String(fd.get('fontFamily') || '') || null,
           })
           ;(e.currentTarget as HTMLFormElement).reset()
         }}
@@ -1335,6 +1410,18 @@ ${sections}
         <select name="segmentId" className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
           <option value="">No segment</option>
           {(segments?.data?.items ?? []).map((s: Segment) => (<option key={s._id} value={s._id}>{s.name}</option>))}
+        </select>
+        <select
+          name="fontFamily"
+          defaultValue={MARKETING_FONT_OPTIONS[0]?.value || ''}
+          className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]"
+          title="Font"
+        >
+          {MARKETING_FONT_OPTIONS.map((f) => (
+            <option key={f.label} value={f.value}>
+              {f.label}
+            </option>
+          ))}
         </select>
         <button className="rounded-lg border px-3 py-2 text-sm">Add campaign</button>
         <textarea name="html" placeholder="Email HTML (basic)" className="sm:col-span-4 rounded-lg border px-3 py-2 text-sm bg-transparent h-28" />
@@ -1456,6 +1543,29 @@ ${sections}
             </select>
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
+            <select
+              value={fontFamily}
+              onChange={(e) => {
+                setFontFamily(e.target.value)
+                // Update preview immediately if it exists.
+                if (previewHtml) {
+                  setPreviewHtml(applyFontFamilyToHtml(previewHtml, e.target.value))
+                }
+              }}
+              className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]"
+              title="Font"
+            >
+              {MARKETING_FONT_OPTIONS.map((f) => (
+                <option key={f.label} value={f.value}>
+                  Font: {f.label}
+                </option>
+              ))}
+            </select>
+            <div className="sm:col-span-2 text-xs text-[color:var(--color-text-muted)] flex items-center">
+              This font is applied to campaign preview and outbound emails.
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
             <div className="sm:col-span-1">
               <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
                 Load from outreach template
@@ -1529,7 +1639,7 @@ ${sections}
                     <select onChange={(e) => {
                       const key = e.target.value
                       const t = (tplData?.data?.items as Template[] | undefined)?.find((x) => x.key === key)
-                      if (t) setMjml(t.mjml)
+                      if (t) setMjml(applyFontFamilyToMjml(t.mjml, fontFamily))
                     }} className="rounded-lg border px-3 py-2 text-sm bg-[color:var(--color-panel)] text-[color:var(--color-text)] focus:bg-[color:var(--color-panel)] focus:text-[color:var(--color-text)]">
                       <option value="">Insert template…</option>
                       {(tplData?.data?.items ?? []).map((t: Template) => (<option key={t.key} value={t.key}>{t.name}</option>))}

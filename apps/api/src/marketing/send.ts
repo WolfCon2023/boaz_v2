@@ -8,6 +8,24 @@ import { env } from '../env.js'
 
 export const marketingSendRouter = Router()
 
+function applyFontFamilyToHtml(html: string, fontFamily?: string | null) {
+  const ff = String(fontFamily || '').trim()
+  if (!ff) return html
+  // Very conservative safety check (campaigns.ts already sanitizes; keep defense in depth here).
+  if (!/^[a-zA-Z0-9\s,"'\-]+$/.test(ff)) return html
+
+  const css = `body, table, td, p, a, div, span { font-family: ${ff} !important; }`
+  const styleTag = `<style>${css}</style>`
+
+  if (/<head[\s>]/i.test(html)) {
+    return html.replace(/<head[^>]*>/i, (m) => m + styleTag)
+  }
+  if (/<html[\s>]/i.test(html)) {
+    return html.replace(/<html[^>]*>/i, (m) => m + `<head>${styleTag}</head>`)
+  }
+  return `<html><head>${styleTag}</head><body>${html}</body></html>`
+}
+
 function buildFilterFromRules(rules: any[]): any {
   const ands: any[] = []
   for (const r of rules || []) {
@@ -183,6 +201,9 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
     
     // Automatically wrap all links with tracking tokens
     html = await wrapLinksWithTracking(html, _id, db, base, campaign.name || 'campaign')
+
+    // Apply campaign font choice to the email HTML
+    html = applyFontFamilyToHtml(html, campaign.fontFamily)
     
     const filter = buildFilterFromRules(Array.isArray(segment.rules) ? segment.rules : [])
     const recipients = await db

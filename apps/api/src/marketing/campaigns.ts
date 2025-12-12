@@ -4,6 +4,16 @@ import { getDb } from '../db.js'
 
 export const marketingCampaignsRouter = Router()
 
+function sanitizeFontFamily(input: unknown) {
+  if (typeof input !== 'string') return null
+  const v = input.trim()
+  if (!v) return null
+  // Keep this conservative: stored value will be used in HTML style injection.
+  // Allow common characters used in font-family stacks.
+  if (!/^[a-zA-Z0-9\s,"'\-]+$/.test(v)) return null
+  return v
+}
+
 // GET /api/marketing/campaigns?q=&sort=&dir=
 marketingCampaignsRouter.get('/campaigns', async (req, res) => {
   const db = await getDb()
@@ -28,6 +38,7 @@ marketingCampaignsRouter.post('/campaigns', async (req, res) => {
   const html = typeof raw.html === 'string' ? raw.html : ''
   const mjml = typeof raw.mjml === 'string' ? raw.mjml : ''
   const previewText = typeof raw.previewText === 'string' ? raw.previewText : ''
+  const fontFamily = sanitizeFontFamily(raw.fontFamily)
   const segmentId = ObjectId.isValid(raw.segmentId) ? new ObjectId(raw.segmentId) : null
   const surveyProgramId = ObjectId.isValid(raw.surveyProgramId) ? new ObjectId(raw.surveyProgramId) : null
   if (!name) return res.status(400).json({ data: null, error: 'invalid_payload' })
@@ -37,6 +48,7 @@ marketingCampaignsRouter.post('/campaigns', async (req, res) => {
     html,
     mjml,
     previewText,
+    fontFamily,
     segmentId,
     surveyProgramId,
     status: String(raw.status || 'draft'),
@@ -55,6 +67,9 @@ marketingCampaignsRouter.put('/campaigns/:id', async (req, res) => {
     const _id = new ObjectId(req.params.id)
     const update: any = { updatedAt: new Date() }
     for (const k of ['name','subject','html','status','mjml','previewText']) if (typeof (req.body ?? {})[k] === 'string') update[k] = (req.body as any)[k]
+    if ('fontFamily' in (req.body ?? {})) {
+      update.fontFamily = sanitizeFontFamily((req.body as any).fontFamily)
+    }
     if (req.body?.segmentId && ObjectId.isValid(req.body.segmentId)) update.segmentId = new ObjectId(req.body.segmentId)
     if ('surveyProgramId' in (req.body ?? {})) {
       if (req.body.surveyProgramId && ObjectId.isValid(req.body.surveyProgramId)) {

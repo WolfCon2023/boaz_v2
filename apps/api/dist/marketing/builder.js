@@ -4,6 +4,22 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '../db.js';
 import { sendEmail } from '../alerts/mail.js';
 export const marketingBuilderRouter = Router();
+function applyFontFamilyToHtml(html, fontFamily) {
+    const ff = String(fontFamily || '').trim();
+    if (!ff)
+        return html;
+    if (!/^[a-zA-Z0-9\s,"'\-]+$/.test(ff))
+        return html;
+    const css = `body, table, td, p, a, div, span { font-family: ${ff} !important; }`;
+    const styleTag = `<style>${css}</style>`;
+    if (/<head[\s>]/i.test(html)) {
+        return html.replace(/<head[^>]*>/i, (m) => m + styleTag);
+    }
+    if (/<html[\s>]/i.test(html)) {
+        return html.replace(/<html[^>]*>/i, (m) => m + `<head>${styleTag}</head>`);
+    }
+    return `<html><head>${styleTag}</head><body>${html}</body></html>`;
+}
 // POST /api/marketing/mjml/preview { mjml }
 marketingBuilderRouter.post('/mjml/preview', async (req, res) => {
     const source = String(req.body?.mjml || '');
@@ -58,6 +74,9 @@ marketingBuilderRouter.post('/campaigns/:id/test-send', async (req, res) => {
         html = String(campaign.html || '');
     if (!html)
         return res.status(400).json({ data: null, error: 'no_html' });
+    // Apply font override (request takes precedence over campaign default)
+    const fontFamily = (req.body && 'fontFamily' in req.body) ? req.body.fontFamily : campaign.fontFamily;
+    html = applyFontFamilyToHtml(html, fontFamily);
     try {
         await sendEmail({ to, subject, html });
         return res.status(200).json({ data: { ok: true }, error: null });
