@@ -95,7 +95,41 @@ export default function CRMAccounts() {
     { key: 'assetRisk', visible: true, label: 'Asset risk' },
     { key: 'successHealth', visible: true, label: 'Success' },
   ]
+
+  // Older saved views used slightly different column keys (e.g. "phone", "survey", "success").
+  // Normalize them so both table rendering + CSV export use the same canonical keys.
+  function normalizeAccountColKey(input: string) {
+    const raw = String(input ?? '').trim()
+    const compact = raw.toLowerCase().replace(/[\s_-]+/g, '')
+    if (!compact) return raw
+
+    // Common legacy aliases
+    if (compact === 'phone' || compact === 'primaryphone' || compact === 'primarycontactphone') return 'primaryContactPhone'
+    if (compact === 'survey' || compact === 'surveys' || compact === 'surveystatus') return 'surveyStatus'
+    if (compact === 'task' || compact === 'tasks' || compact === 'taskcount') return 'tasks'
+    if (compact === 'project' || compact === 'projects' || compact === 'projectssummary') return 'projects'
+    if (compact === 'assetrisk' || compact === 'assetsrisk' || compact === 'licenserisk') return 'assetRisk'
+    if (compact === 'success' || compact === 'successhealth' || compact === 'health' || compact === 'healthscore') return 'successHealth'
+    if (compact === 'onboarding' || compact === 'onboardingstatus') return 'onboardingStatus'
+
+    // Already canonical or unknown
+    return raw
+  }
+
+  function normalizeAccountCols(cols: ColumnDef[]): ColumnDef[] {
+    const seen = new Set<string>()
+    const out: ColumnDef[] = []
+    for (const c of cols) {
+      const key = normalizeAccountColKey(c.key)
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      out.push({ ...c, key })
+    }
+    return out
+  }
+
   function ensureCoreCols(cols: ColumnDef[]): ColumnDef[] {
+    const normalizedCols = normalizeAccountCols(cols)
     let hasTasks = false
     let hasSurvey = false
     let hasAssetRisk = false
@@ -103,7 +137,7 @@ export default function CRMAccounts() {
     let hasSuccess = false
     let hasOnboarding = false
 
-    const next = cols.map((c) => {
+    const next = normalizedCols.map((c) => {
       if (c.key === 'tasks') {
         hasTasks = true
         return { ...c, visible: true, label: 'Tasks' }
@@ -127,6 +161,9 @@ export default function CRMAccounts() {
       if (c.key === 'successHealth') {
         hasSuccess = true
         return { ...c, visible: true, label: 'Success' }
+      }
+      if (c.key === 'primaryContactPhone') {
+        return { ...c, label: 'Phone' }
       }
       return c
     })
@@ -983,6 +1020,107 @@ export default function CRMAccounts() {
     }
     return ''
   }
+
+  // Export-safe values (strings/numbers only). Avoids `[object Object]` when CSV stringifies React nodes.
+  function getColExportValue(a: Account, key: string) {
+    const normalizedKey = normalizeAccountColKey(key)
+    if (key === 'accountNumber') return a.accountNumber ?? ''
+    if (key === 'name') return a.name ?? ''
+    if (key === 'companyName') return a.companyName ?? ''
+    if (key === 'primaryContactName') return a.primaryContactName ?? ''
+    if (key === 'primaryContactEmail') return a.primaryContactEmail ?? ''
+    if (key === 'primaryContactPhone') {
+      const v: any = (a as any).primaryContactPhone
+      if (typeof v === 'string' || typeof v === 'number') return String(v)
+      // Handle accidental object shapes from older data migrations
+      if (v && typeof v === 'object') {
+        const num = (v.number ?? v.phone ?? v.value ?? v.raw) as any
+        const ext = (v.ext ?? v.extension) as any
+        const numStr = num != null ? String(num) : ''
+        const extStr = ext != null && String(ext).trim() ? ` x${String(ext).trim()}` : ''
+        return (numStr ? `${numStr}${extStr}` : JSON.stringify(v))
+      }
+      return ''
+    }
+
+    if (key === 'onboardingStatus') {
+      const value = a.onboardingStatus ?? 'not_started'
+      let label = 'Not started'
+      if (value === 'in_progress') label = 'In progress'
+      else if (value === 'on_hold') label = 'On hold'
+      else if (value === 'complete') label = 'Complete'
+      else if (value === 'cancelled') label = 'Cancelled'
+
+      let riskSuffix = ''
+      if (a.onboardingStatusChangedAt) {
+        const changed = new Date(a.onboardingStatusChangedAt)
+        if (Number.isFinite(changed.getTime())) {
+          const days = (Date.now() - changed.getTime()) / (1000 * 60 * 60 * 24)
+          const isLongOnHold = value === 'on_hold' && days >= 14
+          const isLongInProgress = value === 'in_progress' && days >= 60
+          if (isLongOnHold || isLongInProgress) riskSuffix = ' (Onboarding risk)'
+        }
+      }
+      return `${label}${riskSuffix}`
+    }
+
+    if (key === 'tasks') {
+      const count = accountTaskCountMap.get(a._id) ?? 0
+      return `${count} open`
+    }
+
+    if (key === 'projects') {
+      const summary = accountProjectsMap.get(a._id)
+      if (!summary || summary.total === 0) return 'No projects'
+      const riskCount = (summary.atRisk ?? 0) + (summary.offTrack ?? 0)
+      const parts = [
+        `${summary.total} total`,
+        `${summary.active ?? 0} active`,
+        `${summary.completed ?? 0} completed`,
+        `${riskCount} at risk`,
+      ]
+      return parts.join('; ')
+    }
+
+    if (key === 'surveyStatus') {
+      const status = accountSurveyStatusMap.get(a._id)
+      if (!status || status.responseCount === 0) return 'No surveys'
+      const lastScore = status.lastScore != null ? status.lastScore.toFixed(1) : ''
+      const lastAt = status.lastResponseAt ?? ''
+      return `${status.responseCount} responses; lastScore=${lastScore}; lastResponseAt=${lastAt}`
+    }
+
+    if (key === 'assetRisk') {
+      const risk = accountAssetsRiskMap.get(a._id)
+      if (!risk) return 'Low (score 0)'
+      const bits = [
+        `${risk.label} (score ${risk.score})`,
+        risk.expired ? `${risk.expired} expired` : null,
+        risk.expiring30 ? `${risk.expiring30} expiring<=30d` : null,
+        risk.needsUpgrade ? `${risk.needsUpgrade} need-upgrade` : null,
+        risk.pendingRenewalProducts ? `${risk.pendingRenewalProducts} pending-renewal` : null,
+      ].filter(Boolean)
+      return (bits as string[]).join('; ')
+    }
+
+    if (key === 'successHealth') {
+      const row = accountSuccessMap.get(a._id)
+      if (!row) return 'OK'
+      return `${row.label} (score ${row.score})`
+    }
+
+    // Fallback: try raw field
+    const raw = (a as any)?.[normalizedKey] ?? (a as any)?.[key] ?? ''
+    if (raw == null) return ''
+    if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') return raw
+    if (Array.isArray(raw)) return raw.map((x) => (x == null ? '' : typeof x === 'string' ? x : JSON.stringify(x))).join('; ')
+    // Last resort: avoid "[object Object]"
+    try {
+      return JSON.stringify(raw)
+    } catch {
+      return String(raw)
+    }
+  }
   function handleDragStart(key: string) { setDraggedCol(key) }
   function handleDragOver(e: React.DragEvent) { e.preventDefault() }
   function handleDrop(targetKey: string) {
@@ -1209,7 +1347,7 @@ export default function CRMAccounts() {
             onClick={() => {
               const visibleCols = cols.filter((c) => c.visible)
               const headers = visibleCols.map((c) => c.label)
-              const rows = pageItems.map((a) => visibleCols.map((col) => getColValue(a, col.key)))
+              const rows = pageItems.map((a) => visibleCols.map((col) => getColExportValue(a, col.key)))
               const csv = [headers.join(','), ...rows.map((r) => r.map((x) => '"'+String(x).replaceAll('"','""')+'"').join(','))].join('\n')
               const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
               const url = URL.createObjectURL(blob)
