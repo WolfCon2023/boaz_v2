@@ -51,6 +51,7 @@ export default function CustomerPortalTickets() {
   const [newRequesterName, setNewRequesterName] = useState('')
   const [newRequesterEmail, setNewRequesterEmail] = useState('')
   const [newRequesterPhone, setNewRequesterPhone] = useState('')
+  const [newAttachments, setNewAttachments] = useState<File[]>([])
 
   useEffect(() => {
     const token = localStorage.getItem('customer_portal_token')
@@ -170,9 +171,20 @@ export default function CustomerPortalTickets() {
       if (res.data.error) throw new Error(res.data.error)
       return res.data.data
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       qc.invalidateQueries({ queryKey: ['customer-portal-tickets'] })
       qc.invalidateQueries({ queryKey: ['customer-portal-dashboard'] })
+
+      // If user selected attachments during ticket creation, upload them now.
+      const ticketId = String((data as any)?.ticketId || '')
+      if (ticketId && newAttachments.length > 0) {
+        try {
+          await uploadAttachmentsMutation.mutateAsync({ ticketId, files: newAttachments })
+        } catch {
+          showToast('Ticket created. Attachments failed to upload—open the ticket and try again.', 'warning')
+        }
+      }
+
       setShowCreateForm(false)
       setNewSubject('')
       setNewDescription('')
@@ -180,6 +192,7 @@ export default function CustomerPortalTickets() {
       setNewRequesterName('')
       setNewRequesterEmail('')
       setNewRequesterPhone('')
+      setNewAttachments([])
       showToast(`Ticket #${data.ticketNumber} created successfully`, 'success')
     },
   })
@@ -497,7 +510,7 @@ export default function CustomerPortalTickets() {
                 <h3 className="text-xl font-semibold text-[color:var(--color-text)]">Create New Ticket</h3>
                 <button
                   type="button"
-                  onClick={() => setShowCreateForm(false)}
+                  onClick={() => { setShowCreateForm(false); setNewAttachments([]) }}
                   className="rounded-lg p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
                 >
                   <X className="h-5 w-5" />
@@ -565,6 +578,65 @@ export default function CustomerPortalTickets() {
                   />
                 </label>
 
+                {/* Attachments (optional) */}
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold text-[color:var(--color-text)]">Attachments (optional)</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">
+                        Add screenshots or documents to help us resolve your request faster.
+                      </div>
+                    </div>
+                    <label className="inline-flex items-center rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)] cursor-pointer">
+                      Add files
+                      <input
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files ?? [])
+                          e.currentTarget.value = ''
+                          if (files.length === 0) return
+                          // De-dupe by name+size to prevent accidental doubles
+                          setNewAttachments((prev) => {
+                            const next = [...prev]
+                            for (const f of files) {
+                              if (!next.some((x) => x.name === f.name && x.size === f.size)) next.push(f)
+                            }
+                            return next
+                          })
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {newAttachments.length > 0 ? (
+                    <div className="space-y-2">
+                      {newAttachments.map((f, idx) => (
+                        <div
+                          key={`${f.name}-${f.size}-${idx}`}
+                          className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-[color:var(--color-text)]">{f.name}</div>
+                            <div className="text-xs text-[color:var(--color-text-muted)]">
+                              {Math.round(f.size / 1024)} KB
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setNewAttachments((prev) => prev.filter((_, i) => i !== idx))}
+                            className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-1.5 text-xs text-red-200 hover:bg-red-500/20"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-[color:var(--color-text-muted)]">No files selected.</div>
+                  )}
+                </div>
+
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Priority</span>
                   <select
@@ -582,7 +654,7 @@ export default function CustomerPortalTickets() {
                 <div className="flex gap-3 pt-4 border-t border-[color:var(--color-border)] mt-6">
                   <button
                     type="button"
-                    onClick={() => setShowCreateForm(false)}
+                    onClick={() => { setShowCreateForm(false); setNewAttachments([]) }}
                     className="flex-1 rounded-lg border border-[color:var(--color-border)] px-4 py-2.5 text-sm font-medium text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)] transition-colors"
                   >
                     Cancel
@@ -592,7 +664,7 @@ export default function CustomerPortalTickets() {
                     disabled={createTicketMutation.isPending}
                     className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {createTicketMutation.isPending ? 'Creating...' : 'Create Ticket'}
+                    {createTicketMutation.isPending ? (newAttachments.length > 0 ? 'Creating & uploading…' : 'Creating...') : 'Create Ticket'}
                   </button>
                 </div>
               </form>
