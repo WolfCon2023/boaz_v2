@@ -13,9 +13,46 @@ import { verifyCustomerToken } from './auth.js';
 import { sendAuthEmail } from '../auth/email.js';
 import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
 import { env } from '../env.js';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 export const customerPortalDataRouter = Router();
 // All routes require authentication
 customerPortalDataRouter.use(verifyCustomerToken);
+// === Ticket Attachments (disk storage) ===
+const ticketUploadDir = env.UPLOAD_DIR
+    ? path.join(env.UPLOAD_DIR, 'ticket_attachments')
+    : path.join(process.cwd(), 'uploads', 'ticket_attachments');
+try {
+    if (!fs.existsSync(ticketUploadDir))
+        fs.mkdirSync(ticketUploadDir, { recursive: true });
+}
+catch (err) {
+    console.error('Failed to create ticket attachments upload directory:', err);
+}
+const ticketAttachmentStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, ticketUploadDir),
+    filename: (_req, file, cb) => {
+        const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        const ts = Date.now();
+        const ext = path.extname(safe);
+        const name = path.basename(safe, ext);
+        cb(null, `${ts}-${name}${ext}`);
+    },
+});
+const uploadTicketAttachments = multer({
+    storage: ticketAttachmentStorage,
+    limits: { fileSize: 25 * 1024 * 1024, files: 10 }, // 25MB each, up to 10 files
+    fileFilter: (_req, _file, cb) => cb(null, true),
+});
+function customerTicketOwnershipQuery(customerAuth) {
+    const { accountId, email } = customerAuth || {};
+    if (accountId)
+        return { accountId: new ObjectId(accountId) };
+    if (email)
+        return { requesterEmail: email };
+    return null;
+}
 // GET /api/customer-portal/data/invoices - Get customer's invoices
 customerPortalDataRouter.get('/invoices', async (req, res) => {
     const db = await getDb();
@@ -145,12 +182,104 @@ customerPortalDataRouter.get('/tickets', async (req, res) => {
                 body: c.body,
                 at: c.at,
             })),
+            attachments: (ticket.attachments || []).map((a) => ({
+                id: a._id?.toHexString ? a._id.toHexString() : String(a._id),
+                name: a.originalFilename || a.filename || 'attachment',
+                size: a.size || 0,
+                contentType: a.contentType || 'application/octet-stream',
+                uploadedAt: a.uploadedAt,
+                uploadedByName: a.uploadedByName,
+            })),
         }));
         res.json({ data: { items: formattedTickets }, error: null });
     }
     catch (err) {
         console.error('Get customer tickets error:', err);
         res.status(500).json({ data: null, error: err.message || 'failed_to_get_tickets' });
+    }
+});
+// POST /api/customer-portal/data/tickets/:id/attachments (multipart/form-data files[])
+customerPortalDataRouter.post('/tickets/:id/attachments', uploadTicketAttachments.array('files', 10), async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const { customerId, name, email } = req.customerAuth || {};
+        const ticketId = req.params.id;
+        if (!ObjectId.isValid(ticketId))
+            return res.status(400).json({ data: null, error: 'invalid_id' });
+        const ownership = customerTicketOwnershipQuery(req.customerAuth);
+        if (!ownership)
+            return res.status(403).json({ data: null, error: 'access_denied' });
+        const _id = new ObjectId(ticketId);
+        const ticket = await db.collection('support_tickets').findOne({ _id, ...ownership });
+        if (!ticket)
+            return res.status(404).json({ data: null, error: 'ticket_not_found' });
+        const files = req.files ?? [];
+        if (!files.length)
+            return res.status(400).json({ data: null, error: 'missing_files' });
+        const attachments = files.map((f) => ({
+            _id: new ObjectId(),
+            filename: f.filename,
+            originalFilename: f.originalname,
+            contentType: f.mimetype,
+            size: f.size,
+            path: f.path,
+            uploadedAt: new Date(),
+            uploadedByCustomerId: customerId ? new ObjectId(customerId) : undefined,
+            uploadedByName: name || email || 'Customer',
+            uploadedByEmail: email,
+        }));
+        await db.collection('support_tickets').updateOne({ _id }, { $push: { attachments: { $each: attachments } }, $set: { updatedAt: new Date() } });
+        res.json({
+            data: {
+                items: attachments.map((a) => ({
+                    id: a._id.toHexString(),
+                    name: a.originalFilename,
+                    size: a.size,
+                    contentType: a.contentType,
+                    uploadedAt: a.uploadedAt,
+                    uploadedByName: a.uploadedByName,
+                })),
+            },
+            error: null,
+        });
+    }
+    catch (err) {
+        console.error('Customer ticket attachment upload error:', err);
+        res.status(500).json({ data: null, error: err.message || 'upload_failed' });
+    }
+});
+// GET /api/customer-portal/data/tickets/:id/attachments/:attachmentId/download
+customerPortalDataRouter.get('/tickets/:id/attachments/:attachmentId/download', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const ticketId = req.params.id;
+        const attachmentId = req.params.attachmentId;
+        if (!ObjectId.isValid(ticketId) || !ObjectId.isValid(attachmentId)) {
+            return res.status(400).json({ data: null, error: 'invalid_id' });
+        }
+        const ownership = customerTicketOwnershipQuery(req.customerAuth);
+        if (!ownership)
+            return res.status(403).json({ data: null, error: 'access_denied' });
+        const _id = new ObjectId(ticketId);
+        const attId = new ObjectId(attachmentId);
+        const ticket = await db.collection('support_tickets').findOne({ _id, ...ownership }, { projection: { attachments: 1 } });
+        if (!ticket)
+            return res.status(404).json({ data: null, error: 'ticket_not_found' });
+        const att = ticket.attachments?.find((a) => String(a._id) === String(attId));
+        if (!att)
+            return res.status(404).json({ data: null, error: 'attachment_not_found' });
+        if (!att.path || !fs.existsSync(att.path))
+            return res.status(404).json({ data: null, error: 'file_missing' });
+        res.setHeader('Content-Type', att.contentType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${String(att.originalFilename || 'attachment').replace(/"/g, '')}"`);
+        fs.createReadStream(att.path).pipe(res);
+    }
+    catch (err) {
+        res.status(500).json({ data: null, error: err.message || 'download_failed' });
     }
 });
 // POST /api/customer-portal/data/tickets - Create new support ticket

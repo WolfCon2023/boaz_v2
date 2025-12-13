@@ -27,6 +27,16 @@ type Ticket = {
   createdAt?: string
   updatedAt?: string
   comments?: { author?: string; body?: string; at?: string }[]
+  attachments?: Array<{
+    _id: string
+    originalFilename?: string
+    filename?: string
+    contentType?: string
+    size?: number
+    uploadedAt?: string
+    uploadedByName?: string
+    uploadedByEmail?: string
+  }>
   requesterName?: string | null
   requesterEmail?: string | null
   requesterPhone?: string | null
@@ -54,6 +64,41 @@ export default function SupportTickets() {
   const { confirm, ConfirmDialog } = useConfirm()
   const location = useLocation()
   const createFormRef = React.useRef<HTMLFormElement | null>(null)
+
+  const uploadAttachments = useMutation({
+    mutationFn: async ({ ticketId, files }: { ticketId: string; files: File[] }) => {
+      const fd = new FormData()
+      for (const f of files) fd.append('files', f)
+      const res = await http.post(`/api/crm/support/tickets/${ticketId}/attachments`, fd)
+      return res.data as { data: { items: Array<{ id: string; name: string }> } }
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['support-tickets'] })
+      toast.showToast('BOAZ says: Attachment(s) uploaded.', 'success')
+    },
+    onError: (err: any) => {
+      toast.showToast(err?.response?.data?.error || 'Failed to upload attachments', 'error')
+    },
+  })
+
+  async function downloadAttachment(ticketId: string, att: { _id: string; originalFilename?: string; filename?: string }) {
+    try {
+      const res = await http.get(`/api/crm/support/tickets/${ticketId}/attachments/${att._id}/download`, {
+        responseType: 'blob',
+      })
+      const blob = new Blob([res.data])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = (att.originalFilename || att.filename || 'attachment') as string
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      toast.showToast(e?.response?.data?.error || 'Failed to download attachment', 'error')
+    }
+  }
   type ColumnDef = { key: string; visible: boolean; label: string }
   const defaultCols: ColumnDef[] = [
     { key: 'ticketNumber', visible: true, label: 'Ticket #' },
@@ -1076,6 +1121,52 @@ export default function SupportTickets() {
                 </div>
                 <label className="text-xs text-[color:var(--color-text-muted)] sm:col-span-2">Description</label>
                 <textarea name="description" defaultValue={editing.description ?? ''} placeholder="Description" maxLength={2500} className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+                <div className="sm:col-span-2 mt-2 rounded-lg border border-[color:var(--color-border)] p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold">Attachments</div>
+                    <label className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] cursor-pointer">
+                      {uploadAttachments.isPending ? 'Uploading…' : 'Upload'}
+                      <input
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files ?? [])
+                          e.currentTarget.value = ''
+                          if (!editing?._id || files.length === 0) return
+                          uploadAttachments.mutate({ ticketId: editing._id, files })
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {(editing.attachments ?? []).length > 0 ? (
+                    <div className="space-y-1">
+                      {(editing.attachments ?? []).map((a) => (
+                        <div
+                          key={a._id}
+                          className="flex items-center justify-between gap-2 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] px-2 py-1 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate font-medium">{a.originalFilename || a.filename || 'attachment'}</div>
+                            <div className="text-[10px] text-[color:var(--color-text-muted)]">
+                              {a.size ? `${Math.round(a.size / 1024)} KB` : ''}
+                              {a.uploadedAt ? ` • ${formatDateTime(a.uploadedAt)}` : ''}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="rounded border border-[color:var(--color-border)] px-2 py-1 text-[10px] hover:bg-[color:var(--color-muted)]"
+                            onClick={() => downloadAttachment(editing._id, { _id: a._id, originalFilename: a.originalFilename, filename: a.filename })}
+                          >
+                            Download
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-[color:var(--color-text-muted)]">No attachments yet.</div>
+                  )}
+                </div>
                 <div className="sm:col-span-2 mt-2">
                   <div className="mb-2 text-sm font-semibold">History</div>
                   <div className="space-y-2 max-h-48 overflow-auto rounded-lg border border-[color:var(--color-border)] p-2">

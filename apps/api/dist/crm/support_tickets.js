@@ -1,10 +1,40 @@
 import { Router } from 'express';
 import { getDb, getNextSequence } from '../db.js';
 import { ObjectId } from 'mongodb';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 import { sendAuthEmail } from '../auth/email.js';
 import { env } from '../env.js';
 import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
+import { requireAuth } from '../auth/rbac.js';
 export const supportTicketsRouter = Router();
+// === Ticket Attachments (disk storage, similar to CRM documents) ===
+const ticketUploadDir = env.UPLOAD_DIR
+    ? path.join(env.UPLOAD_DIR, 'ticket_attachments')
+    : path.join(process.cwd(), 'uploads', 'ticket_attachments');
+try {
+    if (!fs.existsSync(ticketUploadDir))
+        fs.mkdirSync(ticketUploadDir, { recursive: true });
+}
+catch (err) {
+    console.error('Failed to create ticket attachments upload directory:', err);
+}
+const ticketAttachmentStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, ticketUploadDir),
+    filename: (_req, file, cb) => {
+        const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        const ts = Date.now();
+        const ext = path.extname(safe);
+        const name = path.basename(safe, ext);
+        cb(null, `${ts}-${name}${ext}`);
+    },
+});
+const uploadTicketAttachments = multer({
+    storage: ticketAttachmentStorage,
+    limits: { fileSize: 50 * 1024 * 1024, files: 10 }, // 50MB each, up to 10 files per request
+    fileFilter: (_req, _file, cb) => cb(null, true),
+});
 // Helper to extract email from assignee string (format: "Name <email>" or just "email")
 function extractAssigneeEmail(assignee) {
     if (!assignee || typeof assignee !== 'string')
@@ -93,6 +123,82 @@ async function sendTicketNotification(db, ticket, assigneeEmail) {
         // Don't throw - we don't want email failures to prevent ticket creation
     }
 }
+// POST /api/crm/support/tickets/:id/attachments (multipart/form-data with files[])
+supportTicketsRouter.post('/tickets/:id/attachments', requireAuth, uploadTicketAttachments.array('files', 10), async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const _id = new ObjectId(req.params.id);
+        const ticket = await db.collection('support_tickets').findOne({ _id });
+        if (!ticket)
+            return res.status(404).json({ data: null, error: 'not_found' });
+        const auth = req.auth;
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
+        const userName = user?.name || auth.email;
+        const files = req.files ?? [];
+        if (!files.length)
+            return res.status(400).json({ data: null, error: 'missing_files' });
+        const attachments = files.map((f) => ({
+            _id: new ObjectId(),
+            filename: f.filename,
+            originalFilename: f.originalname,
+            contentType: f.mimetype,
+            size: f.size,
+            path: f.path,
+            uploadedAt: new Date(),
+            uploadedByUserId: new ObjectId(auth.userId),
+            uploadedByName: userName,
+            uploadedByEmail: auth.email,
+        }));
+        await db.collection('support_tickets').updateOne({ _id }, {
+            $push: { attachments: { $each: attachments } },
+            $set: { updatedAt: new Date() },
+        });
+        res.json({
+            data: {
+                items: attachments.map((a) => ({
+                    id: a._id.toHexString(),
+                    name: a.originalFilename,
+                    size: a.size,
+                    contentType: a.contentType,
+                    uploadedAt: a.uploadedAt,
+                    uploadedByName: a.uploadedByName,
+                    uploadedByEmail: a.uploadedByEmail,
+                })),
+            },
+            error: null,
+        });
+    }
+    catch (e) {
+        console.error('Ticket attachment upload error:', e);
+        res.status(400).json({ data: null, error: e?.message || 'upload_failed' });
+    }
+});
+// GET /api/crm/support/tickets/:id/attachments/:attachmentId/download
+supportTicketsRouter.get('/tickets/:id/attachments/:attachmentId/download', requireAuth, async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    try {
+        const _id = new ObjectId(req.params.id);
+        const attId = new ObjectId(req.params.attachmentId);
+        const ticket = await db.collection('support_tickets').findOne({ _id }, { projection: { attachments: 1 } });
+        if (!ticket)
+            return res.status(404).json({ data: null, error: 'not_found' });
+        const att = (ticket.attachments ?? []).find((a) => String(a._id) === String(attId));
+        if (!att)
+            return res.status(404).json({ data: null, error: 'attachment_not_found' });
+        if (!att.path || !fs.existsSync(att.path))
+            return res.status(404).json({ data: null, error: 'file_missing' });
+        res.setHeader('Content-Type', att.contentType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${String(att.originalFilename || 'attachment').replace(/"/g, '')}"`);
+        fs.createReadStream(att.path).pipe(res);
+    }
+    catch (e) {
+        res.status(400).json({ data: null, error: e?.message || 'invalid_request' });
+    }
+});
 // GET /api/crm/support/tickets?q=&status=&priority=&accountId=&contactId=&sort=&dir=&breached=&dueWithin=
 supportTicketsRouter.get('/tickets', async (req, res) => {
     const db = await getDb();

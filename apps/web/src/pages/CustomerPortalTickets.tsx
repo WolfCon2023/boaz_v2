@@ -25,6 +25,14 @@ type SupportTicket = {
   updatedAt: string
   slaDueAt?: string
   comments: Array<{ author: string; body: string; at: string }>
+  attachments?: Array<{
+    id: string
+    name: string
+    size: number
+    contentType?: string
+    uploadedAt?: string
+    uploadedByName?: string
+  }>
 }
 
 export default function CustomerPortalTickets() {
@@ -34,6 +42,7 @@ export default function CustomerPortalTickets() {
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null)
   const [newComment, setNewComment] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [uploadingTicketId, setUploadingTicketId] = useState<string | null>(null)
   
   // New ticket form
   const [newSubject, setNewSubject] = useState('')
@@ -85,6 +94,51 @@ export default function CustomerPortalTickets() {
       showToast('Comment added successfully', 'success')
     },
   })
+
+  const uploadAttachmentsMutation = useMutation({
+    mutationFn: async ({ ticketId, files }: { ticketId: string; files: File[] }) => {
+      const token = localStorage.getItem('customer_portal_token')
+      const fd = new FormData()
+      for (const f of files) fd.append('files', f)
+      const res = await http.post(
+        `/api/customer-portal/data/tickets/${ticketId}/attachments`,
+        fd,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (res.data.error) throw new Error(res.data.error)
+      return res.data.data
+    },
+    onMutate: ({ ticketId }) => setUploadingTicketId(ticketId),
+    onSettled: () => setUploadingTicketId(null),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customer-portal-tickets'] })
+      showToast('Attachment(s) uploaded successfully', 'success')
+    },
+    onError: (err: any) => {
+      showToast(err?.message || 'Failed to upload attachments', 'error')
+    },
+  })
+
+  async function downloadAttachment(ticketId: string, attachmentId: string, filename: string) {
+    try {
+      const token = localStorage.getItem('customer_portal_token')
+      const res = await http.get(
+        `/api/customer-portal/data/tickets/${ticketId}/attachments/${attachmentId}/download`,
+        { headers: { Authorization: `Bearer ${token}` }, responseType: 'blob' }
+      )
+      const blob = new Blob([res.data])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename || 'attachment'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      showToast(err?.response?.data?.error || 'Failed to download attachment', 'error')
+    }
+  }
 
   const createTicketMutation = useMutation({
     mutationFn: async (data: { shortDescription: string; description: string; priority: string; requesterName: string; requesterEmail: string; requesterPhone: string }) => {
@@ -297,6 +351,54 @@ export default function CustomerPortalTickets() {
                         <p>SLA Due: {formatDateTime(new Date(ticket.slaDueAt))}</p>
                       )}
                     </div>
+                  </div>
+
+                  {/* Attachments */}
+                  <div className="border-t border-[color:var(--color-border)] pt-4">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <h4 className="font-semibold text-[color:var(--color-text)]">Attachments</h4>
+                      <label className="inline-flex items-center rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)] cursor-pointer">
+                        {uploadingTicketId === ticket.id ? 'Uploading…' : 'Upload'}
+                        <input
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files ?? [])
+                            e.currentTarget.value = ''
+                            if (files.length === 0) return
+                            uploadAttachmentsMutation.mutate({ ticketId: ticket.id, files })
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {(ticket.attachments ?? []).length > 0 ? (
+                      <div className="mb-4 space-y-2">
+                        {(ticket.attachments ?? []).map((a) => (
+                          <div
+                            key={a.id}
+                            className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-[color:var(--color-text)]">{a.name}</div>
+                              <div className="text-xs text-[color:var(--color-text-muted)]">
+                                {a.size ? `${Math.round(a.size / 1024)} KB` : ''}
+                                {a.uploadedAt ? ` • ${new Date(a.uploadedAt).toLocaleDateString()}` : ''}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-panel)]"
+                              onClick={() => downloadAttachment(ticket.id, a.id, a.name)}
+                            >
+                              Download
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">No attachments yet</p>
+                    )}
                   </div>
 
                   {/* Comments */}
