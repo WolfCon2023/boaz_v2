@@ -72,8 +72,17 @@ export default function SupportTickets() {
       const res = await http.post(`/api/crm/support/tickets/${ticketId}/attachments`, fd)
       return res.data as { data: { items: Array<{ id: string; name: string }> } }
     },
-    onSuccess: async () => {
+    onSuccess: async (resp, vars) => {
       await qc.invalidateQueries({ queryKey: ['support-tickets'] })
+      // Immediately update the currently open edit modal so attachments appear without closing/re-opening.
+      const added = (resp?.data?.items ?? []).map((a) => ({
+        _id: a.id,
+        originalFilename: a.name,
+      }))
+      setEditing((prev) => {
+        if (!prev || prev._id !== vars.ticketId) return prev
+        return { ...prev, attachments: [...(prev.attachments ?? []), ...added] }
+      })
       toast.showToast('BOAZ says: Attachment(s) uploaded.', 'success')
     },
     onError: (err: any) => {
@@ -99,6 +108,23 @@ export default function SupportTickets() {
       toast.showToast(e?.response?.data?.error || 'Failed to download attachment', 'error')
     }
   }
+
+  const deleteAttachment = useMutation({
+    mutationFn: async ({ ticketId, attachmentId }: { ticketId: string; attachmentId: string }) => {
+      const res = await http.delete(`/api/crm/support/tickets/${ticketId}/attachments/${attachmentId}`)
+      return res.data as { data: { ok: boolean } }
+    },
+    onSuccess: async (_d, vars) => {
+      // Update modal instantly
+      setEditing((prev) => {
+        if (!prev || prev._id !== vars.ticketId) return prev
+        return { ...prev, attachments: (prev.attachments ?? []).filter((a) => a._id !== vars.attachmentId) }
+      })
+      await qc.invalidateQueries({ queryKey: ['support-tickets'] })
+      toast.showToast('BOAZ says: Attachment deleted.', 'success')
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to delete attachment', 'error'),
+  })
   type ColumnDef = { key: string; visible: boolean; label: string }
   const defaultCols: ColumnDef[] = [
     { key: 'ticketNumber', visible: true, label: 'Ticket #' },
@@ -1159,6 +1185,20 @@ export default function SupportTickets() {
                             onClick={() => downloadAttachment(editing._id, { _id: a._id, originalFilename: a.originalFilename, filename: a.filename })}
                           >
                             Download
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1 text-[10px] text-red-300 hover:bg-red-500/20"
+                            onClick={async () => {
+                              const ok = await confirm('Delete this attachment from the ticket? This cannot be undone.', {
+                                confirmText: 'Delete',
+                                confirmColor: 'danger',
+                              })
+                              if (!ok) return
+                              deleteAttachment.mutate({ ticketId: editing._id, attachmentId: a._id })
+                            }}
+                          >
+                            Delete
                           </button>
                         </div>
                       ))}

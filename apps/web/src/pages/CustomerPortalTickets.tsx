@@ -140,6 +140,25 @@ export default function CustomerPortalTickets() {
     }
   }
 
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: async ({ ticketId, attachmentId }: { ticketId: string; attachmentId: string }) => {
+      const token = localStorage.getItem('customer_portal_token')
+      const res = await http.delete(
+        `/api/customer-portal/data/tickets/${ticketId}/attachments/${attachmentId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (res.data.error) throw new Error(res.data.error)
+      return res.data.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customer-portal-tickets'] })
+      showToast('Attachment deleted', 'success')
+    },
+    onError: (err: any) => {
+      showToast(err?.message || 'Failed to delete attachment', 'error')
+    }
+  })
+
   const createTicketMutation = useMutation({
     mutationFn: async (data: { shortDescription: string; description: string; priority: string; requesterName: string; requesterEmail: string; requesterPhone: string }) => {
       const token = localStorage.getItem('customer_portal_token')
@@ -392,6 +411,17 @@ export default function CustomerPortalTickets() {
                               onClick={() => downloadAttachment(ticket.id, a.id, a.name)}
                             >
                               Download
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-1.5 text-xs text-red-200 hover:bg-red-500/20"
+                              onClick={() => {
+                                const ok = window.confirm('Delete this attachment? This cannot be undone.')
+                                if (!ok) return
+                                deleteAttachmentMutation.mutate({ ticketId: ticket.id, attachmentId: a.id })
+                              }}
+                            >
+                              Delete
                             </button>
                           </div>
                         ))}

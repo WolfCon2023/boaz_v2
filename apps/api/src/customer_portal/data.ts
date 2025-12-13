@@ -27,15 +27,21 @@ customerPortalDataRouter.use(verifyCustomerToken)
 const ticketUploadDir = env.UPLOAD_DIR
   ? path.join(env.UPLOAD_DIR, 'ticket_attachments')
   : path.join(process.cwd(), 'uploads', 'ticket_attachments')
-try {
-  if (!fs.existsSync(ticketUploadDir)) fs.mkdirSync(ticketUploadDir, { recursive: true })
-} catch (err) {
-  console.error('Failed to create ticket attachments upload directory:', err)
+function ensureTicketUploadDir() {
+  if (fs.existsSync(ticketUploadDir)) return
+  fs.mkdirSync(ticketUploadDir, { recursive: true })
 }
 
 const ticketAttachmentStorage = multer.diskStorage({
-  destination: (_req: any, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) =>
-    cb(null, ticketUploadDir),
+  destination: (_req: any, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
+    try {
+      // Lazily create the directory to avoid startup-time filesystem stalls in some hosts.
+      ensureTicketUploadDir()
+      cb(null, ticketUploadDir)
+    } catch (e: any) {
+      cb(e, ticketUploadDir)
+    }
+  },
   filename: (_req: any, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_')
     const ts = Date.now()
@@ -297,6 +303,43 @@ customerPortalDataRouter.get('/tickets/:id/attachments/:attachmentId/download', 
     fs.createReadStream(att.path).pipe(res)
   } catch (err: any) {
     res.status(500).json({ data: null, error: err.message || 'download_failed' })
+  }
+})
+
+// DELETE /api/customer-portal/data/tickets/:id/attachments/:attachmentId
+customerPortalDataRouter.delete('/tickets/:id/attachments/:attachmentId', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const ticketId = req.params.id
+    const attachmentId = req.params.attachmentId
+    if (!ObjectId.isValid(ticketId) || !ObjectId.isValid(attachmentId)) {
+      return res.status(400).json({ data: null, error: 'invalid_id' })
+    }
+    const ownership = customerTicketOwnershipQuery(req.customerAuth)
+    if (!ownership) return res.status(403).json({ data: null, error: 'access_denied' })
+
+    const _id = new ObjectId(ticketId)
+    const attId = new ObjectId(attachmentId)
+    const ticket = await db.collection('support_tickets').findOne({ _id, ...ownership }, { projection: { attachments: 1 } as any })
+    if (!ticket) return res.status(404).json({ data: null, error: 'ticket_not_found' })
+    const att = (ticket as any).attachments?.find((a: any) => String(a._id) === String(attId))
+    if (!att) return res.status(404).json({ data: null, error: 'attachment_not_found' })
+
+    await db.collection('support_tickets').updateOne(
+      { _id, ...ownership },
+      { $pull: { attachments: { _id: attId } }, $set: { updatedAt: new Date() } } as any,
+    )
+
+    try {
+      if (att.path && fs.existsSync(att.path)) fs.unlinkSync(att.path)
+    } catch (e) {
+      console.warn('Failed to delete customer ticket attachment file:', e)
+    }
+
+    return res.json({ data: { ok: true }, error: null })
+  } catch (err: any) {
+    return res.status(500).json({ data: null, error: err.message || 'delete_failed' })
   }
 })
 

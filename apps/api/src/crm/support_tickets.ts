@@ -16,15 +16,22 @@ export const supportTicketsRouter = Router()
 const ticketUploadDir = env.UPLOAD_DIR
   ? path.join(env.UPLOAD_DIR, 'ticket_attachments')
   : path.join(process.cwd(), 'uploads', 'ticket_attachments')
-try {
-  if (!fs.existsSync(ticketUploadDir)) fs.mkdirSync(ticketUploadDir, { recursive: true })
-} catch (err) {
-  console.error('Failed to create ticket attachments upload directory:', err)
+
+function ensureTicketUploadDir() {
+  if (fs.existsSync(ticketUploadDir)) return
+  fs.mkdirSync(ticketUploadDir, { recursive: true })
 }
 
 const ticketAttachmentStorage = multer.diskStorage({
-  destination: (_req: any, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) =>
-    cb(null, ticketUploadDir),
+  destination: (_req: any, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
+    try {
+      // Lazily create the directory to avoid any startup-time filesystem stalls in some hosts.
+      ensureTicketUploadDir()
+      cb(null, ticketUploadDir)
+    } catch (e: any) {
+      cb(e, ticketUploadDir)
+    }
+  },
   filename: (_req: any, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const safe = file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '_')
     const ts = Date.now()
@@ -254,6 +261,42 @@ supportTicketsRouter.get('/tickets/:id/attachments/:attachmentId/download', requ
     fs.createReadStream(att.path).pipe(res)
   } catch (e: any) {
     res.status(400).json({ data: null, error: e?.message || 'invalid_request' })
+  }
+})
+
+// DELETE /api/crm/support/tickets/:id/attachments/:attachmentId
+supportTicketsRouter.delete('/tickets/:id/attachments/:attachmentId', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+    const attId = new ObjectId(req.params.attachmentId)
+    const ticket = await db
+      .collection<TicketDoc>('support_tickets')
+      .findOne({ _id }, { projection: { attachments: 1 } as any })
+    if (!ticket) return res.status(404).json({ data: null, error: 'not_found' })
+
+    const att = (ticket.attachments ?? []).find((a) => String(a._id) === String(attId))
+    if (!att) return res.status(404).json({ data: null, error: 'attachment_not_found' })
+
+    await db.collection<TicketDoc>('support_tickets').updateOne(
+      { _id },
+      {
+        $pull: { attachments: { _id: attId } } as any,
+        $set: { updatedAt: new Date() },
+      },
+    )
+
+    // Best-effort disk cleanup; don't fail the request if the file is already missing.
+    try {
+      if (att.path && fs.existsSync(att.path)) fs.unlinkSync(att.path)
+    } catch (e) {
+      console.warn('Failed to delete ticket attachment file:', e)
+    }
+
+    return res.json({ data: { ok: true }, error: null })
+  } catch (e: any) {
+    return res.status(400).json({ data: null, error: e?.message || 'invalid_request' })
   }
 })
 
