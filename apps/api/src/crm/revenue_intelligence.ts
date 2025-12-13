@@ -25,7 +25,7 @@ type DealDoc = {
   approver?: string
 }
 
-type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year'
+type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year' | 'next_year'
 
 type ForecastData = {
   period: ForecastPeriod
@@ -183,6 +183,9 @@ function getForecastRange(period: ForecastPeriod, now: Date) {
   } else if (period === 'current_year') {
     startDate = new Date(now.getFullYear(), 0, 1)
     endExclusive = new Date(now.getFullYear() + 1, 0, 1)
+  } else if (period === 'next_year') {
+    startDate = new Date(now.getFullYear() + 1, 0, 1)
+    endExclusive = new Date(now.getFullYear() + 2, 0, 1)
   }
 
   const endDate = new Date(endExclusive.getTime() - 1) // inclusive end-of-period for display

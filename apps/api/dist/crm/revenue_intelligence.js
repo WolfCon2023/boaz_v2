@@ -136,6 +136,10 @@ function getForecastRange(period, now) {
         startDate = new Date(now.getFullYear(), 0, 1);
         endExclusive = new Date(now.getFullYear() + 1, 0, 1);
     }
+    else if (period === 'next_year') {
+        startDate = new Date(now.getFullYear() + 1, 0, 1);
+        endExclusive = new Date(now.getFullYear() + 2, 0, 1);
+    }
     const endDate = new Date(endExclusive.getTime() - 1); // inclusive end-of-period for display
     return { startDate, endDate, endExclusive };
 }

@@ -6,7 +6,7 @@ import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { formatDateOnly } from '@/lib/dateFormat'
 
-type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year'
+type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year' | 'next_year'
 type DealStage = 'Lead' | 'Qualified' | 'Proposal' | 'Negotiation' | 'Closed Won' | 'Closed Lost'
 
 type Deal = {
@@ -117,6 +117,9 @@ export default function CRMRevenueIntelligence() {
     } else if (p === 'current_year') {
       start = new Date(now.getFullYear(), 0, 1)
       endExclusive = new Date(now.getFullYear() + 1, 0, 1)
+    } else if (p === 'next_year') {
+      start = new Date(now.getFullYear() + 1, 0, 1)
+      endExclusive = new Date(now.getFullYear() + 2, 0, 1)
     }
     const end = new Date(endExclusive.getTime() - 1)
     return { start, end, endExclusive }
@@ -377,6 +380,7 @@ export default function CRMRevenueIntelligence() {
               <option value="next_month">Next Month</option>
               <option value="next_quarter">Next Quarter</option>
               <option value="current_year">Current Year</option>
+              <option value="next_year">Next Year</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
