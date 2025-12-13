@@ -11,9 +11,9 @@ function isClosedWonStage(stageRaw) {
 function isClosedLostStage(stageRaw) {
     return String(stageRaw || '').trim() === 'Closed Lost';
 }
-async function computeForecast(db, period, ownerId) {
+async function computeForecast(db, period, ownerId, opts) {
     const now = new Date();
-    const { startDate, endDate, endExclusive } = getForecastRange(period, now);
+    const { startDate, endDate, endExclusive } = getRangeFromRequest(period, now, opts?.startDateRaw, opts?.endDateRaw);
     const startIso = startDate.toISOString();
     const endIso = endExclusive.toISOString();
     // Fetch deals in the period (use forecastedCloseDate for forecasting, fallback to closeDate)
@@ -77,7 +77,21 @@ async function computeForecast(db, period, ownerId) {
         };
     });
     const wonDeals = scoredDeals.filter((d) => isClosedWonStage(d.stage));
-    const pipelineDeals = scoredDeals.filter((d) => !isClosedWonStage(d.stage) && !isClosedLostStage(d.stage));
+    let pipelineDeals = scoredDeals.filter((d) => !isClosedWonStage(d.stage) && !isClosedLostStage(d.stage));
+    // Optionally exclude overdue deals from pipeline (open deals whose close date is before today)
+    if (opts?.excludeOverdue) {
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        pipelineDeals = pipelineDeals.filter((d) => {
+            const raw = d.forecastedCloseDate || d.closeDate;
+            if (!raw)
+                return true;
+            const dt = new Date(raw);
+            const t = dt.getTime();
+            if (!Number.isFinite(t))
+                return true;
+            return dt >= todayStart;
+        });
+    }
     // Pipeline + won metrics (avoid double counting)
     const totalPipeline = pipelineDeals.reduce((sum, d) => sum + (d.amount || 0), 0);
     const weightedPipeline = pipelineDeals.reduce((sum, d) => sum + (d.amount || 0) * (d.aiScore / 100), 0);
@@ -271,6 +285,35 @@ function getForecastRange(period, now) {
     const endDate = new Date(endExclusive.getTime() - 1); // inclusive end-of-period for display
     return { startDate, endDate, endExclusive };
 }
+function parseDateOnly(value) {
+    if (typeof value !== 'string')
+        return null;
+    const s = value.trim();
+    if (!s)
+        return null;
+    // UI sends YYYY-MM-DD (date only)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [yy, mm, dd] = s.split('-').map((n) => Number(n));
+        if (!yy || !mm || !dd)
+            return null;
+        const d = new Date(yy, mm - 1, dd);
+        return Number.isFinite(d.getTime()) ? d : null;
+    }
+    const d = new Date(s);
+    return Number.isFinite(d.getTime()) ? d : null;
+}
+function getRangeFromRequest(period, now, startDateRaw, endDateRaw) {
+    const startParsed = parseDateOnly(startDateRaw);
+    const endParsed = parseDateOnly(endDateRaw);
+    if (startParsed && endParsed) {
+        const startDate = new Date(startParsed.getFullYear(), startParsed.getMonth(), startParsed.getDate());
+        const endExclusive = new Date(endParsed.getFullYear(), endParsed.getMonth(), endParsed.getDate() + 1);
+        const endDate = new Date(endExclusive.getTime() - 1);
+        return { startDate, endDate, endExclusive, isCustom: true };
+    }
+    const { startDate, endDate, endExclusive } = getForecastRange(period, now);
+    return { startDate, endDate, endExclusive, isCustom: false };
+}
 // GET /api/crm/revenue-intelligence/forecast
 // Returns pipeline forecast with confidence intervals
 revenueIntelligenceRouter.get('/forecast', async (req, res) => {
@@ -279,7 +322,10 @@ revenueIntelligenceRouter.get('/forecast', async (req, res) => {
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     const period = req.query.period || 'current_quarter';
     const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
-    const data = await computeForecast(db, period, ownerId || undefined);
+    const startDateRaw = typeof req.query.startDate === 'string' ? req.query.startDate : undefined;
+    const endDateRaw = typeof req.query.endDate === 'string' ? req.query.endDate : undefined;
+    const excludeOverdue = String(req.query.excludeOverdue || '').toLowerCase() === 'true';
+    const data = await computeForecast(db, period, ownerId || undefined, { startDateRaw, endDateRaw, excludeOverdue });
     res.json({ data, error: null });
 });
 // GET /api/crm/revenue-intelligence/deal-score/:dealId
@@ -436,7 +482,11 @@ revenueIntelligenceRouter.post('/scenario', async (req, res) => {
         return res.status(400).json({ data: null, error: 'invalid_adjustments' });
     }
     // Compute baseline without calling localhost (more reliable in deployments)
-    const baseline = await computeForecast(db, period, undefined);
+    const baseline = await computeForecast(db, period, undefined, {
+        startDateRaw: typeof req.body?.startDate === 'string' ? req.body.startDate : undefined,
+        endDateRaw: typeof req.body?.endDate === 'string' ? req.body.endDate : undefined,
+        excludeOverdue: !!req.body?.excludeOverdue,
+    });
     // Apply adjustments to deals
     const adjustedDeals = baseline.deals.map((deal) => {
         const adjustment = adjustments.find((adj) => adj.dealId === String(deal._id));

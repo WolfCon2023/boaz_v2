@@ -71,6 +71,9 @@ export default function CRMRevenueIntelligence() {
     (searchParams.get('period') as ForecastPeriod) || 'current_quarter',
   )
   const [ownerId, setOwnerId] = React.useState<string>(searchParams.get('ownerId') || '')
+  const [startDate, setStartDate] = React.useState<string>(searchParams.get('startDate') || '')
+  const [endDate, setEndDate] = React.useState<string>(searchParams.get('endDate') || '')
+  const [excludeOverdue, setExcludeOverdue] = React.useState<boolean>(searchParams.get('excludeOverdue') === 'true')
   const [view, setView] = React.useState<'forecast' | 'reps' | 'scenario'>(
     (searchParams.get('view') as any) || 'forecast',
   )
@@ -90,13 +93,24 @@ export default function CRMRevenueIntelligence() {
     params.set('period', period)
     params.set('view', view)
     if (ownerId) params.set('ownerId', ownerId)
+    if (startDate) params.set('startDate', startDate)
+    if (endDate) params.set('endDate', endDate)
+    if (excludeOverdue) params.set('excludeOverdue', 'true')
     setSearchParams(params, { replace: true })
-  }, [period, view, ownerId, setSearchParams])
+  }, [period, view, ownerId, startDate, endDate, excludeOverdue, setSearchParams])
 
   const forecastQ = useQuery({
-    queryKey: ['revenue-intelligence-forecast', period, ownerId],
+    queryKey: ['revenue-intelligence-forecast', period, ownerId, startDate, endDate, excludeOverdue],
     queryFn: async () => {
-      const res = await http.get('/api/crm/revenue-intelligence/forecast', { params: { period, ownerId: ownerId || undefined } })
+      const res = await http.get('/api/crm/revenue-intelligence/forecast', {
+        params: {
+          period,
+          ownerId: ownerId || undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          excludeOverdue: excludeOverdue ? true : undefined,
+        },
+      })
       return res.data as { data: ForecastData }
     },
   })
@@ -218,7 +232,12 @@ export default function CRMRevenueIntelligence() {
       // This uses forecastedCloseDate (preferred) and falls back to closeDate.
       const res = await http.get('/api/crm/deals', { params: { limit: 2000, sort: 'updatedAt', dir: 'desc' } })
       const items = (res.data?.data?.items ?? []) as any[]
-      const { start, end, endExclusive } = getPeriodRange(period, new Date())
+      const now = new Date()
+      const hasCustom = !!startDate && !!endDate
+      const start = hasCustom ? new Date(`${startDate}T00:00:00`) : getPeriodRange(period, now).start
+      const endExclusive = hasCustom ? new Date(new Date(`${endDate}T00:00:00`).getTime() + 24 * 60 * 60 * 1000) : getPeriodRange(period, now).endExclusive
+      const end = hasCustom ? new Date(endExclusive.getTime() - 1) : getPeriodRange(period, now).end
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
       const inPeriod = items.filter((d) => {
         const rawDate = d.forecastedCloseDate || d.closeDate
@@ -226,7 +245,9 @@ export default function CRMRevenueIntelligence() {
         const dt = new Date(rawDate)
         const t = dt.getTime()
         if (!Number.isFinite(t)) return false
-        return dt >= start && dt < endExclusive
+        if (!(dt >= start && dt < endExclusive)) return false
+        if (excludeOverdue && dt < todayStart) return false
+        return true
       })
 
       const computed = computeRepPerformance(inPeriod)
@@ -259,7 +280,13 @@ export default function CRMRevenueIntelligence() {
   // Scenario mutation
   const scenarioMutation = useMutation({
     mutationFn: async (adjustments: Array<{ dealId: string; newStage?: string; newValue?: number; newCloseDate?: string }>) => {
-      const res = await http.post('/api/crm/revenue-intelligence/scenario', { period, adjustments })
+      const res = await http.post('/api/crm/revenue-intelligence/scenario', {
+        period,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        excludeOverdue,
+        adjustments,
+      })
       return res.data as {
         data: {
           baseline: ForecastData['summary']
@@ -402,6 +429,48 @@ export default function CRMRevenueIntelligence() {
               <option value="Unassigned">Unassigned</option>
             </select>
           </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[color:var(--color-text-muted)]">Start</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-1.5 text-xs"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[color:var(--color-text-muted)]">End</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-1.5 text-xs"
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              onClick={() => {
+                setStartDate('')
+                setEndDate('')
+              }}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+              title="Clear custom date range"
+            >
+              Clear dates
+            </button>
+          )}
+
+          <label className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
+            <input
+              type="checkbox"
+              checked={excludeOverdue}
+              onChange={(e) => setExcludeOverdue(e.target.checked)}
+              className="h-4 w-4 accent-[color:var(--color-primary-600)]"
+            />
+            Exclude overdue
+          </label>
           <div className="flex items-center gap-2">
             <label className="text-xs text-[color:var(--color-text-muted)]">View</label>
             <div className="flex rounded-lg border border-[color:var(--color-border)] overflow-hidden">
