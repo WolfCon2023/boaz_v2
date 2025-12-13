@@ -4,6 +4,125 @@ import { getDb } from '../db.js';
 import { requireAuth } from '../auth/rbac.js';
 export const revenueIntelligenceRouter = Router();
 revenueIntelligenceRouter.use(requireAuth);
+function isClosedWonStage(stageRaw) {
+    const s = String(stageRaw || '').trim();
+    return s === 'Closed Won' || s === 'Contract Signed / Closed Won';
+}
+function isClosedLostStage(stageRaw) {
+    return String(stageRaw || '').trim() === 'Closed Lost';
+}
+async function computeForecast(db, period, ownerId) {
+    const now = new Date();
+    const { startDate, endDate, endExclusive } = getForecastRange(period, now);
+    // Fetch deals in the period (use forecastedCloseDate for forecasting, fallback to closeDate)
+    const dealMatch = {
+        $or: [
+            { forecastedCloseDate: { $gte: startDate, $lt: endExclusive } },
+            { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lt: endExclusive } }] },
+        ],
+        stage: { $nin: ['Closed Lost'] },
+    };
+    if (ownerId) {
+        // Special case: UI supports "Unassigned" which should match missing/empty ownerId values.
+        if (ownerId === 'Unassigned') {
+            dealMatch.$and = [
+                ...(Array.isArray(dealMatch.$and) ? dealMatch.$and : []),
+                {
+                    $or: [
+                        { ownerId: null },
+                        { ownerId: { $exists: false } },
+                        { ownerId: '' },
+                    ],
+                },
+            ];
+        }
+        else {
+            dealMatch.ownerId = ownerId;
+        }
+    }
+    const deals = (await db.collection('deals').find(dealMatch).toArray());
+    // Fetch account ages for scoring
+    const accountIds = [...new Set(deals.map((d) => d.accountId).filter(Boolean))];
+    const accounts = accountIds.length > 0
+        ? (await db
+            .collection('accounts')
+            .find({ _id: { $in: accountIds.map((id) => new ObjectId(id)) } })
+            .toArray())
+        : [];
+    const accountAgeMap = new Map();
+    accounts.forEach((acc) => {
+        const age = acc.createdAt ? Math.ceil((Date.now() - new Date(acc.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+        accountAgeMap.set(String(acc._id), age);
+    });
+    // Score each deal
+    const scoredDeals = deals.map((deal) => {
+        const dealAge = deal.createdAt ? Math.ceil((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined;
+        const activityRecency = deal.lastActivityAt ? Math.ceil((Date.now() - new Date(deal.lastActivityAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined;
+        const accountAge = accountAgeMap.get(deal.accountId);
+        const scoring = calculateDealScore(deal, accountAge, dealAge, activityRecency);
+        return {
+            ...deal,
+            aiScore: scoring.score,
+            aiConfidence: scoring.confidence,
+            aiFactors: scoring.factors,
+        };
+    });
+    const wonDeals = scoredDeals.filter((d) => isClosedWonStage(d.stage));
+    const pipelineDeals = scoredDeals.filter((d) => !isClosedWonStage(d.stage) && !isClosedLostStage(d.stage));
+    // Pipeline + won metrics (avoid double counting)
+    const totalPipeline = pipelineDeals.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const weightedPipeline = pipelineDeals.reduce((sum, d) => sum + (d.amount || 0) * (d.aiScore / 100), 0);
+    const closedWon = wonDeals.reduce((sum, d) => sum + (d.amount || 0), 0);
+    // Confidence intervals (pessimistic, likely, optimistic) based on PIPELINE deals only
+    const highConfDeals = pipelineDeals.filter((d) => d.aiConfidence === 'High');
+    const medConfDeals = pipelineDeals.filter((d) => d.aiConfidence === 'Medium');
+    const lowConfDeals = pipelineDeals.filter((d) => d.aiConfidence === 'Low');
+    const pessimistic = closedWon +
+        highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.7, 0) +
+        medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.3, 0) +
+        lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.1, 0);
+    const likely = closedWon +
+        highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.85, 0) +
+        medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.5, 0) +
+        lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.2, 0);
+    const optimistic = closedWon +
+        highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.95, 0) +
+        medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.7, 0) +
+        lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.4, 0);
+    // Stage breakdown (PIPELINE only)
+    const byStage = pipelineDeals.reduce((acc, d) => {
+        const stage = d.stage || 'Unknown';
+        if (!acc[stage])
+            acc[stage] = { count: 0, value: 0, weightedValue: 0 };
+        acc[stage].count++;
+        acc[stage].value += d.amount || 0;
+        acc[stage].weightedValue += (d.amount || 0) * (d.aiScore / 100);
+        return acc;
+    }, {});
+    return {
+        period,
+        startDate,
+        endDate,
+        summary: {
+            totalDeals: scoredDeals.length,
+            totalPipeline,
+            weightedPipeline,
+            closedWon,
+            forecast: {
+                pessimistic: Math.round(pessimistic),
+                likely: Math.round(likely),
+                optimistic: Math.round(optimistic),
+            },
+            confidence: {
+                high: highConfDeals.length,
+                medium: medConfDeals.length,
+                low: lowConfDeals.length,
+            },
+        },
+        byStage,
+        deals: scoredDeals,
+    };
+}
 // Calculate AI-powered deal score based on multiple factors
 function calculateDealScore(deal, accountAge, dealAge, activityRecency) {
     const factors = [];
@@ -151,97 +270,8 @@ revenueIntelligenceRouter.get('/forecast', async (req, res) => {
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     const period = req.query.period || 'current_quarter';
     const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId.trim() : '';
-    // Calculate date range based on period
-    const now = new Date();
-    const { startDate, endDate, endExclusive } = getForecastRange(period, now);
-    // Fetch deals in the period (use forecastedCloseDate for forecasting, fallback to closeDate)
-    const dealMatch = {
-        $or: [
-            { forecastedCloseDate: { $gte: startDate, $lt: endExclusive } },
-            { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lt: endExclusive } }] },
-        ],
-        stage: { $nin: ['Closed Lost'] },
-    };
-    if (ownerId)
-        dealMatch.ownerId = ownerId;
-    const deals = await db.collection('deals').find(dealMatch).toArray();
-    // Fetch account ages for scoring
-    const accountIds = [...new Set(deals.map((d) => d.accountId).filter(Boolean))];
-    const accounts = await db.collection('accounts').find({ _id: { $in: accountIds.map((id) => new ObjectId(id)) } }).toArray();
-    const accountAgeMap = new Map();
-    accounts.forEach((acc) => {
-        const age = acc.createdAt ? Math.ceil((Date.now() - new Date(acc.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : 0;
-        accountAgeMap.set(String(acc._id), age);
-    });
-    // Score each deal
-    const scoredDeals = deals.map((deal) => {
-        const dealAge = deal.createdAt ? Math.ceil((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined;
-        const activityRecency = deal.lastActivityAt ? Math.ceil((Date.now() - new Date(deal.lastActivityAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined;
-        const accountAge = accountAgeMap.get(deal.accountId);
-        const scoring = calculateDealScore(deal, accountAge, dealAge, activityRecency);
-        return {
-            ...deal,
-            aiScore: scoring.score,
-            aiConfidence: scoring.confidence,
-            aiFactors: scoring.factors,
-        };
-    });
-    // Calculate forecast metrics (use 'amount' field from deals)
-    const totalPipeline = scoredDeals.reduce((sum, d) => sum + (d.amount || 0), 0);
-    const weightedPipeline = scoredDeals.reduce((sum, d) => sum + (d.amount || 0) * (d.aiScore / 100), 0);
-    const closedWon = scoredDeals.filter((d) => d.stage === 'Contract Signed / Closed Won' || d.stage === 'Closed Won').reduce((sum, d) => sum + (d.amount || 0), 0);
-    // Confidence intervals (pessimistic, likely, optimistic)
-    const highConfDeals = scoredDeals.filter((d) => d.aiConfidence === 'High');
-    const medConfDeals = scoredDeals.filter((d) => d.aiConfidence === 'Medium');
-    const lowConfDeals = scoredDeals.filter((d) => d.aiConfidence === 'Low');
-    const pessimistic = closedWon +
-        highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.7, 0) +
-        medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.3, 0) +
-        lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.1, 0);
-    const likely = closedWon +
-        highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.85, 0) +
-        medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.5, 0) +
-        lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.2, 0);
-    const optimistic = closedWon +
-        highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.95, 0) +
-        medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.7, 0) +
-        lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.4, 0);
-    // Stage breakdown
-    const byStage = scoredDeals.reduce((acc, d) => {
-        const stage = d.stage || 'Unknown';
-        if (!acc[stage])
-            acc[stage] = { count: 0, value: 0, weightedValue: 0 };
-        acc[stage].count++;
-        acc[stage].value += d.amount || 0;
-        acc[stage].weightedValue += (d.amount || 0) * (d.aiScore / 100);
-        return acc;
-    }, {});
-    res.json({
-        data: {
-            period,
-            startDate,
-            endDate,
-            summary: {
-                totalDeals: scoredDeals.length,
-                totalPipeline,
-                weightedPipeline,
-                closedWon,
-                forecast: {
-                    pessimistic: Math.round(pessimistic),
-                    likely: Math.round(likely),
-                    optimistic: Math.round(optimistic),
-                },
-                confidence: {
-                    high: highConfDeals.length,
-                    medium: medConfDeals.length,
-                    low: lowConfDeals.length,
-                },
-            },
-            byStage,
-            deals: scoredDeals,
-        },
-        error: null,
-    });
+    const data = await computeForecast(db, period, ownerId || undefined);
+    res.json({ data, error: null });
 });
 // GET /api/crm/revenue-intelligence/deal-score/:dealId
 // Get detailed AI scoring for a specific deal
@@ -390,12 +420,8 @@ revenueIntelligenceRouter.post('/scenario', async (req, res) => {
     if (!adjustments || !Array.isArray(adjustments)) {
         return res.status(400).json({ data: null, error: 'invalid_adjustments' });
     }
-    // Fetch current forecast
-    const forecastRes = await fetch(`http://localhost:${process.env.PORT || 4004}/api/crm/revenue-intelligence/forecast?period=${period}`, {
-        headers: { cookie: req.headers.cookie || '' },
-    });
-    const forecastData = (await forecastRes.json());
-    const baseline = forecastData.data;
+    // Compute baseline without calling localhost (more reliable in deployments)
+    const baseline = await computeForecast(db, period, undefined);
     // Apply adjustments to deals
     const adjustedDeals = baseline.deals.map((deal) => {
         const adjustment = adjustments.find((adj) => adj.dealId === String(deal._id));
@@ -403,8 +429,7 @@ revenueIntelligenceRouter.post('/scenario', async (req, res) => {
             return {
                 ...deal,
                 stage: adjustment.newStage || deal.stage,
-                value: adjustment.newValue !== undefined ? adjustment.newValue : deal.value,
-                probability: adjustment.newProbability !== undefined ? adjustment.newProbability : deal.probability,
+                amount: adjustment.newValue !== undefined ? adjustment.newValue : deal.amount,
                 closeDate: adjustment.newCloseDate ? new Date(adjustment.newCloseDate) : deal.closeDate,
                 _adjusted: true,
             };
@@ -412,24 +437,26 @@ revenueIntelligenceRouter.post('/scenario', async (req, res) => {
         return deal;
     });
     // Recalculate forecast with adjusted deals
-    const totalPipeline = adjustedDeals.reduce((sum, d) => sum + (d.value || 0), 0);
-    const weightedPipeline = adjustedDeals.reduce((sum, d) => sum + (d.value || 0) * (d.aiScore / 100), 0);
-    const closedWon = adjustedDeals.filter((d) => d.stage === 'Closed Won').reduce((sum, d) => sum + (d.value || 0), 0);
-    const highConfDeals = adjustedDeals.filter((d) => d.aiConfidence === 'High');
-    const medConfDeals = adjustedDeals.filter((d) => d.aiConfidence === 'Medium');
-    const lowConfDeals = adjustedDeals.filter((d) => d.aiConfidence === 'Low');
+    const wonDeals = adjustedDeals.filter((d) => isClosedWonStage(d.stage));
+    const pipelineDeals = adjustedDeals.filter((d) => !isClosedWonStage(d.stage) && !isClosedLostStage(d.stage));
+    const totalPipeline = pipelineDeals.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const weightedPipeline = pipelineDeals.reduce((sum, d) => sum + (d.amount || 0) * (d.aiScore / 100), 0);
+    const closedWon = wonDeals.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const highConfDeals = pipelineDeals.filter((d) => d.aiConfidence === 'High');
+    const medConfDeals = pipelineDeals.filter((d) => d.aiConfidence === 'Medium');
+    const lowConfDeals = pipelineDeals.filter((d) => d.aiConfidence === 'Low');
     const pessimistic = closedWon +
-        highConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.7, 0) +
-        medConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.3, 0) +
-        lowConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.1, 0);
+        highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.7, 0) +
+        medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.3, 0) +
+        lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.1, 0);
     const likely = closedWon +
-        highConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.85, 0) +
-        medConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.5, 0) +
-        lowConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.2, 0);
+        highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.85, 0) +
+        medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.5, 0) +
+        lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.2, 0);
     const optimistic = closedWon +
-        highConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.95, 0) +
-        medConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.7, 0) +
-        lowConfDeals.reduce((sum, d) => sum + (d.value || 0) * 0.4, 0);
+        highConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.95, 0) +
+        medConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.7, 0) +
+        lowConfDeals.reduce((sum, d) => sum + (d.amount || 0) * 0.4, 0);
     res.json({
         data: {
             baseline: baseline.summary,

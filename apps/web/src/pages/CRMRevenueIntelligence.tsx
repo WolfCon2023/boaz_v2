@@ -70,6 +70,7 @@ export default function CRMRevenueIntelligence() {
   const [period, setPeriod] = React.useState<ForecastPeriod>(
     (searchParams.get('period') as ForecastPeriod) || 'current_quarter',
   )
+  const [ownerId, setOwnerId] = React.useState<string>(searchParams.get('ownerId') || '')
   const [view, setView] = React.useState<'forecast' | 'reps' | 'scenario'>(
     (searchParams.get('view') as any) || 'forecast',
   )
@@ -88,13 +89,14 @@ export default function CRMRevenueIntelligence() {
     const params = new URLSearchParams()
     params.set('period', period)
     params.set('view', view)
+    if (ownerId) params.set('ownerId', ownerId)
     setSearchParams(params, { replace: true })
-  }, [period, view, setSearchParams])
+  }, [period, view, ownerId, setSearchParams])
 
   const forecastQ = useQuery({
-    queryKey: ['revenue-intelligence-forecast', period],
+    queryKey: ['revenue-intelligence-forecast', period, ownerId],
     queryFn: async () => {
-      const res = await http.get('/api/crm/revenue-intelligence/forecast', { params: { period } })
+      const res = await http.get('/api/crm/revenue-intelligence/forecast', { params: { period, ownerId: ownerId || undefined } })
       return res.data as { data: ForecastData }
     },
   })
@@ -381,6 +383,23 @@ export default function CRMRevenueIntelligence() {
               <option value="next_quarter">Next Quarter</option>
               <option value="current_year">Current Year</option>
               <option value="next_year">Next Year</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[color:var(--color-text-muted)]">Owner</label>
+            <select
+              value={ownerId}
+              onChange={(e) => setOwnerId(e.target.value)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-1.5 text-xs"
+            >
+              <option value="">All</option>
+              {users.map((u) => (
+                <option key={u._id} value={u._id}>
+                  {u.name || u.email}
+                </option>
+              ))}
+              <option value="Unassigned">Unassigned</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
