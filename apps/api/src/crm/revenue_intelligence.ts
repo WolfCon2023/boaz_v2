@@ -163,6 +163,32 @@ function calculateDealScore(deal: DealDoc, accountAge?: number, dealAge?: number
   return { score: Math.round(score), confidence, factors }
 }
 
+function getForecastRange(period: ForecastPeriod, now: Date) {
+  // Fiscal year begins Jan 1st (calendar year).
+  // Use half-open intervals [start, endExclusive) to avoid missing deals on the last day due to time components.
+  let startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+  let endExclusive = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
+  if (period === 'current_quarter') {
+    const q = Math.floor(now.getMonth() / 3) // 0..3
+    startDate = new Date(now.getFullYear(), q * 3, 1)
+    endExclusive = new Date(now.getFullYear(), q * 3 + 3, 1)
+  } else if (period === 'next_month') {
+    startDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    endExclusive = new Date(now.getFullYear(), now.getMonth() + 2, 1)
+  } else if (period === 'next_quarter') {
+    const nextQ = Math.floor(now.getMonth() / 3) + 1 // may overflow into next year via JS Date month overflow
+    startDate = new Date(now.getFullYear(), nextQ * 3, 1)
+    endExclusive = new Date(now.getFullYear(), nextQ * 3 + 3, 1)
+  } else if (period === 'current_year') {
+    startDate = new Date(now.getFullYear(), 0, 1)
+    endExclusive = new Date(now.getFullYear() + 1, 0, 1)
+  }
+
+  const endDate = new Date(endExclusive.getTime() - 1) // inclusive end-of-period for display
+  return { startDate, endDate, endExclusive }
+}
+
 // GET /api/crm/revenue-intelligence/forecast
 // Returns pipeline forecast with confidence intervals
 revenueIntelligenceRouter.get('/forecast', async (req, res) => {
@@ -174,30 +200,13 @@ revenueIntelligenceRouter.get('/forecast', async (req, res) => {
 
   // Calculate date range based on period
   const now = new Date()
-  let startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-  let endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-
-  if (period === 'current_quarter') {
-    const currentQuarter = Math.floor(now.getMonth() / 3)
-    startDate = new Date(now.getFullYear(), currentQuarter * 3, 1)
-    endDate = new Date(now.getFullYear(), currentQuarter * 3 + 3, 0)
-  } else if (period === 'next_month') {
-    startDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    endDate = new Date(now.getFullYear(), now.getMonth() + 2, 0)
-  } else if (period === 'next_quarter') {
-    const nextQuarter = Math.floor(now.getMonth() / 3) + 1
-    startDate = new Date(now.getFullYear(), nextQuarter * 3, 1)
-    endDate = new Date(now.getFullYear(), nextQuarter * 3 + 3, 0)
-  } else if (period === 'current_year') {
-    startDate = new Date(now.getFullYear(), 0, 1)
-    endDate = new Date(now.getFullYear(), 11, 31)
-  }
+  const { startDate, endDate, endExclusive } = getForecastRange(period, now)
 
   // Fetch deals in the period (use forecastedCloseDate for forecasting, fallback to closeDate)
   const dealMatch: any = {
     $or: [
-      { forecastedCloseDate: { $gte: startDate, $lte: endDate } },
-      { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lte: endDate } }] },
+      { forecastedCloseDate: { $gte: startDate, $lt: endExclusive } },
+      { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lt: endExclusive } }] },
     ],
     stage: { $nin: ['Closed Lost'] },
   }
@@ -343,23 +352,13 @@ revenueIntelligenceRouter.get('/rep-performance', async (req, res) => {
 
   // Calculate date range
   const now = new Date()
-  let startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-  let endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-
-  if (period === 'current_quarter') {
-    const currentQuarter = Math.floor(now.getMonth() / 3)
-    startDate = new Date(now.getFullYear(), currentQuarter * 3, 1)
-    endDate = new Date(now.getFullYear(), currentQuarter * 3 + 3, 0)
-  } else if (period === 'current_year') {
-    startDate = new Date(now.getFullYear(), 0, 1)
-    endDate = new Date(now.getFullYear(), 11, 31)
-  }
+  const { startDate, endDate, endExclusive } = getForecastRange(period, now)
 
   // Fetch all deals in period (use forecastedCloseDate for forecasting, fallback to closeDate)
   const deals = await db.collection('deals').find({
     $or: [
-      { forecastedCloseDate: { $gte: startDate, $lte: endDate } },
-      { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lte: endDate } }] },
+      { forecastedCloseDate: { $gte: startDate, $lt: endExclusive } },
+      { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lt: endExclusive } }] },
     ],
   }).toArray() as any[]
 
