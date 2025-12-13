@@ -80,6 +80,25 @@ function injectSurveyUrl(html, surveyUrl) {
     }
     return out;
 }
+function injectRecipientIntoTrackingLinks(html, baseUrl, email) {
+    const e = encodeURIComponent(String(email || '').trim().toLowerCase());
+    if (!e)
+        return html;
+    // Add `e=` to any marketing redirect links so click tracking can be tied back to the recipient.
+    // We intentionally do this during per-recipient personalization (after global wrapLinksWithTracking).
+    // Examples:
+    //  href="https://host/api/marketing/r/abc" -> href="https://host/api/marketing/r/abc?e=..."
+    //  href="https://host/api/marketing/r/abc?x=1" -> href="https://host/api/marketing/r/abc?x=1&e=..."
+    const base = baseUrl.replace(/\/$/, '');
+    const re = new RegExp(`href="(${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/api/marketing/r/[^"\\s]+)"`, 'g');
+    return html.replace(re, (_m, url) => {
+        const u = String(url);
+        if (u.includes('e='))
+            return `href="${u}"`;
+        const joiner = u.includes('?') ? '&' : '?';
+        return `href="${u}${joiner}e=${e}"`;
+    });
+}
 function injectPixel(html, pixelUrl) {
     const img = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="" />`;
     if (/(<\/body>)/i.test(html))
@@ -247,6 +266,7 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
             personalized = injectSurveyUrl(personalized, surveyUrl);
             personalized = injectUnsubscribe(personalized, unsubscribeUrl);
             personalized = injectPixel(personalized, pixelUrl);
+            personalized = injectRecipientIntoTrackingLinks(personalized, base, email);
             if (dryRun)
                 continue;
             try {

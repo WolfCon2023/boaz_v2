@@ -4,6 +4,42 @@ import { getDb } from '../db.js'
 
 export const marketingTrackingRouter = Router()
 
+async function ensureEngagementSegmentAndAddEmail(db: any, campaignId: ObjectId | null, rawEmail: string) {
+  if (!campaignId) return
+  const email = String(rawEmail || '').trim().toLowerCase()
+  if (!email || !email.includes('@')) return
+
+  // Respect Do-Not-Contact list
+  const unsub = await db.collection('marketing_unsubscribes').findOne({ email })
+  if (unsub) return
+
+  // Find (or create) a dedicated "engaged" segment for this campaign
+  const campaign = await db.collection('marketing_campaigns').findOne({ _id: campaignId }, { projection: { name: 1 } as any }) as any
+  const campaignName = String(campaign?.name || campaignId.toHexString())
+
+  const segFilter: any = { engagementCampaignId: campaignId }
+  let seg = await db.collection('marketing_segments').findOne(segFilter) as any
+  if (!seg) {
+    const now = new Date()
+    const doc = {
+      name: `Engaged: ${campaignName}`,
+      description: `Auto-generated segment. Populated when recipients open/click "${campaignName}" and are not unsubscribed.`,
+      rules: [],
+      emails: [],
+      engagementCampaignId: campaignId,
+      createdAt: now,
+      updatedAt: now,
+    }
+    const r = await db.collection('marketing_segments').insertOne(doc)
+    seg = { _id: r.insertedId, ...doc }
+  }
+
+  await db.collection('marketing_segments').updateOne(
+    { _id: seg._id },
+    { $addToSet: { emails: email }, $set: { updatedAt: new Date() } }
+  )
+}
+
 // GET /api/marketing/metrics?campaignId=&startDate=&endDate=
 marketingTrackingRouter.get('/metrics', async (req, res) => {
   const db = await getDb()
@@ -91,6 +127,7 @@ marketingTrackingRouter.get('/r/:token', async (req, res) => {
   const token = String(req.params.token || '')
   const link = await db.collection('marketing_links').findOne({ token }) as any
   if (!link) return res.status(404).send('not_found')
+  const recipient = String((req.query.e as string) || '').trim().toLowerCase()
   const target = new URL(link.url)
   if (link.utmSource) target.searchParams.set('utm_source', link.utmSource)
   if (link.utmMedium) target.searchParams.set('utm_medium', link.utmMedium)
@@ -105,14 +142,30 @@ marketingTrackingRouter.get('/r/:token', async (req, res) => {
   const campaignName = campaign?.name || link.utmCampaign || 'unknown'
   
   // Log to marketing_events (for campaign-specific tracking)
-  await db.collection('marketing_events').insertOne({ event: 'click', token, campaignId: link.campaignId || null, url: target.toString(), at: clickedAt })
+  await db.collection('marketing_events').insertOne({
+    event: 'click',
+    token,
+    campaignId: link.campaignId || null,
+    recipient: recipient || null,
+    url: target.toString(),
+    at: clickedAt,
+  })
+
+  // Response-based segmentation: add engaged recipients to an auto-generated segment (if not unsubscribed)
+  if (recipient) {
+    try {
+      await ensureEngagementSegmentAndAddEmail(db, link.campaignId || null, recipient)
+    } catch {
+      // best-effort; never block redirect
+    }
+  }
   
   // Also log to outreach_events (for unified outreach tracking)
   if (link.campaignId) {
     await db.collection('outreach_events').insertOne({ 
       channel: 'email', 
       event: 'clicked', 
-      recipient: null, // Link clicks don't have recipient info
+      recipient: recipient || null,
       variant: `campaign:${campaignName}`,
       meta: { campaignId: link.campaignId.toHexString(), campaignName, url: link.url, token },
       at: clickedAt 
@@ -132,6 +185,16 @@ marketingTrackingRouter.get('/pixel.gif', async (req, res) => {
     const openedAt = new Date()
     // Log to marketing_events (for campaign-specific tracking)
     await db.collection('marketing_events').insertOne({ event: 'open', campaignId, recipient: e || null, at: openedAt })
+
+    // Response-based segmentation: add engaged recipients to an auto-generated segment (if not unsubscribed)
+    if (campaignId && e) {
+      try {
+        await ensureEngagementSegmentAndAddEmail(db, campaignId, e)
+      } catch {
+        // best-effort
+      }
+    }
+
     // Also log to outreach_events (for unified outreach tracking)
     if (e) {
       await db.collection('outreach_events').insertOne({ 
