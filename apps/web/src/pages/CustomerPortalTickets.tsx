@@ -566,18 +566,6 @@ export default function CustomerPortalTickets() {
                   />
                 </label>
 
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Description *</span>
-                  <textarea
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent p-4 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent transition-colors resize-y"
-                    rows={6}
-                    placeholder="Please describe your issue in detail..."
-                    required
-                  />
-                </label>
-
                 {/* Attachments (optional) */}
                 <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
                   <div className="mb-2 flex items-center justify-between gap-2">
@@ -636,6 +624,18 @@ export default function CustomerPortalTickets() {
                     <div className="text-sm text-[color:var(--color-text-muted)]">No files selected.</div>
                   )}
                 </div>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Description *</span>
+                  <textarea
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent p-4 text-sm text-[color:var(--color-text)] focus:ring-2 focus:ring-[color:var(--color-primary-600)] focus:border-transparent transition-colors resize-y"
+                    rows={6}
+                    placeholder="Please describe your issue in detail..."
+                    required
+                  />
+                </label>
 
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-[color:var(--color-text-muted)]">Priority</span>
