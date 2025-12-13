@@ -487,26 +487,58 @@ export default function CRMRevenueIntelligence() {
           <>
           <section className="grid gap-4 md:grid-cols-4">
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Total Pipeline</div>
+              <div className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
+                <span>Total Pipeline</span>
+                <span
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                  title="Total value of open (not Closed Won/Lost) deals in the selected period."
+                >
+                  ?
+                </span>
+              </div>
               <div className="mt-1 text-2xl font-semibold">{formatCurrency(forecast.summary.totalPipeline)}</div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
                 {forecast.summary.totalDeals} deals
               </div>
             </div>
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Weighted Pipeline</div>
+              <div className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
+                <span>Weighted Pipeline</span>
+                <span
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                  title="AI-weighted value of open pipeline: sum(amount × AI score%). Closed Won is excluded."
+                >
+                  ?
+                </span>
+              </div>
               <div className="mt-1 text-2xl font-semibold">{formatCurrency(forecast.summary.weightedPipeline)}</div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">AI-adjusted probability</div>
             </div>
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Closed Won</div>
+              <div className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
+                <span>Closed Won</span>
+                <span
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                  title="Total value of deals already marked Closed Won in the selected period."
+                >
+                  ?
+                </span>
+              </div>
               <div className="mt-1 text-2xl font-semibold text-emerald-400">
                 {formatCurrency(forecast.summary.closedWon)}
               </div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">Already closed</div>
             </div>
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Forecast (Likely)</div>
+              <div className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
+                <span>Forecast (Likely)</span>
+                <span
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[color:var(--color-border)] text-[10px] text-[color:var(--color-text-muted)]"
+                  title="Likely forecast = Closed Won + probability-weighted open pipeline based on AI confidence buckets."
+                >
+                  ?
+                </span>
+              </div>
               <div className="mt-1 text-2xl font-semibold text-blue-400">
                 {formatCurrency(forecast.summary.forecast.likely)}
               </div>
@@ -522,21 +554,45 @@ export default function CRMRevenueIntelligence() {
             <h2 className="mb-3 text-sm font-semibold">Forecast Range with Confidence Intervals</h2>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
-                <div className="text-xs text-red-400">Pessimistic</div>
+                <div className="flex items-center gap-2 text-xs text-red-400">
+                  <span>Pessimistic</span>
+                  <span
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-red-500/40 text-[10px] text-red-300"
+                    title="Conservative estimate: includes Closed Won + a low share of open pipeline by confidence."
+                  >
+                    ?
+                  </span>
+                </div>
                 <div className="mt-1 text-xl font-semibold text-red-300">
                   {formatCurrency(forecast.summary.forecast.pessimistic)}
                 </div>
                 <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">Conservative estimate</div>
               </div>
               <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
-                <div className="text-xs text-blue-400">Likely</div>
+                <div className="flex items-center gap-2 text-xs text-blue-400">
+                  <span>Likely</span>
+                  <span
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-blue-500/40 text-[10px] text-blue-300"
+                    title="Most probable estimate: includes Closed Won + a medium share of open pipeline by confidence."
+                  >
+                    ?
+                  </span>
+                </div>
                 <div className="mt-1 text-xl font-semibold text-blue-300">
                   {formatCurrency(forecast.summary.forecast.likely)}
                 </div>
                 <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">Most probable outcome</div>
               </div>
               <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
-                <div className="text-xs text-emerald-400">Optimistic</div>
+                <div className="flex items-center gap-2 text-xs text-emerald-400">
+                  <span>Optimistic</span>
+                  <span
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-emerald-500/40 text-[10px] text-emerald-300"
+                    title="Best-case estimate: includes Closed Won + a high share of open pipeline by confidence."
+                  >
+                    ?
+                  </span>
+                </div>
                 <div className="mt-1 text-xl font-semibold text-emerald-300">
                   {formatCurrency(forecast.summary.forecast.optimistic)}
                 </div>
