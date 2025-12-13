@@ -63,12 +63,22 @@ function isClosedLostStage(stageRaw: unknown): boolean {
 async function computeForecast(db: any, period: ForecastPeriod, ownerId?: string) {
   const now = new Date()
   const { startDate, endDate, endExclusive } = getForecastRange(period, now)
+  const startIso = startDate.toISOString()
+  const endIso = endExclusive.toISOString()
 
   // Fetch deals in the period (use forecastedCloseDate for forecasting, fallback to closeDate)
   const dealMatch: any = {
     $or: [
+      // forecastedCloseDate stored as a Mongo Date
       { forecastedCloseDate: { $gte: startDate, $lt: endExclusive } },
+      // forecastedCloseDate stored as an ISO string
+      { forecastedCloseDate: { $gte: startIso, $lt: endIso } },
+
+      // Fallback to closeDate when forecastedCloseDate is null or missing
+      { $and: [{ forecastedCloseDate: null }, { closeDate: { $gte: startDate, $lt: endExclusive } }] },
+      { $and: [{ forecastedCloseDate: null }, { closeDate: { $gte: startIso, $lt: endIso } }] },
       { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lt: endExclusive } }] },
+      { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startIso, $lt: endIso } }] },
     ],
     stage: { $nin: ['Closed Lost'] },
   }
@@ -396,10 +406,16 @@ revenueIntelligenceRouter.get('/rep-performance', async (req, res) => {
   const { startDate, endDate, endExclusive } = getForecastRange(period, now)
 
   // Fetch all deals in period (use forecastedCloseDate for forecasting, fallback to closeDate)
+  const startIso = startDate.toISOString()
+  const endIso = endExclusive.toISOString()
   const deals = await db.collection('deals').find({
     $or: [
       { forecastedCloseDate: { $gte: startDate, $lt: endExclusive } },
+      { forecastedCloseDate: { $gte: startIso, $lt: endIso } },
+      { $and: [{ forecastedCloseDate: null }, { closeDate: { $gte: startDate, $lt: endExclusive } }] },
+      { $and: [{ forecastedCloseDate: null }, { closeDate: { $gte: startIso, $lt: endIso } }] },
       { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startDate, $lt: endExclusive } }] },
+      { $and: [{ forecastedCloseDate: { $exists: false } }, { closeDate: { $gte: startIso, $lt: endIso } }] },
     ],
   }).toArray() as any[]
 
