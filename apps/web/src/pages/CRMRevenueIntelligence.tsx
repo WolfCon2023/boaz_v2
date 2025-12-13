@@ -99,24 +99,140 @@ export default function CRMRevenueIntelligence() {
     },
   })
 
+  function getPeriodRange(p: ForecastPeriod, now: Date) {
+    // Fiscal year begins Jan 1 (calendar year). Use half-open interval [start, endExclusive).
+    let start = new Date(now.getFullYear(), now.getMonth(), 1)
+    let endExclusive = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    if (p === 'current_quarter') {
+      const q = Math.floor(now.getMonth() / 3)
+      start = new Date(now.getFullYear(), q * 3, 1)
+      endExclusive = new Date(now.getFullYear(), q * 3 + 3, 1)
+    } else if (p === 'next_month') {
+      start = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      endExclusive = new Date(now.getFullYear(), now.getMonth() + 2, 1)
+    } else if (p === 'next_quarter') {
+      const q = Math.floor(now.getMonth() / 3) + 1
+      start = new Date(now.getFullYear(), q * 3, 1)
+      endExclusive = new Date(now.getFullYear(), q * 3 + 3, 1)
+    } else if (p === 'current_year') {
+      start = new Date(now.getFullYear(), 0, 1)
+      endExclusive = new Date(now.getFullYear() + 1, 0, 1)
+    }
+    const end = new Date(endExclusive.getTime() - 1)
+    return { start, end, endExclusive }
+  }
+
+  function computeRepPerformance(deals: any[]): { reps: RepPerformance[]; summary: { totalReps: number; totalPipeline: number; totalWon: number; avgWinRate: number } } {
+    const byOwner = new Map<string, any>()
+    for (const d of deals) {
+      const owner = String(d.ownerId || 'Unassigned')
+      if (!byOwner.has(owner)) {
+        byOwner.set(owner, {
+          ownerId: owner,
+          totalDeals: 0,
+          openDeals: 0,
+          closedWon: 0,
+          closedLost: 0,
+          totalValue: 0,
+          wonValue: 0,
+          lostValue: 0,
+          pipelineValue: 0,
+        })
+      }
+      const r = byOwner.get(owner)
+      const amt = Number(d.amount || 0) || 0
+      const stage = String(d.stage || '')
+      r.totalDeals++
+      r.totalValue += amt
+      const isWon = stage === 'Contract Signed / Closed Won' || stage === 'Closed Won'
+      const isLost = stage === 'Closed Lost'
+      if (isWon) {
+        r.closedWon++
+        r.wonValue += amt
+      } else if (isLost) {
+        r.closedLost++
+        r.lostValue += amt
+      } else {
+        r.openDeals++
+        r.pipelineValue += amt
+      }
+    }
+
+    const reps: RepPerformance[] = Array.from(byOwner.values()).map((rep: any) => {
+      const decided = rep.closedWon + rep.closedLost
+      const winRate = decided > 0 ? (rep.closedWon / decided) * 100 : 0
+      const avgDealSize = rep.totalDeals > 0 ? rep.totalValue / rep.totalDeals : 0
+      const forecastedRevenue = rep.wonValue + (rep.pipelineValue * (winRate / 100))
+
+      let perfScore = 50
+      if (winRate >= 50) perfScore += 20
+      else if (winRate >= 30) perfScore += 10
+      else if (winRate < 20) perfScore -= 10
+
+      if (avgDealSize > 50000) perfScore += 15
+      else if (avgDealSize > 25000) perfScore += 10
+      else if (avgDealSize < 10000) perfScore -= 5
+
+      if (rep.openDeals > 10) perfScore += 10
+      else if (rep.openDeals > 5) perfScore += 5
+      else if (rep.openDeals < 3) perfScore -= 10
+
+      return {
+        ownerId: rep.ownerId,
+        totalDeals: rep.totalDeals,
+        openDeals: rep.openDeals,
+        closedWon: rep.closedWon,
+        closedLost: rep.closedLost,
+        totalValue: rep.totalValue,
+        wonValue: rep.wonValue,
+        lostValue: rep.lostValue,
+        pipelineValue: rep.pipelineValue,
+        avgDealSize,
+        winRate,
+        forecastedRevenue,
+        performanceScore: Math.max(0, Math.min(100, perfScore)),
+      }
+    })
+
+    reps.sort((a, b) => b.forecastedRevenue - a.forecastedRevenue)
+
+    const summary = {
+      totalReps: reps.length,
+      totalPipeline: reps.reduce((s, r) => s + (r.pipelineValue || 0), 0),
+      totalWon: reps.reduce((s, r) => s + (r.wonValue || 0), 0),
+      avgWinRate: reps.length ? reps.reduce((s, r) => s + (r.winRate || 0), 0) / reps.length : 0,
+    }
+    return { reps, summary }
+  }
+
   const repsQ = useQuery({
     queryKey: ['revenue-intelligence-reps', period],
     enabled: view === 'reps',
     queryFn: async () => {
-      const res = await http.get('/api/crm/revenue-intelligence/rep-performance', { params: { period } })
-      return res.data as {
+      // Compute rep performance client-side from deals to avoid backend period/range mismatches in deployed envs.
+      // This uses forecastedCloseDate (preferred) and falls back to closeDate.
+      const res = await http.get('/api/crm/deals', { params: { limit: 2000, sort: 'updatedAt', dir: 'desc' } })
+      const items = (res.data?.data?.items ?? []) as any[]
+      const { start, end, endExclusive } = getPeriodRange(period, new Date())
+
+      const inPeriod = items.filter((d) => {
+        const rawDate = d.forecastedCloseDate || d.closeDate
+        if (!rawDate) return false
+        const dt = new Date(rawDate)
+        const t = dt.getTime()
+        if (!Number.isFinite(t)) return false
+        return dt >= start && dt < endExclusive
+      })
+
+      const computed = computeRepPerformance(inPeriod)
+      return {
         data: {
-          period: ForecastPeriod
-          startDate: string
-          endDate: string
-          reps: RepPerformance[]
-          summary: {
-            totalReps: number
-            totalPipeline: number
-            totalWon: number
-            avgWinRate: number
-          }
-        }
+          period,
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          reps: computed.reps,
+          summary: computed.summary,
+        },
       }
     },
   })
@@ -306,6 +422,16 @@ export default function CRMRevenueIntelligence() {
                 <span className="text-[10px] opacity-60">ⓘ</span>
               </button>
             </div>
+          </div>
+          <div className="text-[11px] text-[color:var(--color-text-muted)]">
+            Range:{' '}
+            <span className="font-semibold text-[color:var(--color-text)]">
+              {formatDateOnly((view === 'reps' ? reps?.startDate : forecast?.startDate) || '')}
+            </span>
+            {' '}→{' '}
+            <span className="font-semibold text-[color:var(--color-text)]">
+              {formatDateOnly((view === 'reps' ? reps?.endDate : forecast?.endDate) || '')}
+            </span>
           </div>
         </div>
       </section>
