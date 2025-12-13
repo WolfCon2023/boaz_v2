@@ -772,6 +772,19 @@ Creating a segment:
 6. Optionally add direct email addresses for one-off inclusions
 7. Save the segment
 
+Engagement-based segments (auto-generated)
+BOAZ-OS can automatically build an audience segment based on **recipient engagement** (opens/clicks):
+- When a recipient **opens** a campaign email (and does not unsubscribe), their email is added to an auto-generated segment named:
+  - Engaged: <Campaign Name>
+- When a recipient **clicks** a tracked link in the email (and does not unsubscribe), they are also added to the same segment.
+- If a recipient is on the **Do Not Contact** list, they will not be added.
+
+How to use the Engaged segment:
+1. Send your campaign normally.
+2. After recipients open/click, go to Marketing → Segments.
+3. Select the Engaged: <Campaign Name> segment.
+4. Use that segment as the audience for a follow-up campaign (e.g., “Thanks for reading” or “Book a demo”).
+
 Segment best practices:
 - Create segments for different customer types (prospects, customers, partners)
 - Use job titles to target decision makers
@@ -836,7 +849,7 @@ Section 5: Link Tracking
 
 All links in campaigns are automatically tracked:
 - System generates unique tracking tokens for each link
-- Clicks are recorded with timestamp and recipient
+- Clicks are recorded with timestamp and recipient (when available)
 - Links redirect through /api/marketing/r/:token
 - UTM parameters are automatically added (utm_source=email, utm_medium=campaign)
 - Click data appears in Analytics tab
