@@ -4,18 +4,48 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { formatDateOnly } from '@/lib/dateFormat'
 
-type Overview = {
-  range: { startDate: string; endDate: string }
-  kpis: Record<string, any>
-  lists: {
-    topPipeline: Array<{
-      id: string
-      dealNumber: number | null
-      title: string
-      stage: string | null
-      amount: number
-      forecastedCloseDate: string | null
-    }>
+type DetailedReport = {
+  overview: {
+    range: { startDate: string; endDate: string }
+    kpis: Record<string, any>
+    lists: {
+      topPipeline: Array<{
+        id: string
+        dealNumber: number | null
+        title: string
+        stage: string | null
+        amount: number
+        forecastedCloseDate: string | null
+      }>
+      engagedSegments?: Array<{ id: string; name: string; emailCount: number; updatedAt: string | null }>
+    }
+  }
+  details: {
+    financial: {
+      invoiced: { subtotal: number; discounts: number; tax: number; total: number; count: number }
+      cashCollected: number
+      refundsIssued: number
+      netCash: number
+      topOverdueInvoices: Array<{
+        invoiceId: string
+        invoiceNumber: number | null
+        title: string
+        accountName: string | null
+        balance: number
+        status: string | null
+        dueDate: string | null
+        issuedAt: string | null
+        daysOverdue: number | null
+      }>
+    }
+    renewals: {
+      dueInRange: Array<{ id: string; name: string; accountName: string | null; status: string; renewalDate: string | null; mrr: number; arr: number; churnRisk: string | null }>
+      highChurnRisk: Array<{ id: string; name: string; accountName: string | null; status: string; renewalDate: string | null; mrr: number; arr: number; churnRisk: string | null }>
+    }
+    support: {
+      backlog: Array<{ id: string; ticketNumber: number | null; shortDescription: string; priority: string; status: string; slaDueAt: string | null; updatedAt: string | null; requesterName: string | null; requesterEmail: string | null }>
+      breached: Array<{ id: string; ticketNumber: number | null; shortDescription: string; priority: string; status: string; slaDueAt: string | null; updatedAt: string | null; requesterName: string | null; requesterEmail: string | null }>
+    }
   }
 }
 
@@ -29,10 +59,10 @@ export default function CRMReportingPrint() {
   const q = useQuery({
     queryKey: ['crm-reporting-overview-print', startDate, endDate],
     queryFn: async () => {
-      const res = await http.get('/api/crm/reporting/overview', {
+      const res = await http.get('/api/crm/reporting/report', {
         params: { startDate: startDate || undefined, endDate: endDate || undefined },
       })
-      return res.data as { data: Overview }
+      return res.data as { data: DetailedReport }
     },
   })
 
@@ -49,7 +79,11 @@ export default function CRMReportingPrint() {
     return () => clearTimeout(t)
   }, [data])
 
-  const k = data?.kpis || {}
+  const o = data?.overview
+  const k = o?.kpis || {}
+  const fin = data?.details.financial
+  const ren = data?.details.renewals
+  const sup = data?.details.support
 
   return (
     <div>
@@ -75,10 +109,13 @@ export default function CRMReportingPrint() {
         th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
         .right { text-align: right; }
         .pill { display:inline-block; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: 10px; color: var(--muted); }
-        .toolbar { position: sticky; top: 0; z-index: 10; background: rgba(248,250,252,.9); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+        /* High-contrast toolbar so Back/Print are always visible even in dark mode */
+        .toolbar { position: sticky; top: 0; z-index: 10; background: #0b1220; border-bottom: 1px solid rgba(148,163,184,.25); }
         .toolbarInner { max-width: 980px; margin: 0 auto; padding: 10px 32px; display:flex; align-items:center; justify-content:space-between; gap: 10px; }
-        .btn { border: 1px solid var(--border); background: #fff; border-radius: 10px; padding: 8px 10px; font-size: 12px; cursor: pointer; }
-        .btnPrimary { border-color: rgba(37,99,235,.4); background: rgba(37,99,235,.08); }
+        .btn { border: 1px solid rgba(148,163,184,.35); background: rgba(15,23,42,.35); color: #e5e7eb; border-radius: 10px; padding: 8px 10px; font-size: 12px; cursor: pointer; }
+        .btn:hover { background: rgba(15,23,42,.55); }
+        .btnPrimary { border-color: rgba(37,99,235,.7); background: rgba(37,99,235,.22); color: #ffffff; }
+        .btnPrimary:hover { background: rgba(37,99,235,.35); }
         @media print {
           .toolbar { display:none !important; }
           .rp-body { background: #fff; padding: 0; }
@@ -90,7 +127,7 @@ export default function CRMReportingPrint() {
 
       <div className="toolbar">
         <div className="toolbarInner">
-          <div className="text-sm" style={{ color: 'var(--muted)' }}>
+          <div className="text-sm" style={{ color: '#e5e7eb', fontWeight: 700, letterSpacing: '.01em' }}>
             BOAZ Report PDF Preview
           </div>
           <div className="flex gap-2">
@@ -125,7 +162,7 @@ export default function CRMReportingPrint() {
                 </div>
                 <div className="meta">
                   <div>
-                    <span className="pill">Range</span> {formatDateOnly(data.range.startDate)} → {formatDateOnly(data.range.endDate)}
+                    <span className="pill">Range</span> {formatDateOnly(o!.range.startDate)} → {formatDateOnly(o!.range.endDate)}
                   </div>
                   <div style={{ marginTop: 6 }}>
                     <span className="pill">Generated</span> {new Date().toLocaleString()}
@@ -157,6 +194,58 @@ export default function CRMReportingPrint() {
               </div>
 
               <div className="section">
+                <div className="sectionTitle">Financial Summary (range)</div>
+                <div className="twoCol">
+                  <div className="card">
+                    <div className="label">Invoiced</div>
+                    <div className="value">{formatCurrency(Number(fin?.invoiced.total || 0))}</div>
+                    <div className="note">
+                      {Number(fin?.invoiced.count || 0)} invoices • Subtotal {formatCurrency(Number(fin?.invoiced.subtotal || 0))} • Discounts {formatCurrency(Number(fin?.invoiced.discounts || 0))} • Tax {formatCurrency(Number(fin?.invoiced.tax || 0))}
+                    </div>
+                  </div>
+                  <div className="card">
+                    <div className="label">Cash Collected</div>
+                    <div className="value">{formatCurrency(Number(fin?.cashCollected || 0))}</div>
+                    <div className="note">
+                      Refunds {formatCurrency(Number(fin?.refundsIssued || 0))} • Net {formatCurrency(Number(fin?.netCash || 0))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="section">
+                <div className="sectionTitle">Top Overdue Invoices</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Invoice</th>
+                      <th>Account</th>
+                      <th className="right">Balance</th>
+                      <th>Due</th>
+                      <th className="right">Days overdue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(fin?.topOverdueInvoices ?? []).slice(0, 20).map((inv) => (
+                      <tr key={inv.invoiceId}>
+                        <td>
+                          <div style={{ fontWeight: 700 }}>#{inv.invoiceNumber ?? '—'} {inv.title}</div>
+                          <div style={{ color: 'var(--muted)', fontSize: 10 }}>{inv.status ?? '—'}</div>
+                        </td>
+                        <td>{inv.accountName ?? '—'}</td>
+                        <td className="right" style={{ fontWeight: 700 }}>{formatCurrency(Number(inv.balance || 0))}</td>
+                        <td>{inv.dueDate ? formatDateOnly(inv.dueDate) : '—'}</td>
+                        <td className="right">{inv.daysOverdue ?? '—'}</td>
+                      </tr>
+                    ))}
+                    {(fin?.topOverdueInvoices ?? []).length === 0 && (
+                      <tr><td colSpan={5} style={{ color: 'var(--muted)' }}>No overdue invoices found.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="section">
                 <div className="sectionTitle">Top Pipeline Deals</div>
                 <table>
                   <thead>
@@ -168,7 +257,7 @@ export default function CRMReportingPrint() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(data.lists.topPipeline || []).map((d) => (
+                    {(o?.lists.topPipeline || []).map((d) => (
                       <tr key={d.id}>
                         <td>
                           <div style={{ fontWeight: 700 }}>{d.title || 'Untitled'}</div>
@@ -181,6 +270,90 @@ export default function CRMReportingPrint() {
                         <td>{d.forecastedCloseDate ? formatDateOnly(d.forecastedCloseDate) : '—'}</td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="section">
+                <div className="sectionTitle">Renewals</div>
+                <div className="twoCol">
+                  <div className="card">
+                    <div className="label">Due in range</div>
+                    <div className="value">{Number(ren?.dueInRange.length || 0)}</div>
+                    <div className="note">MRR due: {formatCurrency((ren?.dueInRange ?? []).reduce((s, r) => s + Number(r.mrr || 0), 0))}</div>
+                  </div>
+                  <div className="card">
+                    <div className="label">High churn risk</div>
+                    <div className="value">{Number(ren?.highChurnRisk.length || 0)}</div>
+                    <div className="note">Prioritize outreach + renewals plays</div>
+                  </div>
+                </div>
+                <div style={{ height: 10 }} />
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Renewal</th>
+                      <th>Account</th>
+                      <th>Renewal date</th>
+                      <th className="right">MRR</th>
+                      <th>Risk</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(ren?.dueInRange ?? []).slice(0, 15).map((r) => (
+                      <tr key={r.id}>
+                        <td><div style={{ fontWeight: 700 }}>{r.name}</div><div style={{ color: 'var(--muted)', fontSize: 10 }}>{r.status}</div></td>
+                        <td>{r.accountName ?? '—'}</td>
+                        <td>{r.renewalDate ? formatDateOnly(r.renewalDate) : '—'}</td>
+                        <td className="right" style={{ fontWeight: 700 }}>{formatCurrency(Number(r.mrr || 0))}</td>
+                        <td>{r.churnRisk ?? '—'}</td>
+                      </tr>
+                    ))}
+                    {(ren?.dueInRange ?? []).length === 0 && (
+                      <tr><td colSpan={5} style={{ color: 'var(--muted)' }}>No renewals due in selected range.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="section">
+                <div className="sectionTitle">Support Operations</div>
+                <div className="twoCol">
+                  <div className="card">
+                    <div className="label">Backlog (open/in progress)</div>
+                    <div className="value">{Number(sup?.backlog.length || 0)}</div>
+                    <div className="note">Breached SLAs: {Number(sup?.breached.length || 0)}</div>
+                  </div>
+                  <div className="card">
+                    <div className="label">Ticket Priority Mix</div>
+                    <div className="value">{Object.keys((k.ticketsOpenByPriority || {}) as any).length}</div>
+                    <div className="note">See dashboard for breakdown</div>
+                  </div>
+                </div>
+                <div style={{ height: 10 }} />
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Ticket</th>
+                      <th>Priority</th>
+                      <th>Status</th>
+                      <th>SLA Due</th>
+                      <th>Requester</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(sup?.breached ?? []).slice(0, 15).map((t) => (
+                      <tr key={t.id}>
+                        <td><div style={{ fontWeight: 700 }}>#{t.ticketNumber ?? '—'} {t.shortDescription}</div><div style={{ color: 'var(--muted)', fontSize: 10 }}>{t.updatedAt ? new Date(t.updatedAt).toLocaleString() : '—'}</div></td>
+                        <td>{t.priority}</td>
+                        <td>{t.status}</td>
+                        <td>{t.slaDueAt ? new Date(t.slaDueAt).toLocaleString() : '—'}</td>
+                        <td>{t.requesterEmail || t.requesterName || '—'}</td>
+                      </tr>
+                    ))}
+                    {(sup?.breached ?? []).length === 0 && (
+                      <tr><td colSpan={5} style={{ color: 'var(--muted)' }}>No breached tickets found.</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>

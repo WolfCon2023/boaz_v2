@@ -325,6 +325,206 @@ reportingRouter.get('/overview', async (req, res) => {
   res.json({ data: overview, error: null })
 })
 
+// GET /api/crm/reporting/report?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+// Detailed executive report payload (overview + detailed financial/ops tables)
+reportingRouter.get('/report', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const { start, end, endExclusive } = getRange(
+    typeof req.query.startDate === 'string' ? req.query.startDate : undefined,
+    typeof req.query.endDate === 'string' ? req.query.endDate : undefined,
+  )
+
+  const overview = await computeOverview(db, start, endExclusive)
+
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const msDay = 24 * 60 * 60 * 1000
+
+  // === Financial details ===
+  // Payments collected during range (from embedded invoice.payments array)
+  const paidInvoices = (await db
+    .collection('invoices')
+    .find({ 'payments.paidAt': { $gte: start, $lt: endExclusive } } as any, { projection: { payments: 1 } as any })
+    .limit(5000)
+    .toArray()) as any[]
+  let cashCollected = 0
+  for (const inv of paidInvoices) {
+    for (const p of inv.payments ?? []) {
+      const paidAt = p?.paidAt ? new Date(p.paidAt) : null
+      if (!paidAt || !Number.isFinite(paidAt.getTime())) continue
+      if (paidAt >= start && paidAt < endExclusive) cashCollected += safeNumber(p.amount)
+    }
+  }
+
+  // Refunds issued during range (from embedded invoice.refunds array)
+  const refundedInvoices = (await db
+    .collection('invoices')
+    .find({ 'refunds.refundedAt': { $gte: start, $lt: endExclusive } } as any, { projection: { refunds: 1 } as any })
+    .limit(5000)
+    .toArray()) as any[]
+  let refundsIssued = 0
+  for (const inv of refundedInvoices) {
+    for (const r of inv.refunds ?? []) {
+      const refundedAt = r?.refundedAt ? new Date(r.refundedAt) : null
+      if (!refundedAt || !Number.isFinite(refundedAt.getTime())) continue
+      if (refundedAt >= start && refundedAt < endExclusive) refundsIssued += safeNumber(r.amount)
+    }
+  }
+  const netCash = cashCollected - refundsIssued
+
+  // Invoicing composition (issued in range)
+  const invoicedDocs = (await db
+    .collection('invoices')
+    .find({ issuedAt: { $gte: start, $lt: endExclusive } } as any, { projection: { subtotal: 1, tax: 1, discountAmount: 1, total: 1 } as any })
+    .limit(5000)
+    .toArray()) as any[]
+  const invoiced = {
+    subtotal: invoicedDocs.reduce((s, x) => s + safeNumber(x.subtotal), 0),
+    discounts: invoicedDocs.reduce((s, x) => s + safeNumber(x.discountAmount), 0),
+    tax: invoicedDocs.reduce((s, x) => s + safeNumber(x.tax), 0),
+    total: invoicedDocs.reduce((s, x) => s + safeNumber(x.total), 0),
+    count: invoicedDocs.length,
+  }
+
+  // Top overdue invoices
+  const overdueInvoices = (await db
+    .collection('invoices')
+    .find(
+      {
+        balance: { $gt: 0 },
+        status: { $nin: ['void', 'uncollectible'] },
+        dueDate: { $lt: todayStart },
+      } as any,
+      { projection: { invoiceNumber: 1, title: 1, accountId: 1, balance: 1, dueDate: 1, issuedAt: 1, status: 1 } as any },
+    )
+    .sort({ dueDate: 1 })
+    .limit(50)
+    .toArray()) as any[]
+
+  const accountIds = Array.from(
+    new Set(
+      overdueInvoices
+        .map((x) => x.accountId)
+        .filter(Boolean)
+        .map((id: any) => String(id)),
+    ),
+  )
+  const accountDocs =
+    accountIds.length > 0
+      ? ((await db
+          .collection('accounts')
+          .find({ _id: { $in: accountIds.filter(ObjectId.isValid).map((id) => new ObjectId(id)) } } as any, { projection: { name: 1, accountNumber: 1 } as any })
+          .toArray()) as any[])
+      : []
+  const accountNameById = new Map(accountDocs.map((a) => [String(a._id), a.name || `Account ${a.accountNumber || ''}`.trim()]))
+
+  const overdueInvoiceRows = overdueInvoices.map((inv) => {
+    const due = inv.dueDate ? new Date(inv.dueDate) : null
+    const dueStart = due ? new Date(due.getFullYear(), due.getMonth(), due.getDate()) : null
+    const daysOverdue =
+      dueStart && Number.isFinite(dueStart.getTime()) ? Math.max(0, Math.floor((todayStart.getTime() - dueStart.getTime()) / msDay)) : null
+    return {
+      invoiceId: String(inv._id),
+      invoiceNumber: inv.invoiceNumber ?? null,
+      title: inv.title || 'Untitled',
+      accountId: inv.accountId ? String(inv.accountId) : null,
+      accountName: inv.accountId ? accountNameById.get(String(inv.accountId)) || null : null,
+      balance: safeNumber(inv.balance),
+      status: inv.status || null,
+      dueDate: inv.dueDate || null,
+      issuedAt: inv.issuedAt || null,
+      daysOverdue,
+    }
+  })
+
+  // === Renewals lists ===
+  const renewalsDue = (await db
+    .collection('renewals')
+    .find({ renewalDate: { $gte: start, $lt: endExclusive }, status: { $in: ['Active', 'Pending Renewal'] } } as any, { projection: { name: 1, accountName: 1, status: 1, renewalDate: 1, mrr: 1, arr: 1, churnRisk: 1 } as any })
+    .sort({ renewalDate: 1 })
+    .limit(50)
+    .toArray()) as any[]
+  const highRiskRenewals = (await db
+    .collection('renewals')
+    .find({ churnRisk: 'High', status: { $in: ['Active', 'Pending Renewal'] } } as any, { projection: { name: 1, accountName: 1, status: 1, renewalDate: 1, mrr: 1, arr: 1, churnRisk: 1 } as any })
+    .sort({ renewalDate: 1 })
+    .limit(50)
+    .toArray()) as any[]
+
+  // === Ticket backlog ===
+  const backlog = (await db
+    .collection('support_tickets')
+    .find({ status: { $in: ['open', 'in_progress'] } } as any, { projection: { ticketNumber: 1, shortDescription: 1, priority: 1, status: 1, slaDueAt: 1, updatedAt: 1, requesterName: 1, requesterEmail: 1 } as any })
+    .sort({ priority: 1, updatedAt: -1 })
+    .limit(50)
+    .toArray()) as any[]
+  const breached = backlog.filter((t) => t.slaDueAt && new Date(t.slaDueAt).getTime() < now.getTime()).slice(0, 50)
+
+  res.json({
+    data: {
+      overview,
+      details: {
+        financial: {
+          invoiced,
+          cashCollected,
+          refundsIssued,
+          netCash,
+          topOverdueInvoices: overdueInvoiceRows,
+        },
+        renewals: {
+          dueInRange: renewalsDue.map((r) => ({
+            id: String(r._id),
+            name: r.name,
+            accountName: r.accountName || null,
+            status: r.status,
+            renewalDate: r.renewalDate || null,
+            mrr: safeNumber(r.mrr) || (r.arr != null ? safeNumber(r.arr) / 12 : 0),
+            arr: safeNumber(r.arr) || (r.mrr != null ? safeNumber(r.mrr) * 12 : 0),
+            churnRisk: r.churnRisk || null,
+          })),
+          highChurnRisk: highRiskRenewals.map((r) => ({
+            id: String(r._id),
+            name: r.name,
+            accountName: r.accountName || null,
+            status: r.status,
+            renewalDate: r.renewalDate || null,
+            mrr: safeNumber(r.mrr) || (r.arr != null ? safeNumber(r.arr) / 12 : 0),
+            arr: safeNumber(r.arr) || (r.mrr != null ? safeNumber(r.mrr) * 12 : 0),
+            churnRisk: r.churnRisk || null,
+          })),
+        },
+        support: {
+          backlog: backlog.map((t) => ({
+            id: String(t._id),
+            ticketNumber: t.ticketNumber ?? null,
+            shortDescription: t.shortDescription || 'Untitled',
+            priority: t.priority || 'normal',
+            status: t.status || 'open',
+            slaDueAt: t.slaDueAt || null,
+            updatedAt: t.updatedAt || null,
+            requesterName: t.requesterName || null,
+            requesterEmail: t.requesterEmail || null,
+          })),
+          breached: breached.map((t) => ({
+            id: String(t._id),
+            ticketNumber: t.ticketNumber ?? null,
+            shortDescription: t.shortDescription || 'Untitled',
+            priority: t.priority || 'normal',
+            status: t.status || 'open',
+            slaDueAt: t.slaDueAt || null,
+            updatedAt: t.updatedAt || null,
+            requesterName: t.requesterName || null,
+            requesterEmail: t.requesterEmail || null,
+          })),
+        },
+      },
+    },
+    error: null,
+  })
+})
+
 // === Snapshots ===
 type ReportingSnapshotDoc = {
   _id: ObjectId | string
