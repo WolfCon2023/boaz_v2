@@ -54,7 +54,9 @@ export default function CRMReportingPrint() {
   const navigate = useNavigate()
   const startDate = sp.get('startDate') || ''
   const endDate = sp.get('endDate') || ''
+  const autoPrint = sp.get('autoprint') === '1'
   const printedRef = React.useRef(false)
+  const [isReadyToPrint, setIsReadyToPrint] = React.useState(false)
 
   const q = useQuery({
     queryKey: ['crm-reporting-overview-print', startDate, endDate],
@@ -71,13 +73,33 @@ export default function CRMReportingPrint() {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(value || 0)
 
+  // Mark "ready" only after the data is loaded and the browser had a chance to lay out the page.
   React.useEffect(() => {
     if (!data) return
+    let cancelled = false
+    const run = async () => {
+      // wait for fonts if supported
+      try {
+        const anyDoc = document as any
+        if (anyDoc?.fonts?.ready) await anyDoc.fonts.ready
+      } catch {}
+      await new Promise((r) => requestAnimationFrame(() => r(null)))
+      await new Promise((r) => setTimeout(r, 50))
+      if (!cancelled) setIsReadyToPrint(true)
+    }
+    run()
+    return () => { cancelled = true }
+  }, [data])
+
+  // Auto-print (used by "Export PDF" button) — never print the placeholder.
+  React.useEffect(() => {
+    if (!autoPrint) return
+    if (!isReadyToPrint) return
     if (printedRef.current) return
     printedRef.current = true
-    const t = setTimeout(() => window.print(), 250)
+    const t = setTimeout(() => window.print(), 150)
     return () => clearTimeout(t)
-  }, [data])
+  }, [autoPrint, isReadyToPrint])
 
   const o = data?.overview
   const k = o?.kpis || {}
@@ -90,7 +112,8 @@ export default function CRMReportingPrint() {
       {/* Print-specific styling */}
       <style>{`
         :root { --fg:#0f172a; --muted:#475569; --border:#e2e8f0; --panel:#ffffff; --bg:#f8fafc; --brand:#2563eb; }
-        .rp-body { margin: 0; padding: 32px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: var(--fg); background: var(--bg); }
+        /* Ensure the print preview page has its own high-contrast canvas (avoid dark-mode bleed-through). */
+        .rp-body { margin: 0; padding: 32px; min-height: 100vh; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: var(--fg); background: var(--bg); }
         .page { max-width: 980px; margin: 0 auto; }
         .header { display:flex; align-items:flex-start; justify-content:space-between; gap: 16px; margin-bottom: 16px; }
         .brand { font-weight: 800; letter-spacing: .02em; color: var(--brand); font-size: 18px; }
@@ -134,7 +157,14 @@ export default function CRMReportingPrint() {
             <button className="btn" type="button" onClick={() => navigate('/apps/crm/reporting')}>
               Back
             </button>
-            <button className="btn btnPrimary" type="button" onClick={() => window.print()}>
+            <button
+              className="btn btnPrimary"
+              type="button"
+              disabled={!isReadyToPrint}
+              onClick={() => window.print()}
+              title={!isReadyToPrint ? 'Please wait for the report to finish loading' : 'Print / Save as PDF'}
+              style={!isReadyToPrint ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+            >
               Print / Save as PDF
             </button>
           </div>
@@ -144,9 +174,16 @@ export default function CRMReportingPrint() {
       <div className="rp-body">
         <div className="page">
           {!data && (
-            <div className="section">
+            <div
+              className="section"
+              style={{
+                background: '#ffffff',
+                borderColor: '#e2e8f0',
+                color: '#0f172a',
+              }}
+            >
               <div className="sectionTitle">{q.isError ? 'Failed to load report' : 'Preparing report…'}</div>
-              <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+              <div style={{ color: '#475569', fontSize: 12 }}>
                 {q.isError ? 'Please go back and try again.' : 'This will automatically open the print dialog.'}
               </div>
             </div>

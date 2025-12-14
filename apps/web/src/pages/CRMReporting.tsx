@@ -211,6 +211,7 @@ export default function CRMReporting() {
     // Use the currently loaded range to ensure what you see matches the PDF.
     params.set('startDate', data.range.startDate.slice(0, 10))
     params.set('endDate', data.range.endDate.slice(0, 10))
+    params.set('autoprint', '1')
     navigate(`/apps/crm/reporting/print?${params.toString()}`)
   }
 
