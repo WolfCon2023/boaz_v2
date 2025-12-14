@@ -67,6 +67,11 @@ export default function CRMHub() {
       desc: 'AI-powered deal scoring, pipeline forecasting, and rep performance analytics',
       href: '/apps/crm/revenue-intelligence',
     },
+    {
+      label: 'Reporting',
+      desc: 'Competitive-edge dashboards and exports across pipeline, service, and marketing',
+      href: '/apps/crm/reporting',
+    },
     { label: 'Surveys & Feedback', desc: 'NPS/CSAT and post‑interaction surveys', href: '/apps/crm/surveys' },
     {
       label: 'Tasks & Activities',
