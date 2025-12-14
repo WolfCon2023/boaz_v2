@@ -1,9 +1,4 @@
-import { Router } from 'express';
-import { ObjectId } from 'mongodb';
 import { getDb } from '../db.js';
-import { requireAuth } from '../auth/rbac.js';
-export const reportingRouter = Router();
-reportingRouter.use(requireAuth);
 function safeNumber(v) {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
@@ -24,7 +19,7 @@ function parseDateOnly(value) {
     const d = new Date(s);
     return Number.isFinite(d.getTime()) ? d : null;
 }
-function getRange(startRaw, endRaw) {
+export function getRange(startRaw, endRaw) {
     const now = new Date();
     const startParsed = parseDateOnly(startRaw);
     const endParsed = parseDateOnly(endRaw);
@@ -38,7 +33,11 @@ function getRange(startRaw, endRaw) {
     const start = new Date(endExclusive.getTime() - 30 * 24 * 60 * 60 * 1000);
     return { start, endExclusive, end: new Date(endExclusive.getTime() - 1) };
 }
-async function computeOverview(db, start, endExclusive) {
+export async function computeReportingOverview(input) {
+    const db = input.db || (await getDb());
+    if (!db)
+        throw new Error('db_unavailable');
+    const { start, endExclusive } = input;
     const startIso = start.toISOString();
     const endIso = endExclusive.toISOString();
     const now = new Date();
@@ -113,14 +112,12 @@ async function computeOverview(db, start, endExclusive) {
     const quoteAcceptanceRate = quotesCreated > 0 ? quotesAccepted / quotesCreated : 0;
     // === Invoices / receivables ===
     const invoicesCreated = await db.collection('invoices').countDocuments({ createdAt: { $gte: start, $lt: endExclusive } });
-    // Invoiced revenue (issued in selected range)
     const invoicedDocs = (await db
         .collection('invoices')
         .find({ issuedAt: { $gte: start, $lt: endExclusive } }, { projection: { total: 1 } })
         .limit(5000)
         .toArray());
     const invoicedRevenue = invoicedDocs.reduce((s, inv) => s + safeNumber(inv.total), 0);
-    // Avg days-to-pay for invoices that were paid during the selected range (best-effort approximation)
     const paidDocs = (await db
         .collection('invoices')
         .find({ paidAt: { $gte: start, $lt: endExclusive } }, { projection: { issuedAt: 1, paidAt: 1 } })
@@ -189,7 +186,6 @@ async function computeOverview(db, start, endExclusive) {
             aging['90_plus'].balance += bal;
         }
     }
-    // DSO (best-effort): (current AR / average daily invoiced revenue in range) * days
     const dsoDays = invoicedRevenue > 0 ? receivablesOutstanding / (invoicedRevenue / rangeDays) : null;
     // === Renewals ===
     const renewalsActive = (await db
@@ -291,72 +287,3 @@ async function computeOverview(db, start, endExclusive) {
         },
     };
 }
-// GET /api/crm/reporting/overview?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
-// A lightweight "competitive edge" reporting endpoint (cross-module KPIs).
-reportingRouter.get('/overview', async (req, res) => {
-    const db = await getDb();
-    if (!db)
-        return res.status(500).json({ data: null, error: 'db_unavailable' });
-    const { start, end, endExclusive } = getRange(typeof req.query.startDate === 'string' ? req.query.startDate : undefined, typeof req.query.endDate === 'string' ? req.query.endDate : undefined);
-    const overview = await computeOverview(db, start, endExclusive);
-    res.json({ data: overview, error: null });
-});
-// POST /api/crm/reporting/snapshots { startDate?, endDate? }
-reportingRouter.post('/snapshots', async (req, res) => {
-    const db = await getDb();
-    if (!db)
-        return res.status(500).json({ data: null, error: 'db_unavailable' });
-    const raw = req.body ?? {};
-    const { start, endExclusive } = getRange(typeof raw.startDate === 'string' ? raw.startDate : undefined, typeof raw.endDate === 'string' ? raw.endDate : undefined);
-    const overview = await computeOverview(db, start, endExclusive);
-    const auth = req.auth;
-    const doc = {
-        _id: new ObjectId(),
-        createdAt: new Date(),
-        createdByUserId: auth?.userId,
-        kind: 'manual',
-        scheduleKey: null,
-        range: { startDate: overview.range.startDate, endDate: overview.range.endDate },
-        kpis: overview.kpis,
-    };
-    await db.collection('reporting_snapshots').insertOne(doc);
-    res.json({
-        data: {
-            id: String(doc._id),
-            createdAt: doc.createdAt,
-            kind: doc.kind,
-            scheduleKey: doc.scheduleKey,
-            range: doc.range,
-            kpis: doc.kpis,
-        },
-        error: null,
-    });
-});
-// GET /api/crm/reporting/snapshots?limit=20
-reportingRouter.get('/snapshots', async (req, res) => {
-    const db = await getDb();
-    if (!db)
-        return res.status(500).json({ data: null, error: 'db_unavailable' });
-    const limitRaw = Number(req.query.limit);
-    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 20;
-    const items = (await db
-        .collection('reporting_snapshots')
-        .find({})
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .toArray());
-    res.json({
-        data: {
-            items: items.map((s) => ({
-                id: String(s._id),
-                createdAt: s.createdAt,
-                createdByUserId: s.createdByUserId ?? null,
-                kind: s.kind ?? 'manual',
-                scheduleKey: s.scheduleKey ?? null,
-                range: s.range,
-                kpis: s.kpis,
-            })),
-        },
-        error: null,
-    });
-});

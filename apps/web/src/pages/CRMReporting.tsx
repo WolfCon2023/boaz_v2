@@ -73,6 +73,8 @@ export default function CRMReporting() {
             id: string
             createdAt: string
             createdByUserId: string | null
+            kind?: 'manual' | 'scheduled'
+            scheduleKey?: string | null
             range: { startDate: string; endDate: string }
             kpis: Record<string, any>
           }>
@@ -165,6 +167,186 @@ export default function CRMReporting() {
     downloadCsv('reporting-engaged-segments.csv', headers, rows)
   }
 
+  function exportPackJson() {
+    const pack = {
+      type: 'boaz_reporting_export_pack',
+      generatedAt: new Date().toISOString(),
+      selectedRange: { startDate: startDate || null, endDate: endDate || null },
+      overview: data || null,
+      snapshots: snapshotsQ.data?.data.items ?? [],
+    }
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'boaz-report-pack.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportPackCsv() {
+    if (!data) return
+    const rows: Array<Array<string | number>> = []
+    for (const [k, v] of Object.entries(data.kpis as any)) {
+      rows.push(['kpis', k, typeof v === 'object' ? JSON.stringify(v) : String(v ?? '')])
+    }
+    rows.push(['', '', ''])
+    rows.push(['topPipeline', 'dealId', 'dealNumber|title|stage|amount|forecastedCloseDate'])
+    for (const d of data.lists.topPipeline) {
+      rows.push(['topPipeline', d.id, `${d.dealNumber ?? ''}|${d.title}|${d.stage ?? ''}|${d.amount}|${d.forecastedCloseDate ?? ''}`])
+    }
+    rows.push(['', '', ''])
+    rows.push(['engagedSegments', 'segmentId', 'name|emailCount|updatedAt'])
+    for (const s of data.lists.engagedSegments) {
+      rows.push(['engagedSegments', s.id, `${s.name}|${s.emailCount}|${s.updatedAt ?? ''}`])
+    }
+    downloadCsv('boaz-report-pack.csv', ['section', 'metric', 'value'], rows)
+  }
+
+  function exportPdf() {
+    if (!data) return
+    const w = window.open('', '_blank', 'noopener,noreferrer,width=1024,height=768')
+    if (!w) {
+      toast.showToast('Popup blocked. Please allow popups to export PDF.', 'error')
+      return
+    }
+
+    const title = 'BOAZ Reporting'
+    const rangeLabel = `${formatDateOnly(data.range.startDate)} → ${formatDateOnly(data.range.endDate)}`
+    const k = data.kpis
+
+    const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>${title}</title>
+  <style>
+    :root { --fg:#0f172a; --muted:#475569; --border:#e2e8f0; --panel:#ffffff; --bg:#f8fafc; --brand:#2563eb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: var(--fg); background: var(--bg); }
+    .page { max-width: 980px; margin: 0 auto; }
+    .header { display:flex; align-items:flex-start; justify-content:space-between; gap: 16px; margin-bottom: 16px; }
+    .brand { font-weight: 800; letter-spacing: .02em; color: var(--brand); font-size: 18px; }
+    .h1 { font-size: 28px; font-weight: 800; margin: 6px 0 0; }
+    .sub { color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .meta { text-align:right; color: var(--muted); font-size: 12px; }
+    .cardGrid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
+    .label { color: var(--muted); font-size: 11px; }
+    .value { font-size: 18px; font-weight: 800; margin-top: 4px; }
+    .note { color: var(--muted); font-size: 11px; margin-top: 4px; }
+    .section { margin-top: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+    .sectionTitle { font-size: 13px; font-weight: 800; margin: 0 0 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; font-size: 11px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+    .right { text-align: right; }
+    .pill { display:inline-block; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: 10px; color: var(--muted); }
+    .twoCol { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .page { max-width: none; margin: 0; }
+      .section, .card { break-inside: avoid; }
+      @page { margin: 14mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div>
+        <div class="brand">BOAZ-OS</div>
+        <div class="h1">Executive Report</div>
+        <div class="sub">Competitive-edge KPIs across pipeline, service, marketing, and cashflow.</div>
+      </div>
+      <div class="meta">
+        <div><span class="pill">Range</span> ${rangeLabel}</div>
+        <div style="margin-top:6px;"><span class="pill">Generated</span> ${new Date().toLocaleString()}</div>
+      </div>
+    </div>
+
+    <div class="cardGrid">
+      <div class="card"><div class="label">Open Pipeline</div><div class="value">${formatCurrency(Number(k.pipelineValue || 0))}</div><div class="note">${Number(k.pipelineDeals || 0)} deals</div></div>
+      <div class="card"><div class="label">Closed Won</div><div class="value">${formatCurrency(Number(k.closedWonValue || 0))}</div><div class="note">${Number(k.closedWonDeals || 0)} deals</div></div>
+      <div class="card"><div class="label">Support</div><div class="value">${Number(k.openTickets || 0)} open</div><div class="note">${Number(k.breachedTickets || 0)} SLA-breached</div></div>
+      <div class="card"><div class="label">Receivables (AR)</div><div class="value">${formatCurrency(Number(k.receivablesOutstanding || 0))}</div><div class="note">Overdue ${formatCurrency(Number(k.receivablesOverdue || 0))}</div></div>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">Cash Efficiency</div>
+      <div class="twoCol">
+        <div class="card">
+          <div class="label">DSO (best-effort)</div>
+          <div class="value">${k.dsoDays == null ? '—' : `${Math.round(Number(k.dsoDays))} days`}</div>
+          <div class="note">Based on AR vs invoiced revenue during selected range</div>
+        </div>
+        <div class="card">
+          <div class="label">Avg days-to-pay</div>
+          <div class="value">${k.avgDaysToPay == null ? '—' : `${Math.round(Number(k.avgDaysToPay))} days`}</div>
+          <div class="note">Invoices paid during selected range</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">Top Pipeline Deals</div>
+      <table>
+        <thead><tr><th>Deal</th><th>Stage</th><th class="right">Amount</th><th>Forecast Close</th></tr></thead>
+        <tbody>
+          ${(data.lists.topPipeline || []).map((d) => `
+            <tr>
+              <td><div style="font-weight:700;">${String(d.title || 'Untitled')}</div><div style="color:var(--muted); font-size:10px;">#${String(d.dealNumber ?? '—')}</div></td>
+              <td>${String(d.stage ?? '—')}</td>
+              <td class="right" style="font-weight:700;">${formatCurrency(Number(d.amount || 0))}</td>
+              <td>${d.forecastedCloseDate ? formatDateOnly(String(d.forecastedCloseDate)) : '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">Receivables Aging</div>
+      <table>
+        <thead><tr><th>Bucket</th><th class="right">Invoices</th><th class="right">Balance</th></tr></thead>
+        <tbody>
+          ${['current','1_30','31_60','61_90','90_plus'].map((key) => {
+            const row = (k.receivablesAging && k.receivablesAging[key]) ? k.receivablesAging[key] : { count: 0, balance: 0 }
+            const label = key === 'current' ? 'Current' : key.replace('_', '–').replace('plus', '+')
+            return `<tr><td>${label}</td><td class="right">${Number(row.count || 0)}</td><td class="right">${formatCurrency(Number(row.balance || 0))}</td></tr>`
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="sectionTitle">Marketing Engagement</div>
+      <div class="cardGrid" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="card"><div class="label">Opens</div><div class="value">${Number(k.marketingOpens || 0)}</div></div>
+        <div class="card"><div class="label">Clicks</div><div class="value">${Number(k.marketingClicks || 0)}</div></div>
+        <div class="card"><div class="label">CTR</div><div class="value">${k.marketingClickThroughRate == null ? '—' : `${Math.round(Number(k.marketingClickThroughRate) * 100)}%`}</div></div>
+        <div class="card"><div class="label">Unsubscribes</div><div class="value">${Number(k.marketingUnsubscribes || 0)}</div></div>
+      </div>
+    </div>
+
+    <div class="section" style="color: var(--muted); font-size: 11px;">
+      Tip: In the print dialog, choose <b>Save as PDF</b>. For best results, enable background graphics.
+    </div>
+  </div>
+</body>
+</html>`
+
+    w.document.open()
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    // Delay to let layout settle before print
+    setTimeout(() => {
+      w.print()
+    }, 250)
+  }
+
   return (
     <div className="space-y-6">
       <CRMNav />
@@ -176,6 +358,31 @@ export default function CRMReporting() {
         </div>
         <div className="flex items-center gap-2">
           <CRMHelpButton tag="crm:reporting" />
+          <button
+            type="button"
+            onClick={exportPdf}
+            disabled={!data}
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+          >
+            Export PDF
+          </button>
+          <button
+            type="button"
+            onClick={exportPackJson}
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+            title="Downloads a single JSON file containing KPIs, lists, and recent snapshots"
+          >
+            Export Pack (JSON)
+          </button>
+          <button
+            type="button"
+            onClick={exportPackCsv}
+            disabled={!data}
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+            title="Downloads a single CSV with KPIs + lists (sections)"
+          >
+            Export Pack (CSV)
+          </button>
           <button
             type="button"
             onClick={() => saveSnapshot.mutate()}
@@ -244,26 +451,26 @@ export default function CRMReporting() {
       {data && (
         <>
           <section className="grid gap-4 md:grid-cols-4">
-            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+            <a href={`/apps/crm/deals?startDate=${data.range.startDate.slice(0,10)}&endDate=${data.range.endDate.slice(0,10)}`} className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 hover:bg-[color:var(--color-muted)]">
               <div className="text-xs text-[color:var(--color-text-muted)]">Open Pipeline</div>
               <div className="mt-1 text-2xl font-semibold">{formatCurrency(data.kpis.pipelineValue)}</div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">{data.kpis.pipelineDeals} deals</div>
-            </div>
-            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+            </a>
+            <a href={`/apps/crm/deals?startDate=${data.range.startDate.slice(0,10)}&endDate=${data.range.endDate.slice(0,10)}`} className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 hover:bg-[color:var(--color-muted)]">
               <div className="text-xs text-[color:var(--color-text-muted)]">Closed Won</div>
               <div className="mt-1 text-2xl font-semibold text-emerald-400">{formatCurrency(data.kpis.closedWonValue)}</div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">{data.kpis.closedWonDeals} deals</div>
-            </div>
-            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+            </a>
+            <a href="/apps/crm/support/tickets" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 hover:bg-[color:var(--color-muted)]">
               <div className="text-xs text-[color:var(--color-text-muted)]">Support Health</div>
               <div className="mt-1 text-2xl font-semibold">{data.kpis.openTickets} open</div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">{data.kpis.breachedTickets} SLA-breached</div>
-            </div>
-            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+            </a>
+            <a href="/apps/crm/marketing" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 hover:bg-[color:var(--color-muted)]">
               <div className="text-xs text-[color:var(--color-text-muted)]">Marketing Engagement</div>
               <div className="mt-1 text-2xl font-semibold">{data.kpis.marketingClicks} clicks</div>
               <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">{data.kpis.marketingOpens} opens • {data.kpis.marketingUnsubscribes} unsub</div>
-            </div>
+            </a>
           </section>
 
           <section className="grid gap-4 md:grid-cols-4">
@@ -336,13 +543,14 @@ export default function CRMReporting() {
                   <div className="text-xs text-[color:var(--color-text-muted)]">No open tickets in the selected range.</div>
                 ) : (
                   Object.entries(data.kpis.ticketsOpenByPriority || {}).map(([p, n]) => (
-                    <span
+                    <a
                       key={p}
+                      href={`/apps/crm/support/tickets?priority=${encodeURIComponent(p)}`}
                       className="inline-flex items-center rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-1 text-xs"
                     >
                       <span className="font-semibold">{p}</span>
                       <span className="ml-2 text-[color:var(--color-text-muted)]">{n}</span>
-                    </span>
+                    </a>
                   ))
                 )}
               </div>
@@ -453,7 +661,12 @@ export default function CRMReporting() {
                       }
                       return (
                         <tr key={s.id} className="border-b border-[color:var(--color-border)]">
-                          <td className="px-2 py-2">{new Date(s.createdAt).toLocaleString()}</td>
+                          <td className="px-2 py-2">
+                            <div className="font-semibold">{new Date(s.createdAt).toLocaleString()}</div>
+                            <div className="text-[10px] text-[color:var(--color-text-muted)]">
+                              {(s.kind || 'manual')}{s.scheduleKey ? ` • ${s.scheduleKey}` : ''}
+                            </div>
+                          </td>
                           <td className="px-2 py-2">
                             {formatDateOnly(s.range.startDate)} → {formatDateOnly(s.range.endDate)}
                           </td>

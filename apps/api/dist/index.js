@@ -51,6 +51,7 @@ import { adminCustomerPortalUsersRouter } from './admin/customer_portal_users.js
 import { adminSeedDataRouter } from './admin/seed_data.js';
 import { paymentPortalRouter } from './payments/payment_portal.js';
 import { webhooksRouter } from './payments/webhooks.js';
+import { startReportingSnapshotsJob } from './jobs/reporting_snapshots_job.js';
 const app = express();
 const normalize = (s) => s.trim().replace(/\/$/, '').toLowerCase();
 const allowedOriginsRaw = env.ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
@@ -178,6 +179,7 @@ app.get('/api/metrics/summary', async (_req, res) => {
 app.listen(env.PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`API listening on http://localhost:${env.PORT}`);
+    startReportingSnapshotsJob();
 });
 // Global error handler to ensure CORS headers are present on errors
 // Must be registered after routes
