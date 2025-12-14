@@ -93,8 +93,12 @@ export default function CRMRevenueIntelligence() {
   )
   const [selectedDealId, setSelectedDealId] = React.useState<string | null>(null)
   const [showScoringSettings, setShowScoringSettings] = React.useState(false)
+  const [settingsMode, setSettingsMode] = React.useState<'simple' | 'json'>('simple')
   const [settingsText, setSettingsText] = React.useState('')
+  const [settingsDraft, setSettingsDraft] = React.useState<RevenueIntelligenceSettings | null>(null)
   const [settingsError, setSettingsError] = React.useState<string | null>(null)
+  const [newStageKey, setNewStageKey] = React.useState('')
+  const [newStageWeight, setNewStageWeight] = React.useState('')
   
   // Scenario adjustments state
   const [scenarioAdjustments, setScenarioAdjustments] = React.useState<
@@ -156,12 +160,87 @@ export default function CRMRevenueIntelligence() {
     },
   })
 
+  function coerceNumber(v: any, fallback: number) {
+    const n = typeof v === 'number' ? v : Number(v)
+    return Number.isFinite(n) ? n : fallback
+  }
+
+  function normalizeSettings(raw: any): RevenueIntelligenceSettings {
+    const safe = (o: any, fb: any) => (o && typeof o === 'object' && !Array.isArray(o) ? o : fb)
+    const stageWeights = safe(raw?.stageWeights, {})
+    const dealAge = safe(raw?.dealAge, {})
+    const activity = safe(raw?.activity, {})
+    const account = safe(raw?.account, {})
+    const stageDuration = safe(raw?.stageDuration, {})
+    const closeDate = safe(raw?.closeDate, {})
+    const stalePanel = safe(raw?.stalePanel, {})
+
+    // Use current settings (from API) as base when available, otherwise some sane defaults.
+    const base: RevenueIntelligenceSettings =
+      (settingsQ.data?.data as any) || {
+        stageWeights: {},
+        dealAge: { warnDays: 60, agingDays: 90, staleDays: 180, warnImpact: -3, agingImpact: -8, staleImpact: -15 },
+        activity: { hotDays: 7, warmDays: 14, coolDays: 21, coldDays: 30, hotImpact: 10, warmImpact: 5, coolImpact: -6, coldImpact: -12 },
+        account: { matureDays: 365, newDays: 30, matureImpact: 8, newImpact: -5 },
+        stageDuration: { warnDays: 30, stuckDays: 60, warnImpact: -5, stuckImpact: -10 },
+        closeDate: { overdueImpact: -20, closingSoonDays: 7, closingSoonImpact: 12, closingSoonWarmDays: 14, closingSoonWarmImpact: 8 },
+        stalePanel: { noActivityDays: 30, stuckInStageDays: 60 },
+      }
+
+    return {
+      stageWeights: { ...(base.stageWeights || {}), ...Object.fromEntries(Object.entries(stageWeights).map(([k, v]) => [k, coerceNumber(v, 0)])) },
+      dealAge: {
+        warnDays: coerceNumber(dealAge.warnDays, base.dealAge.warnDays),
+        agingDays: coerceNumber(dealAge.agingDays, base.dealAge.agingDays),
+        staleDays: coerceNumber(dealAge.staleDays, base.dealAge.staleDays),
+        warnImpact: coerceNumber(dealAge.warnImpact, base.dealAge.warnImpact),
+        agingImpact: coerceNumber(dealAge.agingImpact, base.dealAge.agingImpact),
+        staleImpact: coerceNumber(dealAge.staleImpact, base.dealAge.staleImpact),
+      },
+      activity: {
+        hotDays: coerceNumber(activity.hotDays, base.activity.hotDays),
+        warmDays: coerceNumber(activity.warmDays, base.activity.warmDays),
+        coolDays: coerceNumber(activity.coolDays, base.activity.coolDays),
+        coldDays: coerceNumber(activity.coldDays, base.activity.coldDays),
+        hotImpact: coerceNumber(activity.hotImpact, base.activity.hotImpact),
+        warmImpact: coerceNumber(activity.warmImpact, base.activity.warmImpact),
+        coolImpact: coerceNumber(activity.coolImpact, base.activity.coolImpact),
+        coldImpact: coerceNumber(activity.coldImpact, base.activity.coldImpact),
+      },
+      account: {
+        matureDays: coerceNumber(account.matureDays, base.account.matureDays),
+        newDays: coerceNumber(account.newDays, base.account.newDays),
+        matureImpact: coerceNumber(account.matureImpact, base.account.matureImpact),
+        newImpact: coerceNumber(account.newImpact, base.account.newImpact),
+      },
+      stageDuration: {
+        warnDays: coerceNumber(stageDuration.warnDays, base.stageDuration.warnDays),
+        stuckDays: coerceNumber(stageDuration.stuckDays, base.stageDuration.stuckDays),
+        warnImpact: coerceNumber(stageDuration.warnImpact, base.stageDuration.warnImpact),
+        stuckImpact: coerceNumber(stageDuration.stuckImpact, base.stageDuration.stuckImpact),
+      },
+      closeDate: {
+        overdueImpact: coerceNumber(closeDate.overdueImpact, base.closeDate.overdueImpact),
+        closingSoonDays: coerceNumber(closeDate.closingSoonDays, base.closeDate.closingSoonDays),
+        closingSoonImpact: coerceNumber(closeDate.closingSoonImpact, base.closeDate.closingSoonImpact),
+        closingSoonWarmDays: coerceNumber(closeDate.closingSoonWarmDays, base.closeDate.closingSoonWarmDays),
+        closingSoonWarmImpact: coerceNumber(closeDate.closingSoonWarmImpact, base.closeDate.closingSoonWarmImpact),
+      },
+      stalePanel: {
+        noActivityDays: coerceNumber(stalePanel.noActivityDays, base.stalePanel.noActivityDays),
+        stuckInStageDays: coerceNumber(stalePanel.stuckInStageDays, base.stalePanel.stuckInStageDays),
+      },
+    }
+  }
+
   async function loadRecommendedDefaults() {
     try {
       setSettingsError(null)
       const res = await http.get('/api/crm/revenue-intelligence/settings/defaults')
       const defaults = (res.data?.data ?? {}) as RevenueIntelligenceSettings
-      setSettingsText(JSON.stringify(defaults, null, 2))
+      const normalized = normalizeSettings(defaults)
+      setSettingsDraft(normalized)
+      setSettingsText(JSON.stringify(normalized, null, 2))
     } catch (e: any) {
       setSettingsError(e?.response?.data?.error || e?.message || 'Failed to load defaults')
     }
@@ -554,7 +633,10 @@ export default function CRMRevenueIntelligence() {
               setSettingsError(null)
               setShowScoringSettings(true)
               const current = settingsQ.data?.data
-              setSettingsText(current ? JSON.stringify(current, null, 2) : '')
+              const normalized = current ? normalizeSettings(current) : null
+              setSettingsDraft(normalized)
+              setSettingsText(normalized ? JSON.stringify(normalized, null, 2) : '')
+              setSettingsMode('simple')
             }}
             className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
             title="View/edit AI scoring settings (admin only)"
@@ -1464,12 +1546,163 @@ export default function CRMRevenueIntelligence() {
               </div>
             )}
 
-            <textarea
-              value={settingsText}
-              onChange={(e) => setSettingsText(e.target.value)}
-              className="w-full min-h-[320px] rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 font-mono text-[11px] text-[color:var(--color-text)]"
-              placeholder={riSettings ? JSON.stringify(riSettings, null, 2) : 'Loading settings…'}
-            />
+            <div className="mb-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  // Switching to simple: parse JSON if needed
+                  if (settingsMode === 'json') {
+                    try {
+                      const parsed = JSON.parse(settingsText || '{}')
+                      const normalized = normalizeSettings(parsed)
+                      setSettingsDraft(normalized)
+                      setSettingsText(JSON.stringify(normalized, null, 2))
+                      setSettingsError(null)
+                    } catch (e: any) {
+                      setSettingsError(`Invalid JSON: ${e?.message || 'Parse error'}`)
+                      return
+                    }
+                  }
+                  setSettingsMode('simple')
+                }}
+                className={`rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs ${settingsMode === 'simple' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}
+              >
+                Simple editor
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // Switching to JSON: serialize current draft
+                  if (settingsDraft) {
+                    setSettingsText(JSON.stringify(settingsDraft, null, 2))
+                  }
+                  setSettingsMode('json')
+                }}
+                className={`rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs ${settingsMode === 'json' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}
+              >
+                Advanced (JSON)
+              </button>
+            </div>
+
+            {settingsMode === 'simple' ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                  <div className="mb-2 text-sm font-semibold">Stage weights</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)] mb-3">
+                    Positive = increases score; negative = decreases score.
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {Object.entries(settingsDraft?.stageWeights || {})
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([k, v]) => (
+                        <label key={k} className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs">
+                          <span className="truncate">{k}</span>
+                          <input
+                            type="number"
+                            value={v}
+                            onChange={(e) => {
+                              const next = normalizeSettings(settingsDraft || {})
+                              next.stageWeights[k] = Number(e.target.value)
+                              setSettingsDraft(next)
+                              setSettingsText(JSON.stringify(next, null, 2))
+                            }}
+                            className="w-24 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
+                          />
+                        </label>
+                      ))}
+                  </div>
+
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <input
+                      type="text"
+                      value={newStageKey}
+                      onChange={(e) => setNewStageKey(e.target.value)}
+                      placeholder="New stage name…"
+                      className="rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs"
+                    />
+                    <input
+                      type="number"
+                      value={newStageWeight}
+                      onChange={(e) => setNewStageWeight(e.target.value)}
+                      placeholder="Weight"
+                      className="rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const key = newStageKey.trim()
+                        if (!key) return
+                        const next = normalizeSettings(settingsDraft || {})
+                        next.stageWeights[key] = Number(newStageWeight || 0)
+                        setSettingsDraft(next)
+                        setSettingsText(JSON.stringify(next, null, 2))
+                        setNewStageKey('')
+                        setNewStageWeight('')
+                      }}
+                      className="rounded bg-[color:var(--color-primary-600)] px-3 py-2 text-xs font-semibold text-white hover:bg-[color:var(--color-primary-700)]"
+                    >
+                      Add stage
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                    <div className="mb-2 text-sm font-semibold">Activity thresholds</div>
+                    <div className="grid gap-2 sm:grid-cols-2 text-xs">
+                      {(['hotDays','warmDays','coolDays','coldDays'] as const).map((k) => (
+                        <label key={k} className="flex items-center justify-between gap-2 rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2">
+                          <span>{k}</span>
+                          <input
+                            type="number"
+                            value={(settingsDraft?.activity as any)?.[k] ?? 0}
+                            onChange={(e) => {
+                              const next = normalizeSettings(settingsDraft || {})
+                              ;(next.activity as any)[k] = Number(e.target.value)
+                              setSettingsDraft(next)
+                              setSettingsText(JSON.stringify(next, null, 2))
+                            }}
+                            className="w-24 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                    <div className="mb-2 text-sm font-semibold">At‑risk thresholds</div>
+                    <div className="grid gap-2 sm:grid-cols-2 text-xs">
+                      {(['noActivityDays','stuckInStageDays'] as const).map((k) => (
+                        <label key={k} className="flex items-center justify-between gap-2 rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2">
+                          <span>{k}</span>
+                          <input
+                            type="number"
+                            value={(settingsDraft?.stalePanel as any)?.[k] ?? 0}
+                            onChange={(e) => {
+                              const next = normalizeSettings(settingsDraft || {})
+                              ;(next.stalePanel as any)[k] = Number(e.target.value)
+                              setSettingsDraft(next)
+                              setSettingsText(JSON.stringify(next, null, 2))
+                            }}
+                            className="w-24 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-[color:var(--color-text-muted)]">
+                  Tip: If you need deeper control (impacts for each factor), switch to <strong>Advanced (JSON)</strong>.
+                </div>
+              </div>
+            ) : (
+              <textarea
+                value={settingsText}
+                onChange={(e) => setSettingsText(e.target.value)}
+                className="w-full min-h-[320px] rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 font-mono text-[11px] text-[color:var(--color-text)]"
+                placeholder={riSettings ? JSON.stringify(riSettings, null, 2) : 'Loading settings…'}
+              />
+            )}
 
             <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
               <button
@@ -1497,8 +1730,9 @@ export default function CRMRevenueIntelligence() {
                 onClick={() => {
                   try {
                     const parsed = JSON.parse(settingsText || '{}')
+                    const normalized = normalizeSettings(parsed)
                     setSettingsError(null)
-                    saveSettingsMutation.mutate(parsed)
+                    saveSettingsMutation.mutate(normalized)
                   } catch (e: any) {
                     setSettingsError(`Invalid JSON: ${e?.message || 'Parse error'}`)
                   }

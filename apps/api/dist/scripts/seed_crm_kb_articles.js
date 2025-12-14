@@ -465,8 +465,8 @@ Each factor contributes positively or negatively to the overall score. You can v
 
 ## Pipeline Forecasting
 The **Forecast** view shows:
-- **Total Pipeline** – sum of all deal values in the period
-- **Weighted Pipeline** – pipeline adjusted by AI scores
+- **Total Pipeline** – sum of **open pipeline** deal values in the selected range (excludes Closed Won/Lost)
+- **Weighted Pipeline** – open pipeline adjusted by AI scores (sum of amount × AI score%)
 - **Closed Won** – revenue already closed
 - **Forecast Range** – three scenarios based on confidence levels:
   - **Pessimistic** – conservative estimate (High confidence at 70%, Medium at 30%, Low at 10%)
@@ -492,13 +492,59 @@ Choose from:
 - **Next Month** – deals closing next month
 - **Next Quarter** – deals closing next quarter
 - **Current Year** – deals closing this year
+- **Next Year** – deals closing next year
 
-## What-If Scenarios (Coming Soon)
-The **Scenario** view will allow you to model pipeline changes:
+Custom date range (recommended)
+You can override the preset periods with a custom date range:
+1. Set **Start** and **End** dates
+2. Revenue Intelligence will use that range instead of the preset period
+3. Click **Clear dates** to return to period mode
+
+Exclude overdue deals
+Enable **Exclude overdue** to remove open deals whose forecast close date is before today from pipeline and forecasts.
+This helps focus the forecast on what can still close in the selected range.
+
+## What-If Scenarios
+Use the **What‑If Scenarios** view to model pipeline changes without modifying the actual deals:
 - Adjust deal stages, values, probabilities, and close dates
 - See real time impact on forecast
 - Compare baseline vs scenario side by side
 - Test different strategies before committing
+
+## Top Drivers (Why the forecast looks the way it does)
+The app includes a **Top Drivers** section that summarizes:
+- Confidence mix (High / Medium / Low)
+- Overdue count (if included)
+- The strongest positive and negative AI factor drivers across your open pipeline
+
+## Stale / At‑Risk Deals
+The **Stale / At‑Risk** panel flags open deals that may slip, such as:
+- Overdue close dates
+- No recent activity for N+ days
+- Stuck in stage for N+ days
+These thresholds are configurable (see Scoring Settings).
+
+## Scoring Settings (Admin)
+Revenue Intelligence scoring is configurable so you can align the AI scoring to your actual sales process.
+Open **Scoring settings** from the Revenue Intelligence page header.
+
+### Non‑technical method (Simple editor)
+Use **Simple editor** to adjust the most common settings without editing JSON:
+- Stage weights (positive/negative)
+- Activity and at‑risk thresholds (days)
+Click **Save settings** to apply.
+
+### Advanced method (JSON)
+Use **Advanced (JSON)** when you need full control (including factor impacts).
+
+How to safely edit the JSON:
+1. Click **Load recommended defaults** (good starting point)
+2. Make small changes and keep the JSON structure intact
+3. Use numbers for numeric values (no quotes)
+4. Keep commas and braces correct (invalid JSON cannot be saved)
+5. Click **Save settings**
+
+Tip: If Top Drivers shows "—", your stage weights may be 0 for your real pipeline stages, or your deals may be missing fields like forecast close date, last activity date, or days-in-stage.
 
 ## Best practices
 - Review AI scoring factors to understand what drives deal success.
