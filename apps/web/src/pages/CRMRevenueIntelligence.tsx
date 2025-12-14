@@ -19,9 +19,23 @@ type Deal = {
   forecastedCloseDate?: string
   ownerId?: string
   dealNumber?: number
+  createdAt?: string
+  updatedAt?: string
+  lastActivityAt?: string
+  daysInStage?: number
   aiScore: number
   aiConfidence: 'High' | 'Medium' | 'Low'
   aiFactors: Array<{ factor: string; impact: number; description: string }>
+}
+
+type RevenueIntelligenceSettings = {
+  stageWeights: Record<string, number>
+  dealAge: { warnDays: number; agingDays: number; staleDays: number; warnImpact: number; agingImpact: number; staleImpact: number }
+  activity: { hotDays: number; warmDays: number; coolDays: number; coldDays: number; hotImpact: number; warmImpact: number; coolImpact: number; coldImpact: number }
+  account: { matureDays: number; newDays: number; matureImpact: number; newImpact: number }
+  stageDuration: { warnDays: number; stuckDays: number; warnImpact: number; stuckImpact: number }
+  closeDate: { overdueImpact: number; closingSoonDays: number; closingSoonImpact: number; closingSoonWarmDays: number; closingSoonWarmImpact: number }
+  stalePanel: { noActivityDays: number; stuckInStageDays: number }
 }
 
 type ForecastData = {
@@ -78,6 +92,9 @@ export default function CRMRevenueIntelligence() {
     (searchParams.get('view') as any) || 'forecast',
   )
   const [selectedDealId, setSelectedDealId] = React.useState<string | null>(null)
+  const [showScoringSettings, setShowScoringSettings] = React.useState(false)
+  const [settingsText, setSettingsText] = React.useState('')
+  const [settingsError, setSettingsError] = React.useState<string | null>(null)
   
   // Scenario adjustments state
   const [scenarioAdjustments, setScenarioAdjustments] = React.useState<
@@ -112,6 +129,30 @@ export default function CRMRevenueIntelligence() {
         },
       })
       return res.data as { data: ForecastData }
+    },
+  })
+
+  const settingsQ = useQuery({
+    queryKey: ['revenue-intelligence-settings'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/revenue-intelligence/settings')
+      return res.data as { data: RevenueIntelligenceSettings }
+    },
+  })
+
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (settings: any) => {
+      const res = await http.put('/api/crm/revenue-intelligence/settings', settings)
+      return res.data as { data: RevenueIntelligenceSettings }
+    },
+    onSuccess: () => {
+      settingsQ.refetch()
+      setSettingsError(null)
+      setShowScoringSettings(false)
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to save settings'
+      setSettingsError(String(msg))
     },
   })
 
@@ -276,6 +317,111 @@ export default function CRMRevenueIntelligence() {
   const reps = repsQ.data?.data
   const users = usersQ.data?.data.items ?? []
   const userById = React.useMemo(() => new Map(users.map((u) => [u._id, u])), [users])
+  const riSettings = settingsQ.data?.data
+
+  const pipelineDealsForUi = React.useMemo(() => {
+    if (!forecast?.deals) return []
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    return forecast.deals.filter((d) => {
+      const stage = String(d.stage || '')
+      const isWon = stage === 'Contract Signed / Closed Won' || stage === 'Closed Won'
+      const isLost = stage === 'Closed Lost'
+      if (isWon || isLost) return false
+      if (!excludeOverdue) return true
+      const raw = d.forecastedCloseDate || d.closeDate
+      if (!raw) return true
+      const dt = new Date(raw)
+      if (!Number.isFinite(dt.getTime())) return true
+      return dt >= todayStart
+    })
+  }, [forecast?.deals, excludeOverdue])
+
+  const atRisk = React.useMemo(() => {
+    if (!forecast?.deals) return null
+    const s = riSettings?.stalePanel
+    const noActivityDays = s?.noActivityDays ?? 30
+    const stuckInStageDays = s?.stuckInStageDays ?? 30
+
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const msDay = 24 * 60 * 60 * 1000
+
+    const overdue = pipelineDealsForUi.filter((d) => {
+      const raw = d.forecastedCloseDate || d.closeDate
+      if (!raw) return false
+      const dt = new Date(raw)
+      if (!Number.isFinite(dt.getTime())) return false
+      return dt < todayStart
+    })
+
+    const noActivity = pipelineDealsForUi.filter((d) => {
+      const raw = d.lastActivityAt || d.updatedAt || d.createdAt
+      if (!raw) return false
+      const dt = new Date(raw)
+      if (!Number.isFinite(dt.getTime())) return false
+      const days = Math.floor((now.getTime() - dt.getTime()) / msDay)
+      return days >= noActivityDays
+    })
+
+    const stuck = pipelineDealsForUi.filter((d) => {
+      const days = Number(d.daysInStage)
+      if (!Number.isFinite(days)) return false
+      return days >= stuckInStageDays
+    })
+
+    // Build a de-duped list of rows (prioritize Overdue > No activity > Stuck)
+    const rowMap = new Map<string, { d: Deal; risk: 'Overdue' | 'No activity' | 'Stuck in stage' }>()
+    for (const d of overdue) rowMap.set(d._id, { d, risk: 'Overdue' })
+    for (const d of noActivity) if (!rowMap.has(d._id)) rowMap.set(d._id, { d, risk: 'No activity' })
+    for (const d of stuck) if (!rowMap.has(d._id)) rowMap.set(d._id, { d, risk: 'Stuck in stage' })
+    const rows = Array.from(rowMap.values()).slice(0, 15)
+
+    return {
+      noActivityDays,
+      stuckInStageDays,
+      overdue,
+      noActivity,
+      stuck,
+      rows,
+    }
+  }, [forecast?.deals, pipelineDealsForUi, riSettings?.stalePanel])
+
+  const drivers = React.useMemo(() => {
+    if (!forecast?.deals) return null
+    const pipeline = pipelineDealsForUi
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const overdueCount = pipeline.filter((d) => {
+      const raw = d.forecastedCloseDate || d.closeDate
+      if (!raw) return false
+      const dt = new Date(raw)
+      if (!Number.isFinite(dt.getTime())) return false
+      return dt < todayStart
+    }).length
+
+    const high = pipeline.filter((d) => d.aiConfidence === 'High').length
+    const med = pipeline.filter((d) => d.aiConfidence === 'Medium').length
+    const low = pipeline.filter((d) => d.aiConfidence === 'Low').length
+
+    const factorTotals = new Map<string, number>()
+    for (const d of pipeline) {
+      for (const f of d.aiFactors || []) {
+        factorTotals.set(f.factor, (factorTotals.get(f.factor) || 0) + (Number(f.impact) || 0))
+      }
+    }
+    const factorList = Array.from(factorTotals.entries()).map(([factor, totalImpact]) => ({ factor, totalImpact }))
+    const topPositive = factorList.filter((x) => x.totalImpact > 0).sort((a, b) => b.totalImpact - a.totalImpact).slice(0, 3)
+    const topNegative = factorList.filter((x) => x.totalImpact < 0).sort((a, b) => a.totalImpact - b.totalImpact).slice(0, 3)
+
+    return {
+      pipelineDeals: pipeline.length,
+      overdueCount,
+      confidence: { high, medium: med, low },
+      topPositive,
+      topNegative,
+    }
+  }, [forecast?.deals, pipelineDealsForUi])
 
   // Scenario mutation
   const scenarioMutation = useMutation({
@@ -391,6 +537,19 @@ export default function CRMRevenueIntelligence() {
         </div>
         <div className="flex items-center gap-2">
           <CRMHelpButton tag="crm:revenue-intelligence" />
+          <button
+            type="button"
+            onClick={() => {
+              setSettingsError(null)
+              setShowScoringSettings(true)
+              const current = settingsQ.data?.data
+              setSettingsText(current ? JSON.stringify(current, null, 2) : '')
+            }}
+            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+            title="View/edit AI scoring settings (admin only)"
+          >
+            Scoring settings
+          </button>
         </div>
       </header>
 
@@ -669,6 +828,118 @@ export default function CRMRevenueIntelligence() {
               </div>
             </div>
           </section>
+
+          {/* Top Drivers */}
+          {drivers && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+              <h2 className="mb-3 text-sm font-semibold">Top Drivers (Why this forecast looks the way it does)</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-xs">
+                  <div className="mb-2 font-semibold">Pipeline composition</div>
+                  <div className="space-y-1 text-[color:var(--color-text-muted)]">
+                    <div><span className="text-[color:var(--color-text)] font-semibold">{drivers.pipelineDeals}</span> open pipeline deals in range</div>
+                    <div><span className="text-[color:var(--color-text)] font-semibold">{drivers.confidence.high}</span> high / <span className="text-[color:var(--color-text)] font-semibold">{drivers.confidence.medium}</span> medium / <span className="text-[color:var(--color-text)] font-semibold">{drivers.confidence.low}</span> low confidence deals</div>
+                    <div><span className="text-[color:var(--color-text)] font-semibold">{drivers.overdueCount}</span> overdue close dates (if included)</div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-xs">
+                  <div className="mb-2 font-semibold">AI scoring drivers (aggregated)</div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <div className="mb-1 text-[10px] uppercase tracking-wide text-emerald-400">Top positive</div>
+                      <div className="space-y-1">
+                        {drivers.topPositive.length ? drivers.topPositive.map((x) => (
+                          <div key={x.factor} className="flex items-center justify-between text-[color:var(--color-text-muted)]">
+                            <span className="truncate">{x.factor}</span>
+                            <span className="ml-2 text-emerald-400 font-semibold">+{x.totalImpact}</span>
+                          </div>
+                        )) : <div className="text-[color:var(--color-text-muted)]">—</div>}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-1 text-[10px] uppercase tracking-wide text-red-400">Top negative</div>
+                      <div className="space-y-1">
+                        {drivers.topNegative.length ? drivers.topNegative.map((x) => (
+                          <div key={x.factor} className="flex items-center justify-between text-[color:var(--color-text-muted)]">
+                            <span className="truncate">{x.factor}</span>
+                            <span className="ml-2 text-red-400 font-semibold">{x.totalImpact}</span>
+                          </div>
+                        )) : <div className="text-[color:var(--color-text-muted)]">—</div>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Stale / At-Risk Deals */}
+          {atRisk && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold">Stale / At-Risk Deals</h2>
+                  <p className="text-xs text-[color:var(--color-text-muted)]">
+                    Flags open pipeline deals with overdue close dates, no activity for {atRisk.noActivityDays}+ days, or stuck in stage for {atRisk.stuckInStageDays}+ days.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
+                  <div className="text-xs text-red-300">Overdue close date</div>
+                  <div className="mt-1 text-2xl font-semibold text-red-200">{atRisk.overdue.length}</div>
+                </div>
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                  <div className="text-xs text-amber-300">No activity</div>
+                  <div className="mt-1 text-2xl font-semibold text-amber-200">{atRisk.noActivity.length}</div>
+                </div>
+                <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-3">
+                  <div className="text-xs text-purple-300">Stuck in stage</div>
+                  <div className="mt-1 text-2xl font-semibold text-purple-200">{atRisk.stuck.length}</div>
+                </div>
+              </div>
+
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[color:var(--color-border)] text-[10px] uppercase text-[color:var(--color-text-muted)]">
+                      <th className="px-2 py-2 text-left">Deal</th>
+                      <th className="px-2 py-2 text-left">Stage</th>
+                      <th className="px-2 py-2 text-right">Value</th>
+                      <th className="px-2 py-2 text-left">Forecast Close</th>
+                      <th className="px-2 py-2 text-left">Risk</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {atRisk.rows.map(({ d, risk }) => (
+                        <tr key={d._id} className="border-b border-[color:var(--color-border)]">
+                          <td className="px-2 py-2">{d.title || 'Untitled'}</td>
+                          <td className="px-2 py-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${getStageColor(d.stage as DealStage)}`}>
+                              {d.stage || 'new'}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 text-right font-semibold">{formatCurrency(d.amount || 0)}</td>
+                          <td className="px-2 py-2">{formatDateOnly(d.forecastedCloseDate || d.closeDate)}</td>
+                          <td className="px-2 py-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                              risk === 'Overdue'
+                                ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                                : risk === 'No activity'
+                                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                                  : 'border-purple-500/40 bg-purple-500/10 text-purple-300'
+                            }`}>
+                              {risk}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {/* By Stage */}
           <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
@@ -1152,6 +1423,72 @@ export default function CRMRevenueIntelligence() {
                 </>
               )
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Scoring Settings Modal */}
+      {showScoringSettings && (
+        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-[min(90vw,56rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Revenue Intelligence – Scoring Settings</h2>
+                <p className="text-xs text-[color:var(--color-text-muted)]">
+                  Admin only. Edit JSON and save to apply immediately to AI scoring.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowScoringSettings(false)}
+                className="rounded-full px-3 py-1 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+              >
+                Close
+              </button>
+            </div>
+
+            {settingsError && (
+              <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+                {settingsError}
+              </div>
+            )}
+
+            <textarea
+              value={settingsText}
+              onChange={(e) => setSettingsText(e.target.value)}
+              className="w-full min-h-[320px] rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 font-mono text-[11px] text-[color:var(--color-text)]"
+              placeholder={riSettings ? JSON.stringify(riSettings, null, 2) : 'Loading settings…'}
+            />
+
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const current = settingsQ.data?.data
+                  setSettingsText(current ? JSON.stringify(current, null, 2) : '')
+                  setSettingsError(null)
+                }}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+              >
+                Reset changes
+              </button>
+              <button
+                type="button"
+                disabled={saveSettingsMutation.isPending}
+                onClick={() => {
+                  try {
+                    const parsed = JSON.parse(settingsText || '{}')
+                    setSettingsError(null)
+                    saveSettingsMutation.mutate(parsed)
+                  } catch (e: any) {
+                    setSettingsError(`Invalid JSON: ${e?.message || 'Parse error'}`)
+                  }
+                }}
+                className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-xs font-semibold text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              >
+                {saveSettingsMutation.isPending ? 'Saving…' : 'Save settings'}
+              </button>
+            </div>
           </div>
         </div>
       )}

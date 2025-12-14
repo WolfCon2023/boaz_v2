@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { requireAuth } from '../auth/rbac.js'
+import { requirePermission } from '../auth/rbac.js'
 
 export const revenueIntelligenceRouter = Router()
 
@@ -27,6 +28,137 @@ type DealDoc = {
 
 type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year' | 'next_year'
 
+type RevenueIntelligenceSettings = {
+  // Stage scoring weights (impact on AI score, -100..100)
+  stageWeights: Record<string, number>
+
+  // Deal age thresholds (days) and impacts
+  dealAge: { warnDays: number; agingDays: number; staleDays: number; warnImpact: number; agingImpact: number; staleImpact: number }
+
+  // Activity recency thresholds (days) and impacts
+  activity: { hotDays: number; warmDays: number; coolDays: number; coldDays: number; hotImpact: number; warmImpact: number; coolImpact: number; coldImpact: number }
+
+  // Account maturity thresholds (days) and impacts
+  account: { matureDays: number; newDays: number; matureImpact: number; newImpact: number }
+
+  // Days in stage thresholds (days) and impacts
+  stageDuration: { warnDays: number; stuckDays: number; warnImpact: number; stuckImpact: number }
+
+  // Close-date proximity boosts/penalties
+  closeDate: { overdueImpact: number; closingSoonDays: number; closingSoonImpact: number; closingSoonWarmDays: number; closingSoonWarmImpact: number }
+
+  // Used for Stale / At-risk panels
+  stalePanel: { noActivityDays: number; stuckInStageDays: number }
+}
+
+const DEFAULT_RI_SETTINGS: RevenueIntelligenceSettings = {
+  stageWeights: {
+    new: -10,
+    Lead: -10,
+    Qualified: 0,
+    Proposal: 10,
+    Negotiation: 15,
+    'Submitted for Review': 5,
+    'Approved / Ready for Signature': 0,
+    'Contract Signed / Closed Won': 0,
+    'Closed Won': 0,
+    'Closed Lost': 0,
+  },
+  dealAge: { warnDays: 60, agingDays: 90, staleDays: 180, warnImpact: -3, agingImpact: -8, staleImpact: -15 },
+  activity: { hotDays: 7, warmDays: 14, coolDays: 21, coldDays: 30, hotImpact: 10, warmImpact: 5, coolImpact: -6, coldImpact: -12 },
+  account: { matureDays: 365, newDays: 30, matureImpact: 8, newImpact: -5 },
+  stageDuration: { warnDays: 30, stuckDays: 60, warnImpact: -5, stuckImpact: -10 },
+  closeDate: { overdueImpact: -20, closingSoonDays: 7, closingSoonImpact: 12, closingSoonWarmDays: 14, closingSoonWarmImpact: 8 },
+  stalePanel: { noActivityDays: 30, stuckInStageDays: 60 },
+}
+
+async function getRevenueIntelligenceSettings(db: any): Promise<RevenueIntelligenceSettings> {
+  const doc = await db.collection('revenue_intelligence_settings').findOne({ _id: 'default' } as any)
+  const raw = (doc as any)?.settings ?? doc
+  if (!raw || typeof raw !== 'object') return DEFAULT_RI_SETTINGS
+
+  const safeNum = (v: any, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback)
+  const safeObj = (v: any) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null)
+
+  const stageWeightsRaw = safeObj((raw as any).stageWeights) || {}
+  const stageWeights: Record<string, number> = { ...DEFAULT_RI_SETTINGS.stageWeights }
+  for (const [k, v] of Object.entries(stageWeightsRaw)) stageWeights[k] = safeNum(v, stageWeights[k] ?? 0)
+
+  const dealAgeRaw = safeObj((raw as any).dealAge) || {}
+  const activityRaw = safeObj((raw as any).activity) || {}
+  const accountRaw = safeObj((raw as any).account) || {}
+  const stageDurationRaw = safeObj((raw as any).stageDuration) || {}
+  const closeDateRaw = safeObj((raw as any).closeDate) || {}
+  const stalePanelRaw = safeObj((raw as any).stalePanel) || {}
+
+  return {
+    stageWeights,
+    dealAge: {
+      warnDays: safeNum((dealAgeRaw as any).warnDays, DEFAULT_RI_SETTINGS.dealAge.warnDays),
+      agingDays: safeNum((dealAgeRaw as any).agingDays, DEFAULT_RI_SETTINGS.dealAge.agingDays),
+      staleDays: safeNum((dealAgeRaw as any).staleDays, DEFAULT_RI_SETTINGS.dealAge.staleDays),
+      warnImpact: safeNum((dealAgeRaw as any).warnImpact, DEFAULT_RI_SETTINGS.dealAge.warnImpact),
+      agingImpact: safeNum((dealAgeRaw as any).agingImpact, DEFAULT_RI_SETTINGS.dealAge.agingImpact),
+      staleImpact: safeNum((dealAgeRaw as any).staleImpact, DEFAULT_RI_SETTINGS.dealAge.staleImpact),
+    },
+    activity: {
+      hotDays: safeNum((activityRaw as any).hotDays, DEFAULT_RI_SETTINGS.activity.hotDays),
+      warmDays: safeNum((activityRaw as any).warmDays, DEFAULT_RI_SETTINGS.activity.warmDays),
+      coolDays: safeNum((activityRaw as any).coolDays, DEFAULT_RI_SETTINGS.activity.coolDays),
+      coldDays: safeNum((activityRaw as any).coldDays, DEFAULT_RI_SETTINGS.activity.coldDays),
+      hotImpact: safeNum((activityRaw as any).hotImpact, DEFAULT_RI_SETTINGS.activity.hotImpact),
+      warmImpact: safeNum((activityRaw as any).warmImpact, DEFAULT_RI_SETTINGS.activity.warmImpact),
+      coolImpact: safeNum((activityRaw as any).coolImpact, DEFAULT_RI_SETTINGS.activity.coolImpact),
+      coldImpact: safeNum((activityRaw as any).coldImpact, DEFAULT_RI_SETTINGS.activity.coldImpact),
+    },
+    account: {
+      matureDays: safeNum((accountRaw as any).matureDays, DEFAULT_RI_SETTINGS.account.matureDays),
+      newDays: safeNum((accountRaw as any).newDays, DEFAULT_RI_SETTINGS.account.newDays),
+      matureImpact: safeNum((accountRaw as any).matureImpact, DEFAULT_RI_SETTINGS.account.matureImpact),
+      newImpact: safeNum((accountRaw as any).newImpact, DEFAULT_RI_SETTINGS.account.newImpact),
+    },
+    stageDuration: {
+      warnDays: safeNum((stageDurationRaw as any).warnDays, DEFAULT_RI_SETTINGS.stageDuration.warnDays),
+      stuckDays: safeNum((stageDurationRaw as any).stuckDays, DEFAULT_RI_SETTINGS.stageDuration.stuckDays),
+      warnImpact: safeNum((stageDurationRaw as any).warnImpact, DEFAULT_RI_SETTINGS.stageDuration.warnImpact),
+      stuckImpact: safeNum((stageDurationRaw as any).stuckImpact, DEFAULT_RI_SETTINGS.stageDuration.stuckImpact),
+    },
+    closeDate: {
+      overdueImpact: safeNum((closeDateRaw as any).overdueImpact, DEFAULT_RI_SETTINGS.closeDate.overdueImpact),
+      closingSoonDays: safeNum((closeDateRaw as any).closingSoonDays, DEFAULT_RI_SETTINGS.closeDate.closingSoonDays),
+      closingSoonImpact: safeNum((closeDateRaw as any).closingSoonImpact, DEFAULT_RI_SETTINGS.closeDate.closingSoonImpact),
+      closingSoonWarmDays: safeNum((closeDateRaw as any).closingSoonWarmDays, DEFAULT_RI_SETTINGS.closeDate.closingSoonWarmDays),
+      closingSoonWarmImpact: safeNum((closeDateRaw as any).closingSoonWarmImpact, DEFAULT_RI_SETTINGS.closeDate.closingSoonWarmImpact),
+    },
+    stalePanel: {
+      noActivityDays: safeNum((stalePanelRaw as any).noActivityDays, DEFAULT_RI_SETTINGS.stalePanel.noActivityDays),
+      stuckInStageDays: safeNum((stalePanelRaw as any).stuckInStageDays, DEFAULT_RI_SETTINGS.stalePanel.stuckInStageDays),
+    },
+  }
+}
+
+// GET /api/crm/revenue-intelligence/settings (read-only for authenticated users)
+revenueIntelligenceRouter.get('/settings', async (_req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const settings = await getRevenueIntelligenceSettings(db)
+  res.json({ data: settings, error: null })
+})
+
+// PUT /api/crm/revenue-intelligence/settings (admin-only)
+revenueIntelligenceRouter.put('/settings', requirePermission('*'), async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const incoming = req.body ?? {}
+  // Store as-is (we sanitize on read). Keep updatedAt for auditing.
+  await db.collection('revenue_intelligence_settings').updateOne(
+    { _id: 'default' } as any,
+    { $set: { _id: 'default', settings: incoming, updatedAt: new Date() } },
+    { upsert: true },
+  )
+  const settings = await getRevenueIntelligenceSettings(db)
+  res.json({ data: settings, error: null })
+})
 type ForecastData = {
   period: ForecastPeriod
   startDate: Date
@@ -70,6 +202,7 @@ async function computeForecast(
   const { startDate, endDate, endExclusive } = getRangeFromRequest(period, now, opts?.startDateRaw, opts?.endDateRaw)
   const startIso = startDate.toISOString()
   const endIso = endExclusive.toISOString()
+  const settings = await getRevenueIntelligenceSettings(db)
 
   // Fetch deals in the period (use forecastedCloseDate for forecasting, fallback to closeDate)
   const dealMatch: any = {
@@ -127,7 +260,7 @@ async function computeForecast(
     const dealAge = deal.createdAt ? Math.ceil((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined
     const activityRecency = deal.lastActivityAt ? Math.ceil((Date.now() - new Date(deal.lastActivityAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined
     const accountAge = accountAgeMap.get(deal.accountId)
-    const scoring = calculateDealScore(deal, accountAge, dealAge, activityRecency)
+    const scoring = calculateDealScore(deal, settings, accountAge, dealAge, activityRecency)
     return {
       ...deal,
       aiScore: scoring.score,
@@ -216,7 +349,13 @@ async function computeForecast(
 }
 
 // Calculate AI-powered deal score based on multiple factors
-function calculateDealScore(deal: DealDoc, accountAge?: number, dealAge?: number, activityRecency?: number): {
+function calculateDealScore(
+  deal: DealDoc,
+  settings: RevenueIntelligenceSettings,
+  accountAge?: number,
+  dealAge?: number,
+  activityRecency?: number,
+): {
   score: number
   confidence: 'High' | 'Medium' | 'Low'
   factors: Array<{ factor: string; impact: number; description: string }>
@@ -227,18 +366,7 @@ function calculateDealScore(deal: DealDoc, accountAge?: number, dealAge?: number
 
   // Factor 1: Stage progression (higher stages = higher confidence)
   const stage = deal.stage || 'new'
-  const stageWeights: Record<string, number> = {
-    'new': -10,
-    'Lead': -10,
-    'Qualified': 0,
-    'Proposal': 10,
-    'Negotiation': 15,
-    'Contract Signed / Closed Won': 0,
-    'Closed Won': 0,
-    'Closed Lost': 0,
-    'Submitted for Review': 5,
-  }
-  const stageImpact = stageWeights[stage] || 0
+  const stageImpact = settings.stageWeights[stage] ?? 0
   if (stageImpact !== 0) {
     score += stageImpact
     factors.push({
@@ -250,54 +378,54 @@ function calculateDealScore(deal: DealDoc, accountAge?: number, dealAge?: number
 
   // Factor 2: Deal age (too old = lower confidence)
   if (dealAge !== undefined) {
-    if (dealAge > 180) {
-      score -= 15
-      factors.push({ factor: 'Deal Age', impact: -15, description: 'Deal is stale (>180 days old)' })
-    } else if (dealAge > 90) {
-      score -= 8
-      factors.push({ factor: 'Deal Age', impact: -8, description: 'Deal is aging (>90 days old)' })
-    } else if (dealAge > 60) {
-      score -= 3
-      factors.push({ factor: 'Deal Age', impact: -3, description: 'Deal is maturing (>60 days old)' })
+    if (dealAge > settings.dealAge.staleDays) {
+      score += settings.dealAge.staleImpact
+      factors.push({ factor: 'Deal Age', impact: settings.dealAge.staleImpact, description: `Deal is stale (>${settings.dealAge.staleDays} days old)` })
+    } else if (dealAge > settings.dealAge.agingDays) {
+      score += settings.dealAge.agingImpact
+      factors.push({ factor: 'Deal Age', impact: settings.dealAge.agingImpact, description: `Deal is aging (>${settings.dealAge.agingDays} days old)` })
+    } else if (dealAge > settings.dealAge.warnDays) {
+      score += settings.dealAge.warnImpact
+      factors.push({ factor: 'Deal Age', impact: settings.dealAge.warnImpact, description: `Deal is maturing (>${settings.dealAge.warnDays} days old)` })
     }
   }
 
   // Factor 3: Activity recency (recent activity = higher confidence)
   if (activityRecency !== undefined) {
-    if (activityRecency <= 7) {
-      score += 10
-      factors.push({ factor: 'Recent Activity', impact: 10, description: 'Active engagement within last week' })
-    } else if (activityRecency <= 14) {
-      score += 5
-      factors.push({ factor: 'Recent Activity', impact: 5, description: 'Recent engagement within 2 weeks' })
-    } else if (activityRecency > 30) {
-      score -= 12
-      factors.push({ factor: 'Activity Gap', impact: -12, description: 'No activity for over 30 days' })
-    } else if (activityRecency > 21) {
-      score -= 6
-      factors.push({ factor: 'Activity Gap', impact: -6, description: 'No activity for over 3 weeks' })
+    if (activityRecency <= settings.activity.hotDays) {
+      score += settings.activity.hotImpact
+      factors.push({ factor: 'Recent Activity', impact: settings.activity.hotImpact, description: `Active engagement within last ${settings.activity.hotDays} days` })
+    } else if (activityRecency <= settings.activity.warmDays) {
+      score += settings.activity.warmImpact
+      factors.push({ factor: 'Recent Activity', impact: settings.activity.warmImpact, description: `Recent engagement within ${settings.activity.warmDays} days` })
+    } else if (activityRecency > settings.activity.coldDays) {
+      score += settings.activity.coldImpact
+      factors.push({ factor: 'Activity Gap', impact: settings.activity.coldImpact, description: `No activity for over ${settings.activity.coldDays} days` })
+    } else if (activityRecency > settings.activity.coolDays) {
+      score += settings.activity.coolImpact
+      factors.push({ factor: 'Activity Gap', impact: settings.activity.coolImpact, description: `No activity for over ${settings.activity.coolDays} days` })
     }
   }
 
   // Factor 4: Account maturity (established accounts = higher confidence)
   if (accountAge !== undefined) {
-    if (accountAge > 365) {
-      score += 8
-      factors.push({ factor: 'Account Maturity', impact: 8, description: 'Established account (>1 year)' })
-    } else if (accountAge < 30) {
-      score -= 5
-      factors.push({ factor: 'New Account', impact: -5, description: 'Very new account (<30 days)' })
+    if (accountAge > settings.account.matureDays) {
+      score += settings.account.matureImpact
+      factors.push({ factor: 'Account Maturity', impact: settings.account.matureImpact, description: `Established account (>${settings.account.matureDays} days)` })
+    } else if (accountAge < settings.account.newDays) {
+      score += settings.account.newImpact
+      factors.push({ factor: 'New Account', impact: settings.account.newImpact, description: `Very new account (<${settings.account.newDays} days)` })
     }
   }
 
   // Factor 5: Days in current stage (stuck = lower confidence)
   if (deal.daysInStage !== undefined && deal.stage !== 'Closed Won' && deal.stage !== 'Closed Lost') {
-    if (deal.daysInStage > 60) {
-      score -= 10
-      factors.push({ factor: 'Stage Duration', impact: -10, description: 'Stuck in stage for >60 days' })
-    } else if (deal.daysInStage > 30) {
-      score -= 5
-      factors.push({ factor: 'Stage Duration', impact: -5, description: 'In stage for >30 days' })
+    if (deal.daysInStage > settings.stageDuration.stuckDays) {
+      score += settings.stageDuration.stuckImpact
+      factors.push({ factor: 'Stage Duration', impact: settings.stageDuration.stuckImpact, description: `Stuck in stage for >${settings.stageDuration.stuckDays} days` })
+    } else if (deal.daysInStage > settings.stageDuration.warnDays) {
+      score += settings.stageDuration.warnImpact
+      factors.push({ factor: 'Stage Duration', impact: settings.stageDuration.warnImpact, description: `In stage for >${settings.stageDuration.warnDays} days` })
     }
   }
 
@@ -306,14 +434,14 @@ function calculateDealScore(deal: DealDoc, accountAge?: number, dealAge?: number
   const closeDate = (deal as any).forecastedCloseDate || deal.closeDate
   const daysToClose = closeDate ? Math.ceil((new Date(closeDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 999
   if (daysToClose < 0) {
-    score -= 20
-    factors.push({ factor: 'Overdue Close Date', impact: -20, description: 'Close date has passed' })
-  } else if (daysToClose <= 7 && (deal.stage === 'Negotiation' || deal.stage === 'Proposal')) {
-    score += 12
-    factors.push({ factor: 'Closing Soon', impact: 12, description: 'Close date within 7 days and in late stage' })
-  } else if (daysToClose <= 14 && deal.stage === 'Negotiation') {
-    score += 8
-    factors.push({ factor: 'Closing Soon', impact: 8, description: 'Close date within 2 weeks and in negotiation' })
+    score += settings.closeDate.overdueImpact
+    factors.push({ factor: 'Overdue Close Date', impact: settings.closeDate.overdueImpact, description: 'Close date has passed' })
+  } else if (daysToClose <= settings.closeDate.closingSoonDays && (deal.stage === 'Negotiation' || deal.stage === 'Proposal')) {
+    score += settings.closeDate.closingSoonImpact
+    factors.push({ factor: 'Closing Soon', impact: settings.closeDate.closingSoonImpact, description: `Close date within ${settings.closeDate.closingSoonDays} days and in late stage` })
+  } else if (daysToClose <= settings.closeDate.closingSoonWarmDays && deal.stage === 'Negotiation') {
+    score += settings.closeDate.closingSoonWarmImpact
+    factors.push({ factor: 'Closing Soon', impact: settings.closeDate.closingSoonWarmImpact, description: `Close date within ${settings.closeDate.closingSoonWarmDays} days and in negotiation` })
   }
 
   // Clamp score between 0 and 100
