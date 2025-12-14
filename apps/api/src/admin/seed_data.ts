@@ -2806,6 +2806,102 @@ For payment processing issues:
   }
 })
 
+// POST /api/admin/seed/reporting-kb - Add Reporting KB article
+adminSeedDataRouter.post('/reporting-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const REPORTING_KB_ARTICLE = {
+      title: 'Using the Reporting app in BOAZ‑OS CRM',
+      category: 'Sales & Analytics',
+      slug: 'crm-reporting-guide',
+      tags: ['crm', 'crm:reporting', 'analytics', 'reporting', 'finance', 'executive-report'],
+      body: `# CRM Reporting (Executive Dashboard) Guide
+
+The **Reporting** app is a cross‑module executive dashboard that ties together **pipeline, support, marketing, renewals, and financial performance** into one view.
+
+---
+
+## ✅ How to open Reporting
+
+- **CRM Hub → Reporting**
+- Or **CRM Navigation → Reporting**
+
+---
+
+## 📊 What you can do in Reporting
+
+### **1) Review KPIs**
+Reporting surfaces key performance indicators across CRM modules (pipeline, quotes, invoices/AR, renewals, and support).
+
+### **2) Use Date Range filters**
+Choose a date range to control what’s included in the report and exports.
+
+### **3) Use Snapshots (history/trends)**
+- **Manual snapshots**: click **Save snapshot**
+- **Scheduled daily snapshots**: auto-captured daily
+- **Run daily snapshot now**: triggers today’s scheduled snapshot immediately
+
+### **4) Export data**
+- **Export CSV**: exports the currently visible KPIs
+- **Export Pack (JSON/CSV)**: downloads a single “executive pack” (KPIs + key lists + snapshot deltas)
+- **Export PDF**: generates a BOAZ‑branded executive report for printing / Save as PDF
+
+---
+
+## 💰 Financial definitions (quick reference)
+
+- **AR (Accounts Receivable)**: Money customers owe you on unpaid invoices.
+- **Overdue AR**: The total unpaid invoice balance **past its due date**.
+- **Receivables Aging**: AR grouped by lateness (Current, 1–30, 31–60, 61–90, 90+).
+- **DSO (Days Sales Outstanding)**: Best‑effort estimate of average collection time.
+- **Cash collected**: Payments recorded on invoices during the selected range.
+- **Refunds**: Refunds recorded on invoices during the selected range.
+- **Net cash**: Cash collected minus refunds.
+
+---
+
+## 🧰 Troubleshooting
+
+### “Basic report (API not updated yet)”
+This indicates your Web app is newer than the API. **Redeploy the API** and try again.
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existingArticle = await db.collection('kb_articles').findOne({ slug: 'crm-reporting-guide' })
+    const result = existingArticle ? 'updated' : 'created'
+
+    if (existingArticle) {
+      await db.collection('kb_articles').updateOne(
+        { slug: 'crm-reporting-guide' },
+        { $set: { ...REPORTING_KB_ARTICLE, updatedAt: new Date() } }
+      )
+    } else {
+      await db.collection('kb_articles').insertOne(REPORTING_KB_ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: REPORTING_KB_ARTICLE.title,
+        slug: REPORTING_KB_ARTICLE.slug,
+        url: `/apps/crm/support/kb/${REPORTING_KB_ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed reporting KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
 // DELETE /api/admin/customer-portal-users/:email - Remove customer by email
 adminSeedDataRouter.delete('/customer-portal-user/:email', async (req, res) => {
   const db = await getDb()

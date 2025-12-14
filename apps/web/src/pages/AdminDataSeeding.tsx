@@ -22,6 +22,7 @@ export default function AdminDataSeeding() {
   const [seedingPaymentPortalKB, setSeedingPaymentPortalKB] = useState(false)
   const [seedingOutreachSequencesKB, setSeedingOutreachSequencesKB] = useState(false)
   const [seedingOutreachTemplatesKB, setSeedingOutreachTemplatesKB] = useState(false)
+  const [seedingReportingKB, setSeedingReportingKB] = useState(false)
   const [seedingAll, setSeedingAll] = useState(false)
   
   const [rolesResult, setRolesResult] = useState<any>(null)
@@ -34,6 +35,7 @@ export default function AdminDataSeeding() {
   const [paymentPortalKBResult, setPaymentPortalKBResult] = useState<any>(null)
   const [outreachSequencesKBResult, setOutreachSequencesKBResult] = useState<any>(null)
   const [outreachTemplatesKBResult, setOutreachTemplatesKBResult] = useState<any>(null)
+  const [reportingKBResult, setReportingKBResult] = useState<any>(null)
   const [seedAllResult, setSeedAllResult] = useState<any>(null)
   const [seedAllProgress, setSeedAllProgress] = useState<string>('')
 
@@ -217,6 +219,24 @@ export default function AdminDataSeeding() {
     }
   }
 
+  async function seedReportingKB() {
+    setSeedingReportingKB(true)
+    setReportingKBResult(null)
+    try {
+      const res = await http.post('/api/admin/seed/reporting-kb')
+      if (res.data.error) {
+        showToast(res.data.error, 'error')
+      } else {
+        setReportingKBResult(res.data.data)
+        showToast('Reporting KB article seeded successfully', 'success')
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to seed Reporting KB', 'error')
+    } finally {
+      setSeedingReportingKB(false)
+    }
+  }
+
   async function seedAllKB() {
     setSeedingAll(true)
     setSeedAllResult(null)
@@ -233,6 +253,7 @@ export default function AdminDataSeeding() {
       { name: 'Payment Portal KB', fn: seedPaymentPortalKB },
       { name: 'Outreach Sequences KB', fn: seedOutreachSequencesKB },
       { name: 'Outreach Templates KB', fn: seedOutreachTemplatesKB },
+      { name: 'Reporting KB', fn: seedReportingKB },
     ]
 
     let successCount = 0
@@ -288,7 +309,7 @@ export default function AdminDataSeeding() {
               <h3 className="text-xl font-bold text-[color:var(--color-text)]">🚀 Seed All KB Articles</h3>
             </div>
             <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
-              Seed all 9 knowledge base articles at once. This will create or update: Roles & Permissions, Support Tickets, Approval Queue, Acceptance Queue, Deal Approval, Customer Success, Payment Portal, Outreach Sequences, and Outreach Templates guides.
+              Seed all 10 knowledge base articles at once. This will create or update: Roles & Permissions, Support Tickets, Approval Queue, Acceptance Queue, Deal Approval, Customer Success, Payment Portal, Outreach Sequences, Outreach Templates, and Reporting guides.
             </p>
             <button
               onClick={seedAllKB}
