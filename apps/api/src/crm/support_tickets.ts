@@ -557,8 +557,12 @@ supportTicketsRouter.post('/portal/tickets', async (req, res) => {
     const requesterPhone = typeof raw.requesterPhone === 'string' ? raw.requesterPhone.trim() : ''
     
     // Validate required fields
-    if (!shortDescription || !requesterName || !requesterEmail || !requesterPhone) {
-      return res.status(400).json({ data: null, error: 'missing_required_fields' })
+    // Support Portal UI only requires email + short description. Phone/name are optional.
+    if (!shortDescription) {
+      return res.status(400).json({ data: null, error: 'missing_shortDescription' })
+    }
+    if (!requesterEmail && !requesterPhone) {
+      return res.status(400).json({ data: null, error: 'missing_contact' })
     }
     
     const description = typeof raw.description === 'string' ? raw.description.slice(0, 2500) : ''
@@ -577,9 +581,9 @@ supportTicketsRouter.post('/portal/tickets', async (req, res) => {
       comments: [],
       createdAt: new Date(),
       updatedAt: new Date(),
-      requesterName,
-      requesterEmail,
-      requesterPhone,
+      requesterName: requesterName || requesterEmail || 'Customer',
+      requesterEmail: requesterEmail || null,
+      requesterPhone: requesterPhone || null,
       type: 'external',
     }
     try {

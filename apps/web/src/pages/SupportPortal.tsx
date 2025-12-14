@@ -3,12 +3,14 @@ import { http } from '@/lib/http'
 
 export default function SupportPortal() {
   const [submitResult, setSubmitResult] = React.useState<{ ticketNumber: number } | null>(null)
+  const [submitError, setSubmitError] = React.useState<string | null>(null)
   const [lookupNumber, setLookupNumber] = React.useState('')
   const [found, setFound] = React.useState<any | null>(null)
   const [loading, setLoading] = React.useState(false)
 
   async function submitTicket(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    setSubmitError(null)
     const fd = new FormData(e.currentTarget)
     const shortDescription = String(fd.get('shortDescription') || '')
     const description = String(fd.get('description') || '')
@@ -23,7 +25,11 @@ export default function SupportPortal() {
         const res2 = await http.post('/api/crm/support/tickets', { shortDescription, description })
         setSubmitResult({ ticketNumber: (res2.data?.data?.ticketNumber as number) || 0 })
       } else {
-        throw err
+        const apiErr = err?.response?.data?.error
+        if (apiErr === 'missing_shortDescription') setSubmitError('Please enter a short description.')
+        else if (apiErr === 'missing_contact') setSubmitError('Please enter at least an email or phone number.')
+        else setSubmitError(apiErr || 'Failed to submit ticket. Please try again.')
+        return
       }
     }
     ;(e.currentTarget as HTMLFormElement).reset()
@@ -100,6 +106,11 @@ export default function SupportPortal() {
           <textarea name="description" placeholder="Describe the issue" maxLength={2500} className="w-full h-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm resize-y" />
           <button className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Submit</button>
         </form>
+        {submitError && (
+          <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+            BOAZ says: {submitError}
+          </div>
+        )}
         {submitResult && (
           <div className="mt-4 text-sm">Thank you! Your ticket number is <span className="font-semibold">{submitResult.ticketNumber}</span>.</div>
         )}
