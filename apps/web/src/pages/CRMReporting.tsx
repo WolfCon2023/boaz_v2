@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
@@ -50,6 +51,7 @@ type Overview = {
 export default function CRMReporting() {
   const toast = useToast()
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [startDate, setStartDate] = React.useState('')
   const [endDate, setEndDate] = React.useState('')
 
@@ -205,146 +207,11 @@ export default function CRMReporting() {
 
   function exportPdf() {
     if (!data) return
-    const w = window.open('', '_blank', 'noopener,noreferrer,width=1024,height=768')
-    if (!w) {
-      toast.showToast('Popup blocked. Please allow popups to export PDF.', 'error')
-      return
-    }
-
-    const title = 'BOAZ Reporting'
-    const rangeLabel = `${formatDateOnly(data.range.startDate)} → ${formatDateOnly(data.range.endDate)}`
-    const k = data.kpis
-
-    const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>${title}</title>
-  <style>
-    :root { --fg:#0f172a; --muted:#475569; --border:#e2e8f0; --panel:#ffffff; --bg:#f8fafc; --brand:#2563eb; }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 32px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: var(--fg); background: var(--bg); }
-    .page { max-width: 980px; margin: 0 auto; }
-    .header { display:flex; align-items:flex-start; justify-content:space-between; gap: 16px; margin-bottom: 16px; }
-    .brand { font-weight: 800; letter-spacing: .02em; color: var(--brand); font-size: 18px; }
-    .h1 { font-size: 28px; font-weight: 800; margin: 6px 0 0; }
-    .sub { color: var(--muted); font-size: 12px; margin-top: 6px; }
-    .meta { text-align:right; color: var(--muted); font-size: 12px; }
-    .cardGrid { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
-    .label { color: var(--muted); font-size: 11px; }
-    .value { font-size: 18px; font-weight: 800; margin-top: 4px; }
-    .note { color: var(--muted); font-size: 11px; margin-top: 4px; }
-    .section { margin-top: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
-    .sectionTitle { font-size: 13px; font-weight: 800; margin: 0 0 10px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border-bottom: 1px solid var(--border); padding: 8px 6px; font-size: 11px; text-align: left; vertical-align: top; }
-    th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
-    .right { text-align: right; }
-    .pill { display:inline-block; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: 10px; color: var(--muted); }
-    .twoCol { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    @media print {
-      body { background: #fff; padding: 0; }
-      .page { max-width: none; margin: 0; }
-      .section, .card { break-inside: avoid; }
-      @page { margin: 14mm; }
-    }
-  </style>
-</head>
-<body>
-  <div class="page">
-    <div class="header">
-      <div>
-        <div class="brand">BOAZ-OS</div>
-        <div class="h1">Executive Report</div>
-        <div class="sub">Competitive-edge KPIs across pipeline, service, marketing, and cashflow.</div>
-      </div>
-      <div class="meta">
-        <div><span class="pill">Range</span> ${rangeLabel}</div>
-        <div style="margin-top:6px;"><span class="pill">Generated</span> ${new Date().toLocaleString()}</div>
-      </div>
-    </div>
-
-    <div class="cardGrid">
-      <div class="card"><div class="label">Open Pipeline</div><div class="value">${formatCurrency(Number(k.pipelineValue || 0))}</div><div class="note">${Number(k.pipelineDeals || 0)} deals</div></div>
-      <div class="card"><div class="label">Closed Won</div><div class="value">${formatCurrency(Number(k.closedWonValue || 0))}</div><div class="note">${Number(k.closedWonDeals || 0)} deals</div></div>
-      <div class="card"><div class="label">Support</div><div class="value">${Number(k.openTickets || 0)} open</div><div class="note">${Number(k.breachedTickets || 0)} SLA-breached</div></div>
-      <div class="card"><div class="label">Receivables (AR)</div><div class="value">${formatCurrency(Number(k.receivablesOutstanding || 0))}</div><div class="note">Overdue ${formatCurrency(Number(k.receivablesOverdue || 0))}</div></div>
-    </div>
-
-    <div class="section">
-      <div class="sectionTitle">Cash Efficiency</div>
-      <div class="twoCol">
-        <div class="card">
-          <div class="label">DSO (best-effort)</div>
-          <div class="value">${k.dsoDays == null ? '—' : `${Math.round(Number(k.dsoDays))} days`}</div>
-          <div class="note">Based on AR vs invoiced revenue during selected range</div>
-        </div>
-        <div class="card">
-          <div class="label">Avg days-to-pay</div>
-          <div class="value">${k.avgDaysToPay == null ? '—' : `${Math.round(Number(k.avgDaysToPay))} days`}</div>
-          <div class="note">Invoices paid during selected range</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="sectionTitle">Top Pipeline Deals</div>
-      <table>
-        <thead><tr><th>Deal</th><th>Stage</th><th class="right">Amount</th><th>Forecast Close</th></tr></thead>
-        <tbody>
-          ${(data.lists.topPipeline || []).map((d) => `
-            <tr>
-              <td><div style="font-weight:700;">${String(d.title || 'Untitled')}</div><div style="color:var(--muted); font-size:10px;">#${String(d.dealNumber ?? '—')}</div></td>
-              <td>${String(d.stage ?? '—')}</td>
-              <td class="right" style="font-weight:700;">${formatCurrency(Number(d.amount || 0))}</td>
-              <td>${d.forecastedCloseDate ? formatDateOnly(String(d.forecastedCloseDate)) : '—'}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="section">
-      <div class="sectionTitle">Receivables Aging</div>
-      <table>
-        <thead><tr><th>Bucket</th><th class="right">Invoices</th><th class="right">Balance</th></tr></thead>
-        <tbody>
-          ${['current','1_30','31_60','61_90','90_plus'].map((key) => {
-            const row = (k.receivablesAging && k.receivablesAging[key]) ? k.receivablesAging[key] : { count: 0, balance: 0 }
-            const label = key === 'current' ? 'Current' : key.replace('_', '–').replace('plus', '+')
-            return `<tr><td>${label}</td><td class="right">${Number(row.count || 0)}</td><td class="right">${formatCurrency(Number(row.balance || 0))}</td></tr>`
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="section">
-      <div class="sectionTitle">Marketing Engagement</div>
-      <div class="cardGrid" style="grid-template-columns: repeat(4, 1fr);">
-        <div class="card"><div class="label">Opens</div><div class="value">${Number(k.marketingOpens || 0)}</div></div>
-        <div class="card"><div class="label">Clicks</div><div class="value">${Number(k.marketingClicks || 0)}</div></div>
-        <div class="card"><div class="label">CTR</div><div class="value">${k.marketingClickThroughRate == null ? '—' : `${Math.round(Number(k.marketingClickThroughRate) * 100)}%`}</div></div>
-        <div class="card"><div class="label">Unsubscribes</div><div class="value">${Number(k.marketingUnsubscribes || 0)}</div></div>
-      </div>
-    </div>
-
-    <div class="section" style="color: var(--muted); font-size: 11px;">
-      Tip: In the print dialog, choose <b>Save as PDF</b>. For best results, enable background graphics.
-    </div>
-  </div>
-</body>
-</html>`
-
-    w.document.open()
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    // Delay to let layout settle before print
-    setTimeout(() => {
-      w.print()
-    }, 250)
+    const params = new URLSearchParams()
+    // Use the currently loaded range to ensure what you see matches the PDF.
+    params.set('startDate', data.range.startDate.slice(0, 10))
+    params.set('endDate', data.range.endDate.slice(0, 10))
+    navigate(`/apps/crm/reporting/print?${params.toString()}`)
   }
 
   return (
