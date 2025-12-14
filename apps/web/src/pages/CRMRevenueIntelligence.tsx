@@ -156,6 +156,17 @@ export default function CRMRevenueIntelligence() {
     },
   })
 
+  async function loadRecommendedDefaults() {
+    try {
+      setSettingsError(null)
+      const res = await http.get('/api/crm/revenue-intelligence/settings/defaults')
+      const defaults = (res.data?.data ?? {}) as RevenueIntelligenceSettings
+      setSettingsText(JSON.stringify(defaults, null, 2))
+    } catch (e: any) {
+      setSettingsError(e?.response?.data?.error || e?.message || 'Failed to load defaults')
+    }
+  }
+
   function getPeriodRange(p: ForecastPeriod, now: Date) {
     // Fiscal year begins Jan 1 (calendar year). Use half-open interval [start, endExclusive).
     let start = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -1461,6 +1472,14 @@ export default function CRMRevenueIntelligence() {
             />
 
             <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={loadRecommendedDefaults}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+                title="Load recommended BOAZ-OS defaults"
+              >
+                Load recommended defaults
+              </button>
               <button
                 type="button"
                 onClick={() => {

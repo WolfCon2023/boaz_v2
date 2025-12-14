@@ -54,12 +54,19 @@ type RevenueIntelligenceSettings = {
 const DEFAULT_RI_SETTINGS: RevenueIntelligenceSettings = {
   stageWeights: {
     new: -10,
+    'Draft / Deal Created': -10,
     Lead: -10,
     Qualified: 0,
+    'Initial Validation': 2,
+    'Manager Approval': 4,
+    'Finance Approval': 6,
+    'Legal Review': 8,
+    'Executive Approval': 10,
+    'Sent for Signature': 14,
     Proposal: 10,
     Negotiation: 15,
-    'Submitted for Review': 5,
-    'Approved / Ready for Signature': 0,
+    'Submitted for Review': 6,
+    'Approved / Ready for Signature': 12,
     'Contract Signed / Closed Won': 0,
     'Closed Won': 0,
     'Closed Lost': 0,
@@ -143,6 +150,11 @@ revenueIntelligenceRouter.get('/settings', async (_req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   const settings = await getRevenueIntelligenceSettings(db)
   res.json({ data: settings, error: null })
+})
+
+// GET /api/crm/revenue-intelligence/settings/defaults (recommended defaults shipped with BOAZ-OS)
+revenueIntelligenceRouter.get('/settings/defaults', async (_req, res) => {
+  res.json({ data: DEFAULT_RI_SETTINGS, error: null })
 })
 
 // PUT /api/crm/revenue-intelligence/settings (admin-only)
@@ -556,7 +568,8 @@ revenueIntelligenceRouter.get('/deal-score/:dealId', async (req, res) => {
   const dealAge = deal.createdAt ? Math.ceil((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined
   const activityRecency = deal.lastActivityAt ? Math.ceil((Date.now() - new Date(deal.lastActivityAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined
 
-  const scoring = calculateDealScore(deal, accountAge, dealAge, activityRecency)
+  const settings = await getRevenueIntelligenceSettings(db)
+  const scoring = calculateDealScore(deal, settings, accountAge, dealAge, activityRecency)
 
   res.json({
     data: {
