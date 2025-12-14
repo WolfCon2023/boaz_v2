@@ -615,6 +615,103 @@ export default function CRMRevenueIntelligence() {
     )
   }
 
+  function downloadCsv(filename: string, headers: string[], rows: Array<Array<string | number | null | undefined>>) {
+    const csv = [
+      headers.join(','),
+      ...rows.map((r) => r.map((x) => `"${String(x ?? '').replaceAll('"', '""')}"`).join(',')),
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportForecastDealsCsv() {
+    if (!forecast?.deals) return
+    const headers = [
+      'dealId',
+      'dealNumber',
+      'title',
+      'stage',
+      'owner',
+      'amount',
+      'forecastedCloseDate',
+      'closeDate',
+      'aiScore',
+      'aiConfidence',
+      'daysInStage',
+      'lastActivityAt',
+      'aiFactors',
+    ]
+    const rows = forecast.deals.map((d) => {
+      const owner = d.ownerId ? (userById.get(d.ownerId)?.name || d.ownerId) : 'Unassigned'
+      const factors = (d.aiFactors || []).map((f) => `${f.factor}:${f.impact}`).join('; ')
+      return [
+        d._id,
+        d.dealNumber ?? '',
+        d.title ?? '',
+        d.stage ?? '',
+        owner,
+        d.amount ?? 0,
+        (d.forecastedCloseDate || '') as any,
+        (d.closeDate || '') as any,
+        d.aiScore ?? '',
+        d.aiConfidence ?? '',
+        d.daysInStage ?? '',
+        d.lastActivityAt ?? '',
+        factors,
+      ]
+    })
+    downloadCsv('revenue-intelligence-deals.csv', headers, rows)
+  }
+
+  function exportRepsCsv() {
+    if (!reps?.reps) return
+    const headers = ['ownerId', 'rep', 'forecastedRevenue', 'pipelineValue', 'wonValue', 'lostValue', 'winRate', 'openDeals', 'closedWon', 'closedLost', 'avgDealSize', 'performanceScore']
+    const rows = reps.reps.map((r) => {
+      const user = userById.get(r.ownerId)
+      const repName = user ? user.name : r.ownerId
+      return [
+        r.ownerId,
+        repName,
+        r.forecastedRevenue,
+        r.pipelineValue,
+        r.wonValue,
+        r.lostValue,
+        r.winRate,
+        r.openDeals,
+        r.closedWon,
+        r.closedLost,
+        r.avgDealSize,
+        r.performanceScore,
+      ]
+    })
+    downloadCsv('revenue-intelligence-reps.csv', headers, rows)
+  }
+
+  function exportAtRiskCsv() {
+    if (!atRisk?.rows) return
+    const headers = ['dealId', 'dealNumber', 'title', 'stage', 'owner', 'amount', 'forecastedCloseDate', 'closeDate', 'risk']
+    const rows = atRisk.rows.map(({ d, risk }) => {
+      const owner = d.ownerId ? (userById.get(d.ownerId)?.name || d.ownerId) : 'Unassigned'
+      return [
+        d._id,
+        d.dealNumber ?? '',
+        d.title ?? '',
+        d.stage ?? '',
+        owner,
+        d.amount ?? 0,
+        d.forecastedCloseDate ?? '',
+        d.closeDate ?? '',
+        risk,
+      ]
+    })
+    downloadCsv('revenue-intelligence-at-risk.csv', headers, rows)
+  }
+
   function getConfidenceColor(confidence: 'High' | 'Medium' | 'Low'): string {
     if (confidence === 'High') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/50'
     if (confidence === 'Medium') return 'text-amber-400 bg-amber-500/10 border-amber-500/50'
@@ -794,6 +891,36 @@ export default function CRMRevenueIntelligence() {
             <span className="font-semibold text-[color:var(--color-text)]">
               {formatDateOnly((view === 'reps' ? reps?.endDate : forecast?.endDate) || '')}
             </span>
+          </div>
+
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={exportForecastDealsCsv}
+              disabled={!forecast?.deals?.length}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              title="Export the current Revenue Intelligence deal list (including AI score & factors)"
+            >
+              Export Deals CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportRepsCsv}
+              disabled={!reps?.reps?.length}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              title="Export the rep leaderboard for the current selection"
+            >
+              Export Reps CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportAtRiskCsv}
+              disabled={!atRisk?.rows?.length}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              title="Export the Stale / At‑Risk deal list"
+            >
+              Export At‑Risk CSV
+            </button>
           </div>
         </div>
       </section>
