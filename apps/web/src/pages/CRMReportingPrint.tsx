@@ -57,14 +57,49 @@ export default function CRMReportingPrint() {
   const autoPrint = sp.get('autoprint') === '1'
   const printedRef = React.useRef(false)
   const [isReadyToPrint, setIsReadyToPrint] = React.useState(false)
+  const [isFallbackBasic, setIsFallbackBasic] = React.useState(false)
 
   const q = useQuery({
     queryKey: ['crm-reporting-overview-print', startDate, endDate],
     queryFn: async () => {
-      const res = await http.get('/api/crm/reporting/report', {
-        params: { startDate: startDate || undefined, endDate: endDate || undefined },
-      })
-      return res.data as { data: DetailedReport }
+      setIsFallbackBasic(false)
+      try {
+        const res = await http.get('/api/crm/reporting/report', {
+          params: { startDate: startDate || undefined, endDate: endDate || undefined },
+        })
+        return res.data as { data: DetailedReport }
+      } catch (e: any) {
+        const status = e?.response?.status
+        if (status !== 404) throw e
+
+        // Backwards-compatible fallback for older API deployments
+        setIsFallbackBasic(true)
+        const res2 = await http.get('/api/crm/reporting/overview', {
+          params: { startDate: startDate || undefined, endDate: endDate || undefined },
+        })
+        const overview = (res2.data as any)?.data
+        const fallback: DetailedReport = {
+          overview,
+          details: {
+            financial: {
+              invoiced: { subtotal: 0, discounts: 0, tax: 0, total: 0, count: 0 },
+              cashCollected: 0,
+              refundsIssued: 0,
+              netCash: 0,
+              topOverdueInvoices: [],
+            },
+            renewals: { dueInRange: [], highChurnRisk: [] },
+            support: { backlog: [], breached: [] },
+          },
+        }
+        return { data: fallback }
+      }
+    },
+    retry: (failureCount, err: any) => {
+      // Don't spam retries on 404 "endpoint not deployed yet"
+      const status = err?.response?.status
+      if (status === 404) return false
+      return failureCount < 2
     },
   })
 
@@ -153,6 +188,11 @@ export default function CRMReportingPrint() {
           <div className="text-sm" style={{ color: '#e5e7eb', fontWeight: 700, letterSpacing: '.01em' }}>
             BOAZ Report PDF Preview
           </div>
+          {isFallbackBasic && (
+            <div className="text-xs" style={{ color: '#cbd5e1' }}>
+              Showing basic report (API not updated yet)
+            </div>
+          )}
           <div className="flex gap-2">
             <button className="btn" type="button" onClick={() => navigate('/apps/crm/reporting')}>
               Back
