@@ -37,6 +37,24 @@ type DetailedReport = {
         issuedAt: string | null
         daysOverdue: number | null
       }>
+      paymentsByMethod?: Record<string, number>
+      topPaidInvoices?: Array<{
+        invoiceId: string
+        invoiceNumber: number | null
+        title: string
+        accountName: string | null
+        totalPaid: number
+        paymentCount: number
+      }>
+      refundEvents?: Array<{
+        invoiceId: string
+        invoiceNumber: number | null
+        title: string
+        accountName: string | null
+        amount: number
+        reason: string | null
+        refundedAt: string
+      }>
     }
     renewals: {
       dueInRange: Array<{ id: string; name: string; accountName: string | null; status: string; renewalDate: string | null; mrr: number; arr: number; churnRisk: string | null }>
@@ -288,6 +306,26 @@ export default function CRMReportingPrint() {
                     </div>
                   </div>
                 </div>
+                <div style={{ height: 10 }} />
+                <div className="twoCol">
+                  <div className="card">
+                    <div className="label">Payments by method (range)</div>
+                    <div className="note">
+                      {fin?.paymentsByMethod && Object.keys(fin.paymentsByMethod).length > 0
+                        ? Object.entries(fin.paymentsByMethod)
+                            .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+                            .slice(0, 6)
+                            .map(([m, amt]) => `${m}: ${formatCurrency(Number(amt || 0))}`)
+                            .join(' • ')
+                        : '—'}
+                    </div>
+                  </div>
+                  <div className="card">
+                    <div className="label">Refunds (range)</div>
+                    <div className="value">{formatCurrency(Number(fin?.refundsIssued || 0))}</div>
+                    <div className="note">{(fin?.refundEvents ?? []).length} refund events</div>
+                  </div>
+                </div>
               </div>
 
               <div className="section">
@@ -317,6 +355,62 @@ export default function CRMReportingPrint() {
                     ))}
                     {(fin?.topOverdueInvoices ?? []).length === 0 && (
                       <tr><td colSpan={5} style={{ color: 'var(--muted)' }}>No overdue invoices found.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="section">
+                <div className="sectionTitle">Top Paid Invoices (range)</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Invoice</th>
+                      <th>Account</th>
+                      <th className="right">Paid</th>
+                      <th className="right">Payments</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(fin?.topPaidInvoices ?? []).slice(0, 15).map((inv) => (
+                      <tr key={inv.invoiceId}>
+                        <td><div style={{ fontWeight: 700 }}>#{inv.invoiceNumber ?? '—'} {inv.title}</div></td>
+                        <td>{inv.accountName ?? '—'}</td>
+                        <td className="right" style={{ fontWeight: 700 }}>{formatCurrency(Number(inv.totalPaid || 0))}</td>
+                        <td className="right">{Number(inv.paymentCount || 0)}</td>
+                      </tr>
+                    ))}
+                    {(fin?.topPaidInvoices ?? []).length === 0 && (
+                      <tr><td colSpan={4} style={{ color: 'var(--muted)' }}>No payments found in selected range.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="section">
+                <div className="sectionTitle">Refund Events (range)</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Invoice</th>
+                      <th>Account</th>
+                      <th className="right">Amount</th>
+                      <th>When</th>
+                      <th>Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(fin?.refundEvents ?? []).slice(0, 20).map((r, idx) => (
+                      <tr key={`${r.invoiceId}-${r.refundedAt}-${idx}`}>
+                        <td><div style={{ fontWeight: 700 }}>#{r.invoiceNumber ?? '—'} {r.title}</div></td>
+                        <td>{r.accountName ?? '—'}</td>
+                        <td className="right" style={{ fontWeight: 700 }}>{formatCurrency(Number(r.amount || 0))}</td>
+                        <td>{r.refundedAt ? new Date(r.refundedAt).toLocaleString() : '—'}</td>
+                        <td>{r.reason ?? '—'}</td>
+                      </tr>
+                    ))}
+                    {(fin?.refundEvents ?? []).length === 0 && (
+                      <tr><td colSpan={5} style={{ color: 'var(--muted)' }}>No refunds found in selected range.</td></tr>
                     )}
                   </tbody>
                 </table>

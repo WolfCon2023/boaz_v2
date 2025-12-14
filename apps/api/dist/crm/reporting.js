@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { ObjectId } from 'mongodb';
 import { getDb } from '../db.js';
 import { requireAuth } from '../auth/rbac.js';
+import { computeReportingOverview, getRange as getCoreRange } from './reporting_core.js';
 export const reportingRouter = Router();
 reportingRouter.use(requireAuth);
 function safeNumber(v) {
@@ -37,6 +38,18 @@ function getRange(startRaw, endRaw) {
     const endExclusive = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const start = new Date(endExclusive.getTime() - 30 * 24 * 60 * 60 * 1000);
     return { start, endExclusive, end: new Date(endExclusive.getTime() - 1) };
+}
+function validateDateOnlyParam(raw) {
+    if (raw == null || raw === '')
+        return { ok: true, value: '' };
+    if (typeof raw !== 'string')
+        return { ok: false, error: 'invalid_date' };
+    const d = parseDateOnly(raw);
+    if (!d)
+        return { ok: false, error: 'invalid_date' };
+    // normalize to YYYY-MM-DD for consistent downstream behavior
+    const iso = new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString().slice(0, 10);
+    return { ok: true, value: iso };
 }
 async function computeOverview(db, start, endExclusive) {
     const startIso = start.toISOString();
@@ -297,8 +310,16 @@ reportingRouter.get('/overview', async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
-    const { start, end, endExclusive } = getRange(typeof req.query.startDate === 'string' ? req.query.startDate : undefined, typeof req.query.endDate === 'string' ? req.query.endDate : undefined);
+    const t0 = Date.now();
+    const startParam = validateDateOnlyParam(req.query.startDate);
+    const endParam = validateDateOnlyParam(req.query.endDate);
+    if (!startParam.ok)
+        return res.status(400).json({ data: null, error: 'invalid_startDate' });
+    if (!endParam.ok)
+        return res.status(400).json({ data: null, error: 'invalid_endDate' });
+    const { start, end, endExclusive } = getRange(startParam.value || undefined, endParam.value || undefined);
     const overview = await computeOverview(db, start, endExclusive);
+    console.log(`[reporting] GET /overview ${res.statusCode} ${Date.now() - t0}ms`);
     res.json({ data: overview, error: null });
 });
 // GET /api/crm/reporting/report?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
@@ -307,7 +328,14 @@ reportingRouter.get('/report', async (req, res) => {
     const db = await getDb();
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
-    const { start, end, endExclusive } = getRange(typeof req.query.startDate === 'string' ? req.query.startDate : undefined, typeof req.query.endDate === 'string' ? req.query.endDate : undefined);
+    const t0 = Date.now();
+    const startParam = validateDateOnlyParam(req.query.startDate);
+    const endParam = validateDateOnlyParam(req.query.endDate);
+    if (!startParam.ok)
+        return res.status(400).json({ data: null, error: 'invalid_startDate' });
+    if (!endParam.ok)
+        return res.status(400).json({ data: null, error: 'invalid_endDate' });
+    const { start, end, endExclusive } = getRange(startParam.value || undefined, endParam.value || undefined);
     const overview = await computeOverview(db, start, endExclusive);
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -316,33 +344,62 @@ reportingRouter.get('/report', async (req, res) => {
     // Payments collected during range (from embedded invoice.payments array)
     const paidInvoices = (await db
         .collection('invoices')
-        .find({ 'payments.paidAt': { $gte: start, $lt: endExclusive } }, { projection: { payments: 1 } })
+        .find({ 'payments.paidAt': { $gte: start, $lt: endExclusive } }, { projection: { invoiceNumber: 1, title: 1, accountId: 1, payments: 1, total: 1, status: 1 } })
         .limit(5000)
         .toArray());
     let cashCollected = 0;
+    const paymentsByMethod = {};
+    const paymentEvents = [];
     for (const inv of paidInvoices) {
         for (const p of inv.payments ?? []) {
             const paidAt = p?.paidAt ? new Date(p.paidAt) : null;
             if (!paidAt || !Number.isFinite(paidAt.getTime()))
                 continue;
-            if (paidAt >= start && paidAt < endExclusive)
-                cashCollected += safeNumber(p.amount);
+            if (paidAt >= start && paidAt < endExclusive) {
+                const amt = safeNumber(p.amount);
+                const method = String(p.method || 'unknown');
+                cashCollected += amt;
+                paymentsByMethod[method] = (paymentsByMethod[method] ?? 0) + amt;
+                paymentEvents.push({
+                    invoiceId: String(inv._id),
+                    invoiceNumber: typeof inv.invoiceNumber === 'number' ? inv.invoiceNumber : null,
+                    title: inv.title || 'Untitled',
+                    accountId: inv.accountId ? String(inv.accountId) : null,
+                    accountName: null,
+                    amount: amt,
+                    method: method || null,
+                    paidAt: paidAt.toISOString(),
+                });
+            }
         }
     }
     // Refunds issued during range (from embedded invoice.refunds array)
     const refundedInvoices = (await db
         .collection('invoices')
-        .find({ 'refunds.refundedAt': { $gte: start, $lt: endExclusive } }, { projection: { refunds: 1 } })
+        .find({ 'refunds.refundedAt': { $gte: start, $lt: endExclusive } }, { projection: { invoiceNumber: 1, title: 1, accountId: 1, refunds: 1, total: 1, status: 1 } })
         .limit(5000)
         .toArray());
     let refundsIssued = 0;
+    const refundEvents = [];
     for (const inv of refundedInvoices) {
         for (const r of inv.refunds ?? []) {
             const refundedAt = r?.refundedAt ? new Date(r.refundedAt) : null;
             if (!refundedAt || !Number.isFinite(refundedAt.getTime()))
                 continue;
-            if (refundedAt >= start && refundedAt < endExclusive)
-                refundsIssued += safeNumber(r.amount);
+            if (refundedAt >= start && refundedAt < endExclusive) {
+                const amt = safeNumber(r.amount);
+                refundsIssued += amt;
+                refundEvents.push({
+                    invoiceId: String(inv._id),
+                    invoiceNumber: typeof inv.invoiceNumber === 'number' ? inv.invoiceNumber : null,
+                    title: inv.title || 'Untitled',
+                    accountId: inv.accountId ? String(inv.accountId) : null,
+                    accountName: null,
+                    amount: amt,
+                    reason: typeof r.reason === 'string' ? r.reason : null,
+                    refundedAt: refundedAt.toISOString(),
+                });
+            }
         }
     }
     const netCash = cashCollected - refundsIssued;
@@ -381,6 +438,15 @@ reportingRouter.get('/report', async (req, res) => {
             .toArray())
         : [];
     const accountNameById = new Map(accountDocs.map((a) => [String(a._id), a.name || `Account ${a.accountNumber || ''}`.trim()]));
+    // Fill accountName for payment/refund events where possible
+    for (const ev of paymentEvents) {
+        if (ev.accountId)
+            ev.accountName = accountNameById.get(ev.accountId) || null;
+    }
+    for (const ev of refundEvents) {
+        if (ev.accountId)
+            ev.accountName = accountNameById.get(ev.accountId) || null;
+    }
     const overdueInvoiceRows = overdueInvoices.map((inv) => {
         const due = inv.dueDate ? new Date(inv.dueDate) : null;
         const dueStart = due ? new Date(due.getFullYear(), due.getMonth(), due.getDate()) : null;
@@ -398,6 +464,25 @@ reportingRouter.get('/report', async (req, res) => {
             daysOverdue,
         };
     });
+    // Top paid invoices (by amount collected in range)
+    const paidByInvoice = new Map();
+    for (const ev of paymentEvents) {
+        const key = ev.invoiceId;
+        const cur = paidByInvoice.get(key) || {
+            invoiceId: ev.invoiceId,
+            invoiceNumber: ev.invoiceNumber,
+            title: ev.title,
+            accountName: ev.accountName,
+            totalPaid: 0,
+            paymentCount: 0,
+        };
+        cur.totalPaid += ev.amount;
+        cur.paymentCount += 1;
+        paidByInvoice.set(key, cur);
+    }
+    const topPaidInvoices = Array.from(paidByInvoice.values())
+        .sort((a, b) => b.totalPaid - a.totalPaid)
+        .slice(0, 25);
     // === Renewals lists ===
     const renewalsDue = (await db
         .collection('renewals')
@@ -429,6 +514,10 @@ reportingRouter.get('/report', async (req, res) => {
                     refundsIssued,
                     netCash,
                     topOverdueInvoices: overdueInvoiceRows,
+                    paymentsByMethod,
+                    topPaidInvoices,
+                    paymentEvents: paymentEvents.sort((a, b) => b.paidAt.localeCompare(a.paidAt)).slice(0, 200),
+                    refundEvents: refundEvents.sort((a, b) => b.refundedAt.localeCompare(a.refundedAt)).slice(0, 200),
                 },
                 renewals: {
                     dueInRange: renewalsDue.map((r) => ({
@@ -480,6 +569,34 @@ reportingRouter.get('/report', async (req, res) => {
         },
         error: null,
     });
+    console.log(`[reporting] GET /report ${res.statusCode} ${Date.now() - t0}ms`);
+});
+// POST /api/crm/reporting/snapshots/run-daily
+// Triggers (or upserts) the scheduled daily snapshot now. Safe in multi-instance environments due to stable string _id.
+reportingRouter.post('/snapshots/run-daily', async (_req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const now = new Date();
+    const dayKey = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString().slice(0, 10);
+    const scheduleKey = `daily:${dayKey}`;
+    const endDate = dayKey;
+    const startDt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    startDt.setUTCDate(startDt.getUTCDate() - 29);
+    const startDate = startDt.toISOString().slice(0, 10);
+    const { start, endExclusive } = getCoreRange(startDate, endDate);
+    const overview = await computeReportingOverview({ db, start, endExclusive });
+    const doc = {
+        _id: scheduleKey,
+        createdAt: new Date(),
+        createdByUserId: null,
+        kind: 'scheduled',
+        scheduleKey,
+        range: { startDate: overview.range.startDate, endDate: overview.range.endDate },
+        kpis: overview.kpis,
+    };
+    await db.collection('reporting_snapshots').updateOne({ _id: scheduleKey }, { $setOnInsert: doc }, { upsert: true });
+    res.json({ data: { ok: true, scheduleKey }, error: null });
 });
 // POST /api/crm/reporting/snapshots { startDate?, endDate? }
 reportingRouter.post('/snapshots', async (req, res) => {
@@ -487,7 +604,13 @@ reportingRouter.post('/snapshots', async (req, res) => {
     if (!db)
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     const raw = req.body ?? {};
-    const { start, endExclusive } = getRange(typeof raw.startDate === 'string' ? raw.startDate : undefined, typeof raw.endDate === 'string' ? raw.endDate : undefined);
+    const startParam = validateDateOnlyParam(raw.startDate);
+    const endParam = validateDateOnlyParam(raw.endDate);
+    if (!startParam.ok)
+        return res.status(400).json({ data: null, error: 'invalid_startDate' });
+    if (!endParam.ok)
+        return res.status(400).json({ data: null, error: 'invalid_endDate' });
+    const { start, endExclusive } = getRange(startParam.value || undefined, endParam.value || undefined);
     const overview = await computeOverview(db, start, endExclusive);
     const auth = req.auth;
     const doc = {

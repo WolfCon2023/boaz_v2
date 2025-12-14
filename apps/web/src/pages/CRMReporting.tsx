@@ -98,6 +98,23 @@ export default function CRMReporting() {
     onError: () => toast.showToast('Failed to save snapshot', 'error'),
   })
 
+  const runDailySnapshot = useMutation({
+    mutationFn: async () => {
+      const res = await http.post('/api/crm/reporting/snapshots/run-daily')
+      return res.data as { data: { ok: boolean; scheduleKey?: string } }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['crm-reporting-snapshots'] })
+      toast.showToast('BOAZ says: Daily snapshot generated.', 'success')
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to generate daily snapshot', 'error'),
+  })
+
+  const lastScheduledSnapshot = React.useMemo(() => {
+    const items = snapshotsQ.data?.data.items ?? []
+    return items.find((s) => s.kind === 'scheduled') || null
+  }, [snapshotsQ.data?.data.items])
+
   function formatCurrency(value: number) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(value || 0)
   }
@@ -498,7 +515,21 @@ export default function CRMReporting() {
           <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold">Snapshots</h2>
-              <div className="text-[10px] text-[color:var(--color-text-muted)]">Track KPIs over time (manual snapshots)</div>
+              <div className="flex items-center gap-2">
+                <div className="text-[10px] text-[color:var(--color-text-muted)]">
+                  {lastScheduledSnapshot
+                    ? `Last scheduled: ${new Date(lastScheduledSnapshot.createdAt).toLocaleString()}`
+                    : 'No scheduled snapshot yet'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => runDailySnapshot.mutate()}
+                  disabled={runDailySnapshot.isPending}
+                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                >
+                  {runDailySnapshot.isPending ? 'Running…' : 'Run daily snapshot now'}
+                </button>
+              </div>
             </div>
             {snapshotsQ.isLoading ? (
               <div className="text-xs text-[color:var(--color-text-muted)]">Loading snapshots…</div>
