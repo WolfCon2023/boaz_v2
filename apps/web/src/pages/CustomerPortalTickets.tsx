@@ -43,6 +43,10 @@ export default function CustomerPortalTickets() {
   const [newComment, setNewComment] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [uploadingTicketId, setUploadingTicketId] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
+
+  const MAX_FILE_BYTES = 25 * 1024 * 1024 // keep in sync with API limit (25MB)
+  const MAX_FILES_PER_UPLOAD = 10
   
   // New ticket form
   const [newSubject, setNewSubject] = useState('')
@@ -104,13 +108,35 @@ export default function CustomerPortalTickets() {
       const res = await http.post(
         `/api/customer-portal/data/tickets/${ticketId}/attachments`,
         fd,
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          onUploadProgress: (evt: any) => {
+            const total = Number(evt?.total || 0)
+            const loaded = Number(evt?.loaded || 0)
+            if (total > 0) {
+              const pct = Math.max(0, Math.min(100, Math.round((loaded / total) * 100)))
+              setUploadProgress((prev) => ({ ...prev, [ticketId]: pct }))
+            }
+          },
+        }
       )
       if (res.data.error) throw new Error(res.data.error)
       return res.data.data
     },
-    onMutate: ({ ticketId }) => setUploadingTicketId(ticketId),
-    onSettled: () => setUploadingTicketId(null),
+    onMutate: ({ ticketId }) => {
+      setUploadingTicketId(ticketId)
+      setUploadProgress((prev) => ({ ...prev, [ticketId]: 0 }))
+    },
+    onSettled: (_data, _err, variables) => {
+      setUploadingTicketId(null)
+      if (variables?.ticketId) {
+        setUploadProgress((prev) => {
+          const next = { ...prev }
+          delete next[variables.ticketId]
+          return next
+        })
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['customer-portal-tickets'] })
       showToast('Attachment(s) uploaded successfully', 'success')
@@ -390,7 +416,7 @@ export default function CustomerPortalTickets() {
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <h4 className="font-semibold text-[color:var(--color-text)]">Attachments</h4>
                       <label className="inline-flex items-center rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-xs text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)] cursor-pointer">
-                        {uploadingTicketId === ticket.id ? 'Uploading…' : 'Upload'}
+                        {uploadingTicketId === ticket.id ? `Uploading… ${uploadProgress[ticket.id] ?? 0}%` : 'Upload'}
                         <input
                           type="file"
                           multiple
@@ -399,11 +425,31 @@ export default function CustomerPortalTickets() {
                             const files = Array.from(e.target.files ?? [])
                             e.currentTarget.value = ''
                             if (files.length === 0) return
-                            uploadAttachmentsMutation.mutate({ ticketId: ticket.id, files })
+                            if (files.length > MAX_FILES_PER_UPLOAD) {
+                              showToast(`You can upload up to ${MAX_FILES_PER_UPLOAD} files at a time.`, 'error')
+                              return
+                            }
+                            const tooBig = files.filter((f) => f.size > MAX_FILE_BYTES)
+                            const ok = files.filter((f) => f.size <= MAX_FILE_BYTES)
+                            if (tooBig.length) {
+                              showToast(`Some files exceed 25MB and were skipped: ${tooBig.map((f) => f.name).join(', ')}`, 'error')
+                            }
+                            if (ok.length === 0) return
+                            uploadAttachmentsMutation.mutate({ ticketId: ticket.id, files: ok })
                           }}
                         />
                       </label>
                     </div>
+                    {uploadingTicketId === ticket.id && (
+                      <div className="mb-3">
+                        <div className="h-2 w-full overflow-hidden rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-bg)]">
+                          <div
+                            className="h-full bg-[color:var(--color-primary-600)]"
+                            style={{ width: `${uploadProgress[ticket.id] ?? 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                     {(ticket.attachments ?? []).length > 0 ? (
                       <div className="mb-4 space-y-2">
                         {(ticket.attachments ?? []).map((a) => (
@@ -585,10 +631,20 @@ export default function CustomerPortalTickets() {
                           const files = Array.from(e.target.files ?? [])
                           e.currentTarget.value = ''
                           if (files.length === 0) return
+                          if (files.length > MAX_FILES_PER_UPLOAD) {
+                            showToast(`You can select up to ${MAX_FILES_PER_UPLOAD} files at a time.`, 'error')
+                            return
+                          }
+                          const tooBig = files.filter((f) => f.size > MAX_FILE_BYTES)
+                          const okFiles = files.filter((f) => f.size <= MAX_FILE_BYTES)
+                          if (tooBig.length) {
+                            showToast(`Some files exceed 25MB and were skipped: ${tooBig.map((f) => f.name).join(', ')}`, 'error')
+                          }
+                          if (okFiles.length === 0) return
                           // De-dupe by name+size to prevent accidental doubles
                           setNewAttachments((prev) => {
                             const next = [...prev]
-                            for (const f of files) {
+                            for (const f of okFiles) {
                               if (!next.some((x) => x.name === f.name && x.size === f.size)) next.push(f)
                             }
                             return next

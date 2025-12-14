@@ -268,6 +268,7 @@ dealsRouter.post('/', async (req, res) => {
     }
 
     const closedWon = 'Contract Signed / Closed Won'
+    const now = new Date()
     const doc: any = {
       title,
       accountId: accountObjectId,
@@ -275,6 +276,11 @@ dealsRouter.post('/', async (req, res) => {
       stage: stageRaw || 'new',
       approver: typeof raw.approver === 'string' ? raw.approver.trim() || undefined : undefined,
       ownerId: typeof raw.ownerId === 'string' ? raw.ownerId.trim() || undefined : undefined,
+      // Revenue Intelligence helpers
+      createdAt: now,
+      updatedAt: now,
+      lastActivityAt: now,
+      stageChangedAt: now,
     }
     if (ObjectId.isValid(raw.marketingCampaignId)) doc.marketingCampaignId = new ObjectId(raw.marketingCampaignId)
     if (typeof raw.attributionToken === 'string') doc.attributionToken = raw.attributionToken.trim()
@@ -412,7 +418,12 @@ dealsRouter.patch('/:id/stage', async (req, res) => {
       )
     }
     
-    await db.collection('deals').updateOne({ _id }, { $set: { stage: parsed.data.stage } })
+    const now = new Date()
+    const set: any = { stage: parsed.data.stage, updatedAt: now, lastActivityAt: now }
+    if (parsed.data.stage !== (currentDeal as any).stage) {
+      set.stageChangedAt = now
+    }
+    await db.collection('deals').updateOne({ _id }, { $set: set })
     res.json({ data: { ok: true }, error: null })
   } catch {
     res.status(400).json({ data: null, error: 'invalid_id' })
@@ -1063,7 +1074,8 @@ dealsRouter.put('/:id', async (req, res) => {
       return res.status(404).json({ data: null, error: 'not_found' })
     }
     
-    const update: any = { ...parsed.data }
+    const now = new Date()
+    const update: any = { ...parsed.data, updatedAt: now, lastActivityAt: now }
     const auth = (req as any).auth as { userId: string; email: string } | undefined
     let user: any = null
     if (auth) {
@@ -1113,6 +1125,7 @@ dealsRouter.put('/:id', async (req, res) => {
 
     // Track stage changes
     if (update.stage && update.stage !== previousStage) {
+      update.stageChangedAt = now
       await addDealHistory(
         db,
         _id,

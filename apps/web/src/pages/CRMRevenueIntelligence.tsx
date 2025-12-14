@@ -5,6 +5,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { formatDateOnly } from '@/lib/dateFormat'
+import { useAccessToken } from '@/components/Auth'
 
 type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year' | 'next_year'
 type DealStage = 'Lead' | 'Qualified' | 'Proposal' | 'Negotiation' | 'Closed Won' | 'Closed Lost'
@@ -80,6 +81,7 @@ type RepPerformance = {
 
 export default function CRMRevenueIntelligence() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const token = useAccessToken()
 
   const [period, setPeriod] = React.useState<ForecastPeriod>(
     (searchParams.get('period') as ForecastPeriod) || 'current_quarter',
@@ -403,6 +405,20 @@ export default function CRMRevenueIntelligence() {
     },
   })
 
+  const rolesQ = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
+    queryKey: ['user', 'roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/roles')
+      return res.data
+    },
+    enabled: !!token,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+
+  const isAdmin = !!rolesQ.data?.isAdmin || (rolesQ.data?.roles ?? []).some((r) => (r.permissions ?? []).includes('*'))
+
   const forecast = forecastQ.data?.data
   const reps = repsQ.data?.data
   const users = usersQ.data?.data.items ?? []
@@ -627,22 +643,24 @@ export default function CRMRevenueIntelligence() {
         </div>
         <div className="flex items-center gap-2">
           <CRMHelpButton tag="crm:revenue-intelligence" />
-          <button
-            type="button"
-            onClick={() => {
-              setSettingsError(null)
-              setShowScoringSettings(true)
-              const current = settingsQ.data?.data
-              const normalized = current ? normalizeSettings(current) : null
-              setSettingsDraft(normalized)
-              setSettingsText(normalized ? JSON.stringify(normalized, null, 2) : '')
-              setSettingsMode('simple')
-            }}
-            className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
-            title="View/edit AI scoring settings (admin only)"
-          >
-            Scoring settings
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsError(null)
+                setShowScoringSettings(true)
+                const current = settingsQ.data?.data
+                const normalized = current ? normalizeSettings(current) : null
+                setSettingsDraft(normalized)
+                setSettingsText(normalized ? JSON.stringify(normalized, null, 2) : '')
+                setSettingsMode('simple')
+              }}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+              title="View/edit AI scoring settings (admin only)"
+            >
+              Scoring settings
+            </button>
+          )}
         </div>
       </header>
 

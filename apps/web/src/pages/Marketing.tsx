@@ -272,6 +272,19 @@ function SegmentsTab() {
                         className="text-left truncate"
                         onClick={() => { setEditing(s); setRules(Array.isArray(s.rules) ? s.rules : []); setEmailsText(Array.isArray(s.emails) ? s.emails.join('\n') : ''); setPreview(null) }}
                       >{s.name}</button>
+                      {s.engagementCampaignId && (
+                        <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                          Engaged (auto)
+                        </span>
+                      )}
+                      <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                        Emails: {Array.isArray(s.emails) ? s.emails.length : 0}
+                      </span>
+                      {s.updatedAt && (
+                        <span className="text-[10px] text-[color:var(--color-text-muted)]">
+                          Updated {new Date(s.updatedAt).toLocaleDateString()}
+                        </span>
+                      )}
                       <button
                         className="rounded-lg border px-2 py-1 text-xs"
                         onClick={(e) => { e.stopPropagation(); setRenamingId(String(s._id)); setRenamingName(String(s.name || '')) }}

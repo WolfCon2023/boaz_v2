@@ -270,11 +270,31 @@ async function computeForecast(
   // Score each deal
   const scoredDeals = deals.map((deal) => {
     const dealAge = deal.createdAt ? Math.ceil((Date.now() - new Date(deal.createdAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined
-    const activityRecency = deal.lastActivityAt ? Math.ceil((Date.now() - new Date(deal.lastActivityAt).getTime()) / (1000 * 60 * 60 * 24)) : undefined
+    const activitySource = (deal as any).lastActivityAt || (deal as any).updatedAt || (deal as any).createdAt
+    const activityRecency = activitySource ? Math.ceil((Date.now() - new Date(activitySource).getTime()) / (1000 * 60 * 60 * 24)) : undefined
     const accountAge = accountAgeMap.get(deal.accountId)
-    const scoring = calculateDealScore(deal, settings, accountAge, dealAge, activityRecency)
+
+    // Derive daysInStage if missing and we have stageChangedAt
+    let derivedDaysInStage: number | undefined = undefined
+    const existingDaysInStage = Number((deal as any).daysInStage)
+    if (Number.isFinite(existingDaysInStage)) {
+      derivedDaysInStage = existingDaysInStage
+    } else if ((deal as any).stageChangedAt) {
+      const sc = new Date((deal as any).stageChangedAt)
+      if (Number.isFinite(sc.getTime())) {
+        derivedDaysInStage = Math.ceil((Date.now() - sc.getTime()) / (1000 * 60 * 60 * 24))
+      }
+    }
+
+    const dealForScoring = {
+      ...(deal as any),
+      lastActivityAt: (deal as any).lastActivityAt || (deal as any).updatedAt || (deal as any).createdAt,
+      daysInStage: derivedDaysInStage ?? (deal as any).daysInStage,
+    }
+
+    const scoring = calculateDealScore(dealForScoring, settings, accountAge, dealAge, activityRecency)
     return {
-      ...deal,
+      ...dealForScoring,
       aiScore: scoring.score,
       aiConfidence: scoring.confidence,
       aiFactors: scoring.factors,

@@ -207,6 +207,7 @@ dealsRouter.post('/', async (req, res) => {
             return res.status(400).json({ data: null, error: 'missing_account' });
         }
         const closedWon = 'Contract Signed / Closed Won';
+        const now = new Date();
         const doc = {
             title,
             accountId: accountObjectId,
@@ -214,6 +215,11 @@ dealsRouter.post('/', async (req, res) => {
             stage: stageRaw || 'new',
             approver: typeof raw.approver === 'string' ? raw.approver.trim() || undefined : undefined,
             ownerId: typeof raw.ownerId === 'string' ? raw.ownerId.trim() || undefined : undefined,
+            // Revenue Intelligence helpers
+            createdAt: now,
+            updatedAt: now,
+            lastActivityAt: now,
+            stageChangedAt: now,
         };
         if (ObjectId.isValid(raw.marketingCampaignId))
             doc.marketingCampaignId = new ObjectId(raw.marketingCampaignId);
@@ -332,7 +338,12 @@ dealsRouter.patch('/:id/stage', async (req, res) => {
         if (parsed.data.stage !== currentDeal.stage) {
             await addDealHistory(db, _id, 'stage_changed', `Stage changed from "${currentDeal.stage}" to "${parsed.data.stage}"`, auth?.userId, user?.name, auth?.email, currentDeal.stage, parsed.data.stage);
         }
-        await db.collection('deals').updateOne({ _id }, { $set: { stage: parsed.data.stage } });
+        const now = new Date();
+        const set = { stage: parsed.data.stage, updatedAt: now, lastActivityAt: now };
+        if (parsed.data.stage !== currentDeal.stage) {
+            set.stageChangedAt = now;
+        }
+        await db.collection('deals').updateOne({ _id }, { $set: set });
         res.json({ data: { ok: true }, error: null });
     }
     catch {
@@ -873,7 +884,8 @@ dealsRouter.put('/:id', async (req, res) => {
             if (!currentDeal) {
                 return res.status(404).json({ data: null, error: 'not_found' });
             }
-            const update = { ...parsed.data };
+            const now = new Date();
+            const update = { ...parsed.data, updatedAt: now, lastActivityAt: now };
             const auth = req.auth;
             let user = null;
             if (auth) {
@@ -924,6 +936,7 @@ dealsRouter.put('/:id', async (req, res) => {
             const movingToClosedWon = update.stage === closedWon && previousStage !== closedWon;
             // Track stage changes
             if (update.stage && update.stage !== previousStage) {
+                update.stageChangedAt = now;
                 await addDealHistory(db, _id, 'stage_changed', `Stage changed from "${previousStage ?? 'empty'}" to "${update.stage}"`, auth?.userId, user?.name, auth?.email, previousStage, update.stage);
             }
             // Track amount changes
