@@ -18,6 +18,7 @@ export default function CustomerPortalLogin() {
   const [loading, setLoading] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
   const [showPwd, setShowPwd] = React.useState(false)
+  const [capsOn, setCapsOn] = React.useState(false)
   
   // Login form
   const [loginEmail, setLoginEmail] = React.useState('')
@@ -40,6 +41,14 @@ export default function CustomerPortalLogin() {
     const id = requestAnimationFrame(() => setMounted(true))
     return () => cancelAnimationFrame(id)
   }, [])
+
+  React.useEffect(() => {
+    try {
+      if (mode === 'login') (document.getElementById('customer-login-email') as HTMLInputElement | null)?.focus()
+      if (mode === 'register') (document.getElementById('customer-register-name') as HTMLInputElement | null)?.focus()
+      if (mode === 'forgot') (document.getElementById('customer-forgot-email') as HTMLInputElement | null)?.focus()
+    } catch {}
+  }, [mode])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -131,8 +140,8 @@ export default function CustomerPortalLogin() {
   }
 
   return (
-    <div className="relative overflow-hidden flex min-h-screen items-center justify-center bg-[color:var(--color-bg)]">
-      {/* Animated background - matching BOAZ design */}
+    <div className="relative overflow-hidden flex min-h-[calc(100vh-8rem)] items-center justify-center">
+      {/* Animated background - match internal sign-in */}
       <style>{`
         @keyframes floatX { 0%{transform:translateX(-20%)} 50%{transform:translateX(20%)} 100%{transform:translateX(-20%)} }
         @keyframes floatY { 0%{transform:translateY(-10%)} 50%{transform:translateY(10%)} 100%{transform:translateY(-10%)} }
@@ -143,50 +152,31 @@ export default function CustomerPortalLogin() {
         <div className="absolute top-1/3 -right-20 h-64 w-64 rounded-full blur-3xl" style={{ background: 'radial-gradient(40% 40% at 50% 50%, #a855f755, transparent 70%)', animation: 'floatX 13s ease-in-out infinite' }} />
       </div>
 
-      <div className={`w-[min(90vw,28rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-lg transition-all duration-300 ${mounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-3 scale-[0.98]'}`}>
-        {/* Header */}
-        <div className="mb-6 text-center">
-          <div className="mb-1 text-2xl font-semibold text-[color:var(--color-text)]">Customer Portal</div>
-          <div className="text-sm text-[color:var(--color-text-muted)]">Access your invoices, tickets, and contracts</div>
+      <div className={`w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow transition-all duration-300 ${mounted ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-3 scale-[0.98]'}`}>
+        <div className="mb-1 text-center text-xl font-semibold">
+          {mode === 'login' && 'Sign in'}
+          {mode === 'register' && 'Create account'}
+          {mode === 'forgot' && 'Reset password'}
         </div>
-
-        {/* Tabs */}
-        {!regSuccess && !forgotSent && (
-          <div className="mb-6 flex border-b border-[color:var(--color-border)]">
-            <button
-              onClick={() => setMode('login')}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                mode === 'login'
-                  ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
-                  : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
-              }`}
-            >
-              Login
-            </button>
-            <button
-              onClick={() => setMode('register')}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                mode === 'register'
-                  ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
-                  : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
-              }`}
-            >
-              Register
-            </button>
-          </div>
-        )}
+        <div className="mb-4 text-center text-xs text-[color:var(--color-text-muted)]">
+          {mode === 'login' && 'Customer Portal — Welcome back to BOAZ‑OS'}
+          {mode === 'register' && 'Customer Portal — Create your access'}
+          {mode === 'forgot' && 'Customer Portal — We’ll email a reset link'}
+        </div>
 
         {/* Login Form */}
         {mode === 'login' && !forgotSent && (
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-3">
             <label className="block text-sm">
-              <span className="mb-1 block text-[color:var(--color-text-muted)]">Email Address</span>
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Email</span>
               <input
                 type="email"
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
                 className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
-                placeholder="you@company.com"
+                placeholder="you@example.com"
+                id="customer-login-email"
+                autoComplete="email"
                 required
               />
             </label>
@@ -198,8 +188,10 @@ export default function CustomerPortalLogin() {
                   type={showPwd ? 'text' : 'password'}
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 pr-16 text-sm text-[color:var(--color-text)]"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 pr-10 text-sm text-[color:var(--color-text)]"
                   placeholder="••••••••"
+                  autoComplete="current-password"
+                  onKeyUp={(e) => setCapsOn((e as any).getModifierState && (e as any).getModifierState('CapsLock'))}
                   required
                 />
                 <button
@@ -210,6 +202,7 @@ export default function CustomerPortalLogin() {
                   {showPwd ? 'Hide' : 'Show'}
                 </button>
               </div>
+              {capsOn && <div className="mt-1 text-[11px] text-yellow-300">Caps Lock is on</div>}
             </label>
 
             <div className="text-right">
@@ -227,14 +220,21 @@ export default function CustomerPortalLogin() {
               disabled={loading}
               className="w-full rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Signing in…' : 'Sign in'}
             </button>
+
+            <div className="pt-1 text-center text-xs text-[color:var(--color-text-muted)]">
+              Need an account?{' '}
+              <button type="button" className="underline" onClick={() => { setMode('register'); setForgotSent(false); setRegSuccess(false) }}>
+                Register
+              </button>
+            </div>
           </form>
         )}
 
         {/* Register Form */}
         {mode === 'register' && !regSuccess && (
-          <form onSubmit={handleRegister} className="space-y-4">
+          <form onSubmit={handleRegister} className="space-y-3">
             <label className="block text-sm">
               <span className="mb-1 block text-[color:var(--color-text-muted)]">Full Name *</span>
               <input
@@ -243,6 +243,7 @@ export default function CustomerPortalLogin() {
                 onChange={(e) => setRegName(e.target.value)}
                 className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
                 placeholder="John Doe"
+                id="customer-register-name"
                 required
               />
             </label>
@@ -266,7 +267,7 @@ export default function CustomerPortalLogin() {
                   type={showPwd ? 'text' : 'password'}
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 pr-16 text-sm text-[color:var(--color-text)]"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 pr-10 text-sm text-[color:var(--color-text)]"
                   placeholder="••••••••"
                   minLength={8}
                   required
@@ -299,6 +300,13 @@ export default function CustomerPortalLogin() {
             >
               {loading ? 'Creating Account...' : 'Create Account'}
             </button>
+
+            <div className="pt-1 text-center text-xs text-[color:var(--color-text-muted)]">
+              Already have an account?{' '}
+              <button type="button" className="underline" onClick={() => { setMode('login'); setForgotSent(false); setRegSuccess(false) }}>
+                Sign in
+              </button>
+            </div>
           </form>
         )}
 
@@ -327,7 +335,7 @@ export default function CustomerPortalLogin() {
 
         {/* Forgot Password Form */}
         {mode === 'forgot' && !forgotSent && (
-          <form onSubmit={handleForgotPassword} className="space-y-4">
+          <form onSubmit={handleForgotPassword} className="space-y-3">
             <div className="mb-4 text-sm text-[color:var(--color-text-muted)]">
               Enter your email address and we'll send you a link to reset your password.
             </div>
@@ -340,6 +348,7 @@ export default function CustomerPortalLogin() {
                 onChange={(e) => setForgotEmail(e.target.value)}
                 className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm text-[color:var(--color-text)]"
                 placeholder="you@company.com"
+                id="customer-forgot-email"
                 required
               />
             </label>
