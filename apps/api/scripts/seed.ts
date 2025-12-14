@@ -1,6 +1,44 @@
 import { MongoClient } from 'mongodb'
 import 'dotenv/config'
 
+const REPORTING_KB_ARTICLE = {
+  title: 'Using the Reporting app in BOAZ‑OS CRM',
+  tags: ['crm', 'crm:reporting', 'analytics', 'reporting', 'finance', 'executive-report'],
+  category: 'Sales & Analytics',
+  body: `
+REPORTING – EXECUTIVE DASHBOARD + EXPORTS
+
+Purpose
+The Reporting app is a cross-module executive dashboard that ties together pipeline, support, marketing, renewals, and financial performance into one view.
+
+Opening the app
+- CRM Hub → Reporting
+- Or use the CRM navigation bar → Reporting
+
+Key concepts (financials)
+- Accounts Receivable (AR): Money customers owe you on unpaid invoices.
+- Overdue AR: The total unpaid invoice balance that is past its due date.
+- Receivables Aging: AR grouped by how late invoices are (Current, 1–30, 31–60, 61–90, 90+).
+- DSO (Days Sales Outstanding): A best‑effort estimate of how long it takes to collect revenue.
+- Cash collected: Payments recorded on invoices during the selected date range.
+- Refunds: Refunds recorded on invoices during the selected date range.
+- Net cash: Cash collected minus refunds.
+
+Snapshots
+- Manual snapshots: “Save snapshot”
+- Scheduled daily snapshots: auto-captured daily
+- “Run daily snapshot now” forces today’s scheduled snapshot to be generated
+
+Exports
+- Export CSV: exports the current dashboard KPIs
+- Export Pack (JSON/CSV): downloads a single “executive pack” (KPIs + key lists + snapshots)
+- Export PDF: generates a BOAZ-branded executive report for printing / Save as PDF
+
+Troubleshooting
+- If you see “basic report (API not updated yet)”, redeploy the API.
+`.trim(),
+}
+
 async function main() {
   const url = process.env.MONGO_URL
   if (!url) {
@@ -10,6 +48,32 @@ async function main() {
   const client = new MongoClient(url)
   await client.connect()
   const db = client.db()
+
+  // Safe mode: only seed / upsert KB content (no destructive deletes).
+  // Use this in production to avoid wiping collections.
+  const seedMode = String(process.env.SEED_MODE || '').toLowerCase()
+  if (seedMode === 'kb-reporting') {
+    await db.collection('kb_articles').updateOne(
+      { title: REPORTING_KB_ARTICLE.title },
+      {
+        $set: {
+          title: REPORTING_KB_ARTICLE.title,
+          body: REPORTING_KB_ARTICLE.body,
+          tags: REPORTING_KB_ARTICLE.tags,
+          category: REPORTING_KB_ARTICLE.category,
+          updatedAt: new Date(),
+        },
+        $setOnInsert: {
+          createdAt: new Date(),
+          author: 'system',
+          views: 0,
+        },
+      },
+      { upsert: true },
+    )
+    console.log('✅ Upserted KB article:', REPORTING_KB_ARTICLE.title)
+    process.exit(0)
+  }
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
