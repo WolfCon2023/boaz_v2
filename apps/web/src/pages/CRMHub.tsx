@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { getPortalUrl } from '@/lib/urls'
 import { useToast } from '@/components/Toast'
+import { useAccessToken } from '@/components/Auth'
 
 type LicenseAlertRow = {
   _id: string
@@ -13,6 +14,22 @@ type LicenseAlertRow = {
 
 export default function CRMHub() {
   const toast = useToast()
+  const token = useAccessToken()
+
+  const { data: rolesData } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
+    queryKey: ['user', 'roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/roles')
+      return res.data
+    },
+    enabled: !!token,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+
+  const isAdmin = rolesData?.roles?.some((r) => r.name === 'admin') || rolesData?.isAdmin || false
+
   const items: { label: string; desc: string; href: string }[] = [
     { label: 'Acceptance Queue', desc: 'View quotes accepted by signers', href: '/apps/crm/quotes/acceptance-queue' },
     { label: 'Accounts', desc: 'Companies and organizations', href: '/apps/crm/accounts' },
@@ -86,6 +103,11 @@ export default function CRMHub() {
     { label: 'Tickets', desc: 'Support tickets and SLAs', href: '/apps/crm/support/tickets' },
   ]
 
+  const visibleItems = React.useMemo(() => {
+    if (isAdmin) return items
+    return items.filter((it) => it.label !== 'Integrations')
+  }, [items, isAdmin])
+
   const assetsAlertsQ = useQuery({
     queryKey: ['assets-license-alerts-dashboard'],
     queryFn: async () => {
@@ -153,7 +175,7 @@ export default function CRMHub() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">CRM Hub</h1>
       <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((it) => (
+        {visibleItems.map((it) => (
           <li key={it.label}>
             <a
               href={it.href}

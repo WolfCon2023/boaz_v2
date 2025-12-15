@@ -76,7 +76,7 @@ import CustomerPortalVerifyEmail from '@/pages/CustomerPortalVerifyEmail'
 import CustomerPortalResetPassword from '@/pages/CustomerPortalResetPassword'
 import SecureCheckout from '@/pages/SecureCheckout'
 import PaymentSuccess from '@/pages/PaymentSuccess'
-import { RequireAuth, RequireApplication } from '@/components/Auth'
+import { RequireAuth, RequireApplication, RequireAdmin } from '@/components/Auth'
 import { ToastProvider } from '@/components/Toast'
 import { CustomerPortalThemeProvider } from '@/components/CustomerPortalThemeProvider'
 
@@ -117,7 +117,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/revenue-intelligence', element: <RequireAuth><RequireApplication appKey="crm"><CRMRevenueIntelligence /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/reporting', element: <RequireAuth><RequireApplication appKey="crm"><CRMReporting /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/reporting/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMReportingPrint /></RequireApplication></RequireAuth> },
-      { path: 'apps/crm/integrations', element: <RequireAuth><RequireApplication appKey="crm"><CRMIntegrations /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/integrations', element: <RequireAuth><RequireApplication appKey="crm"><RequireAdmin><CRMIntegrations /></RequireAdmin></RequireApplication></RequireAuth> },
       { path: 'apps/crm/products', element: <RequireAuth><RequireApplication appKey="crm"><CRMProducts /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/vendors', element: <RequireAuth><RequireApplication appKey="crm"><CRMVendors /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/assets', element: <RequireAuth><RequireApplication appKey="crm"><CRMAssets /></RequireApplication></RequireAuth> },

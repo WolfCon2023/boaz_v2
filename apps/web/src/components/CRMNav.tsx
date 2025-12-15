@@ -21,7 +21,8 @@ export function CRMNav() {
     retry: false, // Don't retry on 401 errors
   })
 
-  const isManager = rolesData?.roles?.some(r => r.name === 'manager') || rolesData?.isAdmin || false
+  const isAdmin = rolesData?.roles?.some(r => r.name === 'admin') || rolesData?.isAdmin || false
+  const isManager = rolesData?.roles?.some(r => r.name === 'manager') || isAdmin || false
 
   return (
     <div className="flex flex-wrap items-center gap-2 p-4">
@@ -45,7 +46,9 @@ export function CRMNav() {
       <NavLink to="/apps/crm/renewals" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Renewals</NavLink>
       <NavLink to="/apps/crm/revenue-intelligence" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Revenue Intelligence</NavLink>
       <NavLink to="/apps/crm/reporting" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Reporting</NavLink>
-      <NavLink to="/apps/crm/integrations" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Integrations</NavLink>
+      {isAdmin && (
+        <NavLink to="/apps/crm/integrations" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Integrations</NavLink>
+      )}
       <NavLink to="/apps/crm/slas" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Contracts &amp; SLAs</NavLink>
       <NavLink to="/apps/crm/success" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Customer Success</NavLink>
       <NavLink to="/apps/crm/surveys" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Surveys &amp; Feedback</NavLink>
