@@ -220,8 +220,8 @@ export const router = createBrowserRouter([
     children: [
       // Wrap customer sign-in in the same PublicShell used by internal auth pages
       { path: 'login', element: <PublicShell><CustomerPortalLogin /></PublicShell> },
-      { path: 'verify-email', element: <CustomerPortalVerifyEmail /> },
-      { path: 'reset-password', element: <CustomerPortalResetPassword /> },
+      { path: 'verify-email', element: <PublicShell><CustomerPortalVerifyEmail /></PublicShell> },
+      { path: 'reset-password', element: <PublicShell><CustomerPortalResetPassword /></PublicShell> },
       { path: 'dashboard', element: <CustomerPortalDashboard /> },
       { path: 'invoices', element: <CustomerPortalInvoices /> },
       { path: 'tickets', element: <CustomerPortalTickets /> },
