@@ -52,6 +52,7 @@ import { adminSeedDataRouter } from './admin/seed_data.js'
 import { paymentPortalRouter } from './payments/payment_portal.js'
 import { webhooksRouter } from './payments/webhooks.js'
 import { startReportingSnapshotsJob } from './jobs/reporting_snapshots_job.js'
+import { startRevenueIntelligenceSnapshotsJob } from './jobs/revenue_intelligence_snapshots_job.js'
 import { integrationsRouter } from './crm/integrations.js'
 
 const app = express()
@@ -183,6 +184,7 @@ app.listen(env.PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${env.PORT}`)
   startReportingSnapshotsJob()
+  startRevenueIntelligenceSnapshotsJob()
 })
 
 // Global error handler to ensure CORS headers are present on errors

@@ -83,6 +83,7 @@ export default function CRMRevenueIntelligence() {
   const [searchParams, setSearchParams] = useSearchParams()
   const token = useAccessToken()
   const [backfillResult, setBackfillResult] = React.useState<any | null>(null)
+  const [snapshotDownloadBusyId, setSnapshotDownloadBusyId] = React.useState<string | null>(null)
 
   const [period, setPeriod] = React.useState<ForecastPeriod>(
     (searchParams.get('period') as ForecastPeriod) || 'current_quarter',
@@ -432,6 +433,49 @@ export default function CRMRevenueIntelligence() {
     },
   })
 
+  const snapshotsQ = useQuery({
+    queryKey: ['revenue-intelligence-snapshots'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/revenue-intelligence/snapshots', { params: { limit: 50 } })
+      return res.data as { data: { items: any[] } }
+    },
+    enabled: isAdmin,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  })
+
+  const runDailySnapshotMutation = useMutation({
+    mutationFn: async () => {
+      const res = await http.post('/api/crm/revenue-intelligence/snapshots/run-daily')
+      return res.data
+    },
+    onSuccess: () => {
+      snapshotsQ.refetch()
+    },
+  })
+
+  function downloadJson(filename: string, obj: any) {
+    const json = JSON.stringify(obj ?? null, null, 2)
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function downloadSnapshotPack(id: string) {
+    setSnapshotDownloadBusyId(id)
+    try {
+      const res = await http.get(`/api/crm/revenue-intelligence/snapshots/${id}`)
+      const snap = res.data?.data
+      downloadJson(`revenue-intelligence-snapshot-${id}.json`, snap)
+    } finally {
+      setSnapshotDownloadBusyId(null)
+    }
+  }
+
   const forecast = forecastQ.data?.data
   const reps = repsQ.data?.data
   const users = usersQ.data?.data.items ?? []
@@ -642,6 +686,41 @@ export default function CRMRevenueIntelligence() {
     URL.revokeObjectURL(url)
   }
 
+  function exportSummaryCsv() {
+    if (!forecast) return
+    const headers = ['metric', 'value']
+    const rows: Array<[string, string | number]> = []
+    rows.push(['period', period])
+    rows.push(['ownerId', ownerId || 'All'])
+    rows.push(['customStartDate', startDate || ''])
+    rows.push(['customEndDate', endDate || ''])
+    rows.push(['excludeOverdue', excludeOverdue ? 'true' : 'false'])
+    rows.push(['rangeStart', forecast.startDate])
+    rows.push(['rangeEnd', forecast.endDate])
+    rows.push(['totalDeals', forecast.summary.totalDeals])
+    rows.push(['totalPipeline', forecast.summary.totalPipeline])
+    rows.push(['weightedPipeline', forecast.summary.weightedPipeline])
+    rows.push(['closedWon', forecast.summary.closedWon])
+    rows.push(['forecast.pessimistic', forecast.summary.forecast.pessimistic])
+    rows.push(['forecast.likely', forecast.summary.forecast.likely])
+    rows.push(['forecast.optimistic', forecast.summary.forecast.optimistic])
+    rows.push(['confidence.high', forecast.summary.confidence.high])
+    rows.push(['confidence.medium', forecast.summary.confidence.medium])
+    rows.push(['confidence.low', forecast.summary.confidence.low])
+    if (drivers) {
+      rows.push(['drivers.pipelineDeals', drivers.pipelineDeals])
+      rows.push(['drivers.overdueCount', drivers.overdueCount])
+      rows.push(['drivers.topPositive', drivers.topPositive.map((x) => `${x.factor}:${x.totalImpact}`).join(' | ')])
+      rows.push(['drivers.topNegative', drivers.topNegative.map((x) => `${x.factor}:${x.totalImpact}`).join(' | ')])
+    }
+    if (atRisk) {
+      rows.push(['atRisk.overdue', atRisk.overdue.length])
+      rows.push(['atRisk.noActivity', atRisk.noActivity.length])
+      rows.push(['atRisk.stuck', atRisk.stuck.length])
+    }
+    downloadCsv('revenue-intelligence-summary.csv', headers, rows.map((r) => [r[0], r[1]]))
+  }
+
   function exportForecastDealsCsv() {
     if (!forecast?.deals) return
     const headers = [
@@ -813,6 +892,84 @@ export default function CRMRevenueIntelligence() {
         </div>
       )}
 
+      {isAdmin && (
+        <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold">Scheduled snapshots</div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">
+                BOAZ automatically captures a daily Revenue Intelligence snapshot (Current Quarter). Use “Run now” to force today’s capture.
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => runDailySnapshotMutation.mutate()}
+                disabled={runDailySnapshotMutation.isPending}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              >
+                {runDailySnapshotMutation.isPending ? 'Running…' : 'Run now'}
+              </button>
+              <button
+                type="button"
+                onClick={() => snapshotsQ.refetch()}
+                disabled={snapshotsQ.isFetching}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {snapshotsQ.isLoading ? (
+            <div className="mt-3 text-xs text-[color:var(--color-text-muted)]">Loading snapshots…</div>
+          ) : (
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[color:var(--color-border)] text-[10px] uppercase text-[color:var(--color-text-muted)]">
+                    <th className="px-2 py-2 text-left">Created</th>
+                    <th className="px-2 py-2 text-left">Kind</th>
+                    <th className="px-2 py-2 text-left">Period</th>
+                    <th className="px-2 py-2 text-right">Pipeline</th>
+                    <th className="px-2 py-2 text-right">Weighted</th>
+                    <th className="px-2 py-2 text-right">Won</th>
+                    <th className="px-2 py-2 text-right">At-risk</th>
+                    <th className="px-2 py-2 text-right">Export</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(snapshotsQ.data?.data.items ?? []).slice(0, 15).map((s: any) => {
+                    const atRiskTotal = (s?.atRisk?.overdue ?? 0) + (s?.atRisk?.noActivity ?? 0) + (s?.atRisk?.stuck ?? 0)
+                    return (
+                      <tr key={s.id} className="border-b border-[color:var(--color-border)]">
+                        <td className="px-2 py-2">{s.createdAt ? new Date(s.createdAt).toLocaleString() : '—'}</td>
+                        <td className="px-2 py-2">{s.kind || 'manual'}</td>
+                        <td className="px-2 py-2">{s.period}</td>
+                        <td className="px-2 py-2 text-right">{formatCurrency(Number(s?.summary?.totalPipeline ?? 0))}</td>
+                        <td className="px-2 py-2 text-right">{formatCurrency(Number(s?.summary?.weightedPipeline ?? 0))}</td>
+                        <td className="px-2 py-2 text-right">{formatCurrency(Number(s?.summary?.closedWon ?? 0))}</td>
+                        <td className="px-2 py-2 text-right">{atRiskTotal}</td>
+                        <td className="px-2 py-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => void downloadSnapshotPack(String(s.id))}
+                            disabled={snapshotDownloadBusyId === String(s.id)}
+                            className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-[11px] hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                          >
+                            {snapshotDownloadBusyId === String(s.id) ? 'Downloading…' : 'JSON'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Period & View Selector */}
       <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
         <div className="flex flex-wrap items-center gap-4">
@@ -946,6 +1103,15 @@ export default function CRMRevenueIntelligence() {
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={exportSummaryCsv}
+              disabled={!forecast}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              title="Export a one-page summary of the current selection (KPIs, drivers, and at-risk counts)"
+            >
+              Export Summary CSV
+            </button>
             <button
               type="button"
               onClick={exportForecastDealsCsv}

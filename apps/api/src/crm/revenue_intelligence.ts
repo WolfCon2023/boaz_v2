@@ -358,6 +358,222 @@ revenueIntelligenceRouter.post('/backfill', requirePermission('*'), async (_req,
     error: null,
   })
 })
+
+type RISnapshotDoc = {
+  _id: ObjectId | string
+  createdAt: Date
+  createdByUserId?: string | null
+  kind?: 'manual' | 'scheduled'
+  scheduleKey?: string | null
+  period: ForecastPeriod
+  ownerId?: string | null
+  excludeOverdue?: boolean
+  range: { startDate: Date; endDate: Date }
+  summary: ForecastData['summary']
+  drivers: { pipelineDeals: number; overdueCount: number; confidence: { high: number; medium: number; low: number }; topPositive: Array<{ factor: string; totalImpact: number }>; topNegative: Array<{ factor: string; totalImpact: number }> }
+  atRisk: { overdue: number; noActivity: number; stuck: number }
+}
+
+function isoDateUTC(d: Date) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString().slice(0, 10)
+}
+
+async function computeSnapshotPayload(
+  db: any,
+  period: ForecastPeriod,
+  ownerId?: string,
+  opts?: { startDateRaw?: string; endDateRaw?: string; excludeOverdue?: boolean },
+) {
+  const forecast = await computeForecast(db, period, ownerId || undefined, opts)
+  const pipeline = (forecast.deals || []).filter((d: any) => !isClosedWonStage(d.stage) && !isClosedLostStage(d.stage))
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const overdueCount = pipeline.filter((d: any) => {
+    const raw = d.forecastedCloseDate || d.closeDate
+    if (!raw) return false
+    const dt = new Date(raw)
+    return Number.isFinite(dt.getTime()) && dt < todayStart
+  }).length
+
+  const high = pipeline.filter((d: any) => d.aiConfidence === 'High').length
+  const med = pipeline.filter((d: any) => d.aiConfidence === 'Medium').length
+  const low = pipeline.filter((d: any) => d.aiConfidence === 'Low').length
+
+  const factorTotals = new Map<string, number>()
+  for (const d of pipeline) {
+    for (const f of (d.aiFactors || [])) {
+      factorTotals.set(String(f.factor), (factorTotals.get(String(f.factor)) || 0) + (Number(f.impact) || 0))
+    }
+  }
+  const factorList = Array.from(factorTotals.entries()).map(([factor, totalImpact]) => ({ factor, totalImpact }))
+  const topPositive = factorList.filter((x) => x.totalImpact > 0).sort((a, b) => b.totalImpact - a.totalImpact).slice(0, 3)
+  const topNegative = factorList.filter((x) => x.totalImpact < 0).sort((a, b) => a.totalImpact - b.totalImpact).slice(0, 3)
+
+  const settings = await getRevenueIntelligenceSettings(db)
+  const msDay = 24 * 60 * 60 * 1000
+  const noActivityDays = settings.stalePanel?.noActivityDays ?? 30
+  const stuckInStageDays = settings.stalePanel?.stuckInStageDays ?? 60
+  const overdue = overdueCount
+  const noActivity = pipeline.filter((d: any) => {
+    const raw = d.lastActivityAt || d.updatedAt || d.createdAt
+    if (!raw) return false
+    const dt = new Date(raw)
+    if (!Number.isFinite(dt.getTime())) return false
+    const days = Math.floor((now.getTime() - dt.getTime()) / msDay)
+    return days >= noActivityDays
+  }).length
+  const stuck = pipeline.filter((d: any) => {
+    const days = Number(d.daysInStage)
+    return Number.isFinite(days) && days >= stuckInStageDays
+  }).length
+
+  return {
+    period: forecast.period,
+    range: { startDate: forecast.startDate, endDate: forecast.endDate },
+    summary: forecast.summary,
+    drivers: {
+      pipelineDeals: pipeline.length,
+      overdueCount,
+      confidence: { high, medium: med, low },
+      topPositive,
+      topNegative,
+    },
+    atRisk: { overdue, noActivity, stuck },
+  }
+}
+
+export async function upsertDailyRevenueIntelligenceSnapshot(db: any) {
+  const now = new Date()
+  const dayKey = isoDateUTC(now)
+  const period: ForecastPeriod = 'current_quarter'
+  const scheduleKey = `daily:${dayKey}:${period}`
+
+  const payload = await computeSnapshotPayload(db, period, undefined, { excludeOverdue: false })
+  const doc: RISnapshotDoc = {
+    _id: scheduleKey,
+    createdAt: new Date(),
+    createdByUserId: null,
+    kind: 'scheduled',
+    scheduleKey,
+    period,
+    ownerId: null,
+    excludeOverdue: false,
+    range: payload.range,
+    summary: payload.summary,
+    drivers: payload.drivers as any,
+    atRisk: payload.atRisk,
+  }
+
+  // db is typed as `any` in this codebase, so avoid generic type parameters (TS2347).
+  await db.collection('revenue_intelligence_snapshots').updateOne(
+    { _id: scheduleKey } as any,
+    { $setOnInsert: doc },
+    { upsert: true },
+  )
+
+  return scheduleKey
+}
+
+// POST /api/crm/revenue-intelligence/snapshots/run-daily (admin-only)
+revenueIntelligenceRouter.post('/snapshots/run-daily', requirePermission('*'), async (_req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const scheduleKey = await upsertDailyRevenueIntelligenceSnapshot(db)
+  res.json({ data: { ok: true, scheduleKey }, error: null })
+})
+
+// POST /api/crm/revenue-intelligence/snapshots (admin-only)
+revenueIntelligenceRouter.post('/snapshots', requirePermission('*'), async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const raw = req.body ?? {}
+  const period = (raw.period as ForecastPeriod) || 'current_quarter'
+  const ownerId = typeof raw.ownerId === 'string' ? raw.ownerId.trim() : ''
+  const startDateRaw = typeof raw.startDate === 'string' ? raw.startDate : undefined
+  const endDateRaw = typeof raw.endDate === 'string' ? raw.endDate : undefined
+  const excludeOverdue = String(raw.excludeOverdue || '').toLowerCase() === 'true'
+
+  const payload = await computeSnapshotPayload(db, period, ownerId || undefined, { startDateRaw, endDateRaw, excludeOverdue })
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+
+  const doc: RISnapshotDoc = {
+    _id: new ObjectId(),
+    createdAt: new Date(),
+    createdByUserId: auth?.userId ?? null,
+    kind: 'manual',
+    scheduleKey: null,
+    period,
+    ownerId: ownerId || null,
+    excludeOverdue,
+    range: payload.range,
+    summary: payload.summary,
+    drivers: payload.drivers as any,
+    atRisk: payload.atRisk,
+  }
+  await db.collection('revenue_intelligence_snapshots').insertOne(doc as any)
+  res.json({ data: { id: String(doc._id), ...doc, _id: undefined }, error: null })
+})
+
+// GET /api/crm/revenue-intelligence/snapshots?limit=20
+revenueIntelligenceRouter.get('/snapshots', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const limitRaw = Number(req.query.limit)
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 20
+  const items = (await db
+    .collection('revenue_intelligence_snapshots')
+    .find({})
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .toArray()) as RISnapshotDoc[]
+
+  res.json({
+    data: {
+      items: items.map((s: any) => ({
+        id: String(s._id),
+        createdAt: s.createdAt,
+        createdByUserId: s.createdByUserId ?? null,
+        kind: s.kind ?? 'manual',
+        scheduleKey: s.scheduleKey ?? null,
+        period: s.period,
+        ownerId: s.ownerId ?? null,
+        excludeOverdue: !!s.excludeOverdue,
+        range: s.range,
+        summary: s.summary,
+        drivers: s.drivers,
+        atRisk: s.atRisk,
+      })),
+    },
+    error: null,
+  })
+})
+
+// GET /api/crm/revenue-intelligence/snapshots/:id
+revenueIntelligenceRouter.get('/snapshots/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const id = String(req.params.id || '')
+  const filter: any = ObjectId.isValid(id) ? { _id: new ObjectId(id) } : { _id: id }
+  const s = (await db.collection('revenue_intelligence_snapshots').findOne(filter as any)) as RISnapshotDoc | null
+  if (!s) return res.status(404).json({ data: null, error: 'not_found' })
+  res.json({
+    data: {
+      id: String((s as any)._id),
+      createdAt: s.createdAt,
+      createdByUserId: (s as any).createdByUserId ?? null,
+      kind: (s as any).kind ?? 'manual',
+      scheduleKey: (s as any).scheduleKey ?? null,
+      period: (s as any).period,
+      ownerId: (s as any).ownerId ?? null,
+      excludeOverdue: !!(s as any).excludeOverdue,
+      range: (s as any).range,
+      summary: (s as any).summary,
+      drivers: (s as any).drivers,
+      atRisk: (s as any).atRisk,
+    },
+    error: null,
+  })
+})
 type ForecastData = {
   period: ForecastPeriod
   startDate: Date
