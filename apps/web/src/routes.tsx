@@ -218,7 +218,8 @@ export const router = createBrowserRouter([
       </CustomerPortalThemeProvider>
     ),
     children: [
-      { path: 'login', element: <CustomerPortalLogin /> },
+      // Wrap customer sign-in in the same PublicShell used by internal auth pages
+      { path: 'login', element: <PublicShell><CustomerPortalLogin /></PublicShell> },
       { path: 'verify-email', element: <CustomerPortalVerifyEmail /> },
       { path: 'reset-password', element: <CustomerPortalResetPassword /> },
       { path: 'dashboard', element: <CustomerPortalDashboard /> },
