@@ -82,6 +82,7 @@ type RepPerformance = {
 export default function CRMRevenueIntelligence() {
   const [searchParams, setSearchParams] = useSearchParams()
   const token = useAccessToken()
+  const [backfillResult, setBackfillResult] = React.useState<any | null>(null)
 
   const [period, setPeriod] = React.useState<ForecastPeriod>(
     (searchParams.get('period') as ForecastPeriod) || 'current_quarter',
@@ -419,6 +420,18 @@ export default function CRMRevenueIntelligence() {
 
   const isAdmin = !!rolesQ.data?.isAdmin || (rolesQ.data?.roles ?? []).some((r) => (r.permissions ?? []).includes('*'))
 
+  const backfillMutation = useMutation({
+    mutationFn: async () => {
+      const res = await http.post('/api/crm/revenue-intelligence/backfill')
+      return res.data as { data: any; error: any }
+    },
+    onSuccess: (res) => {
+      setBackfillResult(res?.data ?? null)
+      // Refresh forecast after backfill so drivers/at-risk panels stabilize immediately
+      forecastQ.refetch()
+    },
+  })
+
   const forecast = forecastQ.data?.data
   const reps = repsQ.data?.data
   const users = usersQ.data?.data.items ?? []
@@ -743,6 +756,25 @@ export default function CRMRevenueIntelligence() {
           {isAdmin && (
             <button
               type="button"
+              onClick={async () => {
+                try {
+                  setBackfillResult(null)
+                  await backfillMutation.mutateAsync()
+                } catch (e: any) {
+                  const msg = e?.response?.data?.error || e?.message || 'Backfill failed'
+                  setBackfillResult({ ok: false, error: String(msg) })
+                }
+              }}
+              disabled={backfillMutation.isPending}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              title="Repair legacy deal fields used by scoring (admin only)"
+            >
+              {backfillMutation.isPending ? 'Backfilling…' : 'Run backfill'}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
               onClick={() => {
                 setSettingsError(null)
                 setShowScoringSettings(true)
@@ -760,6 +792,26 @@ export default function CRMRevenueIntelligence() {
           )}
         </div>
       </header>
+
+      {isAdmin && backfillResult && (
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-sm">
+          {backfillResult.ok === false ? (
+            <div className="text-red-400">Backfill failed: {String(backfillResult.error || 'unknown_error')}</div>
+          ) : (
+            <div className="space-y-1">
+              <div className="font-semibold">Backfill complete</div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">
+                Scanned {backfillResult.scanned ?? 0} deals; updated {backfillResult.updated ?? 0}.
+              </div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">
+                Fixed lastActivityAt: {backfillResult.fixedLastActivityAt ?? 0} • stageChangedAt:{' '}
+                {backfillResult.fixedStageChangedAt ?? 0} • normalized forecastedCloseDate:{' '}
+                {backfillResult.normalizedForecastedCloseDate ?? 0}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Period & View Selector */}
       <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">

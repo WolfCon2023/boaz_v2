@@ -171,6 +171,138 @@ revenueIntelligenceRouter.put('/settings', requirePermission('*'), async (req, r
   const settings = await getRevenueIntelligenceSettings(db)
   res.json({ data: settings, error: null })
 })
+
+// POST /api/crm/revenue-intelligence/backfill (admin-only)
+// Repairs legacy deal fields used by scoring/forecasting so dashboards don't show gaps.
+revenueIntelligenceRouter.post('/backfill', requirePermission('*'), async (_req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const coll = db.collection('deals')
+  const query: any = {
+    $or: [
+      { lastActivityAt: { $exists: false } },
+      { stageChangedAt: { $exists: false } },
+      { forecastedCloseDate: { $type: 'string' } },
+      { closeDate: { $type: 'string' } },
+      { createdAt: { $type: 'string' } },
+      { updatedAt: { $type: 'string' } },
+    ],
+  }
+
+  let scanned = 0
+  let updated = 0
+  let fixedLastActivityAt = 0
+  let fixedStageChangedAt = 0
+  let normalizedForecastedCloseDate = 0
+  let normalizedCloseDate = 0
+  let normalizedCreatedAt = 0
+  let normalizedUpdatedAt = 0
+
+  const parseAnyDate = (v: any): Date | null => {
+    if (!v) return null
+    if (v instanceof Date && Number.isFinite(v.getTime())) return v
+    if (typeof v === 'string') {
+      const s = v.trim()
+      if (!s) return null
+      // Prefer YYYY-MM-DD inputs: store midday UTC to avoid TZ shifts when rendered as date-only.
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const d = new Date(`${s}T12:00:00Z`)
+        return Number.isFinite(d.getTime()) ? d : null
+      }
+      const d = new Date(s)
+      return Number.isFinite(d.getTime()) ? d : null
+    }
+    return null
+  }
+
+  const cursor = coll.find(query, { projection: { lastActivityAt: 1, stageChangedAt: 1, forecastedCloseDate: 1, closeDate: 1, createdAt: 1, updatedAt: 1, stage: 1 } as any }).limit(10_000)
+  const ops: any[] = []
+  for await (const deal of cursor as any) {
+    scanned++
+    const set: any = {}
+
+    // Normalize createdAt/updatedAt if stored as string
+    if (typeof deal.createdAt === 'string') {
+      const d = parseAnyDate(deal.createdAt)
+      if (d) {
+        set.createdAt = d
+        normalizedCreatedAt++
+      }
+    }
+    if (typeof deal.updatedAt === 'string') {
+      const d = parseAnyDate(deal.updatedAt)
+      if (d) {
+        set.updatedAt = d
+        normalizedUpdatedAt++
+      }
+    }
+
+    // Normalize close dates if stored as string
+    if (typeof deal.forecastedCloseDate === 'string') {
+      const d = parseAnyDate(deal.forecastedCloseDate)
+      if (d) {
+        set.forecastedCloseDate = d
+        normalizedForecastedCloseDate++
+      }
+    }
+    if (typeof deal.closeDate === 'string') {
+      const d = parseAnyDate(deal.closeDate)
+      if (d) {
+        set.closeDate = d
+        normalizedCloseDate++
+      }
+    }
+
+    // Fill lastActivityAt if missing (use updatedAt/createdAt)
+    if (!deal.lastActivityAt) {
+      const fallback = parseAnyDate(deal.updatedAt) || parseAnyDate(deal.createdAt)
+      if (fallback) {
+        set.lastActivityAt = fallback
+        fixedLastActivityAt++
+      }
+    }
+
+    // Fill stageChangedAt if missing (use updatedAt/createdAt)
+    if (!deal.stageChangedAt) {
+      const fallback = parseAnyDate(deal.updatedAt) || parseAnyDate(deal.createdAt)
+      if (fallback) {
+        set.stageChangedAt = fallback
+        fixedStageChangedAt++
+      }
+    }
+
+    if (Object.keys(set).length) {
+      ops.push({ updateOne: { filter: { _id: deal._id }, update: { $set: set } } })
+    }
+
+    if (ops.length >= 500) {
+      const r = await coll.bulkWrite(ops, { ordered: false })
+      updated += r.modifiedCount ?? 0
+      ops.length = 0
+    }
+  }
+
+  if (ops.length) {
+    const r = await coll.bulkWrite(ops, { ordered: false })
+    updated += r.modifiedCount ?? 0
+  }
+
+  res.json({
+    data: {
+      ok: true,
+      scanned,
+      updated,
+      fixedLastActivityAt,
+      fixedStageChangedAt,
+      normalizedForecastedCloseDate,
+      normalizedCloseDate,
+      normalizedCreatedAt,
+      normalizedUpdatedAt,
+    },
+    error: null,
+  })
+})
 type ForecastData = {
   period: ForecastPeriod
   startDate: Date
