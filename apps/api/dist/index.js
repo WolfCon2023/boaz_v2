@@ -52,6 +52,7 @@ import { adminSeedDataRouter } from './admin/seed_data.js';
 import { paymentPortalRouter } from './payments/payment_portal.js';
 import { webhooksRouter } from './payments/webhooks.js';
 import { startReportingSnapshotsJob } from './jobs/reporting_snapshots_job.js';
+import { integrationsRouter } from './crm/integrations.js';
 const app = express();
 const normalize = (s) => s.trim().replace(/\/$/, '').toLowerCase();
 const allowedOriginsRaw = env.ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
@@ -115,6 +116,7 @@ app.use('/api/crm/products', (req, res, next) => {
 app.use('/api/crm/products', productsRouter);
 app.use('/api/crm/documents', documentsRouter);
 app.use('/api/crm/tasks', tasksRouter);
+app.use('/api/crm/integrations', integrationsRouter);
 app.use('/api/terms', termsReviewRouter);
 app.use('/api/marketing', marketingSegmentsRouter);
 app.use('/api/marketing', marketingCampaignsRouter);

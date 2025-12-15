@@ -46,7 +46,8 @@ export async function dispatchCrmEvent(
   const activeFilter: any = { kind: 'webhook', isActive: { $ne: false } }
   if (opts?.onlyWebhookId) activeFilter._id = opts.onlyWebhookId
 
-  const hooks = (await db.collection<WebhookDoc>('crm_integrations').find(activeFilter).toArray()) as WebhookDoc[]
+  // db is typed as `any` in this codebase, so avoid generic type parameters (TS2347).
+  const hooks = (await db.collection('crm_integrations').find(activeFilter).toArray()) as WebhookDoc[]
   if (!hooks.length) return
 
   for (const hook of hooks) {
