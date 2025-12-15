@@ -24,6 +24,7 @@ export default function AdminDataSeeding() {
   const [seedingOutreachTemplatesKB, setSeedingOutreachTemplatesKB] = useState(false)
   const [seedingReportingKB, setSeedingReportingKB] = useState(false)
   const [seedingIntegrationsKB, setSeedingIntegrationsKB] = useState(false)
+  const [seedingMarketingSegmentsKB, setSeedingMarketingSegmentsKB] = useState(false)
   const [seedingAll, setSeedingAll] = useState(false)
   
   const [rolesResult, setRolesResult] = useState<any>(null)
@@ -38,6 +39,7 @@ export default function AdminDataSeeding() {
   const [outreachTemplatesKBResult, setOutreachTemplatesKBResult] = useState<any>(null)
   const [reportingKBResult, setReportingKBResult] = useState<any>(null)
   const [integrationsKBResult, setIntegrationsKBResult] = useState<any>(null)
+  const [marketingSegmentsKBResult, setMarketingSegmentsKBResult] = useState<any>(null)
   const [seedAllResult, setSeedAllResult] = useState<any>(null)
   const [seedAllProgress, setSeedAllProgress] = useState<string>('')
 
@@ -257,6 +259,24 @@ export default function AdminDataSeeding() {
     }
   }
 
+  async function seedMarketingSegmentsKB() {
+    setSeedingMarketingSegmentsKB(true)
+    setMarketingSegmentsKBResult(null)
+    try {
+      const res = await http.post('/api/admin/seed/marketing-segments-kb')
+      if (res.data.error) {
+        showToast(res.data.error, 'error')
+      } else {
+        setMarketingSegmentsKBResult(res.data.data)
+        showToast('Marketing Segments KB article seeded successfully', 'success')
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to seed Marketing Segments KB', 'error')
+    } finally {
+      setSeedingMarketingSegmentsKB(false)
+    }
+  }
+
   async function seedAllKB() {
     setSeedingAll(true)
     setSeedAllResult(null)
@@ -275,6 +295,7 @@ export default function AdminDataSeeding() {
       { name: 'Outreach Templates KB', fn: seedOutreachTemplatesKB },
       { name: 'Reporting KB', fn: seedReportingKB },
       { name: 'Integrations KB', fn: seedIntegrationsKB },
+      { name: 'Marketing Segments KB', fn: seedMarketingSegmentsKB },
     ]
 
     let successCount = 0
@@ -330,7 +351,7 @@ export default function AdminDataSeeding() {
               <h3 className="text-xl font-bold text-[color:var(--color-text)]">🚀 Seed All KB Articles</h3>
             </div>
             <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
-              Seed all 11 knowledge base articles at once. This will create or update: Roles & Permissions, Support Tickets, Approval Queue, Acceptance Queue, Deal Approval, Customer Success, Payment Portal, Outreach Sequences, Outreach Templates, Reporting, and Integrations guides.
+              Seed all 12 knowledge base articles at once. This will create or update: Roles & Permissions, Support Tickets, Approval Queue, Acceptance Queue, Deal Approval, Customer Success, Payment Portal, Outreach Sequences, Outreach Templates, Reporting, Integrations, and Marketing Segments guides.
             </p>
             <button
               onClick={seedAllKB}
@@ -965,6 +986,63 @@ export default function AdminDataSeeding() {
                       className="text-blue-600 underline hover:text-blue-700"
                     >
                       View Article: {integrationsKBResult.url}
+                    </a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Seed Marketing Segments KB Article */}
+      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Database className="h-5 w-5 text-[color:var(--color-primary-600)]" />
+              <h3 className="text-lg font-semibold text-[color:var(--color-text)]">Marketing Segments KB Article</h3>
+            </div>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
+              Create a guide explaining segments, engagement tracking (opens/clicks), and Engaged: &lt;Campaign&gt; auto-segments. Updates if already exists.
+            </p>
+            <button
+              onClick={seedMarketingSegmentsKB}
+              disabled={seedingMarketingSegmentsKB}
+              className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {seedingMarketingSegmentsKB ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Seeding...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  <span>Seed Marketing Segments KB</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {marketingSegmentsKBResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900 mb-2">{marketingSegmentsKBResult.message}</p>
+                <div className="text-xs text-green-800">
+                  <p>Title: {marketingSegmentsKBResult.title}</p>
+                  <p>Slug: {marketingSegmentsKBResult.slug}</p>
+                  <p className="mt-2">
+                    <a
+                      href={marketingSegmentsKBResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700"
+                    >
+                      View Article: {marketingSegmentsKBResult.url}
                     </a>
                   </p>
                 </div>

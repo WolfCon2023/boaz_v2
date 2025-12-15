@@ -3064,6 +3064,125 @@ Examples:
   }
 })
 
+// POST /api/admin/seed/marketing-segments-kb - Add Marketing Segments / Engagement KB article
+adminSeedDataRouter.post('/marketing-segments-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const ARTICLE = {
+      title: 'Marketing Segments & Engagement (Opens/Clicks) — BOAZ‑OS Guide',
+      category: 'Marketing',
+      slug: 'marketing-segments-engagement-guide',
+      tags: ['crm', 'crm:marketing', 'crm:marketing-segments', 'marketing', 'segments', 'engagement', 'opens', 'clicks', 'unsubscribe'],
+      body: `# Marketing Segments & Engagement (Opens/Clicks) — BOAZ‑OS Guide
+
+This guide explains how to build and use **Marketing Segments** in BOAZ‑OS, including how BOAZ automatically creates **Engaged** segments based on email opens and clicks.
+
+---
+
+## 1) What is a Segment?
+
+A **segment** is a saved audience list. You use segments to decide **who receives a campaign**.
+
+BOAZ supports:
+- **Rule-based segments** (filters that match contacts)
+- **Direct email segments** (a list of emails you paste in)
+
+---
+
+## 2) Step-by-step: Create a segment
+
+1. Go to **CRM → Marketing → Segments**
+2. Click **Add segment**
+3. Open the segment and define:
+   - **Rules** (example: email contains “@company.com”) and/or
+   - **Direct emails** (paste a list, one per line)
+4. Click **Preview** to see how many contacts/emails match
+
+---
+
+## 3) Engagement tracking (opens & clicks)
+
+When you send a campaign, BOAZ tracks:
+- **Opens**: a tiny tracking pixel embedded in the email (counts when the email is opened)
+- **Clicks**: tracked links (BOAZ wraps links so it can record clicks)
+
+This gives you real engagement signals.
+
+---
+
+## 4) Automatic “Engaged” segments (what most users want)
+
+BOAZ can automatically build an audience segment based on **recipient engagement**:
+
+- When a recipient **opens** or **clicks** a campaign email (and does **not** unsubscribe),
+  BOAZ adds their email address to an auto-generated segment named:
+  - **Engaged: &lt;Campaign Name&gt;**
+
+### How to use the Engaged segment
+1. Send Campaign A
+2. Wait for opens/clicks
+3. Create Campaign B
+4. In Campaign B, choose the segment **Engaged: &lt;Campaign A&gt;**
+5. Send to follow up with people who showed interest
+
+---
+
+## 5) Do Not Contact / Unsubscribe behavior
+
+If someone unsubscribes, they are placed on the **Do Not Contact** list and BOAZ will:
+- Stop sending them marketing emails
+- Stop adding them to Engaged segments
+
+---
+
+## 6) Troubleshooting
+
+### I don’t see an Engaged segment
+- Make sure the campaign was sent successfully
+- Opens/clicks only appear after recipients interact with the email
+- If nobody opened/clicked yet, the segment may not exist yet
+
+### Clicks aren’t tracking
+- Use the built-in link tracking (BOAZ-wrapped links)
+- Some email clients or security tools can strip tracking parameters
+
+---
+
+Need help? Open **CRM → Marketing** and click the **?** icon.
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existing = await db.collection('kb_articles').findOne({ slug: ARTICLE.slug })
+    const result = existing ? 'updated' : 'created'
+    if (existing) {
+      await db.collection('kb_articles').updateOne({ slug: ARTICLE.slug }, { $set: { ...ARTICLE, updatedAt: new Date() } })
+    } else {
+      await db.collection('kb_articles').insertOne(ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: ARTICLE.title,
+        slug: ARTICLE.slug,
+        url: `/apps/crm/support/kb/${ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed marketing segments KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
 // DELETE /api/admin/customer-portal-users/:email - Remove customer by email
 adminSeedDataRouter.delete('/customer-portal-user/:email', async (req, res) => {
   const db = await getDb()

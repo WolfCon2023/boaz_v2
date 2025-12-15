@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
-import { Type, Image, MousePointerClick, Minus, Columns, GripVertical, HelpCircle } from 'lucide-react'
+import { Type, Image, MousePointerClick, Minus, Columns, GripVertical } from 'lucide-react'
 import { useToast } from '@/components/Toast'
 import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -85,15 +86,7 @@ export default function Marketing() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold">Marketing</h1>
-          <a
-            href="/apps/crm/support/kb?q=marketing"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-700"
-            title="View Marketing help documentation"
-          >
-            <HelpCircle className="w-5 h-5" />
-          </a>
+          <CRMHelpButton tag="crm:marketing" />
         </div>
         <div className="flex items-center gap-2">
           <Link 
@@ -226,6 +219,22 @@ function SegmentsTab() {
   }, [editing])
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">How “Engaged” segments work (automatic)</div>
+            <div className="mt-1 text-xs text-[color:var(--color-text-muted)] leading-relaxed">
+              When you send a campaign, BOAZ tracks <b>opens</b> (via tracking pixel) and <b>clicks</b> (via tracked links).
+              If a recipient opens or clicks and is <b>not unsubscribed</b>, BOAZ automatically adds their email to an auto‑generated segment named{' '}
+              <b>Engaged: &lt;Campaign Name&gt;</b>.
+            </div>
+            <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+              <b>Step‑by‑step:</b> (1) Send a campaign → (2) Wait for opens/clicks → (3) Select the new “Engaged: …” segment in your next campaign.
+            </div>
+          </div>
+          <CRMHelpButton tag="crm:marketing-segments" />
+        </div>
+      </div>
       <form className="rounded-2xl border p-4 grid gap-2 sm:grid-cols-3" onSubmit={async (e) => {
         e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement)
         await create.mutateAsync({ name: String(fd.get('name')||''), description: String(fd.get('description')||'') })
