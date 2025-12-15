@@ -13,6 +13,7 @@ import { ArrowLeft, Ticket, MessageSquare, Send, AlertCircle, Plus, X } from 'lu
 import { formatDateTime } from '../lib/dateFormat'
 import { useToast } from '../components/Toast'
 import { CustomerPortalThemeToggle } from '../components/CustomerPortalThemeToggle'
+import { useConfirm } from '../components/ConfirmDialog'
 
 type SupportTicket = {
   id: string
@@ -39,6 +40,7 @@ export default function CustomerPortalTickets() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const qc = useQueryClient()
+  const { confirm, ConfirmDialog } = useConfirm()
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null)
   const [newComment, setNewComment] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -137,7 +139,16 @@ export default function CustomerPortalTickets() {
         })
       }
     },
-    onSuccess: () => {
+    onSuccess: (data: any, variables) => {
+      const added = (data as any)?.items as SupportTicket['attachments'] | undefined
+      if (variables?.ticketId && Array.isArray(added) && added.length) {
+        qc.setQueryData(['customer-portal-tickets'], (prev: SupportTicket[] | undefined) => {
+          if (!prev) return prev
+          return prev.map((t) =>
+            t.id === variables.ticketId ? { ...t, attachments: [...(t.attachments ?? []), ...added] } : t
+          )
+        })
+      }
       qc.invalidateQueries({ queryKey: ['customer-portal-tickets'] })
       showToast('Attachment(s) uploaded successfully', 'success')
     },
@@ -177,7 +188,17 @@ export default function CustomerPortalTickets() {
       if (res.data.error) throw new Error(res.data.error)
       return res.data.data
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      if (variables?.ticketId && variables?.attachmentId) {
+        qc.setQueryData(['customer-portal-tickets'], (prev: SupportTicket[] | undefined) => {
+          if (!prev) return prev
+          return prev.map((t) =>
+            t.id === variables.ticketId
+              ? { ...t, attachments: (t.attachments ?? []).filter((a) => a.id !== variables.attachmentId) }
+              : t
+          )
+        })
+      }
       qc.invalidateQueries({ queryKey: ['customer-portal-tickets'] })
       showToast('Attachment deleted', 'success')
     },
@@ -274,6 +295,7 @@ export default function CustomerPortalTickets() {
 
   return (
     <div className="min-h-screen bg-[color:var(--color-bg)]">
+      {ConfirmDialog}
       <header className="border-b border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -474,8 +496,11 @@ export default function CustomerPortalTickets() {
                             <button
                               type="button"
                               className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-1.5 text-xs text-red-200 hover:bg-red-500/20"
-                              onClick={() => {
-                                const ok = window.confirm('Delete this attachment? This cannot be undone.')
+                              onClick={async () => {
+                                const ok = await confirm('Delete this attachment? This cannot be undone.', {
+                                  confirmText: 'Delete',
+                                  confirmColor: 'danger',
+                                })
                                 if (!ok) return
                                 deleteAttachmentMutation.mutate({ ticketId: ticket.id, attachmentId: a.id })
                               }}
