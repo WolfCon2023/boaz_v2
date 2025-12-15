@@ -11,6 +11,7 @@ import { sendAuthEmail } from '../auth/email.js';
 import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
 import { env } from '../env.js';
 import Stripe from 'stripe';
+import { dispatchCrmEvent } from '../crm/integrations_core.js';
 export const paymentPortalRouter = Router();
 // All routes require authentication
 paymentPortalRouter.use(requireAuth);
@@ -88,6 +89,18 @@ paymentPortalRouter.post('/record', async (req, res) => {
                 updatedAt: new Date(),
             }
         });
+        // Emit webhook event when invoice is paid in full
+        if (newBalance <= 0) {
+            dispatchCrmEvent(db, 'crm.invoice.paid', {
+                invoiceId: String(invoiceId),
+                invoiceNumber: invoice.invoiceNumber ?? null,
+                amount: paymentAmount,
+                method,
+                paidAt: payment.paidAt,
+                balance: Math.max(0, newBalance),
+                source: 'manual',
+            }, { source: 'payments.record' }).catch(() => { });
+        }
         // Add history entry
         await db.collection('invoice_history').insertOne({
             _id: new ObjectId(),

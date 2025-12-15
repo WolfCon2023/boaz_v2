@@ -8,6 +8,7 @@ import { sendAuthEmail } from '../auth/email.js';
 import { env } from '../env.js';
 import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
 import { requireAuth } from '../auth/rbac.js';
+import { dispatchCrmEvent } from './integrations_core.js';
 export const supportTicketsRouter = Router();
 // === Ticket Attachments (disk storage, similar to CRM documents) ===
 const ticketUploadDir = env.UPLOAD_DIR
@@ -432,6 +433,20 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
             try {
                 const result = await coll.insertOne(doc);
                 doc._id = result.insertedId;
+                // Emit webhook event (fire-and-forget)
+                dispatchCrmEvent(db, 'support.ticket.created', {
+                    ticketId: String(result.insertedId),
+                    ticketNumber: doc.ticketNumber ?? null,
+                    shortDescription: doc.shortDescription,
+                    status: doc.status,
+                    priority: doc.priority,
+                    accountId: doc.accountId ? String(doc.accountId) : null,
+                    contactId: doc.contactId ? String(doc.contactId) : null,
+                    requesterName: doc.requesterName ?? null,
+                    requesterEmail: doc.requesterEmail ?? null,
+                    requesterPhone: doc.requesterPhone ?? null,
+                    createdAt: doc.createdAt,
+                }, { source: 'crm.support_tickets.create' }).catch(() => { });
                 // Send email notification to assignee if assigned
                 if (doc.assignee) {
                     const assigneeEmail = extractAssigneeEmail(doc.assignee);

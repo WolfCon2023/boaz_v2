@@ -6,6 +6,7 @@ import { env } from '../env.js';
 import { requireAuth } from '../auth/rbac.js';
 import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js';
 import { generatePaymentLinks, getEnabledPaymentOptions } from '../lib/payment-providers.js';
+import { dispatchCrmEvent } from './integrations_core.js';
 function computeDiscountAmount(discount, subtotal) {
     if (!(subtotal > 0))
         return 0;
@@ -459,6 +460,16 @@ invoicesRouter.post('/:id/payments', async (req, res) => {
             user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) });
         }
         await db.collection('invoices').updateOne({ _id }, { $push: { payments: { amount, method, paidAt } }, $set: fields });
+        // Emit webhook event when invoice reaches paid in full
+        if (newBalance === 0) {
+            dispatchCrmEvent(db, 'crm.invoice.paid', {
+                invoiceId: String(_id),
+                amount,
+                method,
+                paidAt,
+                balance: newBalance,
+            }, { source: 'crm.invoices.payments' }).catch(() => { });
+        }
         // Add history entry for payment
         await addInvoiceHistory(db, _id, 'payment_received', `Payment received: $${amount.toFixed(2)} via ${method}. Balance: $${oldBalance.toFixed(2)} → $${newBalance.toFixed(2)}`, auth?.userId, user?.name, auth?.email, oldBalance, newBalance, { amount, method, paidAt });
         res.json({ data: { ok: true }, error: null });

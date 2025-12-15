@@ -72,6 +72,11 @@ export default function CRMHub() {
       desc: 'Competitive-edge dashboards and exports across pipeline, service, and marketing',
       href: '/apps/crm/reporting',
     },
+    {
+      label: 'Integrations',
+      desc: 'Webhooks and API keys to connect BOAZ with external systems',
+      href: '/apps/crm/integrations',
+    },
     { label: 'Surveys & Feedback', desc: 'NPS/CSAT and post‑interaction surveys', href: '/apps/crm/surveys' },
     {
       label: 'Tasks & Activities',

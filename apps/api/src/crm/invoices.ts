@@ -11,6 +11,7 @@ import {
   formatPaymentInstructions,
   type PaymentMethod 
 } from '../lib/payment-providers.js'
+import { dispatchCrmEvent } from './integrations_core.js'
 
 type Payment = { amount: number; method: string; paidAt: Date }
 type Refund = { amount: number; reason: string; refundedAt: Date }
@@ -602,6 +603,22 @@ invoicesRouter.post('/:id/payments', async (req, res) => {
       { _id },
       { $push: { payments: { amount, method, paidAt } }, $set: fields },
     )
+
+    // Emit webhook event when invoice reaches paid in full
+    if (newBalance === 0) {
+      dispatchCrmEvent(
+        db,
+        'crm.invoice.paid',
+        {
+          invoiceId: String(_id),
+          amount,
+          method,
+          paidAt,
+          balance: newBalance,
+        },
+        { source: 'crm.invoices.payments' },
+      ).catch(() => {})
+    }
     
     // Add history entry for payment
     await addInvoiceHistory(

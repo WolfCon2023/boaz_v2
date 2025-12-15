@@ -10,6 +10,7 @@ import { getDb } from '../db.js'
 import { sendAuthEmail } from '../auth/email.js'
 import { generateEmailTemplate, formatEmailTimestamp } from '../lib/email-templates.js'
 import crypto from 'crypto'
+import { dispatchCrmEvent } from '../crm/integrations_core.js'
 
 export const webhooksRouter = Router()
 
@@ -448,6 +449,25 @@ async function recordPaymentFromWebhook(db: any, data: {
       }
     }
   )
+
+  // Emit webhook event when invoice is paid in full
+  if (balance <= 0) {
+    dispatchCrmEvent(
+      db,
+      'crm.invoice.paid',
+      {
+        invoiceId,
+        invoiceNumber: invoice.invoiceNumber ?? null,
+        amount,
+        method,
+        paidAt: new Date(),
+        balance: Math.max(0, balance),
+        source: 'webhook',
+        reference,
+      },
+      { source: 'payments.webhook' },
+    ).catch(() => {})
+  }
 
   // Add history entry
   await db.collection('invoice_history').insertOne({

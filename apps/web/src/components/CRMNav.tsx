@@ -45,6 +45,7 @@ export function CRMNav() {
       <NavLink to="/apps/crm/renewals" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Renewals</NavLink>
       <NavLink to="/apps/crm/revenue-intelligence" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Revenue Intelligence</NavLink>
       <NavLink to="/apps/crm/reporting" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Reporting</NavLink>
+      <NavLink to="/apps/crm/integrations" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Integrations</NavLink>
       <NavLink to="/apps/crm/slas" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Contracts &amp; SLAs</NavLink>
       <NavLink to="/apps/crm/success" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Customer Success</NavLink>
       <NavLink to="/apps/crm/surveys" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Surveys &amp; Feedback</NavLink>
