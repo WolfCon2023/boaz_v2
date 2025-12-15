@@ -2902,6 +2902,168 @@ This indicates your Web app is newer than the API. **Redeploy the API** and try 
   }
 })
 
+// POST /api/admin/seed/integrations-kb - Add Integrations KB article
+adminSeedDataRouter.post('/integrations-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const INTEGRATIONS_KB_ARTICLE = {
+      title: 'CRM Integrations (Webhooks + API Keys) — Step‑by‑Step Guide',
+      category: 'Administration',
+      slug: 'crm-integrations-guide',
+      tags: ['crm', 'crm:integrations', 'integrations', 'webhooks', 'api-keys', 'zapier', 'make'],
+      body: `# CRM Integrations (Webhooks + API Keys) — Step‑by‑Step Guide
+
+BOAZ Integrations lets you connect BOAZ to other tools (Slack, Zapier, Make, custom apps) so things can happen automatically.
+
+This guide is written for **regular business users** — you do **not** need to be a developer.
+
+---
+
+## 1) What is a webhook? (plain English)
+
+A **webhook** is a “notification link”.
+
+- BOAZ watches for an event (example: **a ticket is created**).
+- When it happens, BOAZ sends a message to a URL you provide (your webhook URL).
+- That other tool receives it and can run an automation (example: **post to Slack**, **create a task**, **add a row to a spreadsheet**, **create a contact**, etc.).
+
+Think of it like: **“When X happens in BOAZ → tell Y immediately.”**
+
+---
+
+## 2) Quick Start (recommended)
+
+### Step A — Get a test webhook URL
+Pick one:
+- **Webhook.site** (fastest): create a temporary URL that shows you what BOAZ sends.
+- **Zapier**: create a “Catch Hook” trigger.
+- **Make**: create a “Custom Webhook” trigger.
+
+You will end up with a URL that looks like \`https://...\`.
+
+### Step B — Create the webhook in BOAZ
+1. Go to **CRM → Integrations**
+2. In **Webhooks**, enter:
+   - **Name**: e.g. “Zapier”
+   - **Destination URL**: paste your webhook URL
+   - **Signing secret (optional)**: leave blank for now (you can enable later)
+   - **Events**: keep the default or use \`*\` to receive everything
+3. Click **Create Webhook**
+
+### Step C — Send a test event
+1. Find your webhook in “Configured webhooks”
+2. Click **Send test**
+3. In your receiving tool, confirm you received an event named **\`test.ping\`**
+
+If you see the test event, your webhook is working.
+
+---
+
+## 3) Common BOAZ events you can automate
+
+BOAZ will send events like:
+- **\`support.ticket.created\`**: a new support ticket was created
+- **\`crm.invoice.paid\`**: an invoice was paid in full
+- **\`test.ping\`**: sent only when you click “Send test”
+
+The Integrations page shows the full list of supported events.
+
+---
+
+## 4) Turning webhook events into automations (Zapier example)
+
+Example: “When a BOAZ ticket is created → create a Slack message”
+1. In Zapier, create a new Zap
+2. Trigger: **Webhooks by Zapier → Catch Hook**
+3. Paste the hook URL into BOAZ and click **Send test**
+4. Action: Slack → “Send Channel Message”
+5. Map fields from the incoming BOAZ payload (like ticket number and subject)
+6. Turn on the Zap
+
+---
+
+## 5) Security (recommended for production)
+
+### Use a Signing Secret (protects against fake events)
+If you set a **Signing secret**, BOAZ will add two headers:
+- \`x-boaz-timestamp\`
+- \`x-boaz-signature\`
+
+Your receiving system can verify the signature to ensure the request genuinely came from BOAZ.
+
+If you’re using Zapier/Make and cannot verify signatures easily, you can still use a secret by:
+- Using a private/unguessable webhook URL
+- Restricting by IP/allowlist if your platform supports it
+
+### Do NOT paste secrets into tickets or public docs
+Treat webhook URLs and signing secrets like passwords.
+
+---
+
+## 6) API Keys (what they are for)
+
+An **API key** is used when an external system needs to **call BOAZ** (instead of BOAZ calling it).
+
+Examples:
+- Sync contacts from another tool into BOAZ
+- Pull invoice status into a data warehouse
+- Build a custom integration service
+
+**Important:** API keys are shown **once** at creation. Copy and store them securely.
+
+---
+
+## 7) Troubleshooting
+
+### “Send test” worked, but real events don’t arrive
+- Confirm the webhook is **Active**
+- Confirm your webhook’s **Events** include the event type you want (or use \`*\`)
+- Create the action again (create a new ticket / fully pay an invoice)
+
+### The receiving tool says “timeout”
+- Your endpoint may be slow or blocked
+- Try a simpler receiver (Webhook.site) to isolate the issue
+
+### I’m not sure what fields are included
+- Use **Webhook.site** and click the received request — you’ll see the exact JSON payload BOAZ sends.
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existingArticle = await db.collection('kb_articles').findOne({ slug: 'crm-integrations-guide' })
+    const result = existingArticle ? 'updated' : 'created'
+
+    if (existingArticle) {
+      await db.collection('kb_articles').updateOne(
+        { slug: 'crm-integrations-guide' },
+        { $set: { ...INTEGRATIONS_KB_ARTICLE, updatedAt: new Date() } },
+      )
+    } else {
+      await db.collection('kb_articles').insertOne(INTEGRATIONS_KB_ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: INTEGRATIONS_KB_ARTICLE.title,
+        slug: INTEGRATIONS_KB_ARTICLE.slug,
+        url: `/apps/crm/support/kb/${INTEGRATIONS_KB_ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed integrations KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
 // DELETE /api/admin/customer-portal-users/:email - Remove customer by email
 adminSeedDataRouter.delete('/customer-portal-user/:email', async (req, res) => {
   const db = await getDb()

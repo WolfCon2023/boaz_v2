@@ -167,6 +167,54 @@ export default function CRMIntegrations() {
         <CRMHelpButton tag="crm:integrations" />
       </div>
 
+      {/* Quick start / step-by-step for non-technical users */}
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Quick Start (non‑technical)</h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
+              A webhook is just a “notification link.” BOAZ sends a message to your URL when something happens (like a ticket being created).
+            </p>
+          </div>
+          <a
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+            href="/apps/crm/support/kb?tag=crm%3Aintegrations"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open full guide
+          </a>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+            <div className="text-xs font-semibold">Step 1</div>
+            <div className="mt-1 text-sm font-medium">Get a webhook URL</div>
+            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              Use a tool like Webhook.site, Zapier “Catch Hook”, or Make “Custom Webhook” to get a URL.
+            </div>
+          </div>
+          <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+            <div className="text-xs font-semibold">Step 2</div>
+            <div className="mt-1 text-sm font-medium">Create a BOAZ webhook</div>
+            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              Paste the URL below, keep events as default (or <code>*</code>), then click <b>Create Webhook</b>.
+            </div>
+          </div>
+          <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+            <div className="text-xs font-semibold">Step 3</div>
+            <div className="mt-1 text-sm font-medium">Send a test</div>
+            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              Click <b>Send test</b> on your webhook and confirm you received <code>test.ping</code>.
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 text-xs text-[color:var(--color-text-muted)]">
+          After that, create a ticket to see <code>support.ticket.created</code>, or pay an invoice in full to see <code>crm.invoice.paid</code>.
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Webhooks */}
         <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
