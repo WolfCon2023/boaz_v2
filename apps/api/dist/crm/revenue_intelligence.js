@@ -161,9 +161,54 @@ revenueIntelligenceRouter.post('/backfill', requirePermission('*'), async (_req,
         }
         return null;
     };
-    const cursor = coll.find(query, { projection: { lastActivityAt: 1, stageChangedAt: 1, forecastedCloseDate: 1, closeDate: 1, createdAt: 1, updatedAt: 1, stage: 1 } }).limit(10_000);
+    const candidates = (await coll
+        .find(query, {
+        projection: {
+            lastActivityAt: 1,
+            stageChangedAt: 1,
+            forecastedCloseDate: 1,
+            closeDate: 1,
+            createdAt: 1,
+            updatedAt: 1,
+            stage: 1,
+        },
+    })
+        .limit(10_000)
+        .toArray());
+    // Use deal_history to derive best-effort timestamps for activity + stage change.
+    // This makes scoring + "stale" panels more accurate for legacy records.
+    const ids = candidates.map((d) => d._id).filter(Boolean);
+    const histMap = new Map();
+    if (ids.length) {
+        try {
+            const hist = await db
+                .collection('deal_history')
+                .aggregate([
+                { $match: { dealId: { $in: ids } } },
+                {
+                    $group: {
+                        _id: '$dealId',
+                        lastHistoryAt: { $max: '$createdAt' },
+                        lastStageAt: {
+                            $max: {
+                                $cond: [{ $eq: ['$eventType', 'stage_changed'] }, '$createdAt', null],
+                            },
+                        },
+                    },
+                },
+            ])
+                .toArray();
+            for (const row of hist) {
+                histMap.set(String(row._id), { lastHistoryAt: row.lastHistoryAt, lastStageAt: row.lastStageAt });
+            }
+        }
+        catch (e) {
+            // best-effort
+            console.warn('RI backfill: deal_history aggregation failed', e);
+        }
+    }
     const ops = [];
-    for await (const deal of cursor) {
+    for (const deal of candidates) {
         scanned++;
         const set = {};
         // Normalize createdAt/updatedAt if stored as string
@@ -196,17 +241,24 @@ revenueIntelligenceRouter.post('/backfill', requirePermission('*'), async (_req,
                 normalizedCloseDate++;
             }
         }
-        // Fill lastActivityAt if missing (use updatedAt/createdAt)
+        // Fill lastActivityAt if missing (use deal_history, then updatedAt/createdAt)
         if (!deal.lastActivityAt) {
-            const fallback = parseAnyDate(deal.updatedAt) || parseAnyDate(deal.createdAt);
+            const hist = histMap.get(String(deal._id));
+            const fallback = (hist?.lastHistoryAt && parseAnyDate(hist.lastHistoryAt)) ||
+                parseAnyDate(deal.updatedAt) ||
+                parseAnyDate(deal.createdAt);
             if (fallback) {
                 set.lastActivityAt = fallback;
                 fixedLastActivityAt++;
             }
         }
-        // Fill stageChangedAt if missing (use updatedAt/createdAt)
+        // Fill stageChangedAt if missing (prefer last stage_changed history timestamp)
         if (!deal.stageChangedAt) {
-            const fallback = parseAnyDate(deal.updatedAt) || parseAnyDate(deal.createdAt);
+            const hist = histMap.get(String(deal._id));
+            const fallback = (hist?.lastStageAt && parseAnyDate(hist.lastStageAt)) ||
+                (hist?.lastHistoryAt && parseAnyDate(hist.lastHistoryAt)) ||
+                parseAnyDate(deal.updatedAt) ||
+                parseAnyDate(deal.createdAt);
             if (fallback) {
                 set.stageChangedAt = fallback;
                 fixedStageChangedAt++;

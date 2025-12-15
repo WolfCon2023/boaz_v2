@@ -1143,7 +1143,7 @@ export default function CRMRevenueIntelligence() {
                             <span className="truncate">{x.factor}</span>
                             <span className="ml-2 text-emerald-400 font-semibold">+{x.totalImpact}</span>
                           </div>
-                        )) : <div className="text-[color:var(--color-text-muted)]">—</div>}
+                        )) : <div className="text-[color:var(--color-text-muted)]">No positive drivers yet</div>}
                       </div>
                     </div>
                     <div>
@@ -1154,10 +1154,16 @@ export default function CRMRevenueIntelligence() {
                             <span className="truncate">{x.factor}</span>
                             <span className="ml-2 text-red-400 font-semibold">{x.totalImpact}</span>
                           </div>
-                        )) : <div className="text-[color:var(--color-text-muted)]">—</div>}
+                        )) : <div className="text-[color:var(--color-text-muted)]">No negative drivers yet</div>}
                       </div>
                     </div>
                   </div>
+                  {(drivers.topPositive.length === 0 && drivers.topNegative.length === 0) && (
+                    <div className="mt-3 text-[11px] text-[color:var(--color-text-muted)]">
+                      If this stays empty, it usually means deals in the selected range have no non-zero scoring factors.
+                      Try <b>Run backfill</b>, or adjust scoring weights so stages have meaningful non-zero impacts.
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -1945,4 +1951,5 @@ export default function CRMRevenueIntelligence() {
     </div>
   )
 }
+
 
