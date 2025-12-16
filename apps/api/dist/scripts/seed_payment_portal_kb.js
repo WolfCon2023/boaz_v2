@@ -92,8 +92,8 @@ We support multiple secure payment methods to accommodate different preferences 
 
 **Mailing Address:**
 Wolf Consulting Group, LLC
-123 Main St, Suite 100
-Raleigh, NC 27601
+2114 Willowcrest Drive
+Waxhaw, NC 28173
 USA
 
 **Important:** Write your invoice number on the check's memo line.

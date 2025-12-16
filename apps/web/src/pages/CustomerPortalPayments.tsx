@@ -520,8 +520,8 @@ export default function CustomerPortalPayments() {
                                 <p>Make checks payable to:</p>
                                 <div className="mt-1 font-semibold">
                                   <div>Wolf Consulting Group, LLC</div>
-                                  <div>123 Main St, Suite 100</div>
-                                  <div>Raleigh, NC 27601</div>
+                                  <div>2114 Willowcrest Drive</div>
+                                  <div>Waxhaw, NC 28173</div>
                                 </div>
                                 <p className="mt-2">Include invoice number: <strong>#{selectedInvoice.invoiceNumber}</strong></p>
                               </div>

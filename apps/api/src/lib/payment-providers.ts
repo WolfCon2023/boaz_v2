@@ -114,8 +114,8 @@ export const PAYMENT_OPTIONS: Record<PaymentMethod, PaymentOption> = {
     instructions: `Please make checks payable to:
 
 **Wolf Consulting Group, LLC**
-**123 Business Drive**
-**Charlotte, NC 28202**
+**2114 Willowcrest Drive**
+**Waxhaw, NC 28173**
 
 Please include your invoice number on the check memo line.
 
@@ -314,14 +314,14 @@ export const PAYMENT_PORTAL_CONFIG: PaymentPortalConfig = {
     accountNumber: '****7890', // Masked for security
     accountName: 'Wolf Consulting Group, LLC',
     swiftCode: 'FCBIUS33',
-    bankAddress: '123 Main Street, Charlotte, NC 28202',
+    bankAddress: '2114 Willowcrest Drive, Waxhaw, NC 28173',
   },
   mailingAddress: {
     name: 'Wolf Consulting Group, LLC',
-    address: '123 Business Drive',
-    city: 'Charlotte',
+    address: '2114 Willowcrest Drive',
+    city: 'Waxhaw',
     state: 'NC',
-    zip: '28202',
+    zip: '28173',
     country: 'USA',
   },
   supportEmail: 'contactwcg@wolfconsultingnc.com',

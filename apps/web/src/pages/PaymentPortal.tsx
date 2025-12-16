@@ -630,8 +630,8 @@ export default function PaymentPortal() {
                             <p>Make check payable to:</p>
                             <div className="mt-1 font-semibold">
                               <div>Wolf Consulting Group, LLC</div>
-                              <div>123 Business Drive</div>
-                              <div>Charlotte, NC 28202</div>
+                              <div>2114 Willowcrest Drive</div>
+                              <div>Waxhaw, NC 28173</div>
                             </div>
                             <p className="mt-2">Include invoice number: <strong>#{selectedInvoice.invoiceNumber}</strong></p>
                           </div>

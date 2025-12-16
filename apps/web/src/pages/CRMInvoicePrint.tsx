@@ -284,8 +284,8 @@ export default function CRMInvoicePrint() {
               <p className="mb-1">Please make checks payable to:</p>
               <div className="font-semibold">
                 <div>Wolf Consulting Group, LLC</div>
-                <div>123 Business Drive</div>
-                <div>Charlotte, NC 28202</div>
+                <div>2114 Willowcrest Drive</div>
+                <div>Waxhaw, NC 28173</div>
               </div>
               <p className="mt-2">Please include your invoice number on the check memo line: <strong>Invoice #{inv?.invoiceNumber ?? id}</strong></p>
             </div>
