@@ -22,9 +22,9 @@ export default function InvoiceAccess() {
 
   const internalHref = invoiceId ? `/apps/crm/invoices/${encodeURIComponent(invoiceId)}/print` : '/apps/crm/invoices'
 
+  // NOTE: Tailwind v4 theme tokens in this app override `max-w-3xl` to `40px` via `--spacing-3xl`.
+  // Use an explicit max-width value in this component to avoid collapsed layouts in production.
   return (
-    {/* NOTE: Tailwind v4 theme tokens in this app override `max-w-3xl` to `40px` via `--spacing-3xl`.
-        Use an explicit max-width value here to avoid collapsed layouts in production. */}
     <div className="mx-auto w-full max-w-[48rem] px-4 py-10 sm:px-0">
       <div className="mb-8 text-center">
         <div className="text-2xl font-semibold">Open Invoice</div>
