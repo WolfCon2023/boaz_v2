@@ -32,6 +32,7 @@ type Quote = {
 }
 
 type QuoteLineItem = {
+  id: string
   productId?: string
   productName?: string
   productSku?: string
@@ -109,6 +110,17 @@ export default function CRMQuotes() {
   const qc = useQueryClient()
   const toast = useToast()
   const { confirm, ConfirmDialog } = useConfirm()
+
+  const makeLineItemId = React.useCallback(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c: any = (globalThis as any).crypto
+      if (c?.randomUUID) return c.randomUUID() as string
+    } catch {
+      // ignore
+    }
+    return `${Date.now()}_${Math.random().toString(16).slice(2)}`
+  }, [])
   const invalidateCrmDashboard = React.useCallback(() => {
     // Dashboard query key is ['crm-dashboard-summary', userEmail]; invalidate by prefix.
     qc.invalidateQueries({ queryKey: ['crm-dashboard-summary'] })
@@ -494,6 +506,7 @@ export default function CRMQuotes() {
 
   const [editing, setEditing] = React.useState<Quote | null>(null)
   const [lineItems, setLineItems] = React.useState<QuoteLineItem[]>([])
+  const [qtyDraftById, setQtyDraftById] = React.useState<Record<string, string>>({})
   const [showHistory, setShowHistory] = React.useState(false)
   const editingIdRef = React.useRef<string | null>(null)
 
@@ -548,6 +561,7 @@ export default function CRMQuotes() {
     
     if (editing && editing.items && Array.isArray(editing.items)) {
       setLineItems(editing.items.map((item: any) => ({
+        id: makeLineItemId(),
         productId: item.productId,
         productName: item.productName || item.name,
         productSku: item.productSku || item.sku,
@@ -561,6 +575,7 @@ export default function CRMQuotes() {
         lineTotal: (item.quantity || 1) * (item.unitPrice || item.price || 0),
         isBundle: item.isBundle || false,
       })))
+      setQtyDraftById({})
       // Load discount if present
       const editingDiscountCode = (editing as any).discountCode
       const editingDiscountId = (editing as any).discountId
@@ -583,16 +598,18 @@ export default function CRMQuotes() {
       }
     } else if (editing) {
       setLineItems([])
+      setQtyDraftById({})
       setDiscountCode('')
       setAppliedDiscount(null)
     } else {
       // When editing is null, reset everything
       setLineItems([])
+      setQtyDraftById({})
       setDiscountCode('')
       setAppliedDiscount(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing?._id])
+  }, [editing?._id, makeLineItemId])
 
   // When discounts load, try to match discount code if editing has one
   React.useEffect(() => {
@@ -1060,6 +1077,7 @@ export default function CRMQuotes() {
                       type="button"
                       onClick={() => {
                         setLineItems([...lineItems, {
+                          id: makeLineItemId(),
                           productId: '',
                           productName: '',
                           productSku: '',
@@ -1199,16 +1217,52 @@ export default function CRMQuotes() {
                                   </td>
                                   <td className="px-2 py-1.5">
                                     <input
-                                      type="number"
-                                      min="0.01"
-                                      step="0.01"
-                                      value={item.quantity || 1}
+                                      type="text"
+                                      inputMode="decimal"
+                                      pattern="[0-9]*[.,]?[0-9]*"
+                                      value={qtyDraftById[item.id] ?? String(item.quantity ?? 1)}
                                       onChange={(e) => {
+                                        const raw = e.target.value
+                                        // Allow empty while typing; only allow numbers + optional decimal point
+                                        if (!/^\d*[.,]?\d*$/.test(raw)) return
+                                        setQtyDraftById((m) => ({ ...m, [item.id]: raw }))
+                                        if (raw === '') return
                                         const newItems = [...lineItems]
-                                        const qty = parseFloat(e.target.value) || 1
+                                        const qty = parseFloat(raw.replace(',', '.'))
+                                        if (!Number.isFinite(qty) || qty <= 0) return
                                         newItems[index].quantity = qty
                                         newItems[index].lineTotal = qty * newItems[index].unitPrice
                                         setLineItems(newItems)
+                                      }}
+                                      onFocus={(e) => {
+                                        e.currentTarget.select()
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // If the user clicks into an already-focused input, onFocus won't fire.
+                                        // Ensure we still select the whole value, but don't break focus.
+                                        if (document.activeElement === e.currentTarget) return
+                                        e.preventDefault()
+                                        e.currentTarget.focus()
+                                        requestAnimationFrame(() => e.currentTarget.select())
+                                      }}
+                                      onWheel={(e) => {
+                                        // Prevent mouse-wheel from "scrolling" the number value
+                                        ;(e.currentTarget as HTMLInputElement).blur()
+                                      }}
+                                      onBlur={() => {
+                                        const raw = qtyDraftById[item.id]
+                                        if (raw == null) return
+                                        const parsed = parseFloat(raw.replace(',', '.'))
+                                        const qty = Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+                                        const newItems = [...lineItems]
+                                        newItems[index].quantity = qty
+                                        newItems[index].lineTotal = qty * newItems[index].unitPrice
+                                        setLineItems(newItems)
+                                        setQtyDraftById((m) => {
+                                          const next = { ...m }
+                                          delete next[item.id]
+                                          return next
+                                        })
                                       }}
                                       className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
                                     />

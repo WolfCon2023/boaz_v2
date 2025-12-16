@@ -29,6 +29,7 @@ type Invoice = {
 }
 
 type InvoiceLineItem = {
+  id: string
   productId?: string
   productName?: string
   productSku?: string
@@ -557,6 +558,19 @@ export default function CRMInvoices() {
   const editingIdRef = React.useRef<string | null>(null)
   // Recipient email state for "Send Invoice"
   const [invoiceRecipientEmail, setInvoiceRecipientEmail] = React.useState('')
+  const makeLineItemId = React.useCallback(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c: any = (globalThis as any).crypto
+      if (c?.randomUUID) return c.randomUUID() as string
+    } catch {
+      // ignore
+    }
+    return `${Date.now()}_${Math.random().toString(16).slice(2)}`
+  }, [])
+
+  // Controlled-number-input UX: allow temporary empty string while typing, then coerce on blur.
+  const [qtyDraftById, setQtyDraftById] = React.useState<Record<string, string>>({})
 
   const { data: linkedRenewalData } = useQuery({
     queryKey: ['renewals-by-invoice', editing?._id],
@@ -582,6 +596,7 @@ export default function CRMInvoices() {
     
     if (editing && editing.items && Array.isArray(editing.items)) {
       setLineItems(editing.items.map((item: any) => ({
+        id: makeLineItemId(),
         productId: item.productId,
         productName: item.productName || item.name,
         productSku: item.productSku || item.sku,
@@ -595,6 +610,7 @@ export default function CRMInvoices() {
         lineTotal: (item.quantity || 1) * (item.unitPrice || item.price || 0),
         isBundle: item.isBundle || false,
       })))
+      setQtyDraftById({})
       // Load discount if present
       const editingDiscountCode = (editing as any).discountCode
       const editingDiscountId = (editing as any).discountId
@@ -617,11 +633,13 @@ export default function CRMInvoices() {
       }
     } else if (editing) {
       setLineItems([])
+      setQtyDraftById({})
       setDiscountCode('')
       setAppliedDiscount(null)
     } else {
       // When editing is null, reset everything
       setLineItems([])
+      setQtyDraftById({})
       setDiscountCode('')
       setAppliedDiscount(null)
     }
@@ -1150,6 +1168,7 @@ export default function CRMInvoices() {
                       type="button"
                       onClick={() => {
                         setLineItems([...lineItems, {
+                          id: makeLineItemId(),
                           productId: '',
                           productName: '',
                           productSku: '',
@@ -1189,7 +1208,7 @@ export default function CRMInvoices() {
                           <tbody>
                             {lineItems.map((item, index) => {
                               return (
-                                <tr key={index} className="border-b border-[color:var(--color-border)]">
+                                <tr key={item.id} className="border-b border-[color:var(--color-border)]">
                                   <td className="px-2 py-1.5">
                                     <select
                                       value={item.isBundle ? `bundle-${item.bundleId}` : (item.productId || '')}
@@ -1289,17 +1308,56 @@ export default function CRMInvoices() {
                                   </td>
                                   <td className="px-2 py-1.5">
                                     <input
-                                      type="number"
-                                      min="0.01"
-                                      step="0.01"
-                                      value={item.quantity || 1}
+                                      type="text"
+                                      inputMode="decimal"
+                                      pattern="[0-9]*[.,]?[0-9]*"
+                                      value={qtyDraftById[item.id] ?? String(item.quantity ?? 1)}
                                       onChange={(e) => {
+                                        const raw = e.target.value
+                                        // Allow empty while typing; only allow numbers + optional decimal point
+                                        if (!/^\d*[.,]?\d*$/.test(raw)) return
+                                        setQtyDraftById((m) => ({ ...m, [item.id]: raw }))
+                                        if (raw === '') return
                                         const newItems = [...lineItems]
-                                        const qty = parseFloat(e.target.value) || 1
+                                        const qty = parseFloat(raw.replace(',', '.'))
+                                        if (!Number.isFinite(qty) || qty <= 0) return
                                         newItems[index].quantity = qty
                                         newItems[index].lineTotal = qty * newItems[index].unitPrice
                                         setLineItems(newItems)
                                       }}
+                                      onFocus={(e) => {
+                                        // Make it easy to replace "1" with "4" without needing to backspace first.
+                                        e.currentTarget.select()
+                                      }}
+                                      onMouseDown={(e) => {
+                                        // If the user clicks into an already-focused input, onFocus won't fire.
+                                        // Ensure we still select the whole value, but don't break focus.
+                                        if (document.activeElement === e.currentTarget) return
+                                        e.preventDefault()
+                                        e.currentTarget.focus()
+                                        // Defer selection until after focus is applied.
+                                        requestAnimationFrame(() => e.currentTarget.select())
+                                      }}
+                                      onWheel={(e) => {
+                                        // Prevent mouse-wheel from "scrolling" the number value (common UX footgun on Windows)
+                                        ;(e.currentTarget as HTMLInputElement).blur()
+                                      }}
+                                      onBlur={() => {
+                                        const raw = qtyDraftById[item.id]
+                                        if (raw == null) return
+                                        const parsed = parseFloat(raw.replace(',', '.'))
+                                        const qty = Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+                                        const newItems = [...lineItems]
+                                        newItems[index].quantity = qty
+                                        newItems[index].lineTotal = qty * newItems[index].unitPrice
+                                        setLineItems(newItems)
+                                        setQtyDraftById((m) => {
+                                          const next = { ...m }
+                                          delete next[item.id]
+                                          return next
+                                        })
+                                      }}
+                                      placeholder="1"
                                       className="w-full rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
                                     />
                                   </td>
@@ -1341,6 +1399,12 @@ export default function CRMInvoices() {
                                     <button
                                       type="button"
                                       onClick={() => {
+                                        setQtyDraftById((m) => {
+                                          if (!m[item.id]) return m
+                                          const next = { ...m }
+                                          delete next[item.id]
+                                          return next
+                                        })
                                         setLineItems(lineItems.filter((_, i) => i !== index))
                                       }}
                                       className="rounded p-1 hover:bg-[color:var(--color-muted)] text-red-600"
