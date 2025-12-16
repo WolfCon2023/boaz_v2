@@ -6,12 +6,13 @@
  */
 
 import * as React from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
 
 export default function CustomerPortalLogin() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { showToast } = useToast()
   
   const [mode, setMode] = React.useState<'login' | 'register' | 'forgot'>('login')
@@ -36,6 +37,23 @@ export default function CustomerPortalLogin() {
   
   // Registration success
   const [regSuccess, setRegSuccess] = React.useState(false)
+
+  const redirectAfterAuth = React.useMemo(() => {
+    try {
+      const params = new URLSearchParams(location.search || '')
+      const next = (params.get('next') || '').trim()
+      const invoiceId = (params.get('invoiceId') || '').trim()
+
+      // Only allow safe in-app customer routes to avoid open redirects.
+      const safeNext = next.startsWith('/customer/') ? next : '/customer/dashboard'
+      if (!invoiceId) return safeNext
+
+      const joiner = safeNext.includes('?') ? '&' : '?'
+      return `${safeNext}${joiner}invoiceId=${encodeURIComponent(invoiceId)}`
+    } catch {
+      return '/customer/dashboard'
+    }
+  }, [location.search])
 
   React.useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true))
@@ -80,7 +98,7 @@ export default function CustomerPortalLogin() {
       localStorage.setItem('customer_portal_user', JSON.stringify(res.data.data.customer))
       
       showToast('Welcome back!', 'success')
-      navigate('/customer/dashboard')
+      navigate(redirectAfterAuth)
     } catch (err: any) {
       console.error('Login error:', err)
       showToast('Login failed', 'error')

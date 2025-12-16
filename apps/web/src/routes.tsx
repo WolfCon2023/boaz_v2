@@ -40,6 +40,7 @@ import CRMRevenueIntelligence from '@/pages/CRMRevenueIntelligence'
 import CRMReporting from '@/pages/CRMReporting'
 import CRMReportingPrint from '@/pages/CRMReportingPrint'
 import CRMInvoicePrint from '@/pages/CRMInvoicePrint'
+import InvoiceAccess from '@/pages/InvoiceAccess'
 import CRMIntegrations from '@/pages/CRMIntegrations'
 import CRMOutreachTemplates from '@/pages/CRMOutreachTemplates'
 import CRMOutreachSequences from '@/pages/CRMOutreachSequences'
@@ -158,6 +159,10 @@ export const router = createBrowserRouter([
   {
     path: '/portal',
     element: <PublicShell><SupportPortal /></PublicShell>,
+  },
+  {
+    path: '/invoices/access/:id',
+    element: <PublicShell><InvoiceAccess /></PublicShell>,
   },
   {
     path: '/payment-success',

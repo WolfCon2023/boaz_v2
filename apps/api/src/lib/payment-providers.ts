@@ -314,7 +314,7 @@ export const PAYMENT_PORTAL_CONFIG: PaymentPortalConfig = {
     accountNumber: '****7890', // Masked for security
     accountName: 'Wolf Consulting Group, LLC',
     swiftCode: 'FCBIUS33',
-    bankAddress: '2114 Willowcrest Drive, Waxhaw, NC 28173',
+    bankAddress: '123 Main Street, Charlotte, NC 28202',
   },
   mailingAddress: {
     name: 'Wolf Consulting Group, LLC',

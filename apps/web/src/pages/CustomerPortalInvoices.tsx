@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '../lib/http'
 import { ArrowLeft, FileText, Eye, Calendar, AlertCircle, CheckCircle } from 'lucide-react'
@@ -28,14 +28,30 @@ type Invoice = {
 
 export default function CustomerPortalInvoices() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [viewingInvoice, setViewingInvoice] = useState<string | null>(null)
+  const invoiceIdFromQuery = (() => {
+    try {
+      return new URLSearchParams(location.search || '').get('invoiceId')
+    } catch {
+      return null
+    }
+  })()
 
   useEffect(() => {
     const token = localStorage.getItem('customer_portal_token')
     if (!token) {
-      navigate('/customer/login')
+      const next = '/customer/invoices'
+      const qs = invoiceIdFromQuery ? `?next=${encodeURIComponent(next)}&invoiceId=${encodeURIComponent(invoiceIdFromQuery)}` : `?next=${encodeURIComponent(next)}`
+      navigate(`/customer/login${qs}`)
     }
-  }, [navigate])
+  }, [navigate, invoiceIdFromQuery])
+
+  // If a specific invoiceId is provided (e.g., from an emailed link), auto-open it after login.
+  useEffect(() => {
+    if (!invoiceIdFromQuery) return
+    setViewingInvoice(invoiceIdFromQuery)
+  }, [invoiceIdFromQuery])
 
   function handleLogout() {
     localStorage.removeItem('customer_portal_token')
