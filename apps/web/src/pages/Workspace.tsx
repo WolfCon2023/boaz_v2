@@ -112,6 +112,7 @@ export default function Workspace() {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: appKey })
     const style = { transform: CSS.Transform.toString(transform), transition }
     const hasAccess = userHasAccess(appKey)
+    const href = catalog.find((c) => c.key === appKey)?.href
     
     return (
       <li ref={setNodeRef} style={style} {...attributes} {...listeners}>
@@ -125,7 +126,11 @@ export default function Workspace() {
           </div>
           <div className="mt-4 text-sm">
             {hasAccess ? (
-              <a href={`/apps/${appKey}`} className="text-[color:var(--color-primary)] underline">Open</a>
+              href ? (
+                <a href={href} className="text-[color:var(--color-primary)] underline">Open</a>
+              ) : (
+                <span className="text-xs text-[color:var(--color-text-muted)]">Coming soon</span>
+              )
             ) : hasPendingRequest(appKey) ? (
               <Link
                 to="/request-status"

@@ -102,6 +102,7 @@ export default function Marketplace() {
         {catalog.map((app) => {
           const hasAccess = userHasAccess(app.key)
           const isInstalled = installed.includes(app.key)
+          const canOpen = !!app.href
           
           return (
             <li key={app.key}>
@@ -111,7 +112,19 @@ export default function Marketplace() {
                 <div className="mt-4 text-sm">
                   {hasAccess ? (
                     isInstalled ? (
-                      <button onClick={() => remove.mutate(app.key)} className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 hover:bg-[color:var(--color-muted)]">Uninstall</button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {canOpen ? (
+                          <a
+                            href={app.href}
+                            className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-1 text-white hover:bg-[color:var(--color-primary-700)]"
+                          >
+                            Open
+                          </a>
+                        ) : (
+                          <span className="text-xs text-[color:var(--color-text-muted)]">Coming soon</span>
+                        )}
+                        <button onClick={() => remove.mutate(app.key)} className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 hover:bg-[color:var(--color-muted)]">Uninstall</button>
+                      </div>
                     ) : (
                       <button onClick={() => install.mutate(app.key)} className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-1 text-white hover:bg-[color:var(--color-primary-700)]">Install</button>
                     )
