@@ -10,6 +10,7 @@ export default function Marketplace() {
   const queryClient = useQueryClient()
   const { showToast } = useToast()
   const [copiedUrl, setCopiedUrl] = React.useState(false)
+  const [pendingRequestKey, setPendingRequestKey] = React.useState<string>('')
   const { data: installed = [] } = useQuery({ queryKey: ['installedApps'], queryFn: async () => getInstalledApps() })
   
   // Get user's application access
@@ -55,11 +56,13 @@ export default function Marketplace() {
   
   const requestAccess = useMutation({
     mutationFn: async (appKey: string) => {
+      setPendingRequestKey(appKey)
       const res = await http.post(`/api/auth/me/applications/${appKey}/request`)
       return { appKey, data: res.data }
     },
     onSuccess: (result) => {
       setRequestedApps(prev => new Set(prev).add(result.appKey))
+      showToast('Access request submitted', 'success')
       queryClient.invalidateQueries({ queryKey: ['user', 'applications'] })
       queryClient.invalidateQueries({ queryKey: ['user', 'app-access-requests'] })
       setTimeout(() => {
@@ -69,6 +72,19 @@ export default function Marketplace() {
           return next
         })
       }, 5000)
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to request access.'
+      showToast(String(msg), 'error')
+      queryClient.invalidateQueries({ queryKey: ['user', 'applications'] })
+      queryClient.invalidateQueries({ queryKey: ['user', 'app-access-requests'] })
+    },
+    onSettled: () => {
+      setPendingRequestKey('')
     },
   })
   
@@ -138,10 +154,10 @@ export default function Marketplace() {
                   ) : (
                     <button 
                       onClick={() => requestAccess.mutate(app.key)}
-                      disabled={requestAccess.isPending}
+                      disabled={pendingRequestKey === app.key}
                       className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 hover:bg-[color:var(--color-muted)] disabled:opacity-50"
                     >
-                      {requestAccess.isPending ? 'Requesting...' : 'Request Access'}
+                      {pendingRequestKey === app.key ? 'Requesting...' : 'Request Access'}
                     </button>
                   )}
                 </div>

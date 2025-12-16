@@ -1068,7 +1068,17 @@ export async function getUserApplicationAccess(userId: string): Promise<string[]
     .find({ userId })
     .toArray()
 
-  return accessDocs.map((doc) => doc.appKey)
+  const keys = accessDocs.map((doc) => String(doc.appKey || '').trim().toLowerCase()).filter(Boolean)
+
+  // Implied access: CRM includes Scheduler + Calendar.
+  // This supports "part of CRM portfolio" while still allowing standalone grants.
+  if (keys.includes('crm')) {
+    if (!keys.includes('scheduler')) keys.push('scheduler')
+    if (!keys.includes('calendar')) keys.push('calendar')
+  }
+
+  // Deduplicate
+  return Array.from(new Set(keys))
 }
 
 export async function hasApplicationAccess(userId: string, appKey: string): Promise<boolean> {
@@ -1076,6 +1086,9 @@ export async function hasApplicationAccess(userId: string, appKey: string): Prom
   if (!db) {
     return false
   }
+
+  const key = String(appKey || '').trim().toLowerCase()
+  if (!key) return false
 
   // Admins have access to all applications
   const userRoles = await db.collection<UserRoleDoc>('user_roles').find({ userId } as any).toArray()
@@ -1090,9 +1103,15 @@ export async function hasApplicationAccess(userId: string, appKey: string): Prom
 
   await ensureUserAppsCollection(db)
 
+  // Implied access: CRM includes Scheduler + Calendar
+  if (key === 'scheduler' || key === 'calendar') {
+    const crmAccess = await db.collection<ApplicationAccessDoc>('user_apps').findOne({ userId, appKey: 'crm' } as any)
+    if (crmAccess) return true
+  }
+
   const access = await db.collection<ApplicationAccessDoc>('user_apps').findOne({
     userId,
-    appKey,
+    appKey: key,
   })
 
   return !!access

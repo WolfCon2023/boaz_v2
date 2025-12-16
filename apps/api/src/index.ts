@@ -58,6 +58,7 @@ import { integrationsRouter } from './crm/integrations.js'
 import { inboundIntegrationsRouter } from './integrations/inbound.js'
 import { schedulerRouter } from './scheduler/index.js'
 import { calendarRouter } from './calendar/index.js'
+import { requireAuth } from './auth/rbac.js'
 
 const app = express()
 const normalize = (s: string) => s.trim().replace(/\/$/, '').toLowerCase()
@@ -160,23 +161,27 @@ app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))
 })
 // Simple metrics placeholder; replace with real queries when DB is connected
-app.get('/api/metrics/summary', async (_req, res) => {
+app.get('/api/metrics/summary', requireAuth, async (req, res) => {
   try {
     const db = await getDb()
     if (!db) {
       return res.json({ data: { appointmentsToday: 0, tasksDueToday: 0, tasksCompletedToday: 0 }, error: null })
     }
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    if (!auth?.userId) return res.status(401).json({ data: null, error: 'unauthorized' })
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today)
     tomorrow.setDate(today.getDate() + 1)
 
-    const appointmentsToday = await db.collection('appointments').countDocuments({ startsAt: { $gte: today, $lt: tomorrow } })
+    const appointmentsToday = await db.collection('appointments').countDocuments({ ownerUserId: auth.userId, startsAt: { $gte: today, $lt: tomorrow } })
     const tasksDueToday = await db.collection('crm_tasks').countDocuments({
+      ownerUserId: auth.userId,
       dueAt: { $gte: today, $lt: tomorrow },
       status: { $in: ['open', 'in_progress'] },
     })
     const tasksCompletedToday = await db.collection('crm_tasks').countDocuments({
+      ownerUserId: auth.userId,
       status: 'completed',
       completedAt: { $gte: today, $lt: tomorrow },
     })

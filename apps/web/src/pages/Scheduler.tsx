@@ -50,6 +50,7 @@ type Appointment = {
 }
 
 type SystemUser = { id: string; name?: string | null; email?: string | null }
+type ContactSearchRow = { _id: string; name?: string; email?: string; mobilePhone?: string; officePhone?: string }
 
 function pad(n: number) {
   return String(n).padStart(2, '0')
@@ -187,6 +188,8 @@ export default function Scheduler() {
   // Internal booking form (staff scheduling)
   const [bookTypeId, setBookTypeId] = React.useState('')
   const [bookStartsAtLocal, setBookStartsAtLocal] = React.useState('')
+  const [bookContactQuery, setBookContactQuery] = React.useState('')
+  const [bookContactId, setBookContactId] = React.useState<string>('')
   const [bookFirstName, setBookFirstName] = React.useState('')
   const [bookLastName, setBookLastName] = React.useState('')
   const [bookEmail, setBookEmail] = React.useState('')
@@ -196,6 +199,13 @@ export default function Scheduler() {
   const [bookScheduledByUserId, setBookScheduledByUserId] = React.useState<string>('')
   const [bookReminderMinutes, setBookReminderMinutes] = React.useState<number>(60)
 
+  const contactSearchQ = useQuery<{ data: { items: ContactSearchRow[] } }>({
+    queryKey: ['scheduler', 'contact-search', bookContactQuery],
+    queryFn: async () => (await http.get('/api/crm/contacts', { params: { q: bookContactQuery.trim(), limit: 10 } })).data,
+    enabled: bookContactQuery.trim().length >= 2,
+    retry: false,
+  })
+
   const createBooking = useMutation({
     mutationFn: async () => {
       const startsAt = new Date(bookStartsAtLocal)
@@ -204,6 +214,7 @@ export default function Scheduler() {
       }
       const res = await http.post('/api/scheduler/appointments/book', {
         appointmentTypeId: bookTypeId,
+        contactId: bookContactId || null,
         attendeeFirstName: bookFirstName.trim(),
         attendeeLastName: bookLastName.trim(),
         attendeeEmail: bookEmail.trim(),
@@ -220,6 +231,8 @@ export default function Scheduler() {
     onSuccess: async () => {
       toast.showToast('Appointment booked and invite sent.', 'success')
       setBookStartsAtLocal('')
+      setBookContactQuery('')
+      setBookContactId('')
       setBookFirstName('')
       setBookLastName('')
       setBookEmail('')
@@ -549,6 +562,52 @@ export default function Scheduler() {
               Book on behalf of a client. Calendar app will provide a richer slot picker; this MVP uses a date/time input + server-side conflict checks.
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-6">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Customer search (CRM Contacts)</label>
+                <input
+                  value={bookContactQuery}
+                  onChange={(e) => {
+                    setBookContactQuery(e.target.value)
+                    if (!e.target.value.trim()) setBookContactId('')
+                  }}
+                  placeholder="Search name or email…"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                />
+                {contactSearchQ.data?.data.items?.length ? (
+                  <div className="mt-2 max-h-40 overflow-auto rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)]">
+                    {contactSearchQ.data.data.items.map((c) => (
+                      <button
+                        key={c._id}
+                        type="button"
+                        onClick={() => {
+                          setBookContactId(c._id)
+                          setBookContactQuery(c.name || c.email || '')
+                          const full = String(c.name || '').trim()
+                          const parts = full.split(/\s+/).filter(Boolean)
+                          if (parts.length >= 2) {
+                            setBookFirstName(parts[0])
+                            setBookLastName(parts.slice(1).join(' '))
+                          } else if (parts.length === 1) {
+                            setBookFirstName(parts[0])
+                          }
+                          if (c.email) setBookEmail(c.email)
+                          const phone = c.mobilePhone || c.officePhone || ''
+                          if (phone) setBookPhone(phone)
+                        }}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--color-muted)] ${
+                          bookContactId === c._id ? 'bg-[color:var(--color-muted)]' : ''
+                        }`}
+                      >
+                        <div className="font-medium">{c.name || c.email || '(no name)'}</div>
+                        <div className="text-xs text-[color:var(--color-text-muted)]">{c.email || ''}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {bookContactId ? (
+                  <div className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">Selected contact ID: {bookContactId}</div>
+                ) : null}
+              </div>
               <div className="md:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Appointment type</label>
                 <select

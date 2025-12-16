@@ -7,9 +7,11 @@ import { CSS } from '@dnd-kit/utilities'
 import { useEffect, useMemo, useState } from 'react'
 import { http } from '@/lib/http'
 import { Link } from 'react-router-dom'
+import { useToast } from '@/components/Toast'
 
 export default function Workspace() {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   const { data: installed = [] } = useQuery({ queryKey: ['installedApps'], queryFn: async () => getInstalledApps() })
   
   // Get user's application access
@@ -70,6 +72,16 @@ export default function Workspace() {
           return next
         })
       }, 5000)
+    },
+    onError: (err: any) => {
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to request access.'
+      showToast(String(msg), 'error')
+      queryClient.invalidateQueries({ queryKey: ['user', 'applications'] })
+      queryClient.invalidateQueries({ queryKey: ['user', 'app-access-requests'] })
     },
   })
   

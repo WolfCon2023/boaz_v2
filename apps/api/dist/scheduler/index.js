@@ -546,6 +546,7 @@ internal.get('/appointments', async (req, res) => {
 });
 const internalBookSchema = z.object({
     appointmentTypeId: z.string().min(6),
+    contactId: z.string().optional().nullable(),
     attendeeFirstName: z.string().min(1).max(80),
     attendeeLastName: z.string().min(1).max(80),
     attendeeEmail: z.string().email().max(180),
@@ -621,13 +622,28 @@ internal.post('/appointments/book', async (req, res) => {
     const attendeeLastName = parsed.data.attendeeLastName.trim();
     const attendeeName = `${attendeeFirstName} ${attendeeLastName}`.trim();
     const attendeePhone = parsed.data.attendeePhone ? parsed.data.attendeePhone.trim() : null;
-    const { contactId } = await ensureContactForAttendee(db, {
-        firstName: attendeeFirstName,
-        lastName: attendeeLastName,
-        name: attendeeName,
-        email: attendeeEmail,
-        phone: attendeePhone,
-    });
+    // Optional: user-selected CRM contact
+    let contactId = null;
+    if (parsed.data.contactId && ObjectId.isValid(parsed.data.contactId)) {
+        try {
+            const c = await db.collection('contacts').findOne({ _id: new ObjectId(parsed.data.contactId) });
+            if (c?._id)
+                contactId = String(c._id);
+        }
+        catch {
+            contactId = null;
+        }
+    }
+    if (!contactId) {
+        const ensured = await ensureContactForAttendee(db, {
+            firstName: attendeeFirstName,
+            lastName: attendeeLastName,
+            name: attendeeName,
+            email: attendeeEmail,
+            phone: attendeePhone,
+        });
+        contactId = ensured.contactId;
+    }
     // Scheduled By: default to current user; allow override if provided and valid.
     let scheduledByUserId = auth.userId;
     let scheduledByName = null;
@@ -730,6 +746,54 @@ internal.post('/appointments/:id/cancel', async (req, res) => {
         endsAt: appt.endsAt?.toISOString?.() ?? null,
     }, { source: 'scheduler_cancel' }).catch(() => null);
     res.json({ data: { ok: true }, error: null });
+});
+// GET /api/scheduler/appointments/by-contact/:contactId?from=ISO&to=ISO
+// Used by CRM contact "dashboard" to show upcoming appointments.
+internal.get('/appointments/by-contact/:contactId', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const contactId = String(req.params.contactId || '').trim();
+    if (!ObjectId.isValid(contactId))
+        return res.status(400).json({ data: null, error: 'invalid_contactId' });
+    const fromRaw = normStr(req.query.from);
+    const toRaw = normStr(req.query.to);
+    const from = fromRaw ? new Date(fromRaw) : new Date();
+    const to = toRaw ? new Date(toRaw) : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to) {
+        return res.status(400).json({ data: null, error: 'invalid_range' });
+    }
+    const items = await db
+        .collection('appointments')
+        .find({
+        contactId: String(contactId),
+        status: { $ne: 'cancelled' },
+        startsAt: { $lt: to },
+        endsAt: { $gt: from },
+    })
+        .sort({ startsAt: 1 })
+        .limit(200)
+        .toArray();
+    res.json({
+        data: {
+            items: items.map((d) => ({
+                ...d,
+                _id: String(d._id),
+                appointmentTypeId: String(d.appointmentTypeId),
+                appointmentTypeName: d.appointmentTypeName ?? null,
+                appointmentTypeSlug: d.appointmentTypeSlug ?? null,
+                contactId: d.contactId ?? null,
+                startsAt: d.startsAt?.toISOString?.() ?? null,
+                endsAt: d.endsAt?.toISOString?.() ?? null,
+                timeZone: d.timeZone ?? null,
+                status: d.status ?? null,
+                attendeeName: d.attendeeName ?? null,
+                attendeeEmail: d.attendeeEmail ?? null,
+                attendeePhone: d.attendeePhone ?? null,
+            })),
+        },
+        error: null,
+    });
 });
 const publicRouter = Router();
 // GET /api/scheduler/public/booking-links/:slug

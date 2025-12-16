@@ -12,6 +12,49 @@ import { RelatedTasks } from '@/components/RelatedTasks'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
 
+type ContactAppointmentRow = {
+  _id: string
+  appointmentTypeName?: string | null
+  startsAt?: string | null
+  endsAt?: string | null
+  timeZone?: string | null
+  status?: string | null
+}
+
+function ContactAppointments({ contactId }: { contactId: string }) {
+  const q = useQuery<{ data: { items: ContactAppointmentRow[] } }>({
+    queryKey: ['scheduler', 'appointments-by-contact', contactId],
+    queryFn: async () => {
+      const from = new Date().toISOString()
+      const to = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+      const res = await http.get(`/api/scheduler/appointments/by-contact/${encodeURIComponent(contactId)}`, { params: { from, to } })
+      return res.data
+    },
+    enabled: !!contactId,
+    retry: false,
+  })
+
+  const items = q.data?.data.items ?? []
+  if (q.isLoading) return <div className="text-xs text-[color:var(--color-text-muted)]">Loading appointments…</div>
+  if (q.isError) return <div className="text-xs text-[color:var(--color-text-muted)]">Unable to load appointments.</div>
+  if (!items.length) return <div className="text-xs text-[color:var(--color-text-muted)]">No upcoming appointments for this contact.</div>
+
+  return (
+    <div className="space-y-2">
+      {items.slice(0, 8).map((a) => (
+        <div key={a._id} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2">
+          <div className="text-sm font-semibold">{a.appointmentTypeName || 'Appointment'}</div>
+          <div className="text-xs text-[color:var(--color-text-muted)]">
+            {a.startsAt ? new Date(a.startsAt).toLocaleString() : ''}
+            {a.endsAt ? ` → ${new Date(a.endsAt).toLocaleTimeString()}` : ''}
+            {a.timeZone ? ` (${a.timeZone})` : ''}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 type ContactSurveyStatusSummary = {
   contactId: string
   responseCount: number
@@ -847,6 +890,14 @@ export default function CRMContacts() {
                   <option value="office">Office</option>
                 </select>
               </label>
+
+              <div className="col-span-full mt-4 rounded-xl border border-[color:var(--color-border)] p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-sm font-semibold">Appointments</div>
+                  <a href="/apps/calendar" className="text-xs underline text-[color:var(--color-primary)]">Open Calendar</a>
+                </div>
+                <ContactAppointments contactId={editing._id} />
+              </div>
 
               <div className="col-span-full mt-4 rounded-xl border border-[color:var(--color-border)] p-3">
                 <div className="mb-2 text-sm font-semibold">Outreach actions</div>

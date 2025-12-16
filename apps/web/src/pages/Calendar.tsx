@@ -7,6 +7,9 @@ type CalendarEvent =
   | {
       kind: 'appointment'
       id: string
+      ownerUserId?: string | null
+      ownerName?: string | null
+      ownerEmail?: string | null
       title: string
       startsAt: string
       endsAt: string
@@ -18,6 +21,9 @@ type CalendarEvent =
   | {
       kind: 'task'
       id: string
+      ownerUserId?: string | null
+      ownerName?: string | null
+      ownerEmail?: string | null
       title: string
       startsAt: string
       endsAt: string
@@ -33,17 +39,31 @@ function startOfDay(d: Date) {
 }
 
 export default function Calendar() {
+  const [view, setView] = React.useState<'me' | 'org'>('me')
   const [rangeDays, setRangeDays] = React.useState(14)
   const from = React.useMemo(() => startOfDay(new Date()), [])
   const to = React.useMemo(() => new Date(from.getTime() + rangeDays * 24 * 60 * 60 * 1000), [from, rangeDays])
 
+  const rolesQ = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
+    queryKey: ['user', 'roles'],
+    queryFn: async () => (await http.get('/api/auth/me/roles')).data,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  })
+  const isAdmin = rolesQ.data?.roles?.some((r) => r.name === 'admin') || rolesQ.data?.isAdmin || false
+  const isManager = rolesQ.data?.roles?.some((r) => r.name === 'manager') || isAdmin
+
   const eventsQ = useQuery({
-    queryKey: ['calendar', 'events', from.toISOString(), to.toISOString()],
+    queryKey: ['calendar', 'events', view, from.toISOString(), to.toISOString()],
     queryFn: async () => {
-      const res = await http.get('/api/calendar/events', { params: { from: from.toISOString(), to: to.toISOString() } })
+      const url = view === 'org' ? '/api/calendar/events/org' : '/api/calendar/events'
+      const res = await http.get(url, { params: { from: from.toISOString(), to: to.toISOString() } })
       return res.data as { data: { items: CalendarEvent[] } }
     },
     refetchInterval: 60_000,
+    retry: false,
+    enabled: view === 'me' ? true : isManager,
   })
 
   const events = eventsQ.data?.data.items ?? []
@@ -85,6 +105,27 @@ export default function Calendar() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-1 text-sm">
+          <button
+            type="button"
+            onClick={() => setView('me')}
+            className={`rounded-lg px-3 py-2 ${view === 'me' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
+          >
+            My calendar
+          </button>
+          {isManager && (
+            <button
+              type="button"
+              onClick={() => setView('org')}
+              className={`rounded-lg px-3 py-2 ${view === 'org' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
+            >
+              Org calendar
+            </button>
+          )}
+        </div>
+        {view === 'org' && !isManager && (
+          <div className="text-xs text-[color:var(--color-text-muted)]">Org calendar requires manager/admin access.</div>
+        )}
         <div className="text-xs text-[color:var(--color-text-muted)]">Range</div>
         <select
           value={String(rangeDays)}
@@ -97,6 +138,12 @@ export default function Calendar() {
         </select>
         <div className="ml-auto text-xs text-[color:var(--color-text-muted)]">{eventsQ.isFetching ? 'Refreshing…' : `${events.length} events`}</div>
       </div>
+
+      {eventsQ.isError && view === 'org' && (
+        <div className="rounded-2xl border border-amber-500/50 bg-amber-500/10 p-4 text-sm text-amber-100">
+          Org calendar requires permission <code>users.read</code>. Showing org events failed; switch back to “My calendar” or ask an admin to grant access.
+        </div>
+      )}
 
       <div className="space-y-4">
         {grouped.map(([day, items]) => (
@@ -111,6 +158,11 @@ export default function Calendar() {
                       <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
                         {e.kind}
                       </span>
+                      {view === 'org' && (e as any).ownerEmail ? (
+                        <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                          {(e as any).ownerName ? `${(e as any).ownerName} — ` : ''}{(e as any).ownerEmail}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="text-xs text-[color:var(--color-text-muted)]">
                       {new Date(e.startsAt).toLocaleString()} → {new Date(e.endsAt).toLocaleTimeString()}
