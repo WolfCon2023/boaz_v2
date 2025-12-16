@@ -693,7 +693,8 @@ invoicesRouter.post('/:id/send-email', requireAuth, async (req, res) => {
         }
         // Send email
         const baseUrl = env.ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
-        const invoiceViewUrl = `${baseUrl}/apps/crm/invoices/${invoiceId.toString()}/print`;
+        // Public gateway page that lets recipients choose Staff Portal vs Customer Portal
+        const invoiceViewUrl = `${baseUrl}/invoices/access/${invoiceId.toString()}`;
         console.log('[Invoice Email] Preparing to send invoice email to:', emailToSend);
         console.log('[Invoice Email] Invoice ID:', invoiceId.toString());
         console.log('[Invoice Email] Sender:', senderData.email);

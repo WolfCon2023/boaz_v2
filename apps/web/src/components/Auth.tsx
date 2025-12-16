@@ -13,7 +13,14 @@ export function useAccessToken(): string | null {
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAccessToken()
   const loc = useLocation()
-  if (!token) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />
+  if (!token) {
+    // Special-case: invoice print links are internal-only, but external recipients may still have old links.
+    // If someone hits an internal invoice URL while logged out, send them to the public chooser page.
+    const m = loc.pathname.match(/^\/apps\/crm\/invoices\/([^/]+)\/print$/)
+    if (m?.[1]) return <Navigate to={`/invoices/access/${encodeURIComponent(m[1])}`} replace />
+
+    return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />
+  }
   return <>{children}</>
 }
 
