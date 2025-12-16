@@ -28,14 +28,28 @@ type Availability = {
 type Appointment = {
   _id: string
   appointmentTypeId: string
+  appointmentTypeName?: string | null
+  appointmentTypeSlug?: string | null
   status: 'booked' | 'cancelled'
+  attendeeFirstName?: string | null
+  attendeeLastName?: string | null
   attendeeName: string
   attendeeEmail: string
+  attendeePhone?: string | null
+  attendeeContactPreference?: 'email' | 'phone' | 'sms' | null
+  scheduledByUserId?: string | null
+  scheduledByName?: string | null
+  scheduledByEmail?: string | null
+  inviteEmailSentAt?: string | null
+  reminderMinutesBefore?: number | null
+  reminderEmailSentAt?: string | null
   startsAt: string
   endsAt: string
   timeZone: string
   source: 'public' | 'internal'
 }
+
+type SystemUser = { id: string; name?: string | null; email?: string | null }
 
 function pad(n: number) {
   return String(n).padStart(2, '0')
@@ -141,6 +155,12 @@ export default function Scheduler() {
   const availability = availabilityQ.data?.data
   const appointments = bookingsQ.data?.data.items ?? []
 
+  const usersQ = useQuery<{ data: { items: SystemUser[] } }>({
+    queryKey: ['scheduler', 'users'],
+    queryFn: async () => (await http.get('/api/scheduler/users')).data,
+    retry: false,
+  })
+
   const [tzDraft, setTzDraft] = React.useState<string>(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
@@ -163,6 +183,55 @@ export default function Scheduler() {
       .then(() => toast.showToast('Booking link copied.', 'success'))
       .catch(() => toast.showToast('Failed to copy link.', 'error'))
   }
+
+  // Internal booking form (staff scheduling)
+  const [bookTypeId, setBookTypeId] = React.useState('')
+  const [bookStartsAtLocal, setBookStartsAtLocal] = React.useState('')
+  const [bookFirstName, setBookFirstName] = React.useState('')
+  const [bookLastName, setBookLastName] = React.useState('')
+  const [bookEmail, setBookEmail] = React.useState('')
+  const [bookPhone, setBookPhone] = React.useState('')
+  const [bookPreference, setBookPreference] = React.useState<'email' | 'phone' | 'sms'>('email')
+  const [bookNotes, setBookNotes] = React.useState('')
+  const [bookScheduledByUserId, setBookScheduledByUserId] = React.useState<string>('')
+  const [bookReminderMinutes, setBookReminderMinutes] = React.useState<number>(60)
+
+  const createBooking = useMutation({
+    mutationFn: async () => {
+      const startsAt = new Date(bookStartsAtLocal)
+      if (!Number.isFinite(startsAt.getTime())) {
+        throw new Error('invalid_startsAt')
+      }
+      const res = await http.post('/api/scheduler/appointments/book', {
+        appointmentTypeId: bookTypeId,
+        attendeeFirstName: bookFirstName.trim(),
+        attendeeLastName: bookLastName.trim(),
+        attendeeEmail: bookEmail.trim(),
+        attendeePhone: bookPhone.trim() || null,
+        attendeeContactPreference: bookPreference,
+        scheduledByUserId: bookScheduledByUserId || null,
+        notes: bookNotes.trim() || null,
+        startsAt: startsAt.toISOString(),
+        timeZone: tzDraft || 'UTC',
+        reminderMinutesBefore: Number.isFinite(bookReminderMinutes) ? bookReminderMinutes : 60,
+      })
+      return res.data
+    },
+    onSuccess: async () => {
+      toast.showToast('Appointment booked and invite sent.', 'success')
+      setBookStartsAtLocal('')
+      setBookFirstName('')
+      setBookLastName('')
+      setBookEmail('')
+      setBookPhone('')
+      setBookNotes('')
+      await qc.invalidateQueries({ queryKey: ['scheduler', 'appointments'] })
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to book appointment.'
+      toast.showToast(msg, 'error')
+    },
+  })
 
   return (
     <div className="space-y-6">
@@ -473,6 +542,142 @@ export default function Scheduler() {
               {bookingsQ.isFetching ? 'Refreshing…' : `${appointments.length} upcoming/recent`}
             </div>
           </div>
+
+          <div className="border-b border-[color:var(--color-border)] px-4 py-3">
+            <div className="text-sm font-semibold">Create booking (internal)</div>
+            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              Book on behalf of a client. Calendar app will provide a richer slot picker; this MVP uses a date/time input + server-side conflict checks.
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-6">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Appointment type</label>
+                <select
+                  value={bookTypeId}
+                  onChange={(e) => setBookTypeId(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                >
+                  <option value="">{typesQ.isLoading ? 'Loading…' : 'Select…'}</option>
+                  {types.filter((t) => t.active).map((t) => (
+                    <option key={t._id} value={t._id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Start time</label>
+                <input
+                  type="datetime-local"
+                  value={bookStartsAtLocal}
+                  onChange={(e) => setBookStartsAtLocal(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Reminder (min)</label>
+                <input
+                  type="number"
+                  value={bookReminderMinutes}
+                  onChange={(e) => setBookReminderMinutes(Number(e.target.value) || 0)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Scheduled by</label>
+                <select
+                  value={bookScheduledByUserId}
+                  onChange={(e) => setBookScheduledByUserId(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                >
+                  <option value="">
+                    {usersQ.isError ? 'No permission (uses current user)' : usersQ.isLoading ? 'Loading…' : 'Select (optional)…'}
+                  </option>
+                  {(usersQ.data?.data.items ?? []).map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name ? `${u.name} — ${u.email || ''}` : u.email || u.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-6">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">First name</label>
+                <input
+                  value={bookFirstName}
+                  onChange={(e) => setBookFirstName(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Last name</label>
+                <input
+                  value={bookLastName}
+                  onChange={(e) => setBookLastName(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Email</label>
+                <input
+                  value={bookEmail}
+                  onChange={(e) => setBookEmail(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Phone</label>
+                <input
+                  value={bookPhone}
+                  onChange={(e) => setBookPhone(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Preference</label>
+                <select
+                  value={bookPreference}
+                  onChange={(e) => setBookPreference(e.target.value as any)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                >
+                  <option value="email">Email</option>
+                  <option value="phone">Phone</option>
+                  <option value="sms">SMS</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-6">
+              <div className="md:col-span-5">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Notes</label>
+                <input
+                  value={bookNotes}
+                  onChange={(e) => setBookNotes(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  placeholder="Optional notes (will be added to the CRM meeting task)"
+                />
+              </div>
+              <div className="flex items-end justify-end">
+                <button
+                  type="button"
+                  disabled={
+                    createBooking.isPending ||
+                    !bookTypeId ||
+                    !bookStartsAtLocal ||
+                    !bookFirstName.trim() ||
+                    !bookLastName.trim() ||
+                    !bookEmail.trim()
+                  }
+                  onClick={() => createBooking.mutate()}
+                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                >
+                  Book &amp; send invite
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="divide-y divide-[color:var(--color-border)]">
             {appointments.map((a) => (
               <div key={a._id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -480,16 +685,28 @@ export default function Scheduler() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold">{a.attendeeName}</span>
                     <span className="text-xs text-[color:var(--color-text-muted)]">{a.attendeeEmail}</span>
+                    {a.attendeePhone ? <span className="text-xs text-[color:var(--color-text-muted)]">{a.attendeePhone}</span> : null}
                     <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
                       {a.status}
                     </span>
                     <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
                       {a.source}
                     </span>
+                    {a.attendeeContactPreference ? (
+                      <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                        pref: {a.attendeeContactPreference}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="text-xs text-[color:var(--color-text-muted)]">
                     {new Date(a.startsAt).toLocaleString()} → {new Date(a.endsAt).toLocaleString()} ({a.timeZone})
                   </div>
+                  {a.scheduledByEmail ? (
+                    <div className="text-xs text-[color:var(--color-text-muted)]">
+                      Scheduled by: {a.scheduledByName ? `${a.scheduledByName} — ` : ''}
+                      {a.scheduledByEmail}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-2">
                   {a.status === 'booked' && (

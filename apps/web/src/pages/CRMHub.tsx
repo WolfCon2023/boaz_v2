@@ -99,6 +99,11 @@ export default function CRMHub() {
       desc: 'Appointments, booking links, and CRM meeting tasks',
       href: '/apps/scheduler',
     },
+    {
+      label: 'Calendar',
+      desc: 'Unified schedule view across Scheduler + CRM tasks',
+      href: '/apps/calendar',
+    },
     { label: 'Surveys & Feedback', desc: 'NPS/CSAT and post‑interaction surveys', href: '/apps/crm/surveys' },
     {
       label: 'Tasks & Activities',

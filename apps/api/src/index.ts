@@ -53,9 +53,11 @@ import { paymentPortalRouter } from './payments/payment_portal.js'
 import { webhooksRouter } from './payments/webhooks.js'
 import { startReportingSnapshotsJob } from './jobs/reporting_snapshots_job.js'
 import { startRevenueIntelligenceSnapshotsJob } from './jobs/revenue_intelligence_snapshots_job.js'
+import { startSchedulerRemindersJob } from './jobs/scheduler_reminders_job.js'
 import { integrationsRouter } from './crm/integrations.js'
 import { inboundIntegrationsRouter } from './integrations/inbound.js'
 import { schedulerRouter } from './scheduler/index.js'
+import { calendarRouter } from './calendar/index.js'
 
 const app = express()
 const normalize = (s: string) => s.trim().replace(/\/$/, '').toLowerCase()
@@ -120,6 +122,7 @@ app.use('/api/crm/tasks', tasksRouter)
 app.use('/api/crm/integrations', integrationsRouter)
 app.use('/api/integrations/inbound', inboundIntegrationsRouter)
 app.use('/api/scheduler', schedulerRouter)
+app.use('/api/calendar', calendarRouter)
 app.use('/api/terms', termsReviewRouter)
 app.use('/api/marketing', marketingSegmentsRouter)
 app.use('/api/marketing', marketingCampaignsRouter)
@@ -189,6 +192,7 @@ app.listen(env.PORT, () => {
   console.log(`API listening on http://localhost:${env.PORT}`)
   startReportingSnapshotsJob()
   startRevenueIntelligenceSnapshotsJob()
+  startSchedulerRemindersJob()
 })
 
 // Global error handler to ensure CORS headers are present on errors

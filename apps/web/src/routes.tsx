@@ -17,6 +17,7 @@ import Dashboard from '@/pages/Dashboard'
 import Marketplace from '@/pages/Marketplace'
 import Workspace from '@/pages/Workspace'
 import Scheduler from '@/pages/Scheduler'
+import Calendar from '@/pages/Calendar'
 import CRMContacts from '@/pages/CRMContacts'
 import CRMAccounts from '@/pages/CRMAccounts'
 import CRMDeals from '@/pages/CRMDeals'
@@ -139,6 +140,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/surveys', element: <RequireAuth><RequireApplication appKey="crm"><CRMSurveys /></RequireApplication></RequireAuth> },
       { path: 'apps/helpdesk', element: <RequireAuth><RequireApplication appKey="helpdesk"><Helpdesk /></RequireApplication></RequireAuth> },
       { path: 'apps/scheduler', element: <RequireAuth><RequireApplication appKey="scheduler"><Scheduler /></RequireApplication></RequireAuth> },
+      { path: 'apps/calendar', element: <RequireAuth><RequireApplication appKey="calendar"><Calendar /></RequireApplication></RequireAuth> },
       { path: 'apps/support', element: <RequireAuth><Support /></RequireAuth> },
       { path: 'request-status', element: <RequireAuth><RequestStatus /></RequireAuth> },
     ],

@@ -95,9 +95,11 @@ export default function SchedulerPublicBooking() {
   })
 
   const [selectedIso, setSelectedIso] = React.useState('')
-  const [attendeeName, setAttendeeName] = React.useState('')
+  const [attendeeFirstName, setAttendeeFirstName] = React.useState('')
+  const [attendeeLastName, setAttendeeLastName] = React.useState('')
   const [attendeeEmail, setAttendeeEmail] = React.useState('')
   const [attendeePhone, setAttendeePhone] = React.useState('')
+  const [contactPreference, setContactPreference] = React.useState<'email' | 'phone' | 'sms'>('email')
   const [notes, setNotes] = React.useState('')
 
   const book = useMutation({
@@ -106,9 +108,11 @@ export default function SchedulerPublicBooking() {
       if (!data) throw new Error('missing_booking_link')
       const tz = data.availability.timeZone || 'UTC'
       const res = await http.post(`/api/scheduler/public/book/${encodeURIComponent(data.type.slug)}`, {
-        attendeeName: attendeeName.trim(),
+        attendeeFirstName: attendeeFirstName.trim(),
+        attendeeLastName: attendeeLastName.trim(),
         attendeeEmail: attendeeEmail.trim(),
         attendeePhone: attendeePhone.trim() || null,
+        attendeeContactPreference: contactPreference,
         notes: notes.trim() || null,
         startsAt: selectedIso,
         timeZone: tz,
@@ -116,7 +120,7 @@ export default function SchedulerPublicBooking() {
       return res.data
     },
     onSuccess: () => {
-      toast.showToast('Booked! Check your email/calendar invite (coming next).', 'success')
+      toast.showToast('Booked! Check your email for the calendar invite.', 'success')
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.error || err?.message || 'Booking failed.'
@@ -242,9 +246,15 @@ export default function SchedulerPublicBooking() {
             <div className="text-sm font-semibold">Your details</div>
             <div className="grid gap-2">
               <input
-                value={attendeeName}
-                onChange={(e) => setAttendeeName(e.target.value)}
-                placeholder="Your name"
+                value={attendeeFirstName}
+                onChange={(e) => setAttendeeFirstName(e.target.value)}
+                placeholder="First name"
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+              />
+              <input
+                value={attendeeLastName}
+                onChange={(e) => setAttendeeLastName(e.target.value)}
+                placeholder="Last name"
                 className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
               />
               <input
@@ -259,6 +269,15 @@ export default function SchedulerPublicBooking() {
                 placeholder="Phone (optional)"
                 className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
               />
+              <select
+                value={contactPreference}
+                onChange={(e) => setContactPreference(e.target.value as any)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+              >
+                <option value="email">Contact preference: Email</option>
+                <option value="phone">Contact preference: Phone</option>
+                <option value="sms">Contact preference: SMS</option>
+              </select>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -270,11 +289,11 @@ export default function SchedulerPublicBooking() {
 
             <button
               type="button"
-              disabled={!selectedIso || !attendeeName.trim() || !attendeeEmail.trim() || book.isPending}
+              disabled={!selectedIso || !attendeeFirstName.trim() || !attendeeLastName.trim() || !attendeeEmail.trim() || book.isPending}
               onClick={() => {
                 if (!selectedIso) return
-                if (!attendeeName.trim() || !attendeeEmail.trim()) {
-                  toast.showToast('Name and email are required.', 'error')
+                if (!attendeeFirstName.trim() || !attendeeLastName.trim() || !attendeeEmail.trim()) {
+                  toast.showToast('First name, last name, and email are required.', 'error')
                   return
                 }
                 book.mutate()

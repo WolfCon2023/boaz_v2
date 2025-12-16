@@ -2,8 +2,9 @@ import { Router } from 'express'
 import { ObjectId } from 'mongodb'
 import { z } from 'zod'
 import { getDb } from '../db.js'
-import { requireAuth, requireApplication } from '../auth/rbac.js'
+import { requireAuth, requireApplication, requirePermission } from '../auth/rbac.js'
 import { dispatchCrmEvent } from '../crm/integrations_core.js'
+import { sendAuthEmail } from '../auth/email.js'
 
 export const schedulerRouter = Router()
 
@@ -36,11 +37,23 @@ type AppointmentStatus = 'booked' | 'cancelled'
 type AppointmentDoc = {
   _id: ObjectId
   appointmentTypeId: ObjectId
+  appointmentTypeName?: string | null
+  appointmentTypeSlug?: string | null
   ownerUserId: string
   status: AppointmentStatus
+  contactId?: string | null
+  attendeeFirstName?: string | null
+  attendeeLastName?: string | null
   attendeeName: string
   attendeeEmail: string
   attendeePhone?: string | null
+  attendeeContactPreference?: 'email' | 'phone' | 'sms' | null
+  scheduledByUserId?: string | null
+  scheduledByName?: string | null
+  scheduledByEmail?: string | null
+  inviteEmailSentAt?: Date | null
+  reminderMinutesBefore?: number | null
+  reminderEmailSentAt?: Date | null
   notes?: string | null
   startsAt: Date
   endsAt: Date
@@ -163,43 +176,188 @@ function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
   return aStart < bEnd && bStart < aEnd
 }
 
-async function createMeetingTaskFromAppointment(db: any, ownerUserId: string, appointment: AppointmentDoc, type: AppointmentTypeDoc) {
+function normEmail(v: any) {
+  const s = String(v || '').trim().toLowerCase()
+  return s
+}
+
+async function ensureContactForAttendee(
+  db: any,
+  attendee: { firstName?: string | null; lastName?: string | null; name?: string | null; email: string; phone?: string | null },
+) {
+  try {
+    const email = normEmail(attendee.email)
+    if (!email) return { contactId: null as string | null }
+
+    const rx = new RegExp(`^${escapeRegex(email)}$`, 'i')
+    const existing = await db.collection('contacts').findOne({ email: rx } as any)
+    if (existing?._id) return { contactId: String(existing._id) }
+
+    const fullName =
+      `${String(attendee.firstName || '').trim()} ${String(attendee.lastName || '').trim()}`.trim() ||
+      String(attendee.name || '').trim() ||
+      email
+
+    const doc: any = {
+      name: fullName,
+      company: undefined,
+      email,
+      mobilePhone: undefined,
+      officePhone: attendee.phone ? String(attendee.phone).trim() : undefined,
+      isPrimary: false,
+      primaryPhone: undefined,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      metadata: { source: 'scheduler' },
+    }
+
+    const ins = await db.collection('contacts').insertOne(doc)
+    return { contactId: String(ins.insertedId) }
+  } catch {
+    return { contactId: null as string | null }
+  }
+}
+
+function icsEscape(s: string) {
+  return String(s || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;')
+}
+
+function toIcsUtc(dt: Date) {
+  const d = new Date(dt)
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const da = String(d.getUTCDate()).padStart(2, '0')
+  const hh = String(d.getUTCHours()).padStart(2, '0')
+  const mm = String(d.getUTCMinutes()).padStart(2, '0')
+  const ss = String(d.getUTCSeconds()).padStart(2, '0')
+  return `${y}${m}${da}T${hh}${mm}${ss}Z`
+}
+
+function buildIcsInvite(args: {
+  uid: string
+  summary: string
+  description?: string
+  startsAt: Date
+  endsAt: Date
+  organizerEmail?: string | null
+  attendeeEmail: string
+}) {
+  const dtstamp = toIcsUtc(new Date())
+  const dtstart = toIcsUtc(args.startsAt)
+  const dtend = toIcsUtc(args.endsAt)
+  const organizer = args.organizerEmail ? `ORGANIZER:MAILTO:${icsEscape(args.organizerEmail)}` : ''
+  const desc = args.description ? `DESCRIPTION:${icsEscape(args.description)}` : ''
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//BOAZ//Scheduler//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${icsEscape(args.uid)}`,
+    `DTSTAMP:${dtstamp}`,
+    `DTSTART:${dtstart}`,
+    `DTEND:${dtend}`,
+    `SUMMARY:${icsEscape(args.summary)}`,
+    desc,
+    organizer,
+    `ATTENDEE;ROLE=REQ-PARTICIPANT;RSVP=TRUE:MAILTO:${icsEscape(args.attendeeEmail)}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ]
+    .filter(Boolean)
+    .join('\r\n')
+}
+
+async function sendInviteEmails(db: any, appointment: AppointmentDoc, type: AppointmentTypeDoc) {
+  try {
+    const attendeeEmail = normEmail(appointment.attendeeEmail)
+    if (!attendeeEmail) return
+
+    // Respect preference if explicitly not email
+    if (appointment.attendeeContactPreference && appointment.attendeeContactPreference !== 'email') {
+      return
+    }
+
+    let organizerEmail: string | null = null
+    try {
+      if (appointment.ownerUserId && ObjectId.isValid(appointment.ownerUserId)) {
+        const u = await db.collection('users').findOne({ _id: new ObjectId(appointment.ownerUserId) } as any)
+        organizerEmail = u?.email ? String(u.email) : null
+      }
+    } catch {
+      organizerEmail = null
+    }
+
+    const summary = `${type.name}`
+    const description = [
+      `Appointment: ${type.name}`,
+      `Attendee: ${appointment.attendeeName} (${attendeeEmail})`,
+      appointment.attendeePhone ? `Phone: ${appointment.attendeePhone}` : null,
+      appointment.notes ? `Notes: ${appointment.notes}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    const uid = `boaz_${String(appointment._id)}@scheduler`
+    const ics = buildIcsInvite({
+      uid,
+      summary,
+      description,
+      startsAt: appointment.startsAt,
+      endsAt: appointment.endsAt,
+      organizerEmail,
+      attendeeEmail,
+    })
+
+    const subject = `Confirmed: ${type.name} — ${new Date(appointment.startsAt).toLocaleString()}`
+    const text = `Your appointment is confirmed.\n\n${description}\n\nThis message includes a calendar invite (.ics).`
+    const html = `<p><strong>Your appointment is confirmed.</strong></p><pre style="white-space:pre-wrap">${icsEscape(description)}</pre><p>This message includes a calendar invite (.ics).</p>`
+
+    await sendAuthEmail({
+      to: attendeeEmail,
+      subject,
+      text,
+      html,
+      attachments: [{ filename: 'invite.ics', content: Buffer.from(ics, 'utf8'), contentType: 'text/calendar; charset=utf-8; method=REQUEST' }],
+      checkPreferences: false,
+    })
+
+    // Also notify the organizer (host) if available and different from attendee
+    if (organizerEmail && normEmail(organizerEmail) && normEmail(organizerEmail) !== attendeeEmail) {
+      await sendAuthEmail({
+        to: organizerEmail,
+        subject: `Booked: ${type.name} — ${appointment.attendeeName}`,
+        text: `A new appointment was booked.\n\n${description}`,
+        html: `<p><strong>A new appointment was booked.</strong></p><pre style="white-space:pre-wrap">${icsEscape(description)}</pre>`,
+        attachments: [{ filename: 'invite.ics', content: Buffer.from(ics, 'utf8'), contentType: 'text/calendar; charset=utf-8; method=REQUEST' }],
+        checkPreferences: false,
+      })
+    }
+  } catch {
+    // best-effort
+  }
+}
+
+async function createMeetingTaskFromAppointment(
+  db: any,
+  ownerUserId: string,
+  appointment: AppointmentDoc,
+  type: AppointmentTypeDoc,
+  contactId?: string | null,
+) {
   try {
     const newId = new ObjectId().toHexString()
     const subject = `${type.name}: ${appointment.attendeeName}`.slice(0, 180)
 
-    // Best-effort: link meeting to a CRM contact by attendee email.
-    let relatedType: 'contact' | undefined
-    let relatedId: string | undefined
-    try {
-      const email = String(appointment.attendeeEmail || '').trim().toLowerCase()
-      if (email) {
-        const rx = new RegExp(`^${escapeRegex(email)}$`, 'i')
-        const existing = await db.collection('contacts').findOne({ email: rx } as any)
-        if (existing?._id) {
-          relatedType = 'contact'
-          relatedId = String(existing._id)
-        } else {
-          const doc: any = {
-            name: appointment.attendeeName,
-            email,
-            officePhone: appointment.attendeePhone ?? undefined,
-            mobilePhone: undefined,
-            company: undefined,
-            isPrimary: false,
-            primaryPhone: undefined,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            metadata: { source: 'scheduler' },
-          }
-          const ins = await db.collection('contacts').insertOne(doc)
-          relatedType = 'contact'
-          relatedId = String(ins.insertedId)
-        }
-      }
-    } catch {
-      // best-effort
-    }
+    const relatedType: 'contact' | undefined = contactId ? 'contact' : undefined
+    const relatedId: string | undefined = contactId ? String(contactId) : undefined
 
     await db.collection('crm_tasks').insertOne({
       _id: newId,
@@ -235,6 +393,26 @@ async function createMeetingTaskFromAppointment(db: any, ownerUserId: string, ap
 const internal = Router()
 internal.use(requireAuth)
 internal.use(requireApplication('scheduler'))
+
+// GET /api/scheduler/users (for Scheduled By dropdown)
+// Requires users.read (staff/manager/admin in default roles)
+internal.get('/users', requirePermission('users.read'), async (_req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const users = await db
+    .collection('users')
+    .find({} as any)
+    .project({ email: 1, name: 1 } as any)
+    .sort({ name: 1, email: 1 } as any)
+    .limit(500)
+    .toArray()
+  res.json({
+    data: {
+      items: users.map((u: any) => ({ id: String(u._id), name: u.name ?? null, email: u.email ?? null })),
+    },
+    error: null,
+  })
+})
 
 // GET /api/scheduler/appointment-types
 internal.get('/appointment-types', async (req: any, res) => {
@@ -448,6 +626,18 @@ internal.get('/appointments', async (req: any, res) => {
         ...d,
         _id: String(d._id),
         appointmentTypeId: String(d.appointmentTypeId),
+        appointmentTypeName: d.appointmentTypeName ?? null,
+        appointmentTypeSlug: d.appointmentTypeSlug ?? null,
+        contactId: d.contactId ?? null,
+        attendeeFirstName: d.attendeeFirstName ?? null,
+        attendeeLastName: d.attendeeLastName ?? null,
+        attendeeContactPreference: d.attendeeContactPreference ?? null,
+        scheduledByUserId: d.scheduledByUserId ?? null,
+        scheduledByName: d.scheduledByName ?? null,
+        scheduledByEmail: d.scheduledByEmail ?? null,
+        inviteEmailSentAt: d.inviteEmailSentAt?.toISOString?.() ?? null,
+        reminderMinutesBefore: d.reminderMinutesBefore ?? null,
+        reminderEmailSentAt: d.reminderEmailSentAt?.toISOString?.() ?? null,
         startsAt: d.startsAt?.toISOString?.() ?? null,
         endsAt: d.endsAt?.toISOString?.() ?? null,
         createdAt: d.createdAt?.toISOString?.() ?? null,
@@ -456,6 +646,177 @@ internal.get('/appointments', async (req: any, res) => {
     },
     error: null,
   })
+})
+
+const internalBookSchema = z.object({
+  appointmentTypeId: z.string().min(6),
+  attendeeFirstName: z.string().min(1).max(80),
+  attendeeLastName: z.string().min(1).max(80),
+  attendeeEmail: z.string().email().max(180),
+  attendeePhone: z.string().max(40).optional().nullable(),
+  attendeeContactPreference: z.enum(['email', 'phone', 'sms']).optional().nullable(),
+  scheduledByUserId: z.string().optional().nullable(),
+  notes: z.string().max(1500).optional().nullable(),
+  startsAt: z.string().min(10),
+  timeZone: z.string().min(1).max(64).optional(),
+  reminderMinutesBefore: z.number().int().min(0).max(7 * 24 * 60).optional().nullable(),
+})
+
+// POST /api/scheduler/appointments/book (internal scheduling)
+internal.post('/appointments/book', async (req: any, res) => {
+  const parsed = internalBookSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const auth = req.auth as { userId: string; email: string }
+
+  let typeId: ObjectId
+  try {
+    typeId = new ObjectId(parsed.data.appointmentTypeId)
+  } catch {
+    return res.status(400).json({ data: null, error: 'invalid_appointmentTypeId' })
+  }
+
+  const type = (await db.collection('scheduler_appointment_types').findOne({ _id: typeId, ownerUserId: auth.userId, active: true } as any)) as any
+  if (!type) return res.status(404).json({ data: null, error: 'appointment_type_not_found' })
+
+  // Reuse public booking logic by delegating to the same checks:
+  const availability = await ensureDefaultAvailability(db, String(type.ownerUserId))
+  const tz = availability.timeZone || parsed.data.timeZone || 'UTC'
+
+  const startUtc = new Date(parsed.data.startsAt)
+  if (!Number.isFinite(startUtc.getTime())) return res.status(400).json({ data: null, error: 'invalid_startsAt' })
+
+  const now = new Date()
+  const max = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
+  if (startUtc < now || startUtc > max) return res.status(400).json({ data: null, error: 'startsAt_out_of_range' })
+
+  const dur = Number(type.durationMinutes ?? 30)
+  const bufferBefore = Number(type.bufferBeforeMinutes ?? 0)
+  const bufferAfter = Number(type.bufferAfterMinutes ?? 0)
+  const endUtc = new Date(startUtc.getTime() + dur * 60000)
+  const bufferedStart = new Date(startUtc.getTime() - bufferBefore * 60000)
+  const bufferedEnd = new Date(endUtc.getTime() + bufferAfter * 60000)
+
+  const zoned = getZonedYmd(tz, startUtc)
+  const dayCfg = (availability.weekly || []).find((d) => Number(d.day) === zoned.dayIndex)
+  if (!dayCfg || !dayCfg.enabled) return res.status(400).json({ data: null, error: 'outside_availability' })
+  const startMin = zoned.hh * 60 + zoned.mm
+  if (startMin < dayCfg.startMin || startMin + dur > dayCfg.endMin) {
+    return res.status(400).json({ data: null, error: 'outside_availability' })
+  }
+
+  const startUtcRoundTrip = zonedTimeToUtc(tz, zoned.y, zoned.m, zoned.d, zoned.hh, zoned.mm)
+  if (Math.abs(startUtcRoundTrip.getTime() - startUtc.getTime()) > 2 * 60 * 1000) {
+    return res.status(400).json({ data: null, error: 'timezone_mismatch' })
+  }
+
+  const conflicts = await db
+    .collection('appointments')
+    .find({
+      ownerUserId: String(type.ownerUserId),
+      status: 'booked',
+      startsAt: { $lt: bufferedEnd },
+      endsAt: { $gt: bufferedStart },
+    } as any)
+    .limit(1)
+    .toArray()
+
+  if (conflicts.length) return res.status(409).json({ data: null, error: 'slot_taken' })
+
+  const attendeeEmail = normEmail(parsed.data.attendeeEmail)
+  const attendeeFirstName = parsed.data.attendeeFirstName.trim()
+  const attendeeLastName = parsed.data.attendeeLastName.trim()
+  const attendeeName = `${attendeeFirstName} ${attendeeLastName}`.trim()
+  const attendeePhone = parsed.data.attendeePhone ? parsed.data.attendeePhone.trim() : null
+
+  const { contactId } = await ensureContactForAttendee(db, {
+    firstName: attendeeFirstName,
+    lastName: attendeeLastName,
+    name: attendeeName,
+    email: attendeeEmail,
+    phone: attendeePhone,
+  })
+
+  // Scheduled By: default to current user; allow override if provided and valid.
+  let scheduledByUserId: string | null = auth.userId
+  let scheduledByName: string | null = null
+  let scheduledByEmail: string | null = auth.email ?? null
+  if (parsed.data.scheduledByUserId && ObjectId.isValid(parsed.data.scheduledByUserId)) {
+    try {
+      const u = await db.collection('users').findOne({ _id: new ObjectId(parsed.data.scheduledByUserId) } as any)
+      if (u?._id) {
+        scheduledByUserId = String(u._id)
+        scheduledByName = u.name ? String(u.name) : null
+        scheduledByEmail = u.email ? String(u.email) : null
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const doc: AppointmentDoc = {
+    _id: new ObjectId(),
+    appointmentTypeId: type._id,
+    appointmentTypeName: type.name ?? null,
+    appointmentTypeSlug: type.slug ?? null,
+    ownerUserId: String(type.ownerUserId),
+    status: 'booked',
+    contactId,
+    attendeeFirstName,
+    attendeeLastName,
+    attendeeName,
+    attendeeEmail,
+    attendeePhone,
+    attendeeContactPreference: parsed.data.attendeeContactPreference ?? 'email',
+    scheduledByUserId,
+    scheduledByName,
+    scheduledByEmail,
+    inviteEmailSentAt: null,
+    reminderMinutesBefore: parsed.data.reminderMinutesBefore ?? 60,
+    reminderEmailSentAt: null,
+    notes: parsed.data.notes ? parsed.data.notes.trim() : null,
+    startsAt: startUtc,
+    endsAt: endUtc,
+    timeZone: tz,
+    source: 'internal',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+
+  await db.collection('appointments').insertOne(doc as any)
+  await createMeetingTaskFromAppointment(db, String(type.ownerUserId), doc, type, contactId)
+
+  // Email + webhook events are best-effort
+  sendInviteEmails(db, doc, type)
+    .then(async () => {
+      await db.collection('appointments').updateOne({ _id: doc._id } as any, { $set: { inviteEmailSentAt: new Date(), updatedAt: new Date() } } as any)
+    })
+    .catch(() => null)
+
+  dispatchCrmEvent(
+    db,
+    'scheduler.appointment.booked',
+    {
+      appointmentId: String(doc._id),
+      appointmentTypeId: String(type._id),
+      appointmentTypeSlug: type.slug,
+      appointmentTypeName: type.name,
+      ownerUserId: String(type.ownerUserId),
+      attendeeEmail: doc.attendeeEmail,
+      attendeeName: doc.attendeeName,
+      attendeePhone: doc.attendeePhone ?? null,
+      startsAt: doc.startsAt.toISOString(),
+      endsAt: doc.endsAt.toISOString(),
+      timeZone: doc.timeZone,
+      source: doc.source,
+    },
+    { source: 'scheduler_internal_booking' },
+  ).catch(() => null)
+
+  res.status(201).json({ data: { _id: String(doc._id) }, error: null })
 })
 
 // POST /api/scheduler/appointments/:id/cancel
@@ -552,12 +913,16 @@ publicRouter.get('/booking-links/:slug', async (req, res) => {
 })
 
 const bookSchema = z.object({
-  attendeeName: z.string().min(1).max(120),
+  attendeeFirstName: z.string().min(1).max(80).optional(),
+  attendeeLastName: z.string().min(1).max(80).optional(),
+  attendeeName: z.string().min(1).max(120).optional(),
   attendeeEmail: z.string().email().max(180),
   attendeePhone: z.string().max(40).optional().nullable(),
+  attendeeContactPreference: z.enum(['email', 'phone', 'sms']).optional().nullable(),
   notes: z.string().max(1500).optional().nullable(),
   startsAt: z.string().min(10),
   timeZone: z.string().min(1).max(64).optional(),
+  reminderMinutesBefore: z.number().int().min(0).max(7 * 24 * 60).optional().nullable(),
 })
 
 // POST /api/scheduler/public/book/:slug
@@ -621,11 +986,28 @@ publicRouter.post('/book/:slug', async (req, res) => {
   const doc: AppointmentDoc = {
     _id: new ObjectId(),
     appointmentTypeId: type._id,
+    appointmentTypeName: type.name ?? null,
+    appointmentTypeSlug: type.slug ?? null,
     ownerUserId: String(type.ownerUserId),
     status: 'booked',
-    attendeeName: parsed.data.attendeeName.trim(),
+    contactId: null,
+    attendeeFirstName: parsed.data.attendeeFirstName ? parsed.data.attendeeFirstName.trim() : null,
+    attendeeLastName: parsed.data.attendeeLastName ? parsed.data.attendeeLastName.trim() : null,
+    attendeeName: (() => {
+      const first = parsed.data.attendeeFirstName ? parsed.data.attendeeFirstName.trim() : ''
+      const last = parsed.data.attendeeLastName ? parsed.data.attendeeLastName.trim() : ''
+      const combined = `${first} ${last}`.trim()
+      return combined || String(parsed.data.attendeeName || '').trim() || parsed.data.attendeeEmail.trim().toLowerCase()
+    })(),
     attendeeEmail: parsed.data.attendeeEmail.trim().toLowerCase(),
     attendeePhone: parsed.data.attendeePhone ? parsed.data.attendeePhone.trim() : null,
+    attendeeContactPreference: parsed.data.attendeeContactPreference ?? 'email',
+    scheduledByUserId: null,
+    scheduledByName: null,
+    scheduledByEmail: null,
+    inviteEmailSentAt: null,
+    reminderMinutesBefore: parsed.data.reminderMinutesBefore ?? 60,
+    reminderEmailSentAt: null,
     notes: parsed.data.notes ? parsed.data.notes.trim() : null,
     startsAt: startUtc,
     endsAt: endUtc,
@@ -635,8 +1017,23 @@ publicRouter.post('/book/:slug', async (req, res) => {
     updatedAt: new Date(),
   }
 
+  const { contactId } = await ensureContactForAttendee(db, {
+    firstName: doc.attendeeFirstName,
+    lastName: doc.attendeeLastName,
+    name: doc.attendeeName,
+    email: doc.attendeeEmail,
+    phone: doc.attendeePhone,
+  })
+  doc.contactId = contactId
+
   await db.collection('appointments').insertOne(doc as any)
-  await createMeetingTaskFromAppointment(db, String(type.ownerUserId), doc, type)
+  await createMeetingTaskFromAppointment(db, String(type.ownerUserId), doc, type, contactId)
+
+  sendInviteEmails(db, doc, type)
+    .then(async () => {
+      await db.collection('appointments').updateOne({ _id: doc._id } as any, { $set: { inviteEmailSentAt: new Date(), updatedAt: new Date() } } as any)
+    })
+    .catch(() => null)
 
   // Best-effort: webhook event
   dispatchCrmEvent(
