@@ -241,7 +241,7 @@ export function generateEmailTemplate(options: EmailTemplateOptions): { html: st
     
     <!-- Footer -->
     <div class="footer">
-      ${options.footer?.customMessage ? `<div class="footer-message">${options.footer.customMessage}</div>` : ''}
+      ${options.footer?.customMessage ? `<div class="footer-message">${options.footer.customMessage.replace(/\n/g, '<br/>')}</div>` : ''}
       
       <div class="footer-brand">BOAZ-OS</div>
       <div class="footer-copyright">© ${year} Wolf Consulting Group, LLC. All rights reserved.</div>
@@ -249,7 +249,7 @@ export function generateEmailTemplate(options: EmailTemplateOptions): { html: st
       <div class="footer-links">
         <a href="https://wolfconsultingnc.com" class="footer-link">Website</a>
         <span style="color: #ccc;">•</span>
-        <a href="mailto:contactwcg@wolfconsultingnc.com" class="footer-link">Contact</a>
+        <a href="mailto:billing@wolfconsultingnc.com" class="footer-link">Contact</a>
       </div>
     </div>
   </div>
@@ -332,7 +332,7 @@ export function generateEmailTemplate(options: EmailTemplateOptions): { html: st
   textParts.push('BOAZ-OS')
   textParts.push(`© ${year} Wolf Consulting Group, LLC`)
   textParts.push('https://wolfconsultingnc.com')
-  textParts.push('contactwcg@wolfconsultingnc.com')
+  textParts.push('billing@wolfconsultingnc.com')
   textParts.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   
   const text = textParts.join('\n')
@@ -514,7 +514,7 @@ export function createStandardEmailTemplate(options: StandardEmailOptions): stri
       <div class="footer-links">
         <a href="https://wolfconsultingnc.com" class="footer-link">Website</a>
         <span style="color: #ccc;">•</span>
-        <a href="mailto:contactwcg@wolfconsultingnc.com" class="footer-link">Contact</a>
+        <a href="mailto:billing@wolfconsultingnc.com" class="footer-link">Contact</a>
       </div>
     </div>
   </div>
@@ -564,7 +564,7 @@ export function createStandardTextEmail(options: StandardEmailOptions): string {
   parts.push('BOAZ-OS')
   parts.push(`© ${year} Wolf Consulting Group, LLC`)
   parts.push('https://wolfconsultingnc.com')
-  parts.push('contactwcg@wolfconsultingnc.com')
+  parts.push('billing@wolfconsultingnc.com')
   parts.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   
   return parts.join('\n')

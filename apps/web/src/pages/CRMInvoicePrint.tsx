@@ -40,10 +40,10 @@ export default function CRMInvoicePrint() {
   }, [accountsQ.data, inv?.accountId])
 
   const company = {
-    name: 'Boaz Demo Company',
-    address: '1234 Demo Blvd, Demo, NC, 99999',
-    email: 'billing@demo.com',
-    phone: '999-999-9999',
+    name: 'Wolf Consulting Group, LLC',
+    address: '2114 Willowcrest Drive, Waxhaw, NC 28173',
+    email: 'billing@wolfconsultingnc.com',
+    phone: '704-803-0934',
   }
 
   return (

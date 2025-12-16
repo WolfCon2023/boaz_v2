@@ -1060,6 +1060,14 @@ invoicesRouter.post('/:id/send-email', requireAuth, async (req, res) => {
           },
           additionalInfo: 'If you have any questions about this invoice or payment options, please contact us at contactwcg@wolfconsultingnc.com. Thank you for your business!',
         },
+        footer: {
+          // Company block for invoice emails (renders in footer + includes in plain text version)
+          customMessage:
+            'Wolf Consulting Group, LLC\n' +
+            '2114 Willowcrest Drive, Waxhaw, NC 28173\n' +
+            'billing@wolfconsultingnc.com\n' +
+            '704-803-0934',
+        },
       })
       
       console.log('[Invoice Email] Calling sendAuthEmail...')
