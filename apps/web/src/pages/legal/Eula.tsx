@@ -123,7 +123,7 @@ export default function LegalEula() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="max-w-[48rem] text-sm leading-relaxed text-[color:var(--color-text)]">
               BOAZ-OS is provided on an "as is" and "as available" basis. Wolf Consulting Group, LLC disclaims all warranties, whether express or implied,
               including any implied warranties of merchantability, fitness for a particular purpose, and non infringement.
               You are responsible for determining whether BOAZ-OS is suitable for your intended use.

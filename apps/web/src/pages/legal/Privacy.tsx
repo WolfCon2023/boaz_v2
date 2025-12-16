@@ -142,7 +142,7 @@ export default function LegalPrivacy() {
             <span className="text-xs text-[color:var(--color-text-muted)] transition-transform group-open:rotate-180">⌃</span>
           </summary>
           <div className="mt-2 space-y-2">
-            <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--color-text)]">
+            <p className="max-w-[48rem] text-sm leading-relaxed text-[color:var(--color-text)]">
               Depending on your jurisdiction and agreements, you may have rights related to access, correction, or deletion of information.
               These requests are typically handled between you and the customer organization that manages your account in BOAZ-OS.
             </p>
