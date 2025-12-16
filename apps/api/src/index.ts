@@ -55,6 +55,7 @@ import { startReportingSnapshotsJob } from './jobs/reporting_snapshots_job.js'
 import { startRevenueIntelligenceSnapshotsJob } from './jobs/revenue_intelligence_snapshots_job.js'
 import { integrationsRouter } from './crm/integrations.js'
 import { inboundIntegrationsRouter } from './integrations/inbound.js'
+import { schedulerRouter } from './scheduler/index.js'
 
 const app = express()
 const normalize = (s: string) => s.trim().replace(/\/$/, '').toLowerCase()
@@ -118,6 +119,7 @@ app.use('/api/crm/documents', documentsRouter)
 app.use('/api/crm/tasks', tasksRouter)
 app.use('/api/crm/integrations', integrationsRouter)
 app.use('/api/integrations/inbound', inboundIntegrationsRouter)
+app.use('/api/scheduler', schedulerRouter)
 app.use('/api/terms', termsReviewRouter)
 app.use('/api/marketing', marketingSegmentsRouter)
 app.use('/api/marketing', marketingCampaignsRouter)

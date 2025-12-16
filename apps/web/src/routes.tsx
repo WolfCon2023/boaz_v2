@@ -16,6 +16,7 @@ import AdminDataSeeding from '@/pages/AdminDataSeeding'
 import Dashboard from '@/pages/Dashboard'
 import Marketplace from '@/pages/Marketplace'
 import Workspace from '@/pages/Workspace'
+import Scheduler from '@/pages/Scheduler'
 import CRMContacts from '@/pages/CRMContacts'
 import CRMAccounts from '@/pages/CRMAccounts'
 import CRMDeals from '@/pages/CRMDeals'
@@ -53,6 +54,7 @@ import SupportTickets from '@/pages/SupportTickets'
 import KnowledgeBase from '@/pages/KnowledgeBase'
 import SupportPortal from '@/pages/SupportPortal'
 import ContractSign from '@/pages/ContractSign'
+import SchedulerPublicBooking from '@/pages/SchedulerPublicBooking'
 import { PublicShell } from '@/components/PublicShell'
 import AboutBoazOs from '@/pages/AboutBoazOs'
 import LegalEula from '@/pages/legal/Eula'
@@ -136,6 +138,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/surveys/help', element: <RequireAuth><RequireApplication appKey="crm"><CRMSurveysHelp /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/surveys', element: <RequireAuth><RequireApplication appKey="crm"><CRMSurveys /></RequireApplication></RequireAuth> },
       { path: 'apps/helpdesk', element: <RequireAuth><RequireApplication appKey="helpdesk"><Helpdesk /></RequireApplication></RequireAuth> },
+      { path: 'apps/scheduler', element: <RequireAuth><RequireApplication appKey="scheduler"><Scheduler /></RequireApplication></RequireAuth> },
       { path: 'apps/support', element: <RequireAuth><Support /></RequireAuth> },
       { path: 'request-status', element: <RequireAuth><RequestStatus /></RequireAuth> },
     ],
@@ -159,6 +162,10 @@ export const router = createBrowserRouter([
   {
     path: '/portal',
     element: <PublicShell><SupportPortal /></PublicShell>,
+  },
+  {
+    path: '/schedule/:slug',
+    element: <PublicShell><SchedulerPublicBooking /></PublicShell>,
   },
   {
     path: '/invoices/access/:id',

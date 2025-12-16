@@ -33,6 +33,8 @@ export const SUPPORTED_CRM_EVENTS = [
     'support.ticket.created',
     'support.ticket.updated',
     'crm.invoice.paid',
+    'scheduler.appointment.booked',
+    'scheduler.appointment.cancelled',
     'test.ping',
 ];
 // GET /api/crm/integrations/events

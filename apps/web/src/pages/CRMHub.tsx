@@ -94,6 +94,11 @@ export default function CRMHub() {
       desc: 'Webhooks and API keys to connect BOAZ with external systems',
       href: '/apps/crm/integrations',
     },
+    {
+      label: 'Scheduler',
+      desc: 'Appointments, booking links, and CRM meeting tasks',
+      href: '/apps/scheduler',
+    },
     { label: 'Surveys & Feedback', desc: 'NPS/CSAT and post‑interaction surveys', href: '/apps/crm/surveys' },
     {
       label: 'Tasks & Activities',
