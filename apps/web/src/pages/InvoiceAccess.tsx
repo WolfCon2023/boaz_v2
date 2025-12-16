@@ -23,7 +23,7 @@ export default function InvoiceAccess() {
   const internalHref = invoiceId ? `/apps/crm/invoices/${encodeURIComponent(invoiceId)}/print` : '/apps/crm/invoices'
 
   return (
-    <div className="mx-auto max-w-3xl py-10">
+    <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-0">
       <div className="mb-8 text-center">
         <div className="text-2xl font-semibold">Open Invoice</div>
         <div className="mt-2 text-sm text-[color:var(--color-text-muted)]">
@@ -36,10 +36,10 @@ export default function InvoiceAccess() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
         <a
           href={customerHref}
-          className="group rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-sm transition hover:bg-[color:var(--color-muted)]"
+          className="group block w-full rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 text-left shadow-sm transition hover:bg-[color:var(--color-muted)]"
         >
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-2">
@@ -62,7 +62,7 @@ export default function InvoiceAccess() {
 
         <a
           href={internalHref}
-          className="group rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-sm transition hover:bg-[color:var(--color-muted)]"
+          className="group block w-full rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 text-left shadow-sm transition hover:bg-[color:var(--color-muted)]"
         >
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-2">
