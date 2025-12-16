@@ -2848,11 +2848,11 @@ adminSeedDataRouter.post('/integrations-kb', async (req, res) => {
         return res.status(500).json({ data: null, error: 'db_unavailable' });
     try {
         const INTEGRATIONS_KB_ARTICLE = {
-            title: 'CRM Integrations (Webhooks + API Keys) — Step‑by‑Step Guide',
+            title: 'CRM Integrations (Webhooks + API Keys + Inbound) — Step‑by‑Step Guide',
             category: 'Administration',
             slug: 'crm-integrations-guide',
-            tags: ['crm', 'crm:integrations', 'integrations', 'webhooks', 'api-keys', 'zapier', 'make'],
-            body: `# CRM Integrations (Webhooks + API Keys) — Step‑by‑Step Guide
+            tags: ['crm', 'crm:integrations', 'integrations', 'webhooks', 'api-keys', 'inbound', 'zapier', 'make'],
+            body: `# CRM Integrations (Webhooks + API Keys + Inbound) — Step‑by‑Step Guide
 
 BOAZ Integrations lets you connect BOAZ to other tools (Slack, Zapier, Make, custom apps) so things can happen automatically.
 
@@ -2954,7 +2954,66 @@ Examples:
 
 ---
 
-## 7) Troubleshooting
+## 7) Inbound (Push data into BOAZ)
+
+BOAZ supports an **Inbound API** so external systems can create/update (upsert) data inside BOAZ.
+
+### What “upsert” means
+If the record already exists, BOAZ updates it. If it does not exist, BOAZ creates it.
+
+### Idempotency (prevents duplicates)
+Inbound uses two fields to uniquely identify records:
+- \`externalSource\` (example: \`hubspot\`, \`quickbooks\`, \`make\`)
+- \`externalId\` (the record ID in that external system)
+
+Send the same \`externalSource + externalId\` again and BOAZ will update the same record.
+
+### Authentication (required)
+Send your API key in a header:
+- \`x-boaz-api-key: boaz_sk_...\`
+
+Required scope:
+- \`integrations:write\`
+
+### Endpoints
+- **Accounts**: \`POST /api/integrations/inbound/accounts\`
+- **Contacts**: \`POST /api/integrations/inbound/contacts\`
+- **Deals**: \`POST /api/integrations/inbound/deals\`
+- **Tickets**: \`POST /api/integrations/inbound/tickets\`
+
+### Example: create/update an Account (copy/paste)
+\`\`\`
+curl -X POST "https://<your-api-host>/api/integrations/inbound/accounts" \\
+  -H "Content-Type: application/json" \\
+  -H "x-boaz-api-key: boaz_sk_********" \\
+  -d '{
+    "externalSource": "hubspot",
+    "externalId": "company_123",
+    "name": "Acme Corp",
+    "domain": "acme.com",
+    "phone": "+1 555-123-4567"
+  }'
+\`\`\`
+
+### Example: create/update a Ticket
+\`\`\`
+curl -X POST "https://<your-api-host>/api/integrations/inbound/tickets" \\
+  -H "Content-Type: application/json" \\
+  -H "x-boaz-api-key: boaz_sk_********" \\
+  -d '{
+    "externalSource": "make",
+    "externalId": "run_987",
+    "shortDescription": "Customer reported login issue",
+    "description": "Created automatically from external form submission",
+    "requesterEmail": "user@acme.com",
+    "priority": "normal",
+    "status": "open"
+  }'
+\`\`\`
+
+---
+
+## 8) Troubleshooting
 
 ### “Send test” worked, but real events don’t arrive
 - Confirm the webhook is **Active**

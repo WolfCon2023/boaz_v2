@@ -4,6 +4,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { useToast } from '@/components/Toast'
+import { useConfirm } from '@/components/ConfirmDialog'
 
 type Webhook = {
   _id: string
@@ -31,6 +32,7 @@ type ApiKeyRow = {
 export default function CRMIntegrations() {
   const toast = useToast()
   const qc = useQueryClient()
+  const { confirm, ConfirmDialog } = useConfirm()
 
   const eventsQ = useQuery({
     queryKey: ['crm', 'integrations', 'events'],
@@ -124,7 +126,7 @@ export default function CRMIntegrations() {
 
   const createKeyM = useMutation({
     mutationFn: async () => {
-      const res = await http.post('/api/crm/integrations/api-keys', { name: newKeyName, scopes: ['*'] })
+      const res = await http.post('/api/crm/integrations/api-keys', { name: newKeyName, scopes: ['integrations:write'] })
       return res.data as { data: { apiKey: string } }
     },
     onSuccess: async (data) => {
@@ -351,8 +353,9 @@ export default function CRMIntegrations() {
                           {h.isActive ? 'Pause' : 'Resume'}
                         </button>
                         <button
-                          onClick={() => {
-                            if (!confirm(`Delete webhook "${h.name}"?`)) return
+                          onClick={async () => {
+                            const ok = await confirm(`Delete webhook "${h.name}"?`, { confirmText: 'Delete', confirmColor: 'danger' })
+                            if (!ok) return
                             deleteWebhookM.mutate(h._id)
                           }}
                           disabled={deleteWebhookM.isPending}
@@ -373,7 +376,7 @@ export default function CRMIntegrations() {
         <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
           <h2 className="text-base font-semibold">API Keys</h2>
           <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-            Generate keys for server-to-server integrations. Keys are shown **once** at creation.
+            Generate keys for server-to-server integrations (Inbound API). Keys are shown **once** at creation.
           </p>
 
           <div className="mt-4 flex gap-2">
@@ -442,8 +445,11 @@ export default function CRMIntegrations() {
                       </div>
                       <button
                         onClick={() => {
-                          if (!confirm(`Revoke API key "${k.name}"?`)) return
-                          revokeKeyM.mutate(k._id)
+                          ;(async () => {
+                            const ok = await confirm(`Revoke API key "${k.name}"?`, { confirmText: 'Revoke', confirmColor: 'danger' })
+                            if (!ok) return
+                            revokeKeyM.mutate(k._id)
+                          })()
                         }}
                         disabled={revokeKeyM.isPending}
                         className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"
@@ -457,7 +463,63 @@ export default function CRMIntegrations() {
             )}
           </div>
         </div>
+
+        {/* Inbound API (push data into BOAZ) */}
+        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+          <h2 className="text-base font-semibold">Inbound (Push data into BOAZ)</h2>
+          <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+            Use an API key to upsert records from external systems. Idempotency is based on <code>externalSource</code> +{' '}
+            <code>externalId</code>.
+          </p>
+
+          <div className="mt-4 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+            <div className="text-xs font-semibold">Auth header</div>
+            <code className="mt-2 block overflow-auto rounded-lg bg-black/30 px-3 py-2 text-[11px]">
+              x-boaz-api-key: boaz_sk_************************
+            </code>
+            <div className="mt-2 text-[11px] text-[color:var(--color-text-muted)]">
+              Scope required: <code>integrations:write</code>. (Keys created above default to this scope.)
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+              <div className="text-xs font-semibold">Accounts</div>
+              <div className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">POST</div>
+              <code className="mt-2 block overflow-auto rounded-lg bg-black/30 px-3 py-2 text-[11px]">
+                /api/integrations/inbound/accounts
+              </code>
+            </div>
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+              <div className="text-xs font-semibold">Contacts</div>
+              <div className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">POST</div>
+              <code className="mt-2 block overflow-auto rounded-lg bg-black/30 px-3 py-2 text-[11px]">
+                /api/integrations/inbound/contacts
+              </code>
+            </div>
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+              <div className="text-xs font-semibold">Deals</div>
+              <div className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">POST</div>
+              <code className="mt-2 block overflow-auto rounded-lg bg-black/30 px-3 py-2 text-[11px]">
+                /api/integrations/inbound/deals
+              </code>
+            </div>
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+              <div className="text-xs font-semibold">Tickets</div>
+              <div className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">POST</div>
+              <code className="mt-2 block overflow-auto rounded-lg bg-black/30 px-3 py-2 text-[11px]">
+                /api/integrations/inbound/tickets
+              </code>
+            </div>
+          </div>
+
+          <div className="mt-4 text-xs text-[color:var(--color-text-muted)]">
+            Tip: Start by sending an <b>Account</b>, then a <b>Contact</b> referencing <code>accountExternalId</code>, then a{' '}
+            <b>Deal</b> referencing <code>accountExternalId</code>.
+          </div>
+        </div>
       </div>
+      {ConfirmDialog}
     </div>
   )
 }
