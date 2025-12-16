@@ -5,6 +5,7 @@ import { getDb } from '../db.js';
 import { requireAuth, requireApplication, requirePermission } from '../auth/rbac.js';
 import { dispatchCrmEvent } from '../crm/integrations_core.js';
 import { sendAuthEmail } from '../auth/email.js';
+import { m365CreateEventForAppointment, m365DeleteEvent, m365HasConflict } from '../calendar/m365.js';
 export const schedulerRouter = Router();
 function normStr(v) {
     return typeof v === 'string' ? v.trim() : '';
@@ -617,6 +618,24 @@ internal.post('/appointments/book', async (req, res) => {
         .toArray();
     if (conflicts.length)
         return res.status(409).json({ data: null, error: 'slot_taken' });
+    // Optional: Microsoft 365 busy-time conflict check (best-effort). If connected and busy, block booking.
+    try {
+        const ext = await m365HasConflict(db, String(type.ownerUserId), bufferedStart.toISOString(), bufferedEnd.toISOString());
+        if (ext.ok && ext.conflict)
+            return res.status(409).json({ data: null, error: 'external_calendar_busy' });
+    }
+    catch {
+        // ignore
+    }
+    // Optional: Microsoft 365 busy-time conflict check (best-effort). If connected and busy, block booking.
+    try {
+        const ext = await m365HasConflict(db, String(type.ownerUserId), bufferedStart.toISOString(), bufferedEnd.toISOString());
+        if (ext.ok && ext.conflict)
+            return res.status(409).json({ data: null, error: 'external_calendar_busy' });
+    }
+    catch {
+        // ignore
+    }
     const attendeeEmail = normEmail(parsed.data.attendeeEmail);
     const attendeeFirstName = parsed.data.attendeeFirstName.trim();
     const attendeeLastName = parsed.data.attendeeLastName.trim();
@@ -681,6 +700,7 @@ internal.post('/appointments/book', async (req, res) => {
         inviteEmailSentAt: null,
         reminderMinutesBefore: parsed.data.reminderMinutesBefore ?? 60,
         reminderEmailSentAt: null,
+        m365EventId: null,
         notes: parsed.data.notes ? parsed.data.notes.trim() : null,
         startsAt: startUtc,
         endsAt: endUtc,
@@ -711,6 +731,14 @@ internal.post('/appointments/book', async (req, res) => {
         timeZone: doc.timeZone,
         source: doc.source,
     }, { source: 'scheduler_internal_booking' }).catch(() => null);
+    // Best-effort: create Outlook event for organizer if connected
+    m365CreateEventForAppointment(db, String(type.ownerUserId), doc)
+        .then(async (r) => {
+        if (!r.ok)
+            return;
+        await db.collection('appointments').updateOne({ _id: doc._id }, { $set: { m365EventId: r.eventId, updatedAt: new Date() } });
+    })
+        .catch(() => null);
     res.status(201).json({ data: { _id: String(doc._id) }, error: null });
 });
 // POST /api/scheduler/appointments/:id/cancel
@@ -736,6 +764,10 @@ internal.post('/appointments/:id/cancel', async (req, res) => {
     db.collection('crm_tasks')
         .updateMany({ 'metadata.source': 'scheduler', 'metadata.appointmentId': String(_id) }, { $set: { status: 'cancelled', updatedAt: new Date() } })
         .catch(() => null);
+    // Best-effort: delete Outlook event if we created one
+    if (appt.m365EventId) {
+        m365DeleteEvent(db, auth.userId, String(appt.m365EventId)).catch(() => null);
+    }
     // Best-effort: webhook event
     dispatchCrmEvent(db, 'scheduler.appointment.cancelled', {
         appointmentId: String(_id),
@@ -933,6 +965,7 @@ publicRouter.post('/book/:slug', async (req, res) => {
         inviteEmailSentAt: null,
         reminderMinutesBefore: parsed.data.reminderMinutesBefore ?? 60,
         reminderEmailSentAt: null,
+        m365EventId: null,
         notes: parsed.data.notes ? parsed.data.notes.trim() : null,
         startsAt: startUtc,
         endsAt: endUtc,
@@ -954,6 +987,14 @@ publicRouter.post('/book/:slug', async (req, res) => {
     sendInviteEmails(db, doc, type)
         .then(async () => {
         await db.collection('appointments').updateOne({ _id: doc._id }, { $set: { inviteEmailSentAt: new Date(), updatedAt: new Date() } });
+    })
+        .catch(() => null);
+    // Best-effort: create Outlook event for organizer if connected
+    m365CreateEventForAppointment(db, String(type.ownerUserId), doc)
+        .then(async (r) => {
+        if (!r.ok)
+            return;
+        await db.collection('appointments').updateOne({ _id: doc._id }, { $set: { m365EventId: r.eventId, updatedAt: new Date() } });
     })
         .catch(() => null);
     // Best-effort: webhook event

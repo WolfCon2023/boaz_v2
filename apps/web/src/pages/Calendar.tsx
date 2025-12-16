@@ -2,6 +2,8 @@ import * as React from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '@/lib/http'
+import { useToast } from '@/components/Toast'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 type CalendarEvent =
   | {
@@ -39,6 +41,8 @@ function startOfDay(d: Date) {
 }
 
 export default function Calendar() {
+  const toast = useToast()
+  const qc = useQueryClient()
   const [view, setView] = React.useState<'me' | 'org'>('me')
   const [rangeDays, setRangeDays] = React.useState(14)
   const from = React.useMemo(() => startOfDay(new Date()), [])
@@ -53,6 +57,35 @@ export default function Calendar() {
   })
   const isAdmin = rolesQ.data?.roles?.some((r) => r.name === 'admin') || rolesQ.data?.isAdmin || false
   const isManager = rolesQ.data?.roles?.some((r) => r.name === 'manager') || isAdmin
+
+  const m365StatusQ = useQuery({
+    queryKey: ['calendar', 'm365', 'status'],
+    queryFn: async () => (await http.get('/api/calendar/m365/status')).data as { data: { configured: boolean; connected: boolean; email?: string | null } },
+    staleTime: 30_000,
+    retry: false,
+  })
+
+  const connectM365 = useMutation({
+    mutationFn: async () => (await http.get('/api/calendar/m365/connect')).data as { data: { url: string } },
+    onSuccess: (r) => {
+      const url = r?.data?.url
+      if (!url) {
+        toast.showToast('Microsoft 365 connect URL not returned.', 'error')
+        return
+      }
+      window.location.href = url
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to start Microsoft 365 connect.', 'error'),
+  })
+
+  const disconnectM365 = useMutation({
+    mutationFn: async () => (await http.post('/api/calendar/m365/disconnect')).data,
+    onSuccess: async () => {
+      toast.showToast('Microsoft 365 disconnected.', 'success')
+      await qc.invalidateQueries({ queryKey: ['calendar', 'm365', 'status'] })
+    },
+    onError: () => toast.showToast('Failed to disconnect Microsoft 365.', 'error'),
+  })
 
   const eventsQ = useQuery({
     queryKey: ['calendar', 'events', view, from.toISOString(), to.toISOString()],
@@ -103,6 +136,45 @@ export default function Calendar() {
           </Link>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-sm font-semibold">Microsoft 365 calendar sync</div>
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Connect Outlook to create events for Scheduler bookings and check for conflicts.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {!m365StatusQ.data?.data?.configured ? (
+              <span className="text-xs text-[color:var(--color-text-muted)]">Not configured on server.</span>
+            ) : m365StatusQ.data?.data?.connected ? (
+              <>
+                <span className="text-xs text-[color:var(--color-text-muted)]">
+                  Connected{m365StatusQ.data?.data?.email ? `: ${m365StatusQ.data.data.email}` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => disconnectM365.mutate()}
+                  disabled={disconnectM365.isPending}
+                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                >
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => connectM365.mutate()}
+                disabled={connectM365.isPending || m365StatusQ.isLoading}
+                className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              >
+                Connect Microsoft 365
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-1 text-sm">

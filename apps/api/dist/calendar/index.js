@@ -3,9 +3,11 @@ import { ObjectId } from 'mongodb';
 import { z } from 'zod';
 import { getDb } from '../db.js';
 import { requireAuth, requireApplication, requirePermission } from '../auth/rbac.js';
+import { m365Router } from './m365.js';
 export const calendarRouter = Router();
 calendarRouter.use(requireAuth);
 calendarRouter.use(requireApplication('calendar'));
+calendarRouter.use('/m365', m365Router);
 const rangeSchema = z.object({
     from: z.string().min(10),
     to: z.string().min(10),

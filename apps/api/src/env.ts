@@ -72,6 +72,11 @@ const EnvSchema = z.object({
   PAYPAL_CLIENT_SECRET: z.string().optional(),
   PAYPAL_WEBHOOK_ID: z.string().optional(),
   PAYPAL_MODE: z.enum(['sandbox', 'live']).optional(),
+  // Microsoft 365 (Outlook/Graph) calendar integration
+  M365_CLIENT_ID: z.string().optional(),
+  M365_CLIENT_SECRET: z.string().optional(),
+  // Must match Azure App Registration redirect URI, e.g. https://your-domain.com/api/calendar/m365/callback
+  M365_REDIRECT_URI: z.string().url().optional(),
 })
 
 const parsed = EnvSchema.safeParse(process.env)
