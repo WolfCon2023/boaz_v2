@@ -7,9 +7,10 @@ export default defineConfig({
   plugins: [react()],
   preview: {
     host: true,
-    // Allow Railway preview hostnames
+    // Allow Railway preview hostnames and custom domains
     allowedHosts: [
       '.up.railway.app',
+      'demo.boazos.app',
     ],
   },
   server: {
