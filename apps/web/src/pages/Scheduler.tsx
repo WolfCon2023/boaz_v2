@@ -162,13 +162,28 @@ export default function Scheduler() {
     retry: false,
   })
 
+  // Get user preferences for timezone
+  const preferencesQ = useQuery<{ data: { preferences: { timezone?: string } } }>({
+    queryKey: ['preferences', 'me'],
+    queryFn: async () => (await http.get('/api/preferences/me')).data,
+    retry: false,
+  })
+  const userTimezone = preferencesQ.data?.data?.preferences?.timezone || 'America/New_York'
+
   const [tzDraft, setTzDraft] = React.useState<string>(() => {
     try {
-      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+      return userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'
     } catch {
-      return 'UTC'
+      return 'America/New_York'
     }
   })
+  
+  // Update timezone draft when preferences load
+  React.useEffect(() => {
+    if (userTimezone && !availability?.timeZone) {
+      setTzDraft(userTimezone)
+    }
+  }, [userTimezone, availability?.timeZone])
   const [weeklyDraft, setWeeklyDraft] = React.useState<Availability['weekly']>([])
   React.useEffect(() => {
     if (!availability) return
@@ -758,7 +773,20 @@ export default function Scheduler() {
                     ) : null}
                   </div>
                   <div className="text-xs text-[color:var(--color-text-muted)]">
-                    {new Date(a.startsAt).toLocaleString()} → {new Date(a.endsAt).toLocaleString()} ({a.timeZone})
+                    {new Date(a.startsAt).toLocaleString('en-US', {
+                      timeZone: a.timeZone || userTimezone,
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      timeZoneName: 'short',
+                    })} → {new Date(a.endsAt).toLocaleString('en-US', {
+                      timeZone: a.timeZone || userTimezone,
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      timeZoneName: 'short',
+                    })}
                   </div>
                   {a.scheduledByEmail ? (
                     <div className="text-xs text-[color:var(--color-text-muted)]">

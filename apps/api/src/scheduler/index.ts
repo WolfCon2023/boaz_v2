@@ -156,16 +156,27 @@ async function ensureDefaultAvailability(db: any, ownerUserId: string) {
   const existing = (await coll.findOne({ ownerUserId } as any)) as AvailabilityDoc | null
   if (existing) return existing
 
+  // Get user's timezone preference, default to Eastern Time (EST/EDT)
+  let timeZone = 'America/New_York' // Default to EST
+  try {
+    const prefsDoc = await db.collection('preferences').findOne({ userId: ownerUserId } as any)
+    if (prefsDoc?.data?.timezone && typeof prefsDoc.data.timezone === 'string') {
+      timeZone = prefsDoc.data.timezone
+    }
+  } catch {
+    // If preferences lookup fails, use default
+  }
+
   const now = new Date()
   const doc: AvailabilityDoc = {
     _id: new ObjectId(),
     ownerUserId,
-    timeZone: 'UTC',
+    timeZone,
     weekly: [0, 1, 2, 3, 4, 5, 6].map((day) => ({
       day,
       enabled: day >= 1 && day <= 5, // Mon-Fri
-      startMin: 9 * 60,
-      endMin: 17 * 60,
+      startMin: 8 * 60, // 8:00 AM
+      endMin: 20 * 60, // 8:00 PM
     })),
     createdAt: now,
     updatedAt: now,
@@ -318,9 +329,28 @@ async function sendInviteEmails(db: any, appointment: AppointmentDoc, type: Appo
       attendeeEmail,
     })
 
-    const subject = `Confirmed: ${type.name} — ${new Date(appointment.startsAt).toLocaleString()}`
-    const text = `Your appointment is confirmed.\n\n${description}\n\nThis message includes a calendar invite (.ics).`
-    const html = `<p><strong>Your appointment is confirmed.</strong></p><pre style="white-space:pre-wrap">${icsEscape(description)}</pre><p>This message includes a calendar invite (.ics).</p>`
+    // Format the appointment time in the appointment's timezone
+    const appointmentDate = new Date(appointment.startsAt)
+    const formattedDate = appointmentDate.toLocaleString('en-US', {
+      timeZone: appointment.timeZone,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    })
+    const formattedEndTime = new Date(appointment.endsAt).toLocaleString('en-US', {
+      timeZone: appointment.timeZone,
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    })
+
+    const subject = `Appointment Confirmed: ${type.name} on ${formattedDate}`
+    const text = `Your appointment has been confirmed!\n\nAppointment Details:\n${description}\n\nDate & Time: ${formattedDate} - ${formattedEndTime}\n\nA calendar invite (.ics file) is attached to this email. Please add it to your calendar.\n\nWe look forward to meeting with you!`
+    const html = `<p><strong>Your appointment has been confirmed!</strong></p><p><strong>Appointment Details:</strong></p><pre style="white-space:pre-wrap">${icsEscape(description)}</pre><p><strong>Date & Time:</strong> ${formattedDate} - ${formattedEndTime}</p><p>A calendar invite (.ics file) is attached to this email. Please add it to your calendar.</p><p>We look forward to meeting with you!</p>`
 
     await sendAuthEmail({
       to: attendeeEmail,

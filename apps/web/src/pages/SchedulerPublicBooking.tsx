@@ -120,7 +120,23 @@ export default function SchedulerPublicBooking() {
       return res.data
     },
     onSuccess: () => {
-      toast.showToast('Booked! Check your email for the calendar invite.', 'success')
+      const data = q.data?.data
+      if (data) {
+        const selectedDate = new Date(selectedIso)
+        const tz = data.availability.timeZone || 'UTC'
+        const formattedDate = selectedDate.toLocaleString('en-US', {
+          timeZone: tz,
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZoneName: 'short',
+        })
+        toast.showToast(`Appointment confirmed for ${formattedDate}! Check your email for the calendar invite.`, 'success')
+      } else {
+        toast.showToast('Appointment confirmed! Check your email for the calendar invite.', 'success')
+      }
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.error || err?.message || 'Booking failed.'
@@ -165,9 +181,19 @@ export default function SchedulerPublicBooking() {
         const conflict = existing.some((ex) => overlaps(bufferedStart, bufferedEnd, ex.s, ex.e))
         if (conflict) continue
 
+        // Format the time in the availability timezone
+        const label = startUtc.toLocaleString('en-US', {
+          timeZone: tz,
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZoneName: 'short',
+        })
         out.push({
           iso: startUtc.toISOString(),
-          label: startUtc.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+          label,
         })
         if (out.length >= 24) return out
       }
