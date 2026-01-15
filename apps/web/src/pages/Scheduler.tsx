@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 
 type AppointmentType = {
   _id: string
@@ -205,6 +206,22 @@ export default function Scheduler() {
   const [bookStartsAtLocal, setBookStartsAtLocal] = React.useState('')
   const [bookDate, setBookDate] = React.useState('')
   const [bookTime, setBookTime] = React.useState('')
+  const [showDatePicker, setShowDatePicker] = React.useState(false)
+  const [datePickerMonth, setDatePickerMonth] = React.useState(new Date())
+  const datePickerRef = React.useRef<HTMLDivElement>(null)
+
+  // Close date picker when clicking outside
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false)
+      }
+    }
+    if (showDatePicker) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showDatePicker])
 
   // Sync date/time fields when bookStartsAtLocal changes externally (but not from our own updates)
   React.useEffect(() => {
@@ -672,20 +689,105 @@ export default function Scheduler() {
               <div className="md:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Start date & time</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <input
-                      type="date"
-                      value={bookDate}
-                      onChange={(e) => {
-                        setBookDate(e.target.value)
-                        if (bookTime && e.target.value) {
-                          const combined = `${e.target.value}T${bookTime}`
-                          setBookStartsAtLocal(combined)
-                        }
-                      }}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                    />
+                  <div className="relative" ref={datePickerRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowDatePicker(!showDatePicker)}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-left flex items-center gap-2 hover:bg-[color:var(--color-muted)]"
+                    >
+                      <Calendar className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+                      <span>{bookDate ? new Date(bookDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Select date'}</span>
+                    </button>
+                    {showDatePicker && (
+                      <div className="absolute z-50 mt-1 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-lg p-4 w-[280px]">
+                        <div className="flex items-center justify-between mb-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const prev = new Date(datePickerMonth)
+                              prev.setMonth(prev.getMonth() - 1)
+                              setDatePickerMonth(prev)
+                            }}
+                            className="p-1 rounded hover:bg-[color:var(--color-muted)]"
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                          <div className="font-semibold text-sm">
+                            {datePickerMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = new Date(datePickerMonth)
+                              next.setMonth(next.getMonth() + 1)
+                              setDatePickerMonth(next)
+                            }}
+                            className="p-1 rounded hover:bg-[color:var(--color-muted)]"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 mb-2">
+                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                            <div key={day} className="text-center text-xs font-medium text-[color:var(--color-text-muted)] py-1">
+                              {day}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                          {(() => {
+                            const year = datePickerMonth.getFullYear()
+                            const month = datePickerMonth.getMonth()
+                            const firstDay = new Date(year, month, 1)
+                            const startDate = new Date(firstDay)
+                            startDate.setDate(startDate.getDate() - firstDay.getDay())
+                            const today = new Date()
+                            today.setHours(0, 0, 0, 0)
+                            const days: React.ReactElement[] = []
+                            for (let i = 0; i < 42; i++) {
+                              const date = new Date(startDate)
+                              date.setDate(startDate.getDate() + i)
+                              const isCurrentMonth = date.getMonth() === month
+                              const isToday = date.getTime() === today.getTime()
+                              const isPast = date < today
+                              const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                              const isSelected = bookDate === dateStr
+                              days.push(
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => {
+                                    if (!isPast) {
+                                      setBookDate(dateStr)
+                                      if (bookTime) {
+                                        const combined = `${dateStr}T${bookTime}`
+                                        setBookStartsAtLocal(combined)
+                                      }
+                                      setShowDatePicker(false)
+                                    }
+                                  }}
+                                  disabled={isPast}
+                                  className={`h-8 rounded text-xs ${
+                                    isPast
+                                      ? 'text-[color:var(--color-text-muted)] opacity-40 cursor-not-allowed'
+                                      : isSelected
+                                        ? 'bg-[color:var(--color-primary-600)] text-white font-semibold'
+                                        : isToday
+                                          ? 'bg-[color:var(--color-primary-soft)] text-[color:var(--color-primary)] font-semibold'
+                                          : isCurrentMonth
+                                            ? 'hover:bg-[color:var(--color-muted)]'
+                                            : 'text-[color:var(--color-text-muted)] opacity-50'
+                                  }`}
+                                >
+                                  {date.getDate()}
+                                </button>
+                              )
+                            }
+                            return days
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <select
