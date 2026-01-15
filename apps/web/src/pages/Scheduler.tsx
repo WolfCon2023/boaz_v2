@@ -68,7 +68,7 @@ export default function Scheduler() {
   const qc = useQueryClient()
   const toast = useToast()
   const { confirm, ConfirmDialog } = useConfirm()
-  const [tab, setTab] = React.useState<'types' | 'availability' | 'bookings'>('types')
+  const [tab, setTab] = React.useState<'types' | 'availability' | 'appointments'>('types')
 
   const typesQ = useQuery<{ data: { items: AppointmentType[] } }>({
     queryKey: ['scheduler', 'types'],
@@ -80,7 +80,7 @@ export default function Scheduler() {
     queryFn: async () => (await http.get('/api/scheduler/availability/me')).data,
   })
 
-  const bookingsQ = useQuery<{ data: { items: Appointment[] } }>({
+  const appointmentsQ = useQuery<{ data: { items: Appointment[] } }>({
     queryKey: ['scheduler', 'appointments'],
     queryFn: async () => {
       const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -143,7 +143,7 @@ export default function Scheduler() {
     onError: () => toast.showToast('Failed to save availability.', 'error'),
   })
 
-  const cancelBooking = useMutation({
+  const cancelAppointment = useMutation({
     mutationFn: async (id: string) => (await http.post(`/api/scheduler/appointments/${encodeURIComponent(id)}/cancel`)).data,
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['scheduler', 'appointments'] })
@@ -154,7 +154,7 @@ export default function Scheduler() {
 
   const types = typesQ.data?.data.items ?? []
   const availability = availabilityQ.data?.data
-  const appointments = bookingsQ.data?.data.items ?? []
+  const appointments = appointmentsQ.data?.data.items ?? []
 
   const usersQ = useQuery<{ data: { items: SystemUser[] } }>({
     queryKey: ['scheduler', 'users'],
@@ -200,7 +200,7 @@ export default function Scheduler() {
       .catch(() => toast.showToast('Failed to copy link.', 'error'))
   }
 
-  // Internal booking form (staff scheduling)
+  // Internal appointment form (staff scheduling)
   const [bookTypeId, setBookTypeId] = React.useState('')
   const [bookStartsAtLocal, setBookStartsAtLocal] = React.useState('')
   const [bookContactQuery, setBookContactQuery] = React.useState('')
@@ -221,7 +221,7 @@ export default function Scheduler() {
     retry: false,
   })
 
-  const createBooking = useMutation({
+  const createAppointment = useMutation({
     mutationFn: async () => {
       const startsAt = new Date(bookStartsAtLocal)
       if (!Number.isFinite(startsAt.getTime())) {
@@ -297,10 +297,10 @@ export default function Scheduler() {
         </button>
         <button
           type="button"
-          onClick={() => setTab('bookings')}
-          className={`rounded-lg px-3 py-2 ${tab === 'bookings' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
+          onClick={() => setTab('appointments')}
+          className={`rounded-lg px-3 py-2 ${tab === 'appointments' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
         >
-          Bookings
+          Appointments
         </button>
       </div>
 
@@ -562,17 +562,17 @@ export default function Scheduler() {
         </section>
       )}
 
-      {tab === 'bookings' && (
+      {tab === 'appointments' && (
         <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
           <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
-            <div className="text-sm font-semibold">Bookings</div>
+            <div className="text-sm font-semibold">Appointments</div>
             <div className="text-xs text-[color:var(--color-text-muted)]">
-              {bookingsQ.isFetching ? 'Refreshing…' : `${appointments.length} upcoming/recent`}
+              {appointmentsQ.isFetching ? 'Refreshing…' : `${appointments.length} upcoming/recent`}
             </div>
           </div>
 
           <div className="border-b border-[color:var(--color-border)] px-4 py-3">
-            <div className="text-sm font-semibold">Create booking (internal)</div>
+            <div className="text-sm font-semibold">Create appointment (internal)</div>
             <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
               Book on behalf of a client. Calendar app will provide a richer slot picker; this MVP uses a date/time input + server-side conflict checks.
             </div>
@@ -736,14 +736,14 @@ export default function Scheduler() {
                 <button
                   type="button"
                   disabled={
-                    createBooking.isPending ||
+                    createAppointment.isPending ||
                     !bookTypeId ||
                     !bookStartsAtLocal ||
                     !bookFirstName.trim() ||
                     !bookLastName.trim() ||
                     !bookEmail.trim()
                   }
-                  onClick={() => createBooking.mutate()}
+                  onClick={() => createAppointment.mutate()}
                   className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
                 >
                   Book &amp; send invite
@@ -802,9 +802,9 @@ export default function Scheduler() {
                       onClick={async () => {
                         const ok = await confirm('Cancel this appointment?', { confirmText: 'Cancel appointment', confirmColor: 'danger' })
                         if (!ok) return
-                        cancelBooking.mutate(a._id)
+                        cancelAppointment.mutate(a._id)
                       }}
-                      disabled={cancelBooking.isPending}
+                      disabled={cancelAppointment.isPending}
                       className="rounded-lg border border-red-400 px-3 py-2 text-xs text-red-500 hover:bg-red-950/40 disabled:opacity-50"
                     >
                       Cancel
@@ -819,7 +819,7 @@ export default function Scheduler() {
                 </div>
               </div>
             ))}
-            {!appointments.length && !bookingsQ.isLoading && (
+            {!appointments.length && !appointmentsQ.isLoading && (
               <div className="px-4 py-8 text-center text-xs text-[color:var(--color-text-muted)]">
                 No appointments yet. Share a booking link from “Appointment types”.
               </div>
