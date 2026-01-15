@@ -69,7 +69,8 @@ export default function Scheduler() {
   const qc = useQueryClient()
   const toast = useToast()
   const { confirm, ConfirmDialog } = useConfirm()
-  const [tab, setTab] = React.useState<'types' | 'availability' | 'appointments'>('types')
+  const [tab, setTab] = React.useState<'types' | 'availability' | 'appointments' | 'calendar'>('types')
+  const [calendarMonth, setCalendarMonth] = React.useState(new Date())
 
   const typesQ = useQuery<{ data: { items: AppointmentType[] } }>({
     queryKey: ['scheduler', 'types'],
@@ -349,6 +350,13 @@ export default function Scheduler() {
           className={`rounded-lg px-3 py-2 ${tab === 'appointments' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
         >
           Appointments
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('calendar')}
+          className={`rounded-lg px-3 py-2 ${tab === 'calendar' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
+        >
+          Calendar
         </button>
       </div>
 
@@ -1021,6 +1029,133 @@ export default function Scheduler() {
                 No appointments yet. Share a booking link from “Appointment types”.
               </div>
             )}
+          </div>
+        </section>
+      )}
+
+      {tab === 'calendar' && (
+        <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm font-semibold">Calendar View</div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const prev = new Date(calendarMonth)
+                  prev.setMonth(prev.getMonth() - 1)
+                  setCalendarMonth(prev)
+                }}
+                className="p-1 rounded hover:bg-[color:var(--color-muted)]"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div className="font-semibold text-sm min-w-[200px] text-center">
+                {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = new Date(calendarMonth)
+                  next.setMonth(next.getMonth() + 1)
+                  setCalendarMonth(next)
+                }}
+                className="p-1 rounded hover:bg-[color:var(--color-muted)]"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCalendarMonth(new Date())}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+              >
+                Today
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-px border border-[color:var(--color-border)] bg-[color:var(--color-border)]">
+            {/* Day headers */}
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+              <div key={day} className="bg-[color:var(--color-panel)] p-2 text-center text-xs font-semibold text-[color:var(--color-text-muted)]">
+                {day}
+              </div>
+            ))}
+
+            {/* Calendar days */}
+            {(() => {
+              const year = calendarMonth.getFullYear()
+              const month = calendarMonth.getMonth()
+              const firstDay = new Date(year, month, 1)
+              const startDate = new Date(firstDay)
+              startDate.setDate(startDate.getDate() - firstDay.getDay())
+              const today = new Date()
+              today.setHours(0, 0, 0, 0)
+              const days: React.ReactElement[] = []
+
+              // Group appointments by date
+              const appointmentsByDate = new Map<string, Appointment[]>()
+              for (const apt of appointments) {
+                if (apt.status === 'cancelled') continue
+                const aptDate = new Date(apt.startsAt)
+                const dateKey = `${aptDate.getFullYear()}-${String(aptDate.getMonth() + 1).padStart(2, '0')}-${String(aptDate.getDate()).padStart(2, '0')}`
+                if (!appointmentsByDate.has(dateKey)) {
+                  appointmentsByDate.set(dateKey, [])
+                }
+                appointmentsByDate.get(dateKey)!.push(apt)
+              }
+
+              for (let i = 0; i < 42; i++) {
+                const date = new Date(startDate)
+                date.setDate(startDate.getDate() + i)
+                const isCurrentMonth = date.getMonth() === month
+                const isToday = date.getTime() === today.getTime()
+                const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                const dayAppointments = appointmentsByDate.get(dateKey) || []
+
+                days.push(
+                  <div
+                    key={i}
+                    className={`min-h-[100px] bg-[color:var(--color-panel)] p-1 ${
+                      !isCurrentMonth ? 'opacity-40' : ''
+                    } ${isToday ? 'ring-2 ring-[color:var(--color-primary-600)]' : ''}`}
+                  >
+                    <div
+                      className={`text-xs font-semibold mb-1 ${
+                        isToday ? 'text-[color:var(--color-primary-600)]' : 'text-[color:var(--color-text-muted)]'
+                      }`}
+                    >
+                      {date.getDate()}
+                    </div>
+                    <div className="space-y-1">
+                      {dayAppointments.slice(0, 3).map((apt) => {
+                        const startTime = new Date(apt.startsAt)
+                        const timeStr = startTime.toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          timeZone: apt.timeZone || userTimezone,
+                        })
+                        return (
+                          <div
+                            key={apt._id}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-[color:var(--color-primary-600)] text-white truncate cursor-pointer hover:opacity-80"
+                            title={`${apt.appointmentTypeName || 'Appointment'}: ${apt.attendeeName} at ${timeStr}`}
+                          >
+                            <div className="font-semibold truncate">{timeStr}</div>
+                            <div className="truncate">{apt.attendeeName}</div>
+                          </div>
+                        )
+                      })}
+                      {dayAppointments.length > 3 && (
+                        <div className="text-[10px] text-[color:var(--color-text-muted)] px-1.5">
+                          +{dayAppointments.length - 3} more
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              }
+              return days
+            })()}
           </div>
         </section>
       )}
