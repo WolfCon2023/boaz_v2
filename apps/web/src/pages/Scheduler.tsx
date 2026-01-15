@@ -203,6 +203,35 @@ export default function Scheduler() {
   // Internal appointment form (staff scheduling)
   const [bookTypeId, setBookTypeId] = React.useState('')
   const [bookStartsAtLocal, setBookStartsAtLocal] = React.useState('')
+  const [bookDate, setBookDate] = React.useState('')
+  const [bookTime, setBookTime] = React.useState('')
+
+  // Sync date/time fields when bookStartsAtLocal changes externally (but not from our own updates)
+  React.useEffect(() => {
+    if (bookStartsAtLocal && (!bookDate || !bookTime)) {
+      try {
+        const date = new Date(bookStartsAtLocal)
+        if (Number.isFinite(date.getTime())) {
+          // Extract date in local timezone (YYYY-MM-DD)
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          const dateStr = `${year}-${month}-${day}`
+          
+          // Extract time in local timezone (HH:MM)
+          const hours = String(date.getHours()).padStart(2, '0')
+          const minutes = String(date.getMinutes()).padStart(2, '0')
+          const timeStr = `${hours}:${minutes}`
+          
+          setBookDate(dateStr)
+          setBookTime(timeStr)
+        }
+      } catch {
+        // Ignore parsing errors
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookStartsAtLocal])
   const [bookContactQuery, setBookContactQuery] = React.useState('')
   const [bookContactId, setBookContactId] = React.useState<string>('')
   const [bookFirstName, setBookFirstName] = React.useState('')
@@ -246,6 +275,8 @@ export default function Scheduler() {
     onSuccess: async () => {
       toast.showToast('Appointment booked and invite sent.', 'success')
       setBookStartsAtLocal('')
+      setBookDate('')
+      setBookTime('')
       setBookContactQuery('')
       setBookContactId('')
       setBookFirstName('')
@@ -639,13 +670,77 @@ export default function Scheduler() {
                 </select>
               </div>
               <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Start time</label>
-                <input
-                  type="datetime-local"
-                  value={bookStartsAtLocal}
-                  onChange={(e) => setBookStartsAtLocal(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                />
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Start date & time</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <input
+                      type="date"
+                      value={bookDate}
+                      onChange={(e) => {
+                        setBookDate(e.target.value)
+                        if (bookTime && e.target.value) {
+                          const combined = `${e.target.value}T${bookTime}`
+                          setBookStartsAtLocal(combined)
+                        }
+                      }}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <select
+                      value={bookTime}
+                      onChange={(e) => {
+                        setBookTime(e.target.value)
+                        if (bookDate && e.target.value) {
+                          const combined = `${bookDate}T${e.target.value}`
+                          setBookStartsAtLocal(combined)
+                        }
+                      }}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                    >
+                      <option value="">Select time</option>
+                      {(() => {
+                        const times: string[] = []
+                        // Generate time slots from 8:00 AM to 8:00 PM in 15-minute intervals
+                        for (let hour = 8; hour <= 20; hour++) {
+                          for (let minute = 0; minute < 60; minute += 15) {
+                            const h = hour.toString().padStart(2, '0')
+                            const m = minute.toString().padStart(2, '0')
+                            const time24 = `${h}:${m}`
+                            times.push(time24)
+                          }
+                        }
+                        return times.map((time24) => {
+                          const [h, m] = time24.split(':')
+                          const hour = parseInt(h, 10)
+                          const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
+                          const ampm = hour >= 12 ? 'PM' : 'AM'
+                          const time12 = `${hour12}:${m} ${ampm}`
+                          return (
+                            <option key={time24} value={time24}>
+                              {time12}
+                            </option>
+                          )
+                        })
+                      })()}
+                    </select>
+                  </div>
+                </div>
+                {bookStartsAtLocal && (
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                    Selected: {new Date(bookStartsAtLocal).toLocaleString('en-US', {
+                      timeZone: tzDraft || userTimezone,
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      timeZoneName: 'short',
+                    })}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Reminder (min)</label>
