@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
-import { Calendar, ChevronLeft, ChevronRight, Search, X, Edit, Trash2, Clock, User, Mail, Phone, CalendarDays, Grid3x3, List, CircleHelp } from 'lucide-react'
+import { KBHelpButton } from '@/components/KBHelpButton'
+import { Calendar, ChevronLeft, ChevronRight, Search, X, Edit, Trash2, Clock, User, Mail, Phone, CalendarDays, Grid3x3, List } from 'lucide-react'
 
 type AppointmentType = {
   _id: string
@@ -360,14 +361,7 @@ export default function Scheduler() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            to={`/apps/crm/support/kb/${helpSlug}`}
-            className="rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] inline-flex items-center gap-2"
-            title="Help for this Scheduler tab"
-          >
-            <CircleHelp className="h-4 w-4" />
-            <span className="hidden sm:inline">Help</span>
-          </Link>
+          <KBHelpButton href={`/apps/crm/support/kb/${helpSlug}`} ariaLabel="Open Scheduler help" title="Knowledge Base" />
           <Link to="/apps/crm" className="rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">
             CRM Hub
           </Link>
