@@ -26,6 +26,10 @@ export default function AdminDataSeeding() {
   const [seedingIntegrationsKB, setSeedingIntegrationsKB] = useState(false)
   const [seedingMarketingSegmentsKB, setSeedingMarketingSegmentsKB] = useState(false)
   const [seedingSchedulerKB, setSeedingSchedulerKB] = useState(false)
+  const [seedingSchedulerAppointmentTypesKB, setSeedingSchedulerAppointmentTypesKB] = useState(false)
+  const [seedingSchedulerAvailabilityKB, setSeedingSchedulerAvailabilityKB] = useState(false)
+  const [seedingSchedulerAppointmentsKB, setSeedingSchedulerAppointmentsKB] = useState(false)
+  const [seedingSchedulerCalendarKB, setSeedingSchedulerCalendarKB] = useState(false)
   const [seedingAll, setSeedingAll] = useState(false)
   
   const [rolesResult, setRolesResult] = useState<any>(null)
@@ -42,6 +46,10 @@ export default function AdminDataSeeding() {
   const [integrationsKBResult, setIntegrationsKBResult] = useState<any>(null)
   const [marketingSegmentsKBResult, setMarketingSegmentsKBResult] = useState<any>(null)
   const [schedulerKBResult, setSchedulerKBResult] = useState<any>(null)
+  const [schedulerAppointmentTypesKBResult, setSchedulerAppointmentTypesKBResult] = useState<any>(null)
+  const [schedulerAvailabilityKBResult, setSchedulerAvailabilityKBResult] = useState<any>(null)
+  const [schedulerAppointmentsKBResult, setSchedulerAppointmentsKBResult] = useState<any>(null)
+  const [schedulerCalendarKBResult, setSchedulerCalendarKBResult] = useState<any>(null)
   const [seedAllResult, setSeedAllResult] = useState<any>(null)
   const [seedAllProgress, setSeedAllProgress] = useState<string>('')
 
@@ -297,6 +305,78 @@ export default function AdminDataSeeding() {
     }
   }
 
+  async function seedSchedulerAppointmentTypesKB() {
+    setSeedingSchedulerAppointmentTypesKB(true)
+    setSchedulerAppointmentTypesKBResult(null)
+    try {
+      const res = await http.post('/api/admin/seed/scheduler-appointment-types-kb')
+      if (res.data.error) {
+        showToast(res.data.error, 'error')
+      } else {
+        setSchedulerAppointmentTypesKBResult(res.data.data)
+        showToast('Scheduler Appointment Types KB article seeded successfully', 'success')
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to seed Scheduler Appointment Types KB', 'error')
+    } finally {
+      setSeedingSchedulerAppointmentTypesKB(false)
+    }
+  }
+
+  async function seedSchedulerAvailabilityKB() {
+    setSeedingSchedulerAvailabilityKB(true)
+    setSchedulerAvailabilityKBResult(null)
+    try {
+      const res = await http.post('/api/admin/seed/scheduler-availability-kb')
+      if (res.data.error) {
+        showToast(res.data.error, 'error')
+      } else {
+        setSchedulerAvailabilityKBResult(res.data.data)
+        showToast('Scheduler Availability KB article seeded successfully', 'success')
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to seed Scheduler Availability KB', 'error')
+    } finally {
+      setSeedingSchedulerAvailabilityKB(false)
+    }
+  }
+
+  async function seedSchedulerAppointmentsKB() {
+    setSeedingSchedulerAppointmentsKB(true)
+    setSchedulerAppointmentsKBResult(null)
+    try {
+      const res = await http.post('/api/admin/seed/scheduler-appointments-kb')
+      if (res.data.error) {
+        showToast(res.data.error, 'error')
+      } else {
+        setSchedulerAppointmentsKBResult(res.data.data)
+        showToast('Scheduler Appointments KB article seeded successfully', 'success')
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to seed Scheduler Appointments KB', 'error')
+    } finally {
+      setSeedingSchedulerAppointmentsKB(false)
+    }
+  }
+
+  async function seedSchedulerCalendarKB() {
+    setSeedingSchedulerCalendarKB(true)
+    setSchedulerCalendarKBResult(null)
+    try {
+      const res = await http.post('/api/admin/seed/scheduler-calendar-kb')
+      if (res.data.error) {
+        showToast(res.data.error, 'error')
+      } else {
+        setSchedulerCalendarKBResult(res.data.data)
+        showToast('Scheduler Calendar KB article seeded successfully', 'success')
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to seed Scheduler Calendar KB', 'error')
+    } finally {
+      setSeedingSchedulerCalendarKB(false)
+    }
+  }
+
   async function seedAllKB() {
     setSeedingAll(true)
     setSeedAllResult(null)
@@ -317,6 +397,10 @@ export default function AdminDataSeeding() {
       { name: 'Integrations KB', fn: seedIntegrationsKB },
       { name: 'Marketing Segments KB', fn: seedMarketingSegmentsKB },
       { name: 'Scheduler KB', fn: seedSchedulerKB },
+      { name: 'Scheduler Appointment Types KB', fn: seedSchedulerAppointmentTypesKB },
+      { name: 'Scheduler Availability KB', fn: seedSchedulerAvailabilityKB },
+      { name: 'Scheduler Appointments KB', fn: seedSchedulerAppointmentsKB },
+      { name: 'Scheduler Calendar KB', fn: seedSchedulerCalendarKB },
     ]
 
     let successCount = 0
@@ -372,7 +456,7 @@ export default function AdminDataSeeding() {
               <h3 className="text-xl font-bold text-[color:var(--color-text)]">🚀 Seed All KB Articles</h3>
             </div>
             <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
-              Seed all 13 knowledge base articles at once. This will create or update: Roles & Permissions, Support Tickets, Approval Queue, Acceptance Queue, Deal Approval, Customer Success, Payment Portal, Outreach Sequences, Outreach Templates, Reporting, Integrations, Marketing Segments, and Scheduler guides.
+              Seed all 17 knowledge base articles at once. This will create or update: Roles & Permissions, Support Tickets, Approval Queue, Acceptance Queue, Deal Approval, Customer Success, Payment Portal, Outreach Sequences, Outreach Templates, Reporting, Integrations, Marketing Segments, Scheduler, and the four Scheduler sub-guides (Appointment Types, Availability, Appointments, Calendar).
             </p>
             <button
               onClick={seedAllKB}
@@ -1178,6 +1262,234 @@ export default function AdminDataSeeding() {
                       className="text-blue-600 underline hover:text-blue-700"
                     >
                       View Article: {schedulerKBResult.url}
+                    </a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Seed Scheduler: Appointment Types KB Article */}
+      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Database className="h-5 w-5 text-[color:var(--color-primary-600)]" />
+              <h3 className="text-lg font-semibold text-[color:var(--color-text)]">Scheduler: Appointment Types KB Article</h3>
+            </div>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
+              Create a guide for the Scheduler Appointment Types tab (slugs, booking links, durations, location fields, buffers). Updates if already exists.
+            </p>
+            <button
+              onClick={seedSchedulerAppointmentTypesKB}
+              disabled={seedingSchedulerAppointmentTypesKB}
+              className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {seedingSchedulerAppointmentTypesKB ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Seeding...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  <span>Seed Scheduler Appointment Types KB</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {schedulerAppointmentTypesKBResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900 mb-2">{schedulerAppointmentTypesKBResult.message}</p>
+                <div className="text-xs text-green-800">
+                  <p>Title: {schedulerAppointmentTypesKBResult.title}</p>
+                  <p>Slug: {schedulerAppointmentTypesKBResult.slug}</p>
+                  <p className="mt-2">
+                    <a
+                      href={schedulerAppointmentTypesKBResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700"
+                    >
+                      View Article: {schedulerAppointmentTypesKBResult.url}
+                    </a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Seed Scheduler: Availability KB Article */}
+      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Database className="h-5 w-5 text-[color:var(--color-primary-600)]" />
+              <h3 className="text-lg font-semibold text-[color:var(--color-text)]">Scheduler: Availability KB Article</h3>
+            </div>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
+              Create a guide for the Scheduler Availability tab (timezone + weekly schedule + slot generation). Updates if already exists.
+            </p>
+            <button
+              onClick={seedSchedulerAvailabilityKB}
+              disabled={seedingSchedulerAvailabilityKB}
+              className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {seedingSchedulerAvailabilityKB ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Seeding...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  <span>Seed Scheduler Availability KB</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {schedulerAvailabilityKBResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900 mb-2">{schedulerAvailabilityKBResult.message}</p>
+                <div className="text-xs text-green-800">
+                  <p>Title: {schedulerAvailabilityKBResult.title}</p>
+                  <p>Slug: {schedulerAvailabilityKBResult.slug}</p>
+                  <p className="mt-2">
+                    <a
+                      href={schedulerAvailabilityKBResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700"
+                    >
+                      View Article: {schedulerAvailabilityKBResult.url}
+                    </a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Seed Scheduler: Appointments KB Article */}
+      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Database className="h-5 w-5 text-[color:var(--color-primary-600)]" />
+              <h3 className="text-lg font-semibold text-[color:var(--color-text)]">Scheduler: Appointments KB Article</h3>
+            </div>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
+              Create a guide for the Scheduler Appointments tab (internal/public booking, status/source, cancelling, CRM task integration). Updates if already exists.
+            </p>
+            <button
+              onClick={seedSchedulerAppointmentsKB}
+              disabled={seedingSchedulerAppointmentsKB}
+              className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {seedingSchedulerAppointmentsKB ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Seeding...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  <span>Seed Scheduler Appointments KB</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {schedulerAppointmentsKBResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900 mb-2">{schedulerAppointmentsKBResult.message}</p>
+                <div className="text-xs text-green-800">
+                  <p>Title: {schedulerAppointmentsKBResult.title}</p>
+                  <p>Slug: {schedulerAppointmentsKBResult.slug}</p>
+                  <p className="mt-2">
+                    <a
+                      href={schedulerAppointmentsKBResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700"
+                    >
+                      View Article: {schedulerAppointmentsKBResult.url}
+                    </a>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Seed Scheduler: Calendar KB Article */}
+      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Database className="h-5 w-5 text-[color:var(--color-primary-600)]" />
+              <h3 className="text-lg font-semibold text-[color:var(--color-text)]">Scheduler: Calendar KB Article</h3>
+            </div>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
+              Create a guide for the Scheduler Calendar tab (month/week/day views + quick create from month view). Updates if already exists.
+            </p>
+            <button
+              onClick={seedSchedulerCalendarKB}
+              disabled={seedingSchedulerCalendarKB}
+              className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {seedingSchedulerCalendarKB ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Seeding...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  <span>Seed Scheduler Calendar KB</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {schedulerCalendarKBResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900 mb-2">{schedulerCalendarKBResult.message}</p>
+                <div className="text-xs text-green-800">
+                  <p>Title: {schedulerCalendarKBResult.title}</p>
+                  <p>Slug: {schedulerCalendarKBResult.slug}</p>
+                  <p className="mt-2">
+                    <a
+                      href={schedulerCalendarKBResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700"
+                    >
+                      View Article: {schedulerCalendarKBResult.url}
                     </a>
                   </p>
                 </div>

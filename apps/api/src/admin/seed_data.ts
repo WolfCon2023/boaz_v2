@@ -3266,6 +3266,15 @@ The **Scheduler** app lets you define appointment types, set availability, share
 
 ---
 
+## 📚 Sub-guides (by tab)
+
+- Appointment Types: `/apps/crm/support/kb/scheduler-appointment-types`
+- Availability: `/apps/crm/support/kb/scheduler-availability`
+- Appointments: `/apps/crm/support/kb/scheduler-appointments`
+- Calendar: `/apps/crm/support/kb/scheduler-calendar`
+
+---
+
 ## 1) Appointment Types (what clients can book)
 
 Appointment Types define what you’re offering and how it’s booked.
@@ -3412,6 +3421,336 @@ When an appointment is cancelled, BOAZ will best-effort cancel the matching CRM 
     })
   } catch (err: any) {
     console.error('Seed scheduler KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
+// POST /api/admin/seed/scheduler-appointment-types-kb - Add Scheduler Appointment Types KB article
+adminSeedDataRouter.post('/scheduler-appointment-types-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const ARTICLE = {
+      title: 'Scheduler — Appointment Types',
+      category: 'Scheduling',
+      slug: 'scheduler-appointment-types',
+      tags: ['scheduler', 'appointment types', 'booking link', 'slug', 'duration', 'location', 'buffers'],
+      body: `# Scheduler — Appointment Types
+
+Appointment Types define **what** someone can book and generate the **public booking link** for that type.
+
+---
+
+## Where to find it
+
+- Scheduler app: **Appointment types** tab (\`/apps/scheduler\`)
+
+---
+
+## What an appointment type includes
+
+- **Name**: Shown to staff and on the public booking page.
+- **Slug**: Used in the URL: \`/schedule/<slug>\`
+- **Duration (minutes)**: Meeting length.
+- **Location type**: Video / Phone / In person / Custom.
+- **Location details** (optional): Zoom link, address, instructions, etc.
+- **Buffers** (optional): Blocks extra time before/after the meeting.
+- **Active**: If inactive, the booking page won’t be usable.
+
+---
+
+## Booking link actions
+
+In the appointment type list you can:
+- **Open booking page** (opens \`/schedule/<slug>\`)
+- **Copy link** (copies the full booking URL)
+
+---
+
+## Tips
+
+- Keep slugs short and stable (changing a slug changes the public URL).
+- Use buffers to prevent back-to-back meetings.
+
+---
+
+Related:
+- Overview: \`/apps/crm/support/kb/scheduler-guide\`
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existing = await db.collection('kb_articles').findOne({ slug: ARTICLE.slug })
+    const result = existing ? 'updated' : 'created'
+    if (existing) {
+      await db.collection('kb_articles').updateOne({ slug: ARTICLE.slug }, { $set: { ...ARTICLE, updatedAt: new Date() } })
+    } else {
+      await db.collection('kb_articles').insertOne(ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: ARTICLE.title,
+        slug: ARTICLE.slug,
+        url: `/apps/crm/support/kb/${ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed scheduler appointment types KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
+// POST /api/admin/seed/scheduler-availability-kb - Add Scheduler Availability KB article
+adminSeedDataRouter.post('/scheduler-availability-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const ARTICLE = {
+      title: 'Scheduler — Availability',
+      category: 'Scheduling',
+      slug: 'scheduler-availability',
+      tags: ['scheduler', 'availability', 'timezone', 'weekly schedule', 'time slots'],
+      body: `# Scheduler — Availability
+
+Availability controls **when** your public booking pages show available times.
+
+---
+
+## Where to find it
+
+- Scheduler app: **Availability** tab (\`/apps/scheduler\`)
+
+---
+
+## Time zone
+
+Availability uses an **IANA** time zone (example: \`America/New_York\`). Booking slots are displayed in that time zone.
+
+---
+
+## Weekly schedule
+
+For each day of week you can set:
+- **Enabled**: Whether bookings can occur on that day
+- **Start** and **End** times
+
+The public booking page generates slots in **15-minute increments**, then filters out:
+- Past times
+- Times outside the booking window
+- Conflicts with existing appointments (including buffers)
+
+---
+
+Related:
+- Overview: \`/apps/crm/support/kb/scheduler-guide\`
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existing = await db.collection('kb_articles').findOne({ slug: ARTICLE.slug })
+    const result = existing ? 'updated' : 'created'
+    if (existing) {
+      await db.collection('kb_articles').updateOne({ slug: ARTICLE.slug }, { $set: { ...ARTICLE, updatedAt: new Date() } })
+    } else {
+      await db.collection('kb_articles').insertOne(ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: ARTICLE.title,
+        slug: ARTICLE.slug,
+        url: `/apps/crm/support/kb/${ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed scheduler availability KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
+// POST /api/admin/seed/scheduler-appointments-kb - Add Scheduler Appointments KB article
+adminSeedDataRouter.post('/scheduler-appointments-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const ARTICLE = {
+      title: 'Scheduler — Appointments',
+      category: 'Scheduling',
+      slug: 'scheduler-appointments',
+      tags: ['scheduler', 'appointments', 'internal booking', 'public booking', 'cancel', 'crm', 'tasks'],
+      body: `# Scheduler — Appointments
+
+The Appointments tab is where you manage bookings and (internally) schedule on behalf of clients.
+
+---
+
+## Where to find it
+
+- Scheduler app: **Appointments** tab (\`/apps/scheduler\`)
+- Public booking: \`/schedule/<slug>\`
+
+---
+
+## Appointment status & source
+
+- **Status**: booked / cancelled
+- **Source**: public / internal
+
+---
+
+## Internal scheduling (“book on behalf of”)
+
+You can create an appointment manually:
+1. Select an **appointment type**
+2. Choose a **date/time**
+3. (Optional) select a **CRM contact**
+4. Enter attendee info + optional notes
+5. Click **Book & send invite**
+
+The server enforces:
+- Availability window checks
+- Conflict checks (including buffers)
+- Optional external calendar busy checks (if connected)
+
+---
+
+## Cancelling
+
+Booked appointments can be cancelled from:
+- The appointment row actions
+- The appointment details modal
+
+When cancelled, BOAZ will best-effort cancel the matching CRM meeting task(s).
+
+---
+
+## CRM Task integration
+
+When an appointment is booked, BOAZ creates a **CRM Task** of type **meeting** (visible in \`/apps/crm/tasks\`).
+
+---
+
+Related:
+- Overview: \`/apps/crm/support/kb/scheduler-guide\`
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existing = await db.collection('kb_articles').findOne({ slug: ARTICLE.slug })
+    const result = existing ? 'updated' : 'created'
+    if (existing) {
+      await db.collection('kb_articles').updateOne({ slug: ARTICLE.slug }, { $set: { ...ARTICLE, updatedAt: new Date() } })
+    } else {
+      await db.collection('kb_articles').insertOne(ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: ARTICLE.title,
+        slug: ARTICLE.slug,
+        url: `/apps/crm/support/kb/${ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed scheduler appointments KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
+// POST /api/admin/seed/scheduler-calendar-kb - Add Scheduler Calendar KB article
+adminSeedDataRouter.post('/scheduler-calendar-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const ARTICLE = {
+      title: 'Scheduler — Calendar',
+      category: 'Scheduling',
+      slug: 'scheduler-calendar',
+      tags: ['scheduler', 'calendar', 'month view', 'week view', 'day view'],
+      body: `# Scheduler — Calendar
+
+The Calendar tab provides a visual view of scheduled appointments.
+
+---
+
+## Where to find it
+
+- Scheduler app: **Calendar** tab (\`/apps/scheduler\`)
+
+---
+
+## Views
+
+- **Month**: quick overview; shows up to a few appointments per day and a “+X more” indicator.
+- **Week**: appointments grouped by weekday.
+- **Day**: list of all appointments for the selected day.
+
+Clicking an appointment opens its details.
+
+---
+
+## Quick create workflow (Month view)
+
+In Month view, clicking a day can jump you into internal booking and pre-fill the date for faster scheduling.
+
+---
+
+Related:
+- Overview: \`/apps/crm/support/kb/scheduler-guide\`
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existing = await db.collection('kb_articles').findOne({ slug: ARTICLE.slug })
+    const result = existing ? 'updated' : 'created'
+    if (existing) {
+      await db.collection('kb_articles').updateOne({ slug: ARTICLE.slug }, { $set: { ...ARTICLE, updatedAt: new Date() } })
+    } else {
+      await db.collection('kb_articles').insertOne(ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: ARTICLE.title,
+        slug: ARTICLE.slug,
+        url: `/apps/crm/support/kb/${ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed scheduler calendar KB error:', err)
     res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
   }
 })
