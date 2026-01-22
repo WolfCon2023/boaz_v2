@@ -53,6 +53,7 @@ import CRMSurveys from '@/pages/CRMSurveys'
 import CRMSurveysHelp from '@/pages/CRMSurveysHelp'
 import SupportTickets from '@/pages/SupportTickets'
 import KnowledgeBase from '@/pages/KnowledgeBase'
+import KnowledgeBaseArticle from '@/pages/KnowledgeBaseArticle'
 import SupportPortal from '@/pages/SupportPortal'
 import ContractSign from '@/pages/ContractSign'
 import SchedulerPublicBooking from '@/pages/SchedulerPublicBooking'
@@ -134,6 +135,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/marketing/social', element: <RequireAuth><RequireApplication appKey="crm"><MarketingSocial /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/support/tickets', element: <RequireAuth><RequireApplication appKey="crm"><SupportTickets /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/support/kb', element: <RequireAuth><RequireApplication appKey="crm"><KnowledgeBase /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/support/kb/:idOrSlug', element: <RequireAuth><RequireApplication appKey="crm"><KnowledgeBaseArticle /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/documents', element: <RequireAuth><RequireApplication appKey="crm"><CRMDocuments /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/tasks', element: <RequireAuth><RequireApplication appKey="crm"><CRMTasks /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/surveys/help', element: <RequireAuth><RequireApplication appKey="crm"><CRMSurveysHelp /></RequireApplication></RequireAuth> },

@@ -13,6 +13,7 @@ import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
 import { useConfirm } from '../components/ConfirmDialog'
 import { CRMNav } from '../components/CRMNav'
+import { KBHelpButton } from '../components/KBHelpButton'
 import { 
   CreditCard, 
   DollarSign, 
@@ -29,7 +30,6 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
-  HelpCircle,
   Shield,
   Lock
 } from 'lucide-react'
@@ -290,14 +290,7 @@ export default function PaymentPortal() {
             <span>Secure payment processing powered by Stripe and PayPal</span>
           </div>
         </div>
-        <a
-          href="/apps/crm/support/kb?tag=payments"
-          className="inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-muted)]"
-          title="View Payment Portal Guide & Security Information"
-        >
-          <HelpCircle className="h-4 w-4" />
-          Help & Security
-        </a>
+        <KBHelpButton href="/apps/crm/support/kb?tag=payments" title="Knowledge Base" ariaLabel="Open Payment Portal help" />
       </div>
 
       {/* Tabs */}
