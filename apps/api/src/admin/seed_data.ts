@@ -3242,6 +3242,180 @@ Need help? Open **CRM → Marketing** and click the **?** icon.
   }
 })
 
+// POST /api/admin/seed/scheduler-kb - Add Scheduler KB article
+adminSeedDataRouter.post('/scheduler-kb', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const ARTICLE = {
+      title: 'Scheduler — Booking Links, Availability, and Appointments',
+      category: 'Scheduling',
+      slug: 'scheduler-guide',
+      tags: ['scheduler', 'appointments', 'booking link', 'availability', 'calendar', 'crm', 'tasks', 'meetings'],
+      body: `# Scheduler — Booking Links, Availability, and Appointments
+
+The **Scheduler** app lets you define appointment types, set availability, share public booking links, and manage scheduled appointments. When an appointment is booked, BOAZ also creates a **CRM Task (type: meeting)** so it shows up in the CRM workflow.
+
+---
+
+## ✅ Where to find it
+
+- Internal Scheduler app: **Apps → Scheduler** (`/apps/scheduler`)
+- Public booking page: `/schedule/<appointment-type-slug>`
+
+---
+
+## 1) Appointment Types (what clients can book)
+
+Appointment Types define what you’re offering and how it’s booked.
+
+### Fields
+- **Name**: Display name (example: “15 min intro call”)
+- **Slug**: Used in the booking link URL (example: `intro-call`)
+- **Duration**: Minutes for the meeting
+- **Location**:
+  - **Video**, **Phone**, **In person**, or **Custom**
+  - Optional **Location details** (Zoom link, address, instructions, etc.)
+- **Buffers** (optional):
+  - **Buffer before**: blocks time before the meeting
+  - **Buffer after**: blocks time after the meeting
+- **Active**: Inactive types won’t be available for booking
+
+### Booking links
+From the Appointment Types list you can:
+- **Open booking page** (opens the public page)
+- **Copy link** (copies the public booking URL to your clipboard)
+
+---
+
+## 2) Availability (when people can book you)
+
+Availability controls the time slots that appear on your public booking pages.
+
+### Time zone
+- Availability uses an **IANA time zone** (example: `America/New_York`)
+- The public booking page displays slots in the availability time zone
+
+### Weekly schedule
+- Configure **Enabled**, **Start**, and **End** for each day of the week
+- The public booking page generates slots in **15-minute increments**
+
+---
+
+## 3) Booking appointments (internal vs public)
+
+### Public booking (clients)
+Clients book via the public page (`/schedule/<slug>`):
+1. Pick an available time
+2. Enter name + email (phone and notes optional)
+3. Click **Book appointment**
+
+The system will block a slot if:
+- It’s outside your availability
+- It overlaps another booked appointment (including buffer time)
+- (If connected) your external calendar reports busy time
+
+### Internal booking (staff “book on behalf of”)
+Inside **Scheduler → Appointments**, you can create an appointment for a client:
+- Search/select a **CRM Contact** (optional but recommended)
+- Choose an appointment type
+- Pick a date/time
+- Provide attendee details and optional notes
+- Click **Book & send invite**
+
+---
+
+## 4) Appointments list + details
+
+The Appointments tab shows upcoming/recent appointments and auto-refreshes periodically.
+
+### Search
+Use the search box to find appointments by:
+- Attendee name
+- Attendee email
+- Phone
+- Appointment type name
+
+### Status and source
+- **Status**: booked / cancelled
+- **Source**: public / internal
+
+### Cancelling
+Booked appointments can be cancelled from the list or from the appointment details modal.
+
+---
+
+## 5) Calendar view
+
+The Calendar tab provides:
+- **Month** view (quick overview + click a day to start booking internally)
+- **Week** view (appointments grouped per day)
+- **Day** view (appointments for one date)
+
+Clicking an appointment opens its details.
+
+---
+
+## CRM integration (meetings become Tasks)
+
+When an appointment is booked, BOAZ creates a **CRM Task** of type **meeting** so it appears in:
+- **CRM → Tasks** (`/apps/crm/tasks`)
+
+When an appointment is cancelled, BOAZ will best-effort cancel the matching CRM meeting task(s).
+
+---
+
+## Troubleshooting
+
+### “Booking page not found”
+- The booking URL slug may be wrong
+- The appointment type may be inactive or deleted
+
+### “No available times”
+- Confirm availability is enabled for that weekday
+- Confirm start/end window times are set
+- Existing appointments (including buffers) may be blocking slots
+
+### “Slot taken” / “External calendar busy”
+- Someone else booked it first, or
+- Your connected calendar shows a conflict during that buffered window
+
+---
+
+**Last Updated:** January 2026
+`,
+      status: 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      author: 'System',
+      views: 0,
+    }
+
+    const existing = await db.collection('kb_articles').findOne({ slug: ARTICLE.slug })
+    const result = existing ? 'updated' : 'created'
+    if (existing) {
+      await db.collection('kb_articles').updateOne({ slug: ARTICLE.slug }, { $set: { ...ARTICLE, updatedAt: new Date() } })
+    } else {
+      await db.collection('kb_articles').insertOne(ARTICLE as any)
+    }
+
+    res.json({
+      data: {
+        message: `KB article ${result} successfully`,
+        result,
+        title: ARTICLE.title,
+        slug: ARTICLE.slug,
+        url: `/apps/crm/support/kb/${ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed scheduler KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
 // DELETE /api/admin/customer-portal-users/:email - Remove customer by email
 adminSeedDataRouter.delete('/customer-portal-user/:email', async (req, res) => {
   const db = await getDb()
