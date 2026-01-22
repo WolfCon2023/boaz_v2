@@ -66,6 +66,10 @@ const allowedOriginsRaw = env.ORIGIN.split(',').map((o) => o.trim()).filter(Bool
 const allowedOrigins = allowedOriginsRaw.map(normalize)
 const isAllowed = (origin: string) => {
   const o = normalize(origin)
+  // Allow localhost for local dev UIs hitting Railway APIs
+  if (o.startsWith('http://localhost') || o.startsWith('https://localhost') || o.startsWith('http://127.0.0.1') || o.startsWith('https://127.0.0.1')) {
+    return true
+  }
   // Wildcard
   if (allowedOrigins.includes('*')) return true
   // Exact match
