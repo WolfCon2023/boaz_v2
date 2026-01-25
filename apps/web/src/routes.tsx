@@ -97,7 +97,7 @@ export const router = createBrowserRouter([
       { path: 'settings', element: <RequireAuth><Settings /></RequireAuth> },
       { path: 'admin', element: <RequireAuth><AdminPortal /></RequireAuth> },
       { path: 'admin/customer-portal-users', element: <RequireAuth><AdminCustomerPortalUsers /></RequireAuth> },
-      { path: 'admin/seed-data', element: <RequireAuth><AdminDataSeeding /></RequireAuth> },
+      { path: 'admin/seed-data', element: <RequireAuth><RequireAdmin><AdminDataSeeding /></RequireAdmin></RequireAuth> },
       // login is defined as a top-level route wrapped in PublicShell
       { path: 'register', element: <Register /> },
       { path: 'dashboard', element: <RequireAuth><RequireApplication appKey="dashboard"><Dashboard /></RequireApplication></RequireAuth> },

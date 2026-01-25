@@ -18,6 +18,232 @@ export default function AdminDataSeeding() {
     const join = url.includes('?') ? '&' : '?'
     return http.post(`${url}${join}ts=${Date.now()}`)
   }
+
+  async function upsertKbArticleBySlug(article: { title: string; slug: string; body: string; category: string; tags: string[] }) {
+    // Uses normal KB CRUD endpoints (more stable than /api/admin/seed when edge routing is flaky).
+    // Requires the API to accept `slug` on create/update (added in api `crm/kb.ts`).
+    try {
+      const getRes = await http.get(`/api/crm/support/kb/${encodeURIComponent(article.slug)}`)
+      const existing = (getRes.data as any)?.data?.item
+      if (existing?._id) {
+        await http.put(`/api/crm/support/kb/${encodeURIComponent(String(existing._id))}`, {
+          title: article.title,
+          body: article.body,
+          category: article.category,
+          tags: article.tags,
+          slug: article.slug,
+        })
+        return { message: 'KB article updated successfully', result: 'updated', title: article.title, slug: article.slug, url: `/apps/crm/support/kb/${article.slug}` }
+      }
+    } catch (err: any) {
+      // If not found, we'll create below. Otherwise rethrow.
+      if (err?.response?.status !== 404) throw err
+    }
+
+    await http.post('/api/crm/support/kb', {
+      title: article.title,
+      body: article.body,
+      category: article.category,
+      tags: article.tags,
+      slug: article.slug,
+      author: 'System',
+    })
+    return { message: 'KB article created successfully', result: 'created', title: article.title, slug: article.slug, url: `/apps/crm/support/kb/${article.slug}` }
+  }
+
+  const SCHEDULER_ARTICLE = {
+    title: 'Scheduler — Booking Links, Availability, and Appointments',
+    category: 'Scheduling',
+    slug: 'scheduler-guide',
+    tags: ['scheduler', 'appointments', 'booking link', 'availability', 'calendar', 'crm', 'tasks', 'meetings'],
+    body: `# Scheduler — Booking Links, Availability, and Appointments
+
+The **Scheduler** app lets you define appointment types, set availability, share public booking links, and manage scheduled appointments. When an appointment is booked, BOAZ also creates a **CRM Task (type: meeting)** so it shows up in the CRM workflow.
+
+---
+
+## ✅ Where to find it
+
+- Internal Scheduler app: **Apps → Scheduler** (\`/apps/scheduler\`)
+- Public booking page: \`/schedule/<appointment-type-slug>\`
+
+---
+
+## 📚 Sub-guides (by tab)
+
+- Appointment Types: \`/apps/crm/support/kb/scheduler-appointment-types\`
+- Availability: \`/apps/crm/support/kb/scheduler-availability\`
+- Appointments: \`/apps/crm/support/kb/scheduler-appointments\`
+- Calendar: \`/apps/crm/support/kb/scheduler-calendar\`
+
+---
+
+## 1) Appointment Types (what clients can book)
+
+Appointment Types define what you’re offering and how it’s booked.
+
+### Fields
+- **Name**: Display name
+- **Slug**: Used in the booking link URL
+- **Duration**: Minutes for the meeting
+- **Location**: Video / Phone / In person / Custom (+ optional details)
+- **Buffers** (optional): before/after
+- **Active**: Inactive types won’t be available for booking
+
+---
+
+## 2) Availability (when people can book you)
+
+Availability controls the time slots that appear on your public booking pages.
+
+---
+
+## 3) Booking appointments (internal vs public)
+
+- Public booking: \`/schedule/<slug>\`
+- Internal booking: Scheduler → Appointments tab
+
+---
+
+## 4) Appointments list + details
+
+Search by attendee name/email/phone or appointment type.
+
+---
+
+## 5) Calendar view
+
+Month / Week / Day views for scheduled appointments.
+
+---
+
+## CRM integration (meetings become Tasks)
+
+Appointments create **CRM Tasks** of type **meeting** (see \`/apps/crm/tasks\`).
+
+---
+
+**Last Updated:** January 2026
+`,
+  }
+
+  const SCHEDULER_APPOINTMENT_TYPES_ARTICLE = {
+    title: 'Scheduler — Appointment Types',
+    category: 'Scheduling',
+    slug: 'scheduler-appointment-types',
+    tags: ['scheduler', 'appointment types', 'booking link', 'slug', 'duration', 'location', 'buffers'],
+    body: `# Scheduler — Appointment Types
+
+Appointment Types define **what** someone can book and generate the **public booking link** for that type.
+
+---
+
+## Where to find it
+
+- Scheduler app: **Appointment types** tab (\`/apps/scheduler\`)
+
+---
+
+## What an appointment type includes
+
+- **Name**
+- **Slug** (\`/schedule/<slug>\`)
+- **Duration (minutes)**
+- **Location type** + optional **location details**
+- **Buffers** (before/after)
+- **Active** toggle
+
+---
+
+Related:
+- Overview: \`/apps/crm/support/kb/scheduler-guide\`
+`,
+  }
+
+  const SCHEDULER_AVAILABILITY_ARTICLE = {
+    title: 'Scheduler — Availability',
+    category: 'Scheduling',
+    slug: 'scheduler-availability',
+    tags: ['scheduler', 'availability', 'timezone', 'weekly schedule', 'time slots'],
+    body: `# Scheduler — Availability
+
+Availability controls **when** your public booking pages show available times.
+
+---
+
+## Where to find it
+
+- Scheduler app: **Availability** tab (\`/apps/scheduler\`)
+
+---
+
+## Time zone
+
+Use an IANA time zone (example: \`America/New_York\`). Slots display in that time zone.
+
+---
+
+## Weekly schedule
+
+Set enabled/start/end per day. Slots are generated in 15-minute increments and conflicts are filtered out.
+
+---
+
+Related:
+- Overview: \`/apps/crm/support/kb/scheduler-guide\`
+`,
+  }
+
+  const SCHEDULER_APPOINTMENTS_ARTICLE = {
+    title: 'Scheduler — Appointments',
+    category: 'Scheduling',
+    slug: 'scheduler-appointments',
+    tags: ['scheduler', 'appointments', 'internal booking', 'public booking', 'cancel', 'crm', 'tasks'],
+    body: `# Scheduler — Appointments
+
+Manage bookings and schedule appointments (internal or public).
+
+---
+
+## Where to find it
+
+- Scheduler app: **Appointments** tab (\`/apps/scheduler\`)
+- Public booking: \`/schedule/<slug>\`
+
+---
+
+## Cancelling
+
+Cancel from the list or the details modal. BOAZ will best-effort cancel matching CRM meeting task(s).
+
+---
+
+Related:
+- Overview: \`/apps/crm/support/kb/scheduler-guide\`
+`,
+  }
+
+  const SCHEDULER_CALENDAR_ARTICLE = {
+    title: 'Scheduler — Calendar',
+    category: 'Scheduling',
+    slug: 'scheduler-calendar',
+    tags: ['scheduler', 'calendar', 'month view', 'week view', 'day view'],
+    body: `# Scheduler — Calendar
+
+Visualize scheduled appointments in Month / Week / Day views.
+
+---
+
+## Where to find it
+
+- Scheduler app: **Calendar** tab (\`/apps/scheduler\`)
+
+---
+
+Related:
+- Overview: \`/apps/crm/support/kb/scheduler-guide\`
+`,
+  }
   
   const [seedingRoles, setSeedingRoles] = useState(false)
   const [seedingKB, setSeedingKB] = useState(false)
@@ -306,7 +532,17 @@ export default function AdminDataSeeding() {
         showToast('Scheduler KB article seeded successfully', 'success')
       }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to seed Scheduler KB', 'error')
+      if (err?.response?.status === 404) {
+        try {
+          const r = await upsertKbArticleBySlug(SCHEDULER_ARTICLE)
+          setSchedulerKBResult(r)
+          showToast('Scheduler KB article seeded successfully', 'success')
+        } catch (e: any) {
+          showToast(e?.response?.data?.error || e?.message || 'Failed to seed Scheduler KB', 'error')
+        }
+      } else {
+        showToast(err.response?.data?.error || 'Failed to seed Scheduler KB', 'error')
+      }
     } finally {
       setSeedingSchedulerKB(false)
     }
@@ -324,7 +560,17 @@ export default function AdminDataSeeding() {
         showToast('Scheduler Appointment Types KB article seeded successfully', 'success')
       }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to seed Scheduler Appointment Types KB', 'error')
+      if (err?.response?.status === 404) {
+        try {
+          const r = await upsertKbArticleBySlug(SCHEDULER_APPOINTMENT_TYPES_ARTICLE)
+          setSchedulerAppointmentTypesKBResult(r)
+          showToast('Scheduler Appointment Types KB article seeded successfully', 'success')
+        } catch (e: any) {
+          showToast(e?.response?.data?.error || e?.message || 'Failed to seed Scheduler Appointment Types KB', 'error')
+        }
+      } else {
+        showToast(err.response?.data?.error || 'Failed to seed Scheduler Appointment Types KB', 'error')
+      }
     } finally {
       setSeedingSchedulerAppointmentTypesKB(false)
     }
@@ -342,7 +588,17 @@ export default function AdminDataSeeding() {
         showToast('Scheduler Availability KB article seeded successfully', 'success')
       }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to seed Scheduler Availability KB', 'error')
+      if (err?.response?.status === 404) {
+        try {
+          const r = await upsertKbArticleBySlug(SCHEDULER_AVAILABILITY_ARTICLE)
+          setSchedulerAvailabilityKBResult(r)
+          showToast('Scheduler Availability KB article seeded successfully', 'success')
+        } catch (e: any) {
+          showToast(e?.response?.data?.error || e?.message || 'Failed to seed Scheduler Availability KB', 'error')
+        }
+      } else {
+        showToast(err.response?.data?.error || 'Failed to seed Scheduler Availability KB', 'error')
+      }
     } finally {
       setSeedingSchedulerAvailabilityKB(false)
     }
@@ -360,7 +616,17 @@ export default function AdminDataSeeding() {
         showToast('Scheduler Appointments KB article seeded successfully', 'success')
       }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to seed Scheduler Appointments KB', 'error')
+      if (err?.response?.status === 404) {
+        try {
+          const r = await upsertKbArticleBySlug(SCHEDULER_APPOINTMENTS_ARTICLE)
+          setSchedulerAppointmentsKBResult(r)
+          showToast('Scheduler Appointments KB article seeded successfully', 'success')
+        } catch (e: any) {
+          showToast(e?.response?.data?.error || e?.message || 'Failed to seed Scheduler Appointments KB', 'error')
+        }
+      } else {
+        showToast(err.response?.data?.error || 'Failed to seed Scheduler Appointments KB', 'error')
+      }
     } finally {
       setSeedingSchedulerAppointmentsKB(false)
     }
@@ -378,7 +644,17 @@ export default function AdminDataSeeding() {
         showToast('Scheduler Calendar KB article seeded successfully', 'success')
       }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to seed Scheduler Calendar KB', 'error')
+      if (err?.response?.status === 404) {
+        try {
+          const r = await upsertKbArticleBySlug(SCHEDULER_CALENDAR_ARTICLE)
+          setSchedulerCalendarKBResult(r)
+          showToast('Scheduler Calendar KB article seeded successfully', 'success')
+        } catch (e: any) {
+          showToast(e?.response?.data?.error || e?.message || 'Failed to seed Scheduler Calendar KB', 'error')
+        }
+      } else {
+        showToast(err.response?.data?.error || 'Failed to seed Scheduler Calendar KB', 'error')
+      }
     } finally {
       setSeedingSchedulerCalendarKB(false)
     }
