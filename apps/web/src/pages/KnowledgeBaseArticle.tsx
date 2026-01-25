@@ -8,10 +8,22 @@ type Article = {
   _id: string
   title?: string
   body?: string
+  slug?: string
   tags?: string[]
   category?: string
   updatedAt?: string
   attachments?: { _id: string; filename: string; contentType?: string; size?: number }[]
+}
+
+function slugifyTitle(s: string) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u2012-\u2015]/g, '-') // unicode dashes
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
 function renderMarkdownLite(md: string) {
@@ -150,7 +162,25 @@ export default function KnowledgeBaseArticle() {
 
   const q = useQuery({
     queryKey: ['kb', 'article', idOrSlug],
-    queryFn: async () => (await http.get(`/api/crm/support/kb/${encodeURIComponent(idOrSlug)}`)).data as { data: { item: Article } },
+    queryFn: async () => {
+      // First: try direct fetch by id or slug.
+      try {
+        return (await http.get(`/api/crm/support/kb/${encodeURIComponent(idOrSlug)}`)).data as { data: { item: Article } }
+      } catch (err: any) {
+        // If slug fetch fails, fall back to searching the KB list and matching by slugified title.
+        if (err?.response?.status !== 404) throw err
+
+        const hint = String(idOrSlug || '').split('-')[0] || String(idOrSlug || '')
+        const listRes = await http.get('/api/crm/support/kb', { params: { q: hint } })
+        const items = (listRes.data as any)?.data?.items as Article[] | undefined
+        const found =
+          (items || []).find((a) => a.slug === idOrSlug) ||
+          (items || []).find((a) => slugifyTitle(a.title || '') === idOrSlug)
+
+        if (!found) throw err
+        return { data: { item: found } } as any
+      }
+    },
     enabled: Boolean(idOrSlug),
     retry: false,
   })
