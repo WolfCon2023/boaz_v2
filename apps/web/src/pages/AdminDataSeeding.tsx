@@ -11,6 +11,13 @@ import { Database, Play, CheckCircle, Loader } from 'lucide-react'
 
 export default function AdminDataSeeding() {
   const { showToast } = useToast()
+
+  // Work around occasional stale-edge routing by cache-busting seed calls.
+  // (Some deploys/edges can briefly serve older route tables; a unique query avoids sticky routing.)
+  function seedPost(url: string) {
+    const join = url.includes('?') ? '&' : '?'
+    return http.post(`${url}${join}ts=${Date.now()}`)
+  }
   
   const [seedingRoles, setSeedingRoles] = useState(false)
   const [seedingKB, setSeedingKB] = useState(false)
@@ -57,7 +64,7 @@ export default function AdminDataSeeding() {
     setSeedingRoles(true)
     setRolesResult(null)
     try {
-      const res = await http.post('/api/admin/seed/it-roles')
+      const res = await seedPost('/api/admin/seed/it-roles')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -75,7 +82,7 @@ export default function AdminDataSeeding() {
     setSeedingKB(true)
     setKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/roles-kb')
+      const res = await seedPost('/api/admin/seed/roles-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -93,7 +100,7 @@ export default function AdminDataSeeding() {
     setSeedingTicketsKB(true)
     setTicketsKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/tickets-kb')
+      const res = await seedPost('/api/admin/seed/tickets-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -111,7 +118,7 @@ export default function AdminDataSeeding() {
     setSeedingApprovalKB(true)
     setApprovalKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/approval-queue-kb')
+      const res = await seedPost('/api/admin/seed/approval-queue-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -129,7 +136,7 @@ export default function AdminDataSeeding() {
     setSeedingAcceptanceKB(true)
     setAcceptanceKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/acceptance-queue-kb')
+      const res = await seedPost('/api/admin/seed/acceptance-queue-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -147,7 +154,7 @@ export default function AdminDataSeeding() {
     setSeedingDealApprovalKB(true)
     setDealApprovalKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/deal-approval-kb')
+      const res = await seedPost('/api/admin/seed/deal-approval-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -165,7 +172,7 @@ export default function AdminDataSeeding() {
     setSeedingCustomerSuccessKB(true)
     setCustomerSuccessKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/customer-success-kb')
+      const res = await seedPost('/api/admin/seed/customer-success-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -183,7 +190,7 @@ export default function AdminDataSeeding() {
     setSeedingPaymentPortalKB(true)
     setPaymentPortalKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/payment-portal-kb')
+      const res = await seedPost('/api/admin/seed/payment-portal-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -201,7 +208,7 @@ export default function AdminDataSeeding() {
     setSeedingOutreachSequencesKB(true)
     setOutreachSequencesKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/outreach-sequences-kb')
+      const res = await seedPost('/api/admin/seed/outreach-sequences-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -219,7 +226,7 @@ export default function AdminDataSeeding() {
     setSeedingOutreachTemplatesKB(true)
     setOutreachTemplatesKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/outreach-templates-kb')
+      const res = await seedPost('/api/admin/seed/outreach-templates-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -237,7 +244,7 @@ export default function AdminDataSeeding() {
     setSeedingReportingKB(true)
     setReportingKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/reporting-kb')
+      const res = await seedPost('/api/admin/seed/reporting-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -255,7 +262,7 @@ export default function AdminDataSeeding() {
     setSeedingIntegrationsKB(true)
     setIntegrationsKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/integrations-kb')
+      const res = await seedPost('/api/admin/seed/integrations-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -273,7 +280,7 @@ export default function AdminDataSeeding() {
     setSeedingMarketingSegmentsKB(true)
     setMarketingSegmentsKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/marketing-segments-kb')
+      const res = await seedPost('/api/admin/seed/marketing-segments-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -291,7 +298,7 @@ export default function AdminDataSeeding() {
     setSeedingSchedulerKB(true)
     setSchedulerKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/scheduler-kb')
+      const res = await seedPost('/api/admin/seed/scheduler-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -309,7 +316,7 @@ export default function AdminDataSeeding() {
     setSeedingSchedulerAppointmentTypesKB(true)
     setSchedulerAppointmentTypesKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/scheduler-appointment-types-kb')
+      const res = await seedPost('/api/admin/seed/scheduler-appointment-types-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -327,7 +334,7 @@ export default function AdminDataSeeding() {
     setSeedingSchedulerAvailabilityKB(true)
     setSchedulerAvailabilityKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/scheduler-availability-kb')
+      const res = await seedPost('/api/admin/seed/scheduler-availability-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -345,7 +352,7 @@ export default function AdminDataSeeding() {
     setSeedingSchedulerAppointmentsKB(true)
     setSchedulerAppointmentsKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/scheduler-appointments-kb')
+      const res = await seedPost('/api/admin/seed/scheduler-appointments-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
@@ -363,7 +370,7 @@ export default function AdminDataSeeding() {
     setSeedingSchedulerCalendarKB(true)
     setSchedulerCalendarKBResult(null)
     try {
-      const res = await http.post('/api/admin/seed/scheduler-calendar-kb')
+      const res = await seedPost('/api/admin/seed/scheduler-calendar-kb')
       if (res.data.error) {
         showToast(res.data.error, 'error')
       } else {
