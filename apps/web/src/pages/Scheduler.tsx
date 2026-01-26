@@ -355,12 +355,7 @@ export default function Scheduler() {
     }
   }, [showDatePicker])
 
-  // Slot picker UX: collapse list after selecting a slot, reset on type toggle/change.
-  React.useEffect(() => {
-    if (!useSlotPicker) return
-    // If no selection yet, show the list by default.
-    if (!bookStartsAtLocal) setSlotPickerOpen(true)
-  }, [useSlotPicker, bookStartsAtLocal])
+  // Slot picker UX: don't auto-open on clear; open is user-driven.
 
   // Sync date/time fields when bookStartsAtLocal changes externally (but not from our own updates)
   React.useEffect(() => {
@@ -479,6 +474,7 @@ export default function Scheduler() {
     onSuccess: async () => {
       toast.showToast('Appointment booked and invite sent.', 'success')
       setBookStartsAtLocal('')
+      setSlotPickerOpen(false)
       setBookDate('')
       setBookTime('')
       setBookContactQuery('')
