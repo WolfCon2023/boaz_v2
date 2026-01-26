@@ -1288,12 +1288,12 @@ export default function Scheduler() {
                             setSlotPickerOpen(true)
                             return
                           }
-                          if (bookingLinkQ.isLoading || bookingLinkQ.isFetching) return
+                          // Allow opening even while loading; we'll show "Loading availability…" in the label.
                           setSlotPickerOpen((v) => !v)
                         }}
                         className={`w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-left text-sm flex items-center justify-between gap-2 hover:bg-[color:var(--color-muted)] ${
                           !selectedType ? 'opacity-80' : ''
-                        }`}
+                        } cursor-pointer`}
                         title={!selectedType ? 'Select an appointment type first' : undefined}
                       >
                         <span className={!selectedType ? 'text-[color:var(--color-text-muted)]' : bookStartsAtLocal ? 'font-semibold' : 'text-[color:var(--color-text-muted)]'}>
