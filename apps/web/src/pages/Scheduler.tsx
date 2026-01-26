@@ -1272,41 +1272,55 @@ export default function Scheduler() {
 
                 {useSlotPicker ? (
                   <div className="mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-2">
-                    {!selectedType ? (
-                      <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">Select an appointment type to see available slots.</div>
-                    ) : bookingLinkQ.isLoading ? (
-                      <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">Loading availability…</div>
-                    ) : bookingLinkQ.isError ? (
-                      <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">Unable to load availability for this type.</div>
-                    ) : slotOptions.length ? (
-                      <div className="space-y-2">
-                        <button
-                          type="button"
-                          onClick={() => setSlotPickerOpen((v) => !v)}
-                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-left text-sm hover:bg-[color:var(--color-muted)] flex items-center justify-between gap-2"
-                        >
-                          <span className={bookStartsAtLocal ? 'font-semibold' : 'text-[color:var(--color-text-muted)]'}>
-                            {bookStartsAtLocal ? (slotOptions.find((s) => s.iso === bookStartsAtLocal)?.label || 'Selected time') : 'Select a time…'}
-                          </span>
-                          <span className="text-xs text-[color:var(--color-text-muted)]">{slotPickerOpen ? 'Hide' : 'Change'}</span>
-                        </button>
-
-                        {bookStartsAtLocal ? (
-                          <div className="flex items-center justify-end">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setBookStartsAtLocal('')
-                                setSlotPickerOpen(true)
-                              }}
-                              className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
-                            >
-                              Clear
-                            </button>
-                          </div>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        disabled={!selectedType || bookingLinkQ.isLoading || bookingLinkQ.isError}
+                        onClick={() => {
+                          if (!selectedType) return
+                          if (bookingLinkQ.isLoading || bookingLinkQ.isError) return
+                          setSlotPickerOpen((v) => !v)
+                        }}
+                        className={`w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-left text-sm flex items-center justify-between gap-2 ${
+                          !selectedType || bookingLinkQ.isLoading || bookingLinkQ.isError
+                            ? 'opacity-60 cursor-not-allowed'
+                            : 'hover:bg-[color:var(--color-muted)]'
+                        }`}
+                        title={!selectedType ? 'Select an appointment type first' : undefined}
+                      >
+                        <span className={!selectedType ? 'text-[color:var(--color-text-muted)]' : bookStartsAtLocal ? 'font-semibold' : 'text-[color:var(--color-text-muted)]'}>
+                          {!selectedType
+                            ? 'Select an appointment type to see available slots.'
+                            : bookingLinkQ.isLoading
+                              ? 'Loading availability…'
+                              : bookingLinkQ.isError
+                                ? 'Unable to load availability.'
+                                : bookStartsAtLocal
+                                  ? slotOptions.find((s) => s.iso === bookStartsAtLocal)?.label || 'Selected time'
+                                  : 'Select a time…'}
+                        </span>
+                        {selectedType && !bookingLinkQ.isLoading && !bookingLinkQ.isError ? (
+                          <span className="text-xs text-[color:var(--color-text-muted)]">{slotPickerOpen ? 'Hide' : 'Show'}</span>
                         ) : null}
+                      </button>
 
-                        {slotPickerOpen ? (
+                      {bookStartsAtLocal ? (
+                        <div className="flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBookStartsAtLocal('')
+                              setSlotPickerOpen(true)
+                            }}
+                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {selectedType && !bookingLinkQ.isLoading && !bookingLinkQ.isError && slotPickerOpen ? (
+                        slotOptions.length ? (
                           <div className="grid grid-cols-1 gap-1">
                             {slotOptions.map((s) => (
                               <button
@@ -1322,11 +1336,11 @@ export default function Scheduler() {
                               </button>
                             ))}
                           </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">No available slots in the next few weeks.</div>
-                    )}
+                        ) : (
+                          <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">No available slots in the next few weeks.</div>
+                        )
+                      ) : null}
+                    </div>
                   </div>
                 ) : (
                   <div className="mt-2 grid grid-cols-2 gap-2">
