@@ -79,7 +79,10 @@ export default function Scheduler() {
   const qc = useQueryClient()
   const toast = useToast()
   const { confirm, ConfirmDialog } = useConfirm()
-  const portalTarget = typeof document !== 'undefined' ? document.body : null
+  const portalTarget =
+    typeof document !== 'undefined'
+      ? (document.getElementById('portal-root') || document.getElementById('root') || document.body)
+      : null
   const [tab, setTab] = React.useState<'types' | 'availability' | 'appointments' | 'calendar'>('types')
   const [calendarMonth, setCalendarMonth] = React.useState(new Date())
   const [calendarView, setCalendarView] = React.useState<'month' | 'week' | 'day'>('month')
