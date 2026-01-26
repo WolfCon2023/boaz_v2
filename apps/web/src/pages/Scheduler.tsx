@@ -340,6 +340,7 @@ export default function Scheduler() {
   const [showDatePicker, setShowDatePicker] = React.useState(false)
   const [datePickerMonth, setDatePickerMonth] = React.useState(new Date())
   const datePickerRef = React.useRef<HTMLDivElement>(null)
+  const bookTypeSelectRef = React.useRef<HTMLSelectElement>(null)
 
   // Close date picker when clicking outside
   React.useEffect(() => {
@@ -1234,6 +1235,7 @@ export default function Scheduler() {
               <div className="md:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Appointment type</label>
                 <select
+                  ref={bookTypeSelectRef}
                   value={bookTypeId}
                   onChange={(e) => {
                     setBookTypeId(e.target.value)
@@ -1275,31 +1277,37 @@ export default function Scheduler() {
                     <div className="space-y-2">
                       <button
                         type="button"
-                        disabled={!selectedType || bookingLinkQ.isLoading || bookingLinkQ.isError}
                         onClick={() => {
-                          if (!selectedType) return
-                          if (bookingLinkQ.isLoading || bookingLinkQ.isError) return
+                          if (!selectedType) {
+                            toast.showToast('Select an appointment type first.', 'info')
+                            bookTypeSelectRef.current?.focus()
+                            return
+                          }
+                          if (bookingLinkQ.isError) {
+                            bookingLinkQ.refetch()
+                            setSlotPickerOpen(true)
+                            return
+                          }
+                          if (bookingLinkQ.isLoading || bookingLinkQ.isFetching) return
                           setSlotPickerOpen((v) => !v)
                         }}
-                        className={`w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-left text-sm flex items-center justify-between gap-2 ${
-                          !selectedType || bookingLinkQ.isLoading || bookingLinkQ.isError
-                            ? 'opacity-60 cursor-not-allowed'
-                            : 'hover:bg-[color:var(--color-muted)]'
+                        className={`w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-left text-sm flex items-center justify-between gap-2 hover:bg-[color:var(--color-muted)] ${
+                          !selectedType ? 'opacity-80' : ''
                         }`}
                         title={!selectedType ? 'Select an appointment type first' : undefined}
                       >
                         <span className={!selectedType ? 'text-[color:var(--color-text-muted)]' : bookStartsAtLocal ? 'font-semibold' : 'text-[color:var(--color-text-muted)]'}>
                           {!selectedType
                             ? 'Select an appointment type to see available slots.'
-                            : bookingLinkQ.isLoading
+                            : bookingLinkQ.isLoading || bookingLinkQ.isFetching
                               ? 'Loading availability…'
                               : bookingLinkQ.isError
-                                ? 'Unable to load availability.'
+                                ? 'Unable to load availability (click to retry).'
                                 : bookStartsAtLocal
                                   ? slotOptions.find((s) => s.iso === bookStartsAtLocal)?.label || 'Selected time'
                                   : 'Select a time…'}
                         </span>
-                        {selectedType && !bookingLinkQ.isLoading && !bookingLinkQ.isError ? (
+                        {selectedType && !bookingLinkQ.isLoading && !bookingLinkQ.isFetching && !bookingLinkQ.isError ? (
                           <span className="text-xs text-[color:var(--color-text-muted)]">{slotPickerOpen ? 'Hide' : 'Show'}</span>
                         ) : null}
                       </button>
