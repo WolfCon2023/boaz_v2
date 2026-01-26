@@ -2107,11 +2107,17 @@ export default function Scheduler() {
 
       {/* Appointment Details Modal */}
       {selectedAppointment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSelectedAppointment(null)}>
-          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-6 py-4">
+        <div
+          className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setSelectedAppointment(null)}
+        >
+          <div
+            className="w-[min(90vw,56rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] pb-3">
               <div>
-                <h2 className="text-lg font-semibold">Appointment Details</h2>
+                <h2 className="text-base font-semibold">Appointment Details</h2>
                 <p className="text-xs text-[color:var(--color-text-muted)] mt-1">
                   {selectedAppointment.appointmentTypeName || 'Appointment'}
                 </p>
@@ -2119,13 +2125,13 @@ export default function Scheduler() {
               <button
                 type="button"
                 onClick={() => setSelectedAppointment(null)}
-                className="p-2 rounded-lg hover:bg-[color:var(--color-muted)]"
+                className="p-2 rounded hover:bg-[color:var(--color-muted)]"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Attendee</div>
                   <div className="flex items-center gap-2">
@@ -2214,7 +2220,7 @@ export default function Scheduler() {
                   <div className="text-sm">{selectedAppointment.cancelReason}</div>
                 </div>
               ) : null}
-              <div className="flex items-center gap-2 pt-4 border-t border-[color:var(--color-border)]">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[color:var(--color-border)]">
                 {selectedAppointment.status === 'booked' && (
                   <button
                     type="button"
