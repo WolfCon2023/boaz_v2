@@ -58,7 +58,14 @@ export default function AdminDataSeeding() {
     tags: ['scheduler', 'appointments', 'booking link', 'availability', 'calendar', 'crm', 'tasks', 'meetings'],
     body: `# Scheduler — Booking Links, Availability, and Appointments
 
-The **Scheduler** app lets you define appointment types, set availability, share public booking links, and manage scheduled appointments. When an appointment is booked, BOAZ also creates a **CRM Task (type: meeting)** so it shows up in the CRM workflow.
+The **Scheduler** app is used to:
+- Create **Appointment Types** (what can be booked)
+- Configure **Availability** (when you can be booked)
+- Share **public booking links** (\`/schedule/<slug>\`)
+- Manage **Appointments** (booked/cancelled)
+- View appointments in **Calendar** views (Month / Week / Day)
+
+When an appointment is booked, BOAZ also creates a **CRM Task (type: meeting)** so it appears in your CRM workflow.
 
 ---
 
@@ -78,48 +85,51 @@ The **Scheduler** app lets you define appointment types, set availability, share
 
 ---
 
-## 1) Appointment Types (what clients can book)
+## Core concepts
 
-Appointment Types define what you’re offering and how it’s booked.
-
-### Fields
-- **Name**: Display name
-- **Slug**: Used in the booking link URL
-- **Duration**: Minutes for the meeting
-- **Location**: Video / Phone / In person / Custom (+ optional details)
-- **Buffers** (optional): before/after
-- **Active**: Inactive types won’t be available for booking
+- **Appointment Type**: A template (name, slug, duration, location, buffers, active)
+- **Availability**: Weekly schedule + time zone used to generate slots
+- **Appointment**: A booking record (attendee, start/end, status, source)
+- **Source**: \`public\` (booked by attendee) or \`internal\` (booked by staff)
+- **CRM meeting task**: A CRM task created from an appointment (visible at \`/apps/crm/tasks\`)
 
 ---
 
-## 2) Availability (when people can book you)
+## Booking flow overview
 
-Availability controls the time slots that appear on your public booking pages.
+### Public booking (clients)
+1. Share \`/schedule/<slug>\`
+2. Attendee selects an available slot and enters details
+3. BOAZ validates:
+   - within availability hours
+   - within booking window
+   - no conflicts with existing appointments (including buffers)
+   - optional external-calendar “busy” conflicts (if connected)
+4. BOAZ creates:
+   - Appointment record
+   - CRM Contact link/creation (best-effort)
+   - CRM meeting task
 
----
-
-## 3) Booking appointments (internal vs public)
-
-- Public booking: \`/schedule/<slug>\`
-- Internal booking: Scheduler → Appointments tab
-
----
-
-## 4) Appointments list + details
-
-Search by attendee name/email/phone or appointment type.
-
----
-
-## 5) Calendar view
-
-Month / Week / Day views for scheduled appointments.
+### Internal booking (staff)
+1. Scheduler → Appointments → “Create appointment (internal)”
+2. Optionally link to a CRM Contact (recommended)
+3. Choose type, date/time, attendee details
+4. BOAZ runs the same conflict checks and creates the same downstream records
 
 ---
 
-## CRM integration (meetings become Tasks)
+## Troubleshooting (common)
 
-Appointments create **CRM Tasks** of type **meeting** (see \`/apps/crm/tasks\`).
+### “Article not found” in KB
+The KB page exists, but the article hasn’t been seeded into MongoDB yet. Seed from \`/admin/seed-data\`.
+
+### “No available times”
+- Availability day may be disabled
+- Start/end window may be too small for the appointment duration
+- Existing appointments and/or buffers may block all slots
+
+### “Slot taken”
+Someone booked it first or another appointment overlaps the buffered window.
 
 ---
 
@@ -144,14 +154,58 @@ Appointment Types define **what** someone can book and generate the **public boo
 
 ---
 
-## What an appointment type includes
+## Fields (and what they do)
 
-- **Name**
-- **Slug** (\`/schedule/<slug>\`)
-- **Duration (minutes)**
-- **Location type** + optional **location details**
-- **Buffers** (before/after)
-- **Active** toggle
+### Name (required)
+- Display name shown internally and on the public booking page.
+
+### Slug (required)
+- Used in the public booking URL: \`/schedule/<slug>\`
+- Keep slugs short and stable (changing the slug changes the public link).
+
+### Duration (minutes)
+- Determines the appointment end time.
+
+### Location
+- Location type: Video / Phone / In person / Custom
+- Location details (optional): meeting link, address, dial-in instructions, etc.
+
+### Buffers (optional, recommended)
+- Buffer before (minutes)
+- Buffer after (minutes)
+
+Buffers are included in conflict checks to prevent back-to-back bookings.
+
+### Active
+- If inactive, the public booking page is effectively disabled for new bookings.
+
+---
+
+## Booking link actions
+
+From the list you can:
+- **Open booking page** (opens \`/schedule/<slug>\`)
+- **Copy link** (copies a shareable booking link)
+
+---
+
+## Best practices
+
+- Use \`15\` or \`30\` minute durations for most intro calls.
+- Use buffers for travel/setup (example: 10 before / 10 after).
+- Put the actual Zoom/Teams link in “Location details” so clients have it at booking time.
+
+---
+
+## Troubleshooting
+
+### Booking page “not found”
+- Ensure the appointment type is **Active**
+- Ensure you’re using the correct URL: \`/schedule/<slug>\`
+
+### People can’t see any times
+- Availability may not be enabled for that day
+- Existing appointments (or buffers) may be blocking all slots
 
 ---
 
@@ -179,13 +233,37 @@ Availability controls **when** your public booking pages show available times.
 
 ## Time zone
 
-Use an IANA time zone (example: \`America/New_York\`). Slots display in that time zone.
+Use an **IANA time zone** (example: \`America/New_York\`).
+
+Notes:
+- The public booking page displays slots in this time zone.
+- If you change the time zone, the weekly hours are interpreted in the new zone.
 
 ---
 
 ## Weekly schedule
 
-Set enabled/start/end per day. Slots are generated in 15-minute increments and conflicts are filtered out.
+For each weekday you configure:
+- Enabled (on/off)
+- Start time
+- End time
+
+How public slots are generated:
+- Slots are generated in **15-minute increments**
+- Slots are filtered out if they:
+  - are in the past
+  - fall outside the enabled day’s hours
+  - conflict with an existing appointment (including buffers)
+  - conflict with an external calendar (if connected)
+
+---
+
+## Troubleshooting
+
+### “No available times”
+- Ensure the weekday is enabled
+- Ensure start/end allow enough room for the appointment duration
+- Check whether buffers are blocking adjacent slots
 
 ---
 
@@ -201,7 +279,7 @@ Related:
     tags: ['scheduler', 'appointments', 'internal booking', 'public booking', 'cancel', 'crm', 'tasks'],
     body: `# Scheduler — Appointments
 
-Manage bookings and schedule appointments (internal or public).
+The Appointments tab is where you manage bookings and (internally) schedule on behalf of clients.
 
 ---
 
@@ -209,6 +287,39 @@ Manage bookings and schedule appointments (internal or public).
 
 - Scheduler app: **Appointments** tab (\`/apps/scheduler\`)
 - Public booking: \`/schedule/<slug>\`
+
+---
+
+## Status & source
+
+- Status: \`booked\` or \`cancelled\`
+- Source: \`public\` or \`internal\`
+
+---
+
+## Search
+
+Search supports:
+- attendee name
+- attendee email
+- attendee phone
+- appointment type name
+
+---
+
+## Internal booking (“book on behalf of”)
+
+From “Create appointment (internal)”:
+1. (Optional) Search/select a **CRM Contact**
+2. Choose an appointment type
+3. Choose date & time
+4. Enter attendee details and optional notes/reminder minutes
+5. Click **Book & send invite**
+
+What the system does:
+- validates availability and conflicts
+- creates/links a CRM Contact (best-effort)
+- creates a CRM meeting task
 
 ---
 
@@ -237,6 +348,30 @@ Visualize scheduled appointments in Month / Week / Day views.
 ## Where to find it
 
 - Scheduler app: **Calendar** tab (\`/apps/scheduler\`)
+
+---
+
+## Views
+
+### Month
+- Overview of the month
+- Shows a few appointments per day and a “+X more” indicator
+- Click a day to jump into internal booking faster
+
+### Week
+- Groups appointments per day
+- Useful for workload planning
+
+### Day
+- Shows all appointments for a single date
+- Click an appointment to open details
+
+---
+
+## Tips
+
+- Cancelled appointments do not appear.
+- If you don’t see an appointment, confirm it’s within the displayed date range.
 
 ---
 
