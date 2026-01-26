@@ -1708,9 +1708,7 @@ export default function Scheduler() {
       {tab === 'calendar' && calendarView === 'month' && (
         <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
           <div className="mb-4 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
-            {!m365StatusQ.data?.data?.configured ? (
-              <div className="text-xs text-[color:var(--color-text-muted)]">External calendar sync is not configured on this environment.</div>
-            ) : m365StatusQ.data?.data?.connected ? (
+            {m365StatusQ.data?.data?.configured && m365StatusQ.data?.data?.connected ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs text-[color:var(--color-text-muted)]">
                   External calendar conflict checks: <span className="font-semibold text-green-400">Enabled</span>
@@ -1723,7 +1721,7 @@ export default function Scheduler() {
                   Manage in Calendar
                 </Link>
               </div>
-            ) : (
+            ) : m365StatusQ.data?.data?.configured ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs text-[color:var(--color-text-muted)]">
                   External calendar conflict checks: <span className="font-semibold text-[color:var(--color-text-muted)]">Disabled</span>
@@ -1735,7 +1733,7 @@ export default function Scheduler() {
                   Connect calendar
                 </Link>
               </div>
-            )}
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between mb-4">

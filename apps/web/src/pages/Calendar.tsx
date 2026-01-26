@@ -146,9 +146,7 @@ export default function Calendar() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!m365StatusQ.data?.data?.configured ? (
-              <span className="text-xs text-[color:var(--color-text-muted)]">Not configured on server.</span>
-            ) : m365StatusQ.data?.data?.connected ? (
+            {m365StatusQ.data?.data?.configured && m365StatusQ.data?.data?.connected ? (
               <>
                 <span className="text-xs text-[color:var(--color-text-muted)]">
                   Connected{m365StatusQ.data?.data?.email ? `: ${m365StatusQ.data.data.email}` : ''}
@@ -162,7 +160,7 @@ export default function Calendar() {
                   Disconnect
                 </button>
               </>
-            ) : (
+            ) : m365StatusQ.data?.data?.configured ? (
               <button
                 type="button"
                 onClick={() => connectM365.mutate()}
@@ -171,7 +169,7 @@ export default function Calendar() {
               >
                 Connect Microsoft 365
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </section>
