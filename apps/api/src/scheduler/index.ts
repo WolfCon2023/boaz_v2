@@ -20,6 +20,9 @@ type AppointmentTypeDoc = {
   bufferBeforeMinutes?: number
   bufferAfterMinutes?: number
   active: boolean
+  schedulingMode?: 'single' | 'round_robin'
+  teamUserIds?: string[]
+  rrCursor?: number
   createdAt: Date
   updatedAt: Date
 }
@@ -42,6 +45,10 @@ type AppointmentDoc = {
   appointmentTypeSlug?: string | null
   ownerUserId: string
   status: AppointmentStatus
+  cancelReason?: string | null
+  cancelledAt?: Date | null
+  cancelledByUserId?: string | null
+  cancelEmailSentAt?: Date | null
   contactId?: string | null
   attendeeFirstName?: string | null
   attendeeLastName?: string | null
@@ -288,6 +295,45 @@ function buildIcsInvite(args: {
     .join('\r\n')
 }
 
+function buildIcsCancel(args: {
+  uid: string
+  summary: string
+  description?: string
+  startsAt: Date
+  endsAt: Date
+  organizerEmail?: string | null
+  attendeeEmail: string
+}) {
+  const dtstamp = toIcsUtc(new Date())
+  const dtstart = toIcsUtc(args.startsAt)
+  const dtend = toIcsUtc(args.endsAt)
+  const organizer = args.organizerEmail ? `ORGANIZER:MAILTO:${icsEscape(args.organizerEmail)}` : ''
+  const desc = args.description ? `DESCRIPTION:${icsEscape(args.description)}` : ''
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//BOAZ//Scheduler//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:CANCEL',
+    'BEGIN:VEVENT',
+    `UID:${icsEscape(args.uid)}`,
+    `DTSTAMP:${dtstamp}`,
+    `DTSTART:${dtstart}`,
+    `DTEND:${dtend}`,
+    `SUMMARY:${icsEscape(args.summary)}`,
+    desc,
+    organizer,
+    `ATTENDEE;ROLE=REQ-PARTICIPANT;RSVP=FALSE:MAILTO:${icsEscape(args.attendeeEmail)}`,
+    'STATUS:CANCELLED',
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ]
+    .filter(Boolean)
+    .join('\r\n')
+}
+
 async function sendInviteEmails(db: any, appointment: AppointmentDoc, type: AppointmentTypeDoc) {
   try {
     const attendeeEmail = normEmail(appointment.attendeeEmail)
@@ -369,6 +415,90 @@ async function sendInviteEmails(db: any, appointment: AppointmentDoc, type: Appo
         text: `A new appointment was booked.\n\n${description}`,
         html: `<p><strong>A new appointment was booked.</strong></p><pre style="white-space:pre-wrap">${icsEscape(description)}</pre>`,
         attachments: [{ filename: 'invite.ics', content: Buffer.from(ics, 'utf8'), contentType: 'text/calendar; charset=utf-8; method=REQUEST' }],
+        checkPreferences: false,
+      })
+    }
+  } catch {
+    // best-effort
+  }
+}
+
+async function sendCancelEmails(db: any, appointment: AppointmentDoc, type: AppointmentTypeDoc, opts?: { reason?: string | null }) {
+  try {
+    const attendeeEmail = normEmail(appointment.attendeeEmail)
+    if (!attendeeEmail) return
+
+    // Respect preference if explicitly not email
+    if (appointment.attendeeContactPreference && appointment.attendeeContactPreference !== 'email') {
+      return
+    }
+
+    let organizerEmail: string | null = null
+    try {
+      if (appointment.ownerUserId && ObjectId.isValid(appointment.ownerUserId)) {
+        const u = await db.collection('users').findOne({ _id: new ObjectId(appointment.ownerUserId) } as any)
+        organizerEmail = u?.email ? String(u.email) : null
+      }
+    } catch {
+      organizerEmail = null
+    }
+
+    const summary = `${type.name}`
+    const description = [
+      `Appointment: ${type.name}`,
+      `Attendee: ${appointment.attendeeName} (${attendeeEmail})`,
+      appointment.attendeePhone ? `Phone: ${appointment.attendeePhone}` : null,
+      opts?.reason ? `Cancellation reason: ${String(opts.reason).trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    const uid = `boaz_${String(appointment._id)}@scheduler`
+    const ics = buildIcsCancel({
+      uid,
+      summary,
+      description,
+      startsAt: appointment.startsAt,
+      endsAt: appointment.endsAt,
+      organizerEmail,
+      attendeeEmail,
+    })
+
+    const appointmentDate = new Date(appointment.startsAt)
+    const formattedDate = appointmentDate.toLocaleString('en-US', {
+      timeZone: appointment.timeZone,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    })
+
+    const subject = `Appointment Cancelled: ${type.name} on ${formattedDate}`
+    const reasonLine = opts?.reason ? `\n\nReason: ${String(opts.reason).trim()}` : ''
+    const text = `Your appointment has been cancelled.\n\nAppointment: ${type.name}\nDate & Time: ${formattedDate}${reasonLine}\n\nA cancellation notice (.ics file) is attached to this email.`
+    const html = `<p><strong>Your appointment has been cancelled.</strong></p><p><strong>Appointment:</strong> ${icsEscape(
+      type.name,
+    )}</p><p><strong>Date & Time:</strong> ${icsEscape(formattedDate)}${opts?.reason ? `</p><p><strong>Reason:</strong> ${icsEscape(String(opts.reason).trim())}` : ''}</p><p>A cancellation notice (.ics file) is attached to this email.</p>`
+
+    await sendAuthEmail({
+      to: attendeeEmail,
+      subject,
+      text,
+      html,
+      attachments: [{ filename: 'cancel.ics', content: Buffer.from(ics, 'utf8'), contentType: 'text/calendar; charset=utf-8; method=CANCEL' }],
+      checkPreferences: false,
+    })
+
+    if (organizerEmail && normEmail(organizerEmail) && normEmail(organizerEmail) !== attendeeEmail) {
+      await sendAuthEmail({
+        to: organizerEmail,
+        subject: `Cancelled: ${type.name} — ${appointment.attendeeName}`,
+        text: `An appointment was cancelled.\n\n${description}`,
+        html: `<p><strong>An appointment was cancelled.</strong></p><pre style="white-space:pre-wrap">${icsEscape(description)}</pre>`,
+        attachments: [{ filename: 'cancel.ics', content: Buffer.from(ics, 'utf8'), contentType: 'text/calendar; charset=utf-8; method=CANCEL' }],
         checkPreferences: false,
       })
     }
@@ -478,6 +608,8 @@ const appointmentTypeSchema = z.object({
   bufferBeforeMinutes: z.number().int().min(0).max(120).optional(),
   bufferAfterMinutes: z.number().int().min(0).max(120).optional(),
   active: z.boolean().default(true),
+  schedulingMode: z.enum(['single', 'round_robin']).optional(),
+  teamUserIds: z.array(z.string().min(6)).max(25).optional(),
 })
 
 // POST /api/scheduler/appointment-types
@@ -507,6 +639,9 @@ internal.post('/appointment-types', async (req: any, res) => {
     bufferBeforeMinutes: parsed.data.bufferBeforeMinutes ?? 0,
     bufferAfterMinutes: parsed.data.bufferAfterMinutes ?? 0,
     active: parsed.data.active ?? true,
+    schedulingMode: parsed.data.schedulingMode ?? 'single',
+    teamUserIds: (parsed.data.teamUserIds || []).filter((x) => typeof x === 'string' && ObjectId.isValid(x)).slice(0, 25),
+    rrCursor: 0,
     createdAt: now,
     updatedAt: now,
   }
@@ -538,6 +673,11 @@ internal.put('/appointment-types/:id', async (req: any, res) => {
   if (parsed.data.bufferBeforeMinutes !== undefined) update.bufferBeforeMinutes = parsed.data.bufferBeforeMinutes
   if (parsed.data.bufferAfterMinutes !== undefined) update.bufferAfterMinutes = parsed.data.bufferAfterMinutes
   if (parsed.data.active !== undefined) update.active = parsed.data.active
+  if (parsed.data.schedulingMode !== undefined) update.schedulingMode = parsed.data.schedulingMode
+  if (parsed.data.teamUserIds !== undefined) {
+    update.teamUserIds = parsed.data.teamUserIds.filter((x) => typeof x === 'string' && ObjectId.isValid(x)).slice(0, 25)
+    update.rrCursor = 0
+  }
 
   if (update.slug) {
     const clash = await db
@@ -660,6 +800,10 @@ internal.get('/appointments', async (req: any, res) => {
         appointmentTypeId: String(d.appointmentTypeId),
         appointmentTypeName: d.appointmentTypeName ?? null,
         appointmentTypeSlug: d.appointmentTypeSlug ?? null,
+        cancelReason: d.cancelReason ?? null,
+        cancelledAt: d.cancelledAt?.toISOString?.() ?? null,
+        cancelledByUserId: d.cancelledByUserId ?? null,
+        cancelEmailSentAt: d.cancelEmailSentAt?.toISOString?.() ?? null,
         contactId: d.contactId ?? null,
         attendeeFirstName: d.attendeeFirstName ?? null,
         attendeeLastName: d.attendeeLastName ?? null,
@@ -893,6 +1037,13 @@ internal.post('/appointments/book', async (req: any, res) => {
 
 // POST /api/scheduler/appointments/:id/cancel
 internal.post('/appointments/:id/cancel', async (req: any, res) => {
+  const cancelParsed = z
+    .object({
+      reason: z.string().max(500).optional().nullable(),
+      notifyAttendee: z.boolean().optional(),
+    })
+    .safeParse(req.body ?? {})
+
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   const auth = req.auth as { userId: string; email: string }
@@ -906,7 +1057,16 @@ internal.post('/appointments/:id/cancel', async (req: any, res) => {
   const appt = (await db.collection('appointments').findOne({ _id, ownerUserId: auth.userId } as any)) as any
   if (!appt) return res.status(404).json({ data: null, error: 'not_found' })
 
-  const r = await db.collection('appointments').updateOne({ _id, ownerUserId: auth.userId } as any, { $set: { status: 'cancelled', updatedAt: new Date() } } as any)
+  const now = new Date()
+  const reason = cancelParsed.success ? (cancelParsed.data.reason ? String(cancelParsed.data.reason).trim().slice(0, 500) : null) : null
+  const notifyAttendee = cancelParsed.success ? !!cancelParsed.data.notifyAttendee : false
+
+  const r = await db
+    .collection('appointments')
+    .updateOne(
+      { _id, ownerUserId: auth.userId } as any,
+      { $set: { status: 'cancelled', cancelReason: reason, cancelledAt: now, cancelledByUserId: auth.userId, updatedAt: now } } as any,
+    )
   if (!r.matchedCount) return res.status(404).json({ data: null, error: 'not_found' })
 
   // Best-effort: cancel matching CRM task(s) created from this appointment.
@@ -922,6 +1082,25 @@ internal.post('/appointments/:id/cancel', async (req: any, res) => {
     m365DeleteEvent(db, auth.userId, String(appt.m365EventId)).catch(() => null)
   }
 
+  // Best-effort: attendee cancellation email (if requested)
+  if (notifyAttendee) {
+    try {
+      const type = await db.collection('scheduler_appointment_types').findOne({ _id: appt.appointmentTypeId } as any)
+      if (type) {
+        const merged: any = { ...appt, status: 'cancelled', cancelReason: reason, cancelledAt: now, cancelledByUserId: auth.userId, updatedAt: now }
+        sendCancelEmails(db, merged, type, { reason })
+          .then(async () => {
+            await db
+              .collection('appointments')
+              .updateOne({ _id, ownerUserId: auth.userId } as any, { $set: { cancelEmailSentAt: new Date(), updatedAt: new Date() } } as any)
+          })
+          .catch(() => null)
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // Best-effort: webhook event
   dispatchCrmEvent(
     db,
@@ -933,6 +1112,7 @@ internal.post('/appointments/:id/cancel', async (req: any, res) => {
       attendeeName: appt.attendeeName ?? null,
       startsAt: appt.startsAt?.toISOString?.() ?? null,
       endsAt: appt.endsAt?.toISOString?.() ?? null,
+      cancelReason: reason,
     },
     { source: 'scheduler_cancel' },
   ).catch(() => null)
@@ -1008,11 +1188,87 @@ publicRouter.get('/booking-links/:slug', async (req, res) => {
   const now = new Date()
   const windowDays = clamp(safeMin(req.query.windowDays, 14), 1, 60)
   const to = new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000)
+
+  // For single-host types, existing conflicts only need the owner.
   const existing = await db
     .collection('appointments')
     .find({ ownerUserId: String(type.ownerUserId), status: 'booked', startsAt: { $gte: now, $lt: to } } as any)
     .project({ startsAt: 1, endsAt: 1 } as any)
     .toArray()
+
+  // For round-robin/team types, we optionally precompute slots server-side by unioning team availability.
+  // This keeps the frontend simple while still offering "any-host" times.
+  let slots: Array<{ iso: string; label: string }> | null = null
+  try {
+    const mode = String(type.schedulingMode || 'single')
+    const rawTeam = Array.isArray(type.teamUserIds) ? type.teamUserIds : []
+    const team = Array.from(new Set([String(type.ownerUserId), ...rawTeam].filter((x) => typeof x === 'string' && ObjectId.isValid(x)))).slice(0, 10)
+    if (mode === 'round_robin' && team.length >= 2) {
+      const tzLabel = availability.timeZone || 'UTC'
+      const duration = Number(type.durationMinutes || 30)
+      const bufferBefore = Number(type.bufferBeforeMinutes || 0)
+      const bufferAfter = Number(type.bufferAfterMinutes || 0)
+      const union = new Map<string, true>()
+      const step = 15
+
+      for (const userId of team) {
+        const av = await ensureDefaultAvailability(db, String(userId))
+        const tz = av.timeZone || tzLabel || 'UTC'
+        const weekly = av.weekly || []
+        const userExisting = await db
+          .collection('appointments')
+          .find({ ownerUserId: String(userId), status: 'booked', startsAt: { $gte: now, $lt: to } } as any)
+          .project({ startsAt: 1, endsAt: 1 } as any)
+          .toArray()
+
+        const ex = (userExisting || [])
+          .map((e: any) => ({ s: new Date(e.startsAt), e: new Date(e.endsAt) }))
+          .filter((x: any) => Number.isFinite(x.s.getTime()) && Number.isFinite(x.e.getTime()))
+
+        for (let i = 0; i < Math.min(windowDays, 60); i++) {
+          const dayProbe = new Date(now.getTime() + i * 24 * 60 * 60 * 1000 + 12 * 60 * 60 * 1000) // noon UTC
+          const { y, m, d, dayIndex } = getZonedYmd(tz, dayProbe)
+          const cfg = weekly.find((w: any) => Number(w.day) === dayIndex)
+          if (!cfg || !cfg.enabled) continue
+
+          for (let startMin = cfg.startMin; startMin + duration <= cfg.endMin; startMin += step) {
+            const hh = Math.floor(startMin / 60)
+            const mm = startMin % 60
+            const startUtc = zonedTimeToUtc(tz, y, m, d, hh, mm)
+            const endUtc = new Date(startUtc.getTime() + duration * 60000)
+            const bufferedStart = new Date(startUtc.getTime() - bufferBefore * 60000)
+            const bufferedEnd = new Date(endUtc.getTime() + bufferAfter * 60000)
+            if (startUtc < now) continue
+            if (startUtc > to) continue
+            const conflict = ex.some((b: any) => overlaps(bufferedStart, bufferedEnd, b.s, b.e))
+            if (conflict) continue
+            union.set(startUtc.toISOString(), true)
+            if (union.size >= 24) break
+          }
+          if (union.size >= 24) break
+        }
+        if (union.size >= 24) break
+      }
+
+      if (union.size) {
+        const isos = Array.from(union.keys()).sort().slice(0, 24)
+        slots = isos.map((iso) => ({
+          iso,
+          label: new Date(iso).toLocaleString('en-US', {
+            timeZone: tzLabel,
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            timeZoneName: 'short',
+          }),
+        }))
+      }
+    }
+  } catch {
+    slots = null
+  }
 
   res.json({
     data: {
@@ -1034,6 +1290,7 @@ publicRouter.get('/booking-links/:slug', async (req, res) => {
         startsAt: e.startsAt?.toISOString?.() ?? null,
         endsAt: e.endsAt?.toISOString?.() ?? null,
       })),
+      slots: slots ?? undefined,
       window: { from: now.toISOString(), to: to.toISOString() },
     },
     error: null,
@@ -1066,8 +1323,14 @@ publicRouter.post('/book/:slug', async (req, res) => {
   const type = (await db.collection('scheduler_appointment_types').findOne({ slug, active: true } as any)) as any
   if (!type) return res.status(404).json({ data: null, error: 'not_found' })
 
-  const availability = await ensureDefaultAvailability(db, String(type.ownerUserId))
-  const tz = availability.timeZone || parsed.data.timeZone || 'UTC'
+  const mode = String(type.schedulingMode || 'single')
+  const rawTeam = Array.isArray(type.teamUserIds) ? type.teamUserIds : []
+  const team = Array.from(new Set([String(type.ownerUserId), ...rawTeam].filter((x) => typeof x === 'string' && ObjectId.isValid(x)))).slice(0, 25)
+
+  // default (single host): use the type's owner
+  let ownerUserId = String(type.ownerUserId)
+  let availability = await ensureDefaultAvailability(db, ownerUserId)
+  let tz = availability.timeZone || parsed.data.timeZone || 'UTC'
 
   const startUtc = new Date(parsed.data.startsAt)
   if (!Number.isFinite(startUtc.getTime())) return res.status(400).json({ data: null, error: 'invalid_startsAt' })
@@ -1084,40 +1347,100 @@ publicRouter.post('/book/:slug', async (req, res) => {
   const bufferedStart = new Date(startUtc.getTime() - bufferBefore * 60000)
   const bufferedEnd = new Date(endUtc.getTime() + bufferAfter * 60000)
 
-  const zoned = getZonedYmd(tz, startUtc)
-  const dayCfg = (availability.weekly || []).find((d) => Number(d.day) === zoned.dayIndex)
-  if (!dayCfg || !dayCfg.enabled) return res.status(400).json({ data: null, error: 'outside_availability' })
-  const startMin = zoned.hh * 60 + zoned.mm
-  if (startMin < dayCfg.startMin || startMin + dur > dayCfg.endMin) {
-    return res.status(400).json({ data: null, error: 'outside_availability' })
+  // Round-robin host selection: try hosts in cursor order until one can accept this slot.
+  if (mode === 'round_robin' && team.length >= 2) {
+    const cursor = Number(type.rrCursor || 0)
+    const startIdx = ((Number.isFinite(cursor) ? cursor : 0) % team.length + team.length) % team.length
+    let picked = false
+
+    for (let i = 0; i < team.length; i++) {
+      const candidateId = String(team[(startIdx + i) % team.length] || '').trim()
+      if (!candidateId || !ObjectId.isValid(candidateId)) continue
+      const candAvailability = await ensureDefaultAvailability(db, candidateId)
+      const candTz = candAvailability.timeZone || parsed.data.timeZone || 'UTC'
+
+      const candZoned = getZonedYmd(candTz, startUtc)
+      const candDayCfg = (candAvailability.weekly || []).find((d: any) => Number(d.day) === candZoned.dayIndex)
+      if (!candDayCfg || !candDayCfg.enabled) continue
+      const candStartMin = candZoned.hh * 60 + candZoned.mm
+      if (candStartMin < candDayCfg.startMin || candStartMin + dur > candDayCfg.endMin) continue
+
+      const candRoundTrip = zonedTimeToUtc(candTz, candZoned.y, candZoned.m, candZoned.d, candZoned.hh, candZoned.mm)
+      if (Math.abs(candRoundTrip.getTime() - startUtc.getTime()) > 2 * 60 * 1000) continue
+
+      const conflicts = await db
+        .collection('appointments')
+        .find({
+          ownerUserId: String(candidateId),
+          status: 'booked',
+          startsAt: { $lt: bufferedEnd },
+          endsAt: { $gt: bufferedStart },
+        } as any)
+        .limit(1)
+        .toArray()
+      if (conflicts.length) continue
+
+      // Optional: Microsoft 365 busy-time conflict check (best-effort).
+      try {
+        const ext = await m365HasConflict(db, String(candidateId), bufferedStart.toISOString(), bufferedEnd.toISOString())
+        if (ext.ok && ext.conflict) continue
+      } catch {
+        // ignore
+      }
+
+      ownerUserId = candidateId
+      availability = candAvailability
+      tz = candTz
+      picked = true
+      break
+    }
+
+    if (!picked) return res.status(409).json({ data: null, error: 'slot_taken' })
+  } else {
+    const zoned = getZonedYmd(tz, startUtc)
+    const dayCfg = (availability.weekly || []).find((d: any) => Number(d.day) === zoned.dayIndex)
+    if (!dayCfg || !dayCfg.enabled) return res.status(400).json({ data: null, error: 'outside_availability' })
+    const startMin = zoned.hh * 60 + zoned.mm
+    if (startMin < dayCfg.startMin || startMin + dur > dayCfg.endMin) {
+      return res.status(400).json({ data: null, error: 'outside_availability' })
+    }
+
+    const startUtcRoundTrip = zonedTimeToUtc(tz, zoned.y, zoned.m, zoned.d, zoned.hh, zoned.mm)
+    if (Math.abs(startUtcRoundTrip.getTime() - startUtc.getTime()) > 2 * 60 * 1000) {
+      return res.status(400).json({ data: null, error: 'timezone_mismatch' })
+    }
+
+    const conflicts = await db
+      .collection('appointments')
+      .find({
+        ownerUserId: String(ownerUserId),
+        status: 'booked',
+        startsAt: { $lt: bufferedEnd },
+        endsAt: { $gt: bufferedStart },
+      } as any)
+      .limit(1)
+      .toArray()
+    if (conflicts.length) return res.status(409).json({ data: null, error: 'slot_taken' })
+
+    try {
+      const ext = await m365HasConflict(db, String(ownerUserId), bufferedStart.toISOString(), bufferedEnd.toISOString())
+      if (ext.ok && ext.conflict) return res.status(409).json({ data: null, error: 'external_calendar_busy' })
+    } catch {
+      // ignore
+    }
   }
-
-  // Recompute UTC from zoned wall-clock to ensure we aren't accepting mismatched TZ inputs
-  const startUtcRoundTrip = zonedTimeToUtc(tz, zoned.y, zoned.m, zoned.d, zoned.hh, zoned.mm)
-  if (Math.abs(startUtcRoundTrip.getTime() - startUtc.getTime()) > 2 * 60 * 1000) {
-    return res.status(400).json({ data: null, error: 'timezone_mismatch' })
-  }
-
-  const conflicts = await db
-    .collection('appointments')
-    .find({
-      ownerUserId: String(type.ownerUserId),
-      status: 'booked',
-      startsAt: { $lt: bufferedEnd },
-      endsAt: { $gt: bufferedStart },
-    } as any)
-    .limit(1)
-    .toArray()
-
-  if (conflicts.length) return res.status(409).json({ data: null, error: 'slot_taken' })
 
   const doc: AppointmentDoc = {
     _id: new ObjectId(),
     appointmentTypeId: type._id,
     appointmentTypeName: type.name ?? null,
     appointmentTypeSlug: type.slug ?? null,
-    ownerUserId: String(type.ownerUserId),
+    ownerUserId: String(ownerUserId),
     status: 'booked',
+    cancelReason: null,
+    cancelledAt: null,
+    cancelledByUserId: null,
+    cancelEmailSentAt: null,
     contactId: null,
     attendeeFirstName: parsed.data.attendeeFirstName ? parsed.data.attendeeFirstName.trim() : null,
     attendeeLastName: parsed.data.attendeeLastName ? parsed.data.attendeeLastName.trim() : null,
@@ -1156,7 +1479,7 @@ publicRouter.post('/book/:slug', async (req, res) => {
   doc.contactId = contactId
 
   await db.collection('appointments').insertOne(doc as any)
-  await createMeetingTaskFromAppointment(db, String(type.ownerUserId), doc, type, contactId)
+  await createMeetingTaskFromAppointment(db, String(ownerUserId), doc, type, contactId)
 
   sendInviteEmails(db, doc, type)
     .then(async () => {
@@ -1165,12 +1488,17 @@ publicRouter.post('/book/:slug', async (req, res) => {
     .catch(() => null)
 
   // Best-effort: create Outlook event for organizer if connected
-  m365CreateEventForAppointment(db, String(type.ownerUserId), doc)
+  m365CreateEventForAppointment(db, String(ownerUserId), doc)
     .then(async (r) => {
       if (!r.ok) return
       await db.collection('appointments').updateOne({ _id: doc._id } as any, { $set: { m365EventId: r.eventId, updatedAt: new Date() } } as any)
     })
     .catch(() => null)
+
+  // Advance RR cursor best-effort (only after successful booking)
+  if (mode === 'round_robin' && team.length >= 2) {
+    db.collection('scheduler_appointment_types').updateOne({ _id: type._id } as any, { $inc: { rrCursor: 1 }, $set: { updatedAt: new Date() } } as any).catch(() => null)
+  }
 
   // Best-effort: webhook event
   dispatchCrmEvent(
@@ -1181,7 +1509,7 @@ publicRouter.post('/book/:slug', async (req, res) => {
       appointmentTypeId: String(type._id),
       appointmentTypeSlug: type.slug,
       appointmentTypeName: type.name,
-      ownerUserId: String(type.ownerUserId),
+      ownerUserId: String(ownerUserId),
       attendeeEmail: doc.attendeeEmail,
       attendeeName: doc.attendeeName,
       attendeePhone: doc.attendeePhone ?? null,

@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
+import { generateBookingSlots } from '@/lib/schedulerSlots'
 
 type PublicBookingData = {
   data: {
@@ -18,69 +19,10 @@ type PublicBookingData = {
     }
     availability: { timeZone: string; weekly: Array<{ day: number; enabled: boolean; startMin: number; endMin: number }> }
     existing: Array<{ startsAt: string; endsAt: string }>
+    slots?: Array<{ iso: string; label: string }>
     window: { from: string; to: string }
   }
   error: any
-}
-
-function getTimeZoneOffsetMinutes(timeZone: string, date: Date) {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  })
-  const parts = dtf.formatToParts(date)
-  const get = (t: string) => parts.find((p) => p.type === t)?.value
-  const y = Number(get('year'))
-  const m = Number(get('month'))
-  const d = Number(get('day'))
-  const hh = Number(get('hour'))
-  const mm = Number(get('minute'))
-  const ss = Number(get('second'))
-  const asUtc = Date.UTC(y, m - 1, d, hh, mm, ss)
-  return (asUtc - date.getTime()) / 60000
-}
-
-function zonedTimeToUtc(timeZone: string, y: number, m: number, d: number, hh: number, mm: number) {
-  let utcGuess = Date.UTC(y, m - 1, d, hh, mm, 0)
-  let off1 = getTimeZoneOffsetMinutes(timeZone, new Date(utcGuess))
-  utcGuess = utcGuess - off1 * 60000
-  let off2 = getTimeZoneOffsetMinutes(timeZone, new Date(utcGuess))
-  utcGuess = utcGuess - (off2 - off1) * 60000
-  return new Date(utcGuess)
-}
-
-function getZonedYmd(timeZone: string, date: Date) {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-  const parts = dtf.formatToParts(date)
-  const get = (t: string) => parts.find((p) => p.type === t)?.value
-  const y = Number(get('year'))
-  const mo = Number(get('month'))
-  const da = Number(get('day'))
-  const hh = Number(get('hour'))
-  const mi = Number(get('minute'))
-  const wd = String(get('weekday') || '')
-  const dayIndex =
-    wd.startsWith('Sun') ? 0 : wd.startsWith('Mon') ? 1 : wd.startsWith('Tue') ? 2 : wd.startsWith('Wed') ? 3 : wd.startsWith('Thu') ? 4 : wd.startsWith('Fri') ? 5 : 6
-  return { y, m: mo, d: da, hh, mm: mi, dayIndex }
-}
-
-function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
-  return aStart < bEnd && bStart < aEnd
 }
 
 export default function SchedulerPublicBooking() {
@@ -147,58 +89,21 @@ export default function SchedulerPublicBooking() {
   const slots = React.useMemo(() => {
     const data = q.data?.data
     if (!data) return []
-    const tz = data.availability.timeZone || 'UTC'
-    const weekly = data.availability.weekly || []
-    const duration = Number(data.type.durationMinutes || 30)
-    const bufferBefore = Number(data.type.bufferBeforeMinutes || 0)
-    const bufferAfter = Number(data.type.bufferAfterMinutes || 0)
-    const existing = (data.existing || [])
-      .map((e) => ({ s: new Date(e.startsAt), e: new Date(e.endsAt) }))
-      .filter((x) => Number.isFinite(x.s.getTime()) && Number.isFinite(x.e.getTime()))
-    const now = new Date()
-    const from = new Date(data.window.from)
-    const to = new Date(data.window.to)
-    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) return []
-
-    const out: Array<{ iso: string; label: string }> = []
-
-    for (let i = 0; i < 21; i++) {
-      const dayProbe = new Date(from.getTime() + i * 24 * 60 * 60 * 1000 + 12 * 60 * 60 * 1000) // noon UTC
-      const { y, m, d, dayIndex } = getZonedYmd(tz, dayProbe)
-      const cfg = weekly.find((w) => Number(w.day) === dayIndex)
-      if (!cfg || !cfg.enabled) continue
-
-      const step = 15
-      for (let startMin = cfg.startMin; startMin + duration <= cfg.endMin; startMin += step) {
-        const hh = Math.floor(startMin / 60)
-        const mm = startMin % 60
-        const startUtc = zonedTimeToUtc(tz, y, m, d, hh, mm)
-        const endUtc = new Date(startUtc.getTime() + duration * 60000)
-        const bufferedStart = new Date(startUtc.getTime() - bufferBefore * 60000)
-        const bufferedEnd = new Date(endUtc.getTime() + bufferAfter * 60000)
-        if (startUtc < now) continue
-        if (startUtc < from || startUtc > to) continue
-        const conflict = existing.some((ex) => overlaps(bufferedStart, bufferedEnd, ex.s, ex.e))
-        if (conflict) continue
-
-        // Format the time in the availability timezone
-        const label = startUtc.toLocaleString('en-US', {
-          timeZone: tz,
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          timeZoneName: 'short',
-        })
-        out.push({
-          iso: startUtc.toISOString(),
-          label,
-        })
-        if (out.length >= 24) return out
-      }
-    }
-    return out
+    if (Array.isArray(data.slots) && data.slots.length) return data.slots
+    return generateBookingSlots({
+      timeZone: data.availability.timeZone || 'UTC',
+      weekly: data.availability.weekly || [],
+      type: {
+        durationMinutes: Number(data.type.durationMinutes || 30),
+        bufferBeforeMinutes: Number(data.type.bufferBeforeMinutes || 0),
+        bufferAfterMinutes: Number(data.type.bufferAfterMinutes || 0),
+      },
+      existing: data.existing || [],
+      windowFromIso: data.window.from,
+      windowToIso: data.window.to,
+      maxSlots: 24,
+      stepMinutes: 15,
+    })
   }, [q.data?.data])
 
   if (q.isLoading) {

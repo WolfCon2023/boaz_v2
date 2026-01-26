@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { KBHelpButton } from '@/components/KBHelpButton'
 import { Calendar, ChevronLeft, ChevronRight, Search, X, Edit, Trash2, Clock, User, Mail, Phone, CalendarDays, Grid3x3, List } from 'lucide-react'
+import { generateBookingSlots } from '@/lib/schedulerSlots'
 
 type AppointmentType = {
   _id: string
@@ -17,6 +18,9 @@ type AppointmentType = {
   bufferBeforeMinutes?: number
   bufferAfterMinutes?: number
   active: boolean
+  schedulingMode?: 'single' | 'round_robin'
+  teamUserIds?: string[]
+  rrCursor?: number
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -33,6 +37,10 @@ type Appointment = {
   appointmentTypeName?: string | null
   appointmentTypeSlug?: string | null
   status: 'booked' | 'cancelled'
+  cancelReason?: string | null
+  cancelledAt?: string | null
+  cancelledByUserId?: string | null
+  cancelEmailSentAt?: string | null
   attendeeFirstName?: string | null
   attendeeLastName?: string | null
   attendeeName: string
@@ -75,6 +83,9 @@ export default function Scheduler() {
   const [calendarView, setCalendarView] = React.useState<'month' | 'week' | 'day'>('month')
   const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null)
   const [appointmentSearch, setAppointmentSearch] = React.useState('')
+  const [cancelModalId, setCancelModalId] = React.useState<string | null>(null)
+  const [cancelReasonDraft, setCancelReasonDraft] = React.useState('')
+  const [cancelNotifyDraft, setCancelNotifyDraft] = React.useState(true)
   const helpSlug =
     tab === 'types'
       ? 'scheduler-appointment-types'
@@ -88,6 +99,8 @@ export default function Scheduler() {
     queryKey: ['scheduler', 'types'],
     queryFn: async () => (await http.get('/api/scheduler/appointment-types')).data,
   })
+
+  const types = typesQ.data?.data.items ?? []
 
   const availabilityQ = useQuery<{ data: Availability }>({
     queryKey: ['scheduler', 'availability'],
@@ -148,6 +161,48 @@ export default function Scheduler() {
     onError: () => toast.showToast('Failed to delete appointment type.', 'error'),
   })
 
+  const [editingTypeId, setEditingTypeId] = React.useState<string | null>(null)
+  const [editName, setEditName] = React.useState('')
+  const [editSlug, setEditSlug] = React.useState('')
+  const [editDurationMinutes, setEditDurationMinutes] = React.useState(15)
+  const [editLocationType, setEditLocationType] = React.useState<'video' | 'phone' | 'in_person' | 'custom'>('video')
+  const [editLocationDetails, setEditLocationDetails] = React.useState('')
+  const [editBufferBeforeMinutes, setEditBufferBeforeMinutes] = React.useState(0)
+  const [editBufferAfterMinutes, setEditBufferAfterMinutes] = React.useState(0)
+  const [editActive, setEditActive] = React.useState(true)
+  const [editSchedulingMode, setEditSchedulingMode] = React.useState<'single' | 'round_robin'>('single')
+  const [editTeamUserIds, setEditTeamUserIds] = React.useState<string[]>([])
+
+  const editingType = React.useMemo(() => types.find((t) => t._id === editingTypeId) || null, [types, editingTypeId])
+
+  React.useEffect(() => {
+    if (!editingType) return
+    setEditName(editingType.name || '')
+    setEditSlug(editingType.slug || '')
+    setEditDurationMinutes(Number(editingType.durationMinutes || 15))
+    setEditLocationType((editingType.locationType as any) || 'video')
+    setEditLocationDetails(editingType.locationDetails || '')
+    setEditBufferBeforeMinutes(Number(editingType.bufferBeforeMinutes || 0))
+    setEditBufferAfterMinutes(Number(editingType.bufferAfterMinutes || 0))
+    setEditActive(!!editingType.active)
+    setEditSchedulingMode((editingType.schedulingMode as any) || 'single')
+    setEditTeamUserIds(Array.isArray(editingType.teamUserIds) ? editingType.teamUserIds : [])
+  }, [editingType])
+
+  const updateType = useMutation({
+    mutationFn: async (args: { id: string; patch: Partial<AppointmentType> }) =>
+      (await http.put(`/api/scheduler/appointment-types/${encodeURIComponent(args.id)}`, args.patch)).data,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['scheduler', 'types'] })
+      toast.showToast('Appointment type updated.', 'success')
+      setEditingTypeId(null)
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to update appointment type.'
+      toast.showToast(msg, 'error')
+    },
+  })
+
   const saveAvailability = useMutation({
     mutationFn: async (payload: Availability) => (await http.put('/api/scheduler/availability/me', payload)).data,
     onSuccess: async () => {
@@ -158,7 +213,8 @@ export default function Scheduler() {
   })
 
   const cancelAppointment = useMutation({
-    mutationFn: async (id: string) => (await http.post(`/api/scheduler/appointments/${encodeURIComponent(id)}/cancel`)).data,
+    mutationFn: async (args: { id: string; reason?: string | null; notifyAttendee?: boolean }) =>
+      (await http.post(`/api/scheduler/appointments/${encodeURIComponent(args.id)}/cancel`, { reason: args.reason ?? null, notifyAttendee: !!args.notifyAttendee })).data,
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['scheduler', 'appointments'] })
       toast.showToast('Appointment cancelled.', 'success')
@@ -166,7 +222,6 @@ export default function Scheduler() {
     onError: () => toast.showToast('Failed to cancel appointment.', 'error'),
   })
 
-  const types = typesQ.data?.data.items ?? []
   const availability = availabilityQ.data?.data
   const allAppointments = appointmentsQ.data?.data.items ?? []
   
@@ -213,6 +268,12 @@ export default function Scheduler() {
   })
   const userTimezone = preferencesQ.data?.data?.preferences?.timezone || 'America/New_York'
 
+  const m365StatusQ = useQuery({
+    queryKey: ['calendar', 'm365', 'status'],
+    queryFn: async () => (await http.get('/api/calendar/m365/status')).data as { data: { configured: boolean; connected: boolean; email?: string | null } },
+    retry: false,
+  })
+
   const [tzDraft, setTzDraft] = React.useState<string>(() => {
     try {
       return userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'
@@ -235,6 +296,32 @@ export default function Scheduler() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availabilityQ.data?.data?.updatedAt])
 
+  const effectiveWeekly = weeklyDraft.length ? weeklyDraft : availability?.weekly || []
+
+  function setWeeklyPreset(preset: 'weekdays_9_5' | 'weekdays_8_8' | 'all_9_5' | 'clear') {
+    const mk = (enabled: boolean, startMin: number, endMin: number) => ({ enabled, startMin, endMin })
+    const next = [0, 1, 2, 3, 4, 5, 6].map((day) => {
+      if (preset === 'clear') return { day, ...mk(false, 9 * 60, 17 * 60) }
+      if (preset === 'all_9_5') return { day, ...mk(true, 9 * 60, 17 * 60) }
+      if (preset === 'weekdays_8_8') return { day, ...mk(day >= 1 && day <= 5, 8 * 60, 20 * 60) }
+      return { day, ...mk(day >= 1 && day <= 5, 9 * 60, 17 * 60) }
+    })
+    setWeeklyDraft(next)
+  }
+
+  function copyDayTo(target: 'weekdays' | 'all') {
+    const src = effectiveWeekly.find((d) => d.day === 1) // Monday
+    if (!src) return
+    const next = [...effectiveWeekly]
+    for (let i = 0; i < next.length; i++) {
+      const day = next[i]!.day
+      const ok = target === 'all' ? true : day >= 1 && day <= 5
+      if (!ok) continue
+      next[i] = { ...next[i]!, enabled: src.enabled, startMin: src.startMin, endMin: src.endMin }
+    }
+    setWeeklyDraft(next)
+  }
+
   function copyLink(slugValue: string) {
     const url = `${window.location.origin}/schedule/${encodeURIComponent(slugValue)}`
     navigator.clipboard
@@ -244,6 +331,7 @@ export default function Scheduler() {
   }
 
   // Internal appointment form (staff scheduling)
+  const [useSlotPicker, setUseSlotPicker] = React.useState(true)
   const [bookTypeId, setBookTypeId] = React.useState('')
   const [bookStartsAtLocal, setBookStartsAtLocal] = React.useState('')
   const [bookDate, setBookDate] = React.useState('')
@@ -309,6 +397,54 @@ export default function Scheduler() {
     retry: false,
   })
 
+  const selectedType = React.useMemo(() => types.find((t) => t._id === bookTypeId) || null, [types, bookTypeId])
+
+  const bookingLinkQ = useQuery<{
+    data: {
+      type: {
+        _id: string
+        name: string
+        slug: string
+        durationMinutes: number
+        locationType: string
+        locationDetails?: string | null
+        bufferBeforeMinutes?: number
+        bufferAfterMinutes?: number
+      }
+      availability: { timeZone: string; weekly: Array<{ day: number; enabled: boolean; startMin: number; endMin: number }> }
+      existing: Array<{ startsAt: string; endsAt: string }>
+      slots?: Array<{ iso: string; label: string }>
+      window: { from: string; to: string }
+    }
+    error: any
+  }>({
+    queryKey: ['scheduler', 'booking-link', selectedType?.slug || ''],
+    queryFn: async () =>
+      (await http.get(`/api/scheduler/public/booking-links/${encodeURIComponent(selectedType!.slug)}`, { params: { windowDays: 21 } })).data,
+    enabled: useSlotPicker && !!selectedType?.slug,
+    retry: false,
+  })
+
+  const slotOptions = React.useMemo(() => {
+    const data = bookingLinkQ.data?.data
+    if (!data) return []
+    if (Array.isArray(data.slots) && data.slots.length) return data.slots
+    return generateBookingSlots({
+      timeZone: data.availability.timeZone || tzDraft || userTimezone || 'UTC',
+      weekly: data.availability.weekly || [],
+      type: {
+        durationMinutes: Number(data.type.durationMinutes || 30),
+        bufferBeforeMinutes: Number(data.type.bufferBeforeMinutes || 0),
+        bufferAfterMinutes: Number(data.type.bufferAfterMinutes || 0),
+      },
+      existing: data.existing || [],
+      windowFromIso: data.window.from,
+      windowToIso: data.window.to,
+      maxSlots: 24,
+      stepMinutes: 15,
+    })
+  }, [bookingLinkQ.data?.data, tzDraft, userTimezone])
+
   const createAppointment = useMutation({
     mutationFn: async () => {
       const startsAt = new Date(bookStartsAtLocal)
@@ -353,6 +489,265 @@ export default function Scheduler() {
 
   return (
     <div className="space-y-6">
+      {editingTypeId && editingType && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-xl">
+            <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+              <div>
+                <div className="text-sm font-semibold">Edit appointment type</div>
+                <div className="text-xs text-[color:var(--color-text-muted)]">Changes apply immediately to the public booking page.</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingTypeId(null)}
+                className="rounded-lg border border-[color:var(--color-border)] p-2 text-sm hover:bg-[color:var(--color-muted)]"
+                aria-label="Close"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-4">
+              <div className="grid gap-3 md:grid-cols-6">
+                <div className="md:col-span-3">
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Name</label>
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Slug</label>
+                  <input
+                    value={editSlug}
+                    onChange={(e) => setEditSlug(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Duration (min)</label>
+                  <input
+                    type="number"
+                    value={editDurationMinutes}
+                    onChange={(e) => setEditDurationMinutes(Number(e.target.value) || 15)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-6">
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Location</label>
+                  <select
+                    value={editLocationType}
+                    onChange={(e) => setEditLocationType(e.target.value as any)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  >
+                    <option value="video">Video</option>
+                    <option value="phone">Phone</option>
+                    <option value="in_person">In person</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div className="md:col-span-3">
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Location details (optional)</label>
+                  <input
+                    value={editLocationDetails}
+                    onChange={(e) => setEditLocationDetails(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                    placeholder="Zoom link, address, instructions…"
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Active</label>
+                  <select
+                    value={editActive ? '1' : '0'}
+                    onChange={(e) => setEditActive(e.target.value === '1')}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  >
+                    <option value="1">Yes</option>
+                    <option value="0">No</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-6">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Buffer before</label>
+                  <input
+                    type="number"
+                    value={editBufferBeforeMinutes}
+                    onChange={(e) => setEditBufferBeforeMinutes(Number(e.target.value) || 0)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Buffer after</label>
+                  <input
+                    type="number"
+                    value={editBufferAfterMinutes}
+                    onChange={(e) => setEditBufferAfterMinutes(Number(e.target.value) || 0)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  />
+                </div>
+                  <div className="md:col-span-4">
+                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Scheduling mode</label>
+                    <select
+                      value={editSchedulingMode}
+                      onChange={(e) => setEditSchedulingMode(e.target.value as any)}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                    >
+                      <option value="single">Single host</option>
+                      <option value="round_robin">Round robin (team)</option>
+                    </select>
+                    {editSchedulingMode === 'round_robin' ? (
+                      <div className="mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                        <div className="text-xs text-[color:var(--color-text-muted)] mb-2">
+                          Add team members who can host this appointment type. You (the owner) are always included.
+                        </div>
+                        {usersQ.isError ? (
+                          <div className="text-xs text-[color:var(--color-text-muted)]">Team selection requires `users.read` permission.</div>
+                        ) : usersQ.isLoading ? (
+                          <div className="text-xs text-[color:var(--color-text-muted)]">Loading users…</div>
+                        ) : (
+                          <div className="max-h-40 overflow-auto space-y-1">
+                            {(usersQ.data?.data.items ?? []).map((u) => {
+                              const checked = editTeamUserIds.includes(u.id)
+                              const label = u.name ? `${u.name} — ${u.email || ''}` : u.email || u.id
+                              return (
+                                <label key={u.id} className="flex items-center gap-2 text-sm">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      const next = new Set(editTeamUserIds)
+                                      if (e.target.checked) next.add(u.id)
+                                      else next.delete(u.id)
+                                      setEditTeamUserIds(Array.from(next))
+                                    }}
+                                  />
+                                  <span className="text-xs">{label}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                <div className="md:col-span-4 flex items-end justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingTypeId(null)}
+                    className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={updateType.isPending || !editName.trim() || !editSlug.trim()}
+                    onClick={() =>
+                      updateType.mutate({
+                        id: editingTypeId,
+                        patch: {
+                          name: editName.trim(),
+                          slug: editSlug.trim(),
+                          durationMinutes: editDurationMinutes,
+                          locationType: editLocationType,
+                          locationDetails: editLocationDetails.trim() || null,
+                          bufferBeforeMinutes: editBufferBeforeMinutes,
+                          bufferAfterMinutes: editBufferAfterMinutes,
+                          active: editActive,
+                            schedulingMode: editSchedulingMode,
+                            teamUserIds: editSchedulingMode === 'round_robin' ? editTeamUserIds : [],
+                        },
+                      })
+                    }
+                    className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                  >
+                    Save changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelModalId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setCancelModalId(null)}>
+          <div
+            className="w-full max-w-xl rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+              <div>
+                <div className="text-sm font-semibold">Cancel appointment</div>
+                <div className="text-xs text-[color:var(--color-text-muted)]">Optionally include a reason and email the attendee.</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCancelModalId(null)}
+                className="rounded-lg border border-[color:var(--color-border)] p-2 text-sm hover:bg-[color:var(--color-muted)]"
+                aria-label="Close"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Reason (optional)</label>
+                <textarea
+                  value={cancelReasonDraft}
+                  onChange={(e) => setCancelReasonDraft(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  placeholder="e.g., Client requested reschedule"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={cancelNotifyDraft} onChange={(e) => setCancelNotifyDraft(e.target.checked)} />
+                Email attendee a cancellation notice
+              </label>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCancelModalId(null)}
+                  className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                >
+                  Keep appointment
+                </button>
+                <button
+                  type="button"
+                  disabled={cancelAppointment.isPending}
+                  onClick={() => {
+                    cancelAppointment.mutate(
+                      { id: cancelModalId, reason: cancelReasonDraft.trim() || null, notifyAttendee: cancelNotifyDraft },
+                      {
+                        onSuccess: () => {
+                          setCancelModalId(null)
+                          setCancelReasonDraft('')
+                          setCancelNotifyDraft(true)
+                          setSelectedAppointment((cur) => (cur && cur._id === cancelModalId ? null : cur))
+                        },
+                      },
+                    )
+                  }}
+                  className="rounded-lg border border-red-400 px-4 py-2 text-sm text-red-500 hover:bg-red-950/40 disabled:opacity-50"
+                >
+                  Cancel appointment
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold">Scheduler</h1>
@@ -521,12 +916,36 @@ export default function Scheduler() {
                           inactive
                         </span>
                       )}
+                      {t.schedulingMode === 'round_robin' && (
+                        <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                          round robin{Array.isArray(t.teamUserIds) && t.teamUserIds.length ? ` (+${t.teamUserIds.length})` : ''}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-[color:var(--color-text-muted)]">
                       /schedule/{t.slug} • {t.durationMinutes} min • {t.locationType || 'video'}
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingTypeId(t._id)}
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+                      title="Edit"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        <Edit className="h-3.5 w-3.5" /> Edit
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateType.mutate({ id: t._id, patch: { active: !t.active } })}
+                      disabled={updateType.isPending}
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                      title={t.active ? 'Disable booking page' : 'Enable booking page'}
+                    >
+                      {t.active ? 'Disable' : 'Enable'}
+                    </button>
                     <a
                       href={`/schedule/${encodeURIComponent(t.slug)}`}
                       target="_blank"
@@ -545,7 +964,10 @@ export default function Scheduler() {
                     <button
                       type="button"
                       onClick={async () => {
-                        const ok = await confirm('Delete this appointment type?', { confirmText: 'Delete', confirmColor: 'danger' })
+                        const ok = await confirm('Delete this appointment type? This is permanent. Prefer Disable if you want to keep history.', {
+                          confirmText: 'Delete',
+                          confirmColor: 'danger',
+                        })
                         if (!ok) return
                         deleteType.mutate(t._id)
                       }}
@@ -587,11 +1009,16 @@ export default function Scheduler() {
               <button
                 type="button"
                 onClick={() => {
-                  if (weeklyDraft.length !== 7) {
+                  if (effectiveWeekly.length !== 7) {
                     toast.showToast('Availability must include 7 days.', 'error')
                     return
                   }
-                  saveAvailability.mutate({ timeZone: tzDraft.trim() || 'UTC', weekly: weeklyDraft })
+                  const bad = effectiveWeekly.find((d) => d.enabled && d.startMin >= d.endMin)
+                  if (bad) {
+                    toast.showToast(`Invalid hours on ${DAYS[bad.day] || 'a day'} (start must be before end).`, 'error')
+                    return
+                  }
+                  saveAvailability.mutate({ timeZone: tzDraft.trim() || 'UTC', weekly: effectiveWeekly })
                 }}
                 disabled={saveAvailability.isPending}
                 className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
@@ -599,6 +1026,53 @@ export default function Scheduler() {
                 Save availability
               </button>
             </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setWeeklyPreset('weekdays_9_5')}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+            >
+              Weekdays 9–5
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeeklyPreset('weekdays_8_8')}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+            >
+              Weekdays 8–8
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeeklyPreset('all_9_5')}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+            >
+              All days 9–5
+            </button>
+            <button
+              type="button"
+              onClick={() => copyDayTo('weekdays')}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+              title="Copies Monday settings to Mon–Fri"
+            >
+              Copy Mon → Weekdays
+            </button>
+            <button
+              type="button"
+              onClick={() => copyDayTo('all')}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+              title="Copies Monday settings to all days"
+            >
+              Copy Mon → All
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeeklyPreset('clear')}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+            >
+              Clear all
+            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -612,7 +1086,7 @@ export default function Scheduler() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--color-border)]">
-                {(weeklyDraft.length ? weeklyDraft : availability?.weekly || []).map((d, idx) => (
+                {effectiveWeekly.map((d, idx) => (
                   <tr key={d.day} className="align-middle">
                     <td className="py-2 pr-3 font-medium">{DAYS[d.day] || `Day ${d.day}`}</td>
                     <td className="py-2 pr-3">
@@ -620,7 +1094,7 @@ export default function Scheduler() {
                         type="checkbox"
                         checked={d.enabled}
                         onChange={(e) => {
-                          const next = [...(weeklyDraft.length ? weeklyDraft : availability?.weekly || [])]
+                          const next = [...effectiveWeekly]
                           next[idx] = { ...next[idx], enabled: e.target.checked }
                           setWeeklyDraft(next)
                         }}
@@ -632,7 +1106,7 @@ export default function Scheduler() {
                         value={minsToHHMM(d.startMin)}
                         onChange={(e) => {
                           const [hh, mm] = e.target.value.split(':').map((x) => Number(x))
-                          const next = [...(weeklyDraft.length ? weeklyDraft : availability?.weekly || [])]
+                          const next = [...effectiveWeekly]
                           next[idx] = { ...next[idx], startMin: hh * 60 + mm }
                           setWeeklyDraft(next)
                         }}
@@ -645,7 +1119,7 @@ export default function Scheduler() {
                         value={minsToHHMM(d.endMin)}
                         onChange={(e) => {
                           const [hh, mm] = e.target.value.split(':').map((x) => Number(x))
-                          const next = [...(weeklyDraft.length ? weeklyDraft : availability?.weekly || [])]
+                          const next = [...effectiveWeekly]
                           next[idx] = { ...next[idx], endMin: hh * 60 + mm }
                           setWeeklyDraft(next)
                         }}
@@ -693,7 +1167,7 @@ export default function Scheduler() {
           <div className="border-b border-[color:var(--color-border)] px-4 py-3">
             <div className="text-sm font-semibold">Create appointment (internal)</div>
             <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-              Book on behalf of a client. Calendar app will provide a richer slot picker; this MVP uses a date/time input + server-side conflict checks.
+              Book on behalf of a client. Use the slot picker to select valid times from availability (recommended); manual date/time remains as a fallback.
             </div>
             <div className="mt-3 grid gap-3 md:grid-cols-6">
               <div className="md:col-span-2">
@@ -746,7 +1220,12 @@ export default function Scheduler() {
                 <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Appointment type</label>
                 <select
                   value={bookTypeId}
-                  onChange={(e) => setBookTypeId(e.target.value)}
+                  onChange={(e) => {
+                    setBookTypeId(e.target.value)
+                    setBookStartsAtLocal('')
+                    setBookDate('')
+                    setBookTime('')
+                  }}
                   className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
                 >
                   <option value="">{typesQ.isLoading ? 'Loading…' : 'Select…'}</option>
@@ -758,148 +1237,193 @@ export default function Scheduler() {
                 </select>
               </div>
               <div className="md:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Start date & time</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="relative" ref={datePickerRef}>
-                    <button
-                      type="button"
-                      onClick={() => setShowDatePicker(!showDatePicker)}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-left flex items-center gap-2 hover:bg-[color:var(--color-muted)]"
-                    >
-                      <Calendar className="h-4 w-4 text-[color:var(--color-text-muted)]" />
-                      <span>{bookDate ? new Date(bookDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Select date'}</span>
-                    </button>
-                    {showDatePicker && (
-                      <div className="absolute z-50 mt-1 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-lg p-4 w-[280px]">
-                        <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Start time</label>
+                  <label className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
+                    <input
+                      type="checkbox"
+                      checked={useSlotPicker}
+                      onChange={(e) => {
+                        setUseSlotPicker(e.target.checked)
+                        setBookStartsAtLocal('')
+                        setBookDate('')
+                        setBookTime('')
+                      }}
+                    />
+                    Pick from availability
+                  </label>
+                </div>
+
+                {useSlotPicker ? (
+                  <div className="mt-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-2">
+                    {!selectedType ? (
+                      <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">Select an appointment type to see available slots.</div>
+                    ) : bookingLinkQ.isLoading ? (
+                      <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">Loading availability…</div>
+                    ) : bookingLinkQ.isError ? (
+                      <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">Unable to load availability for this type.</div>
+                    ) : slotOptions.length ? (
+                      <div className="grid grid-cols-1 gap-1">
+                        {slotOptions.map((s) => (
                           <button
+                            key={s.iso}
                             type="button"
-                            onClick={() => {
-                              const prev = new Date(datePickerMonth)
-                              prev.setMonth(prev.getMonth() - 1)
-                              setDatePickerMonth(prev)
-                            }}
-                            className="p-1 rounded hover:bg-[color:var(--color-muted)]"
+                            onClick={() => setBookStartsAtLocal(s.iso)}
+                            className={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[color:var(--color-muted)] ${
+                              bookStartsAtLocal === s.iso ? 'bg-[color:var(--color-muted)] font-semibold' : ''
+                            }`}
                           >
-                            <ChevronLeft className="h-4 w-4" />
+                            {s.label}
                           </button>
-                          <div className="font-semibold text-sm">
-                            {datePickerMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = new Date(datePickerMonth)
-                              next.setMonth(next.getMonth() + 1)
-                              setDatePickerMonth(next)
-                            }}
-                            className="p-1 rounded hover:bg-[color:var(--color-muted)]"
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-7 gap-1 mb-2">
-                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                            <div key={day} className="text-center text-xs font-medium text-[color:var(--color-text-muted)] py-1">
-                              {day}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="grid grid-cols-7 gap-1">
-                          {(() => {
-                            const year = datePickerMonth.getFullYear()
-                            const month = datePickerMonth.getMonth()
-                            const firstDay = new Date(year, month, 1)
-                            const startDate = new Date(firstDay)
-                            startDate.setDate(startDate.getDate() - firstDay.getDay())
-                            const today = new Date()
-                            today.setHours(0, 0, 0, 0)
-                            const days: React.ReactElement[] = []
-                            for (let i = 0; i < 42; i++) {
-                              const date = new Date(startDate)
-                              date.setDate(startDate.getDate() + i)
-                              const isCurrentMonth = date.getMonth() === month
-                              const isToday = date.getTime() === today.getTime()
-                              const isPast = date < today
-                              const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-                              const isSelected = bookDate === dateStr
-                              days.push(
-                                <button
-                                  key={i}
-                                  type="button"
-                                  onClick={() => {
-                                    if (!isPast) {
-                                      setBookDate(dateStr)
-                                      if (bookTime) {
-                                        const combined = `${dateStr}T${bookTime}`
-                                        setBookStartsAtLocal(combined)
-                                      }
-                                      setShowDatePicker(false)
-                                    }
-                                  }}
-                                  disabled={isPast}
-                                  className={`h-8 rounded text-xs ${
-                                    isPast
-                                      ? 'text-[color:var(--color-text-muted)] opacity-40 cursor-not-allowed'
-                                      : isSelected
-                                        ? 'bg-[color:var(--color-primary-600)] text-white font-semibold'
-                                        : isToday
-                                          ? 'bg-[color:var(--color-primary-soft)] text-[color:var(--color-primary)] font-semibold'
-                                          : isCurrentMonth
-                                            ? 'hover:bg-[color:var(--color-muted)]'
-                                            : 'text-[color:var(--color-text-muted)] opacity-50'
-                                  }`}
-                                >
-                                  {date.getDate()}
-                                </button>
-                              )
-                            }
-                            return days
-                          })()}
-                        </div>
+                        ))}
                       </div>
+                    ) : (
+                      <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">No available slots in the next few weeks.</div>
                     )}
                   </div>
-                  <div>
-                    <select
-                      value={bookTime}
-                      onChange={(e) => {
-                        setBookTime(e.target.value)
-                        if (bookDate && e.target.value) {
-                          const combined = `${bookDate}T${e.target.value}`
-                          setBookStartsAtLocal(combined)
-                        }
-                      }}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                    >
-                      <option value="">Select time</option>
-                      {(() => {
-                        const times: string[] = []
-                        // Generate time slots from 8:00 AM to 8:00 PM in 15-minute intervals
-                        for (let hour = 8; hour <= 20; hour++) {
-                          for (let minute = 0; minute < 60; minute += 15) {
-                            const h = hour.toString().padStart(2, '0')
-                            const m = minute.toString().padStart(2, '0')
-                            const time24 = `${h}:${m}`
-                            times.push(time24)
+                ) : (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div className="relative" ref={datePickerRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowDatePicker(!showDatePicker)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-left flex items-center gap-2 hover:bg-[color:var(--color-muted)]"
+                      >
+                        <Calendar className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+                        <span>{bookDate ? new Date(bookDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Select date'}</span>
+                      </button>
+                      {showDatePicker && (
+                        <div className="absolute z-50 mt-1 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-lg p-4 w-[280px]">
+                          <div className="flex items-center justify-between mb-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const prev = new Date(datePickerMonth)
+                                prev.setMonth(prev.getMonth() - 1)
+                                setDatePickerMonth(prev)
+                              }}
+                              className="p-1 rounded hover:bg-[color:var(--color-muted)]"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <div className="font-semibold text-sm">
+                              {datePickerMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = new Date(datePickerMonth)
+                                next.setMonth(next.getMonth() + 1)
+                                setDatePickerMonth(next)
+                              }}
+                              className="p-1 rounded hover:bg-[color:var(--color-muted)]"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-7 gap-1 mb-2">
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                              <div key={day} className="text-center text-xs font-medium text-[color:var(--color-text-muted)] py-1">
+                                {day}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="grid grid-cols-7 gap-1">
+                            {(() => {
+                              const year = datePickerMonth.getFullYear()
+                              const month = datePickerMonth.getMonth()
+                              const firstDay = new Date(year, month, 1)
+                              const startDate = new Date(firstDay)
+                              startDate.setDate(startDate.getDate() - firstDay.getDay())
+                              const today = new Date()
+                              today.setHours(0, 0, 0, 0)
+                              const days: React.ReactElement[] = []
+                              for (let i = 0; i < 42; i++) {
+                                const date = new Date(startDate)
+                                date.setDate(startDate.getDate() + i)
+                                const isCurrentMonth = date.getMonth() === month
+                                const isToday = date.getTime() === today.getTime()
+                                const isPast = date < today
+                                const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                                const isSelected = bookDate === dateStr
+                                days.push(
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => {
+                                      if (!isPast) {
+                                        setBookDate(dateStr)
+                                        if (bookTime) {
+                                          const combined = `${dateStr}T${bookTime}`
+                                          setBookStartsAtLocal(combined)
+                                        }
+                                        setShowDatePicker(false)
+                                      }
+                                    }}
+                                    disabled={isPast}
+                                    className={`h-8 rounded text-xs ${
+                                      isPast
+                                        ? 'text-[color:var(--color-text-muted)] opacity-40 cursor-not-allowed'
+                                        : isSelected
+                                          ? 'bg-[color:var(--color-primary-600)] text-white font-semibold'
+                                          : isToday
+                                            ? 'bg-[color:var(--color-primary-soft)] text-[color:var(--color-primary)] font-semibold'
+                                            : isCurrentMonth
+                                              ? 'hover:bg-[color:var(--color-muted)]'
+                                              : 'text-[color:var(--color-text-muted)] opacity-50'
+                                    }`}
+                                  >
+                                    {date.getDate()}
+                                  </button>
+                                )
+                              }
+                              return days
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <select
+                        value={bookTime}
+                        onChange={(e) => {
+                          setBookTime(e.target.value)
+                          if (bookDate && e.target.value) {
+                            const combined = `${bookDate}T${e.target.value}`
+                            setBookStartsAtLocal(combined)
                           }
-                        }
-                        return times.map((time24) => {
-                          const [h, m] = time24.split(':')
-                          const hour = parseInt(h, 10)
-                          const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
-                          const ampm = hour >= 12 ? 'PM' : 'AM'
-                          const time12 = `${hour12}:${m} ${ampm}`
-                          return (
-                            <option key={time24} value={time24}>
-                              {time12}
-                            </option>
-                          )
-                        })
-                      })()}
-                    </select>
+                        }}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                      >
+                        <option value="">Select time</option>
+                        {(() => {
+                          const times: string[] = []
+                          for (let hour = 8; hour <= 20; hour++) {
+                            for (let minute = 0; minute < 60; minute += 15) {
+                              const h = hour.toString().padStart(2, '0')
+                              const m = minute.toString().padStart(2, '0')
+                              const time24 = `${h}:${m}`
+                              times.push(time24)
+                            }
+                          }
+                          return times.map((time24) => {
+                            const [h, m] = time24.split(':')
+                            const hour = parseInt(h, 10)
+                            const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour
+                            const ampm = hour >= 12 ? 'PM' : 'AM'
+                            const time12 = `${hour12}:${m} ${ampm}`
+                            return (
+                              <option key={time24} value={time24}>
+                                {time12}
+                              </option>
+                            )
+                          })
+                        })()}
+                      </select>
+                    </div>
                   </div>
-                </div>
+                )}
+
                 {bookStartsAtLocal && (
                   <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                     Selected: {new Date(bookStartsAtLocal).toLocaleString('en-US', {
@@ -1077,9 +1601,9 @@ export default function Scheduler() {
                       <button
                         type="button"
                         onClick={async () => {
-                          const ok = await confirm('Cancel this appointment?', { confirmText: 'Cancel appointment', confirmColor: 'danger' })
-                          if (!ok) return
-                          cancelAppointment.mutate(a._id)
+                          setCancelModalId(a._id)
+                          setCancelReasonDraft('')
+                          setCancelNotifyDraft(true)
                         }}
                         disabled={cancelAppointment.isPending}
                         className="rounded-lg border border-red-400 px-3 py-2 text-xs text-red-500 hover:bg-red-950/40 disabled:opacity-50 flex items-center gap-1"
@@ -1118,6 +1642,37 @@ export default function Scheduler() {
 
       {tab === 'calendar' && calendarView === 'month' && (
         <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+          <div className="mb-4 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+            {!m365StatusQ.data?.data?.configured ? (
+              <div className="text-xs text-[color:var(--color-text-muted)]">External calendar sync is not configured on this environment.</div>
+            ) : m365StatusQ.data?.data?.connected ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs text-[color:var(--color-text-muted)]">
+                  External calendar conflict checks: <span className="font-semibold text-green-400">Enabled</span>
+                  {m365StatusQ.data.data.email ? ` (${m365StatusQ.data.data.email})` : ''}
+                </div>
+                <Link
+                  to="/apps/calendar"
+                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                >
+                  Manage in Calendar
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs text-[color:var(--color-text-muted)]">
+                  External calendar conflict checks: <span className="font-semibold text-[color:var(--color-text-muted)]">Disabled</span>
+                </div>
+                <Link
+                  to="/apps/calendar"
+                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                >
+                  Connect calendar
+                </Link>
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-between mb-4">
             <div className="text-sm font-semibold">Calendar View</div>
             <div className="flex items-center gap-2">
@@ -1646,16 +2201,20 @@ export default function Scheduler() {
                   <span className="text-sm capitalize">{selectedAppointment.attendeeContactPreference}</span>
                 </div>
               )}
+              {selectedAppointment.status === 'cancelled' && selectedAppointment.cancelReason ? (
+                <div>
+                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Cancellation reason</div>
+                  <div className="text-sm">{selectedAppointment.cancelReason}</div>
+                </div>
+              ) : null}
               <div className="flex items-center gap-2 pt-4 border-t border-[color:var(--color-border)]">
                 {selectedAppointment.status === 'booked' && (
                   <button
                     type="button"
                     onClick={async () => {
-                      const ok = await confirm('Cancel this appointment?', { confirmText: 'Cancel appointment', confirmColor: 'danger' })
-                      if (!ok) return
-                      cancelAppointment.mutate(selectedAppointment._id, {
-                        onSuccess: () => setSelectedAppointment(null),
-                      })
+                      setCancelModalId(selectedAppointment._id)
+                      setCancelReasonDraft('')
+                      setCancelNotifyDraft(true)
                     }}
                     disabled={cancelAppointment.isPending}
                     className="rounded-lg border border-red-400 px-4 py-2 text-sm text-red-500 hover:bg-red-950/40 disabled:opacity-50 flex items-center gap-2"
