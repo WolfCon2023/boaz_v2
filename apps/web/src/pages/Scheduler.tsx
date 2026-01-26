@@ -334,6 +334,7 @@ export default function Scheduler() {
   const [useSlotPicker, setUseSlotPicker] = React.useState(true)
   const [bookTypeId, setBookTypeId] = React.useState('')
   const [bookStartsAtLocal, setBookStartsAtLocal] = React.useState('')
+  const [slotPickerOpen, setSlotPickerOpen] = React.useState(true)
   const [bookDate, setBookDate] = React.useState('')
   const [bookTime, setBookTime] = React.useState('')
   const [showDatePicker, setShowDatePicker] = React.useState(false)
@@ -352,6 +353,13 @@ export default function Scheduler() {
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [showDatePicker])
+
+  // Slot picker UX: collapse list after selecting a slot, reset on type toggle/change.
+  React.useEffect(() => {
+    if (!useSlotPicker) return
+    // If no selection yet, show the list by default.
+    if (!bookStartsAtLocal) setSlotPickerOpen(true)
+  }, [useSlotPicker, bookStartsAtLocal])
 
   // Sync date/time fields when bookStartsAtLocal changes externally (but not from our own updates)
   React.useEffect(() => {
@@ -1230,6 +1238,7 @@ export default function Scheduler() {
                   onChange={(e) => {
                     setBookTypeId(e.target.value)
                     setBookStartsAtLocal('')
+                    setSlotPickerOpen(true)
                     setBookDate('')
                     setBookTime('')
                   }}
@@ -1270,19 +1279,50 @@ export default function Scheduler() {
                     ) : bookingLinkQ.isError ? (
                       <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">Unable to load availability for this type.</div>
                     ) : slotOptions.length ? (
-                      <div className="grid grid-cols-1 gap-1">
-                        {slotOptions.map((s) => (
-                          <button
-                            key={s.iso}
-                            type="button"
-                            onClick={() => setBookStartsAtLocal(s.iso)}
-                            className={`w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[color:var(--color-muted)] ${
-                              bookStartsAtLocal === s.iso ? 'bg-[color:var(--color-muted)] font-semibold' : ''
-                            }`}
-                          >
-                            {s.label}
-                          </button>
-                        ))}
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => setSlotPickerOpen((v) => !v)}
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-left text-sm hover:bg-[color:var(--color-muted)] flex items-center justify-between gap-2"
+                        >
+                          <span className={bookStartsAtLocal ? 'font-semibold' : 'text-[color:var(--color-text-muted)]'}>
+                            {bookStartsAtLocal ? (slotOptions.find((s) => s.iso === bookStartsAtLocal)?.label || 'Selected time') : 'Select a time…'}
+                          </span>
+                          <span className="text-xs text-[color:var(--color-text-muted)]">{slotPickerOpen ? 'Hide' : 'Change'}</span>
+                        </button>
+
+                        {bookStartsAtLocal ? (
+                          <div className="flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBookStartsAtLocal('')
+                                setSlotPickerOpen(true)
+                              }}
+                              className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {slotPickerOpen ? (
+                          <div className="grid grid-cols-1 gap-1">
+                            {slotOptions.map((s) => (
+                              <button
+                                key={s.iso}
+                                type="button"
+                                onClick={() => {
+                                  setBookStartsAtLocal(s.iso)
+                                  setSlotPickerOpen(false)
+                                }}
+                                className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-[color:var(--color-muted)]"
+                              >
+                                {s.label}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="px-2 py-2 text-xs text-[color:var(--color-text-muted)]">No available slots in the next few weeks.</div>
