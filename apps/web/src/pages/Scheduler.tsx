@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
@@ -79,10 +78,6 @@ export default function Scheduler() {
   const qc = useQueryClient()
   const toast = useToast()
   const { confirm, ConfirmDialog } = useConfirm()
-  const portalTarget =
-    typeof document !== 'undefined'
-      ? (document.getElementById('portal-root') || document.getElementById('root') || document.body)
-      : null
   const [tab, setTab] = React.useState<'types' | 'availability' | 'appointments' | 'calendar'>('types')
   const [calendarMonth, setCalendarMonth] = React.useState(new Date())
   const [calendarView, setCalendarView] = React.useState<'month' | 'week' | 'day'>('month')
@@ -494,202 +489,199 @@ export default function Scheduler() {
 
   return (
     <div className="space-y-6">
-      {editingTypeId && editingType && portalTarget
-        ? createPortal(
-            <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 p-4" onClick={() => setEditingTypeId(null)}>
-              <div
-                className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-xl"
-                onClick={(e) => e.stopPropagation()}
+      {editingTypeId && editingType && (
+        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setEditingTypeId(null)}>
+          <div
+            className="w-[min(90vw,56rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] pb-3">
+              <div>
+                <div className="text-base font-semibold">Edit appointment type</div>
+                <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">Changes apply immediately to the public booking page.</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingTypeId(null)}
+                className="p-2 rounded hover:bg-[color:var(--color-muted)]"
+                aria-label="Close"
+                title="Close"
               >
-                <div className="flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] px-5 py-4">
-                  <div>
-                    <div className="text-base font-semibold">Edit appointment type</div>
-                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">Changes apply immediately to the public booking page.</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setEditingTypeId(null)}
-                    className="rounded-lg border border-[color:var(--color-border)] p-2 text-sm hover:bg-[color:var(--color-muted)]"
-                    aria-label="Close"
-                    title="Close"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Name</label>
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                  />
                 </div>
-
-                <div className="space-y-5 p-5">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Name</label>
-                      <input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Slug</label>
-                      <input
-                        value={editSlug}
-                        onChange={(e) => setEditSlug(e.target.value)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Duration (min)</label>
-                      <input
-                        type="number"
-                        value={editDurationMinutes}
-                        onChange={(e) => setEditDurationMinutes(Number(e.target.value) || 15)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Active</label>
-                      <select
-                        value={editActive ? '1' : '0'}
-                        onChange={(e) => setEditActive(e.target.value === '1')}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                      >
-                        <option value="1">Yes</option>
-                        <option value="0">No</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Location</label>
-                      <select
-                        value={editLocationType}
-                        onChange={(e) => setEditLocationType(e.target.value as any)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                      >
-                        <option value="video">Video</option>
-                        <option value="phone">Phone</option>
-                        <option value="in_person">In person</option>
-                        <option value="custom">Custom</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Location details (optional)</label>
-                      <input
-                        value={editLocationDetails}
-                        onChange={(e) => setEditLocationDetails(e.target.value)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                        placeholder="Zoom link, address, instructions…"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Buffer before (min)</label>
-                      <input
-                        type="number"
-                        value={editBufferBeforeMinutes}
-                        onChange={(e) => setEditBufferBeforeMinutes(Number(e.target.value) || 0)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Buffer after (min)</label>
-                      <input
-                        type="number"
-                        value={editBufferAfterMinutes}
-                        onChange={(e) => setEditBufferAfterMinutes(Number(e.target.value) || 0)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Scheduling mode</label>
-                      <select
-                        value={editSchedulingMode}
-                        onChange={(e) => setEditSchedulingMode(e.target.value as any)}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                      >
-                        <option value="single">Single host</option>
-                        <option value="round_robin">Round robin (team)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {editSchedulingMode === 'round_robin' ? (
-                    <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
-                      <div className="text-xs text-[color:var(--color-text-muted)]">
-                        Add team members who can host this appointment type. You (the owner) are always included.
-                      </div>
-                      <div className="mt-3">
-                        {usersQ.isError ? (
-                          <div className="text-xs text-[color:var(--color-text-muted)]">Team selection requires `users.read` permission.</div>
-                        ) : usersQ.isLoading ? (
-                          <div className="text-xs text-[color:var(--color-text-muted)]">Loading users…</div>
-                        ) : (
-                          <div className="max-h-48 overflow-auto space-y-2">
-                            {(usersQ.data?.data.items ?? []).map((u) => {
-                              const checked = editTeamUserIds.includes(u.id)
-                              const label = u.name ? `${u.name} — ${u.email || ''}` : u.email || u.id
-                              return (
-                                <label key={u.id} className="flex items-center gap-2 text-sm">
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={(e) => {
-                                      const next = new Set(editTeamUserIds)
-                                      if (e.target.checked) next.add(u.id)
-                                      else next.delete(u.id)
-                                      setEditTeamUserIds(Array.from(next))
-                                    }}
-                                  />
-                                  <span className="text-sm">{label}</span>
-                                </label>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[color:var(--color-border)] pt-4">
-                    <button
-                      type="button"
-                      onClick={() => setEditingTypeId(null)}
-                      className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={updateType.isPending || !editName.trim() || !editSlug.trim()}
-                      onClick={() =>
-                        updateType.mutate({
-                          id: editingTypeId,
-                          patch: {
-                            name: editName.trim(),
-                            slug: editSlug.trim(),
-                            durationMinutes: editDurationMinutes,
-                            locationType: editLocationType,
-                            locationDetails: editLocationDetails.trim() || null,
-                            bufferBeforeMinutes: editBufferBeforeMinutes,
-                            bufferAfterMinutes: editBufferAfterMinutes,
-                            active: editActive,
-                            schedulingMode: editSchedulingMode,
-                            teamUserIds: editSchedulingMode === 'round_robin' ? editTeamUserIds : [],
-                          },
-                        })
-                      }
-                      className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                    >
-                      Save changes
-                    </button>
-                  </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Slug</label>
+                  <input
+                    value={editSlug}
+                    onChange={(e) => setEditSlug(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Duration (min)</label>
+                  <input
+                    type="number"
+                    value={editDurationMinutes}
+                    onChange={(e) => setEditDurationMinutes(Number(e.target.value) || 15)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Active</label>
+                  <select
+                    value={editActive ? '1' : '0'}
+                    onChange={(e) => setEditActive(e.target.value === '1')}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                  >
+                    <option value="1">Yes</option>
+                    <option value="0">No</option>
+                  </select>
                 </div>
               </div>
-            </div>,
-            portalTarget,
-          )
-        : null}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Location</label>
+                  <select
+                    value={editLocationType}
+                    onChange={(e) => setEditLocationType(e.target.value as any)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                  >
+                    <option value="video">Video</option>
+                    <option value="phone">Phone</option>
+                    <option value="in_person">In person</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Location details (optional)</label>
+                  <input
+                    value={editLocationDetails}
+                    onChange={(e) => setEditLocationDetails(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                    placeholder="Zoom link, address, instructions…"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Buffer before (min)</label>
+                  <input
+                    type="number"
+                    value={editBufferBeforeMinutes}
+                    onChange={(e) => setEditBufferBeforeMinutes(Number(e.target.value) || 0)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Buffer after (min)</label>
+                  <input
+                    type="number"
+                    value={editBufferAfterMinutes}
+                    onChange={(e) => setEditBufferAfterMinutes(Number(e.target.value) || 0)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Scheduling mode</label>
+                  <select
+                    value={editSchedulingMode}
+                    onChange={(e) => setEditSchedulingMode(e.target.value as any)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                  >
+                    <option value="single">Single host</option>
+                    <option value="round_robin">Round robin (team)</option>
+                  </select>
+                </div>
+              </div>
+
+              {editSchedulingMode === 'round_robin' ? (
+                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+                  <div className="text-xs text-[color:var(--color-text-muted)]">
+                    Add team members who can host this appointment type. You (the owner) are always included.
+                  </div>
+                  <div className="mt-3">
+                    {usersQ.isError ? (
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Team selection requires `users.read` permission.</div>
+                    ) : usersQ.isLoading ? (
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Loading users…</div>
+                    ) : (
+                      <div className="max-h-48 overflow-auto space-y-2">
+                        {(usersQ.data?.data.items ?? []).map((u) => {
+                          const checked = editTeamUserIds.includes(u.id)
+                          const label = u.name ? `${u.name} — ${u.email || ''}` : u.email || u.id
+                          return (
+                            <label key={u.id} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const next = new Set(editTeamUserIds)
+                                  if (e.target.checked) next.add(u.id)
+                                  else next.delete(u.id)
+                                  setEditTeamUserIds(Array.from(next))
+                                }}
+                              />
+                              <span className="text-sm">{label}</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[color:var(--color-border)]">
+                <button
+                  type="button"
+                  onClick={() => setEditingTypeId(null)}
+                  className="px-4 py-2 text-sm rounded-lg border border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={updateType.isPending || !editName.trim() || !editSlug.trim()}
+                  onClick={() =>
+                    updateType.mutate({
+                      id: editingTypeId,
+                      patch: {
+                        name: editName.trim(),
+                        slug: editSlug.trim(),
+                        durationMinutes: editDurationMinutes,
+                        locationType: editLocationType,
+                        locationDetails: editLocationDetails.trim() || null,
+                        bufferBeforeMinutes: editBufferBeforeMinutes,
+                        bufferAfterMinutes: editBufferAfterMinutes,
+                        active: editActive,
+                        schedulingMode: editSchedulingMode,
+                        teamUserIds: editSchedulingMode === 'round_robin' ? editTeamUserIds : [],
+                      },
+                    })
+                  }
+                  className="px-4 py-2 text-sm rounded-lg border bg-[color:var(--color-primary-600)] text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                >
+                  Save changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cancelModalId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setCancelModalId(null)}>
