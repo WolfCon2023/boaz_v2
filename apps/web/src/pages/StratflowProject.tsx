@@ -43,6 +43,8 @@ type Issue = {
   labels?: string[]
   components?: string[]
   order: number
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
 type Sprint = {
@@ -88,6 +90,17 @@ function normView(v: string | null): ViewMode {
   const x = String(v || '').toLowerCase()
   if (x === 'list' || x === 'sprint' || x === 'timeline' || x === 'reports') return x
   return 'board'
+}
+
+function parseIsoDate(s?: string | null): Date | null {
+  if (!s) return null
+  const d = new Date(String(s))
+  return Number.isFinite(d.getTime()) ? d : null
+}
+
+function daysBetween(a: Date, b: Date) {
+  const ms = b.getTime() - a.getTime()
+  return ms / (1000 * 60 * 60 * 24)
 }
 
 function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: (id: string) => void }) {
@@ -336,6 +349,20 @@ export default function StratflowProject() {
   })
   const sprints = sprintsQ.data?.data.items ?? []
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null
+
+  const milestoneBoardId = boards.find((b) => b.kind === 'MILESTONES')?._id ?? null
+  const milestoneBoardQ = useQuery<{ data: { board: Board; columns: Column[] } }>({
+    queryKey: ['stratflow', 'board', milestoneBoardId],
+    queryFn: async () => (await http.get(`/api/stratflow/boards/${milestoneBoardId}`)).data,
+    retry: false,
+    enabled: Boolean(milestoneBoardId) && view === 'timeline',
+  })
+  const milestoneIssuesQ = useQuery<{ data: { items: Issue[] } }>({
+    queryKey: ['stratflow', 'issues', milestoneBoardId],
+    queryFn: async () => (await http.get(`/api/stratflow/boards/${milestoneBoardId}/issues`)).data,
+    retry: false,
+    enabled: Boolean(milestoneBoardId) && view === 'timeline',
+  })
 
   const backlogIssuesQ = useQuery<{ data: { items: Issue[] } }>({
     queryKey: ['stratflow', 'projectIssues', projectId, 'backlog'],
@@ -826,20 +853,204 @@ export default function StratflowProject() {
           )}
 
           {view === 'timeline' && (
-            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
-              <div className="text-base font-semibold">Timeline</div>
-              <div className="mt-2 text-sm text-[color:var(--color-text-muted)]">
-                Coming next: milestones + phases, dates, and a zoomable roadmap timeline. We’ll start with Traditional milestones and then add Scrum sprint timelines.
+            <section className="space-y-4">
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-base font-semibold">Timeline</div>
+                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                      MVP: shows sprint timelines when dates exist, plus Traditional milestone boards when present.
+                    </div>
+                  </div>
+                </div>
               </div>
+
+              {(() => {
+                const datedSprints = sprints
+                  .map((s) => ({ s, start: parseIsoDate(s.startDate), end: parseIsoDate(s.endDate) }))
+                  .filter((x) => x.start && x.end) as Array<{ s: Sprint; start: Date; end: Date }>
+                const sorted = datedSprints.slice().sort((a, b) => a.start.getTime() - b.start.getTime())
+                if (!sorted.length) return null
+                const minStart = sorted[0].start
+                const maxEnd = sorted.reduce((m, x) => (x.end.getTime() > m.getTime() ? x.end : m), sorted[0].end)
+                const spanDays = Math.max(1, daysBetween(minStart, maxEnd))
+
+                return (
+                  <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold">Sprint timeline</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">{sorted.length} sprint(s) with dates</div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {sorted.map(({ s, start, end }) => {
+                        const left = (daysBetween(minStart, start) / spanDays) * 100
+                        const width = Math.max(2, (daysBetween(start, end) / spanDays) * 100)
+                        return (
+                          <div key={s._id} className="grid grid-cols-[10rem_1fr] items-center gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium truncate">{s.name}</div>
+                              <div className="text-xs text-[color:var(--color-text-muted)]">
+                                {start.toLocaleDateString()} → {end.toLocaleDateString()}
+                              </div>
+                            </div>
+                            <div className="h-8 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] relative overflow-hidden">
+                              <div
+                                className={[
+                                  'absolute top-1/2 h-4 -translate-y-1/2 rounded-lg',
+                                  s.state === 'active'
+                                    ? 'bg-[color:var(--color-primary-600)]'
+                                    : s.state === 'closed'
+                                    ? 'bg-green-600'
+                                    : 'bg-[color:var(--color-panel)]',
+                                ].join(' ')}
+                                style={{ left: `${left}%`, width: `${width}%` }}
+                                title={s.state}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {milestoneBoardId ? (
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+                  <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                    <div className="text-sm font-semibold">Milestones</div>
+                    <div className="text-xs text-[color:var(--color-text-muted)]">
+                      {milestoneIssuesQ.isFetching || milestoneBoardQ.isFetching
+                        ? 'Loading…'
+                        : `${(milestoneIssuesQ.data?.data.items ?? []).length} milestone(s)`}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 p-4 md:grid-cols-2 lg:grid-cols-4">
+                    {(milestoneBoardQ.data?.data.columns ?? [])
+                      .slice()
+                      .sort((a, b) => (a.order || 0) - (b.order || 0))
+                      .map((c) => {
+                        const issues = (milestoneIssuesQ.data?.data.items ?? []).filter((i) => i.columnId === c._id)
+                        return (
+                          <div key={c._id} className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+                            <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-3 py-2">
+                              <div className="text-sm font-semibold">{c.name}</div>
+                              <div className="text-xs text-[color:var(--color-text-muted)]">{issues.length}</div>
+                            </div>
+                            <div className="divide-y divide-[color:var(--color-border)]">
+                              {issues
+                                .slice()
+                                .sort((a, b) => (a.order || 0) - (b.order || 0))
+                                .slice(0, 50)
+                                .map((i) => (
+                                  <button
+                                    key={i._id}
+                                    type="button"
+                                    className="w-full text-left px-3 py-2 hover:bg-[color:var(--color-muted)]"
+                                    onClick={() => setFocusedIssueId(i._id)}
+                                  >
+                                    <div className="text-sm font-medium">{i.title}</div>
+                                    <div className="mt-0.5 text-[10px] text-[color:var(--color-text-muted)]">{i.type}</div>
+                                  </button>
+                                ))}
+                              {!issues.length && !(milestoneIssuesQ.isLoading || milestoneBoardQ.isLoading) ? (
+                                <div className="px-3 py-4 text-xs text-[color:var(--color-text-muted)]">No milestones.</div>
+                              ) : null}
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                </div>
+              ) : null}
+
+              {!milestoneBoardId && !sprints.some((s) => parseIsoDate(s.startDate) && parseIsoDate(s.endDate)) ? (
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-sm text-[color:var(--color-text-muted)]">
+                  No dated sprints or milestone board found yet. Add sprint dates (start/end) or use a Traditional template to get Milestones.
+                </div>
+              ) : null}
             </section>
           )}
 
           {view === 'reports' && (
-            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
-              <div className="text-base font-semibold">Reports</div>
-              <div className="mt-2 text-sm text-[color:var(--color-text-muted)]">
-                Coming next: WIP by column, cycle time, throughput, and a simple “Work health” dashboard. We’ll wire these to real aggregates once issue metadata (dates/assignees) is expanded.
-              </div>
+            <section className="space-y-4">
+              {(() => {
+                const total = loadedIssues.length
+                const done = loadedIssues.filter((i) => i.statusKey === 'done').length
+                const backlog = loadedIssues.filter((i) => i.statusKey === 'backlog').length
+                const wip = loadedIssues.filter((i) => i.statusKey === 'todo' || i.statusKey === 'in_progress' || i.statusKey === 'in_review').length
+                const pctDone = total ? Math.round((done / total) * 100) : 0
+
+                const now = new Date()
+                const openAges = loadedIssues
+                  .filter((i) => i.statusKey !== 'done')
+                  .map((i) => parseIsoDate(i.createdAt))
+                  .filter(Boolean)
+                  .map((d) => daysBetween(d as Date, now))
+                const avgOpenAge = openAges.length ? Math.round((openAges.reduce((a, b) => a + b, 0) / openAges.length) * 10) / 10 : null
+
+                const colCounts = columns
+                  .slice()
+                  .sort((a, b) => (a.order || 0) - (b.order || 0))
+                  .map((c) => ({ id: c._id, name: c.name, count: loadedIssues.filter((i) => i.columnId === c._id).length }))
+                const maxCol = Math.max(1, ...colCounts.map((c) => c.count))
+
+                return (
+                  <>
+                    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-base font-semibold">Reports</div>
+                          <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">MVP: real counts + simple health signals from current issue state.</div>
+                        </div>
+                        <div className="text-xs text-[color:var(--color-text-muted)]">{issuesQ.isFetching ? 'Syncing…' : 'Live'}</div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="text-xs text-[color:var(--color-text-muted)]">Total issues</div>
+                          <div className="mt-1 text-2xl font-semibold">{total}</div>
+                        </div>
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="text-xs text-[color:var(--color-text-muted)]">Done</div>
+                          <div className="mt-1 text-2xl font-semibold">{done}</div>
+                          <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{pctDone}% complete</div>
+                        </div>
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="text-xs text-[color:var(--color-text-muted)]">WIP</div>
+                          <div className="mt-1 text-2xl font-semibold">{wip}</div>
+                          <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">To Do / In Progress / In Review</div>
+                        </div>
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="text-xs text-[color:var(--color-text-muted)]">Backlog</div>
+                          <div className="mt-1 text-2xl font-semibold">{backlog}</div>
+                          <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                            Avg open age: {avgOpenAge == null ? '—' : `${avgOpenAge}d`}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold">WIP by column</div>
+                        <div className="text-xs text-[color:var(--color-text-muted)]">{currentBoard?.name || 'Board'}</div>
+                      </div>
+                      <div className="mt-4 space-y-2">
+                        {colCounts.map((c) => (
+                          <div key={c.id} className="grid grid-cols-[10rem_1fr_auto] items-center gap-3">
+                            <div className="text-sm text-[color:var(--color-text-muted)] truncate">{c.name}</div>
+                            <div className="h-3 rounded-full bg-[color:var(--color-muted)] overflow-hidden border border-[color:var(--color-border)]">
+                              <div className="h-full bg-[color:var(--color-primary-600)]" style={{ width: `${(c.count / maxCol) * 100}%` }} />
+                            </div>
+                            <div className="text-sm font-medium tabular-nums">{c.count}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )
+              })()}
             </section>
           )}
         </>
