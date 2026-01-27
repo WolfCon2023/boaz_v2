@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download, Database } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download, Database, Layers } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
+import { AdminStratflow } from '@/components/AdminStratflow'
 
 type Session = {
   jti: string
@@ -17,7 +18,7 @@ type Session = {
 
 export default function AdminPortal() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests' | 'access-report' | 'maintenance'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests' | 'access-report' | 'maintenance' | 'stratflow'>('sessions')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [registrationRequestStatus, setRegistrationRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
   const [appAccessRequestStatus, setAppAccessRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
@@ -777,6 +778,17 @@ export default function AdminPortal() {
         >
           <Download className="mr-2 inline h-4 w-4" />
           Maintenance
+        </button>
+        <button
+          onClick={() => setActiveTab('stratflow')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'stratflow'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <Layers className="mr-2 inline h-4 w-4" />
+          StratFlow
         </button>
       </div>
 
@@ -1826,6 +1838,7 @@ export default function AdminPortal() {
 
       {/* Maintenance / Tools */}
       {activeTab === 'maintenance' && <MaintenanceTab isAdmin={isAdmin} message={message} error={error} setMessage={setMessage} setError={setError} />}
+      {activeTab === 'stratflow' && <AdminStratflow />}
     </div>
   )
 }

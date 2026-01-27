@@ -47,6 +47,12 @@ type Comment = {
   createdAt: string
 }
 
+type ProjectMember = { id: string; email: string; name: string }
+type ProjectMembersResponse = { data: { users: ProjectMember[] } }
+
+type ProjectComponent = { _id: string; name: string }
+type ProjectComponentsResponse = { data: { items: ProjectComponent[] } }
+
 function normalizeIssueType(t: StratflowIssueType): 'Epic' | 'Story' | 'Task' | 'Defect' | 'Spike' {
   if (t === 'Bug') return 'Defect'
   return t
@@ -83,6 +89,20 @@ export function StratflowIssueDrawer({
     enabled: Boolean(projectId),
   })
 
+  const membersQ = useQuery<ProjectMembersResponse>({
+    queryKey: ['stratflow', 'project', projectId, 'members'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/members`)).data,
+    retry: false,
+    enabled: Boolean(projectId),
+  })
+
+  const componentsQ = useQuery<ProjectComponentsResponse>({
+    queryKey: ['stratflow', 'project', projectId, 'components'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/components`)).data,
+    retry: false,
+    enabled: Boolean(projectId),
+  })
+
   const epicsQ = useQuery<{ data: { items: StratflowIssue[] } }>({
     queryKey: ['stratflow', 'epics', projectId],
     queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/issues?type=Epic`)).data,
@@ -99,6 +119,8 @@ export function StratflowIssueDrawer({
 
   const issue = issueQ.data?.data
   const sprints = sprintsQ.data?.data.items ?? []
+  const members = membersQ.data?.data.users ?? []
+  const projectComponents = componentsQ.data?.data.items ?? []
   const epics = (epicsQ.data?.data.items ?? []).filter((e) => e._id !== issueId)
   const comments = commentsQ.data?.data.items ?? []
 
@@ -111,7 +133,8 @@ export function StratflowIssueDrawer({
   const [sprintId, setSprintId] = React.useState<string>('') // '' means none
   const [epicId, setEpicId] = React.useState<string>('') // '' means none
   const [labelsText, setLabelsText] = React.useState<string>('')
-  const [componentsText, setComponentsText] = React.useState<string>('')
+  const [selectedComponents, setSelectedComponents] = React.useState<string[]>([])
+  const [assigneeId, setAssigneeId] = React.useState<string>('')
   const [newComment, setNewComment] = React.useState<string>('')
 
   React.useEffect(() => {
@@ -125,7 +148,8 @@ export function StratflowIssueDrawer({
     setSprintId(issue.sprintId || '')
     setEpicId(issue.epicId || '')
     setLabelsText((issue.labels || []).join(', '))
-    setComponentsText((issue.components || []).join(', '))
+    setSelectedComponents(issue.components || [])
+    setAssigneeId(issue.assigneeId || '')
   }, [issue, issueId])
 
   const save = useMutation({
@@ -143,14 +167,12 @@ export function StratflowIssueDrawer({
         storyPoints: parsedPoints,
         sprintId: sprintId || null,
         epicId: epicId || null,
+        assigneeId: assigneeId || null,
         labels: labelsText
           .split(',')
           .map((x) => x.trim())
           .filter(Boolean),
-        components: componentsText
-          .split(',')
-          .map((x) => x.trim())
-          .filter(Boolean),
+        components: selectedComponents,
       }
       return (await http.patch(`/api/stratflow/issues/${issueId}`, payload)).data
     },
@@ -292,13 +314,19 @@ export function StratflowIssueDrawer({
                 </div>
                 <div className="space-y-2">
                   <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Assignee</label>
-                  <input
-                    value={String(issue.assigneeId || '')}
-                    readOnly
-                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent opacity-70"
-                    placeholder="(MVP) User picker coming next"
-                    title="User picker coming next"
-                  />
+                  <select
+                    value={assigneeId || ''}
+                    onChange={(e) => setAssigneeId(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                    title="Only project members can be assigned"
+                  >
+                    <option value="">Unassigned</option>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {(m.name || m.email) + (m.email ? ` (${m.email})` : '')}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -336,12 +364,37 @@ export function StratflowIssueDrawer({
                 </div>
                 <div className="space-y-2">
                   <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Components</label>
-                  <input
-                    value={componentsText}
-                    onChange={(e) => setComponentsText(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
-                    placeholder="Auth Service, Frontend, API"
-                  />
+                  <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-2">
+                    {!projectComponents.length ? (
+                      <div className="text-xs text-[color:var(--color-text-muted)]">
+                        No components defined for this project yet (an admin can add them in Admin Portal).
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {projectComponents.map((c) => {
+                          const active = selectedComponents.includes(c.name)
+                          return (
+                            <button
+                              key={c._id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedComponents((prev) => (prev.includes(c.name) ? prev.filter((x) => x !== c.name) : [...prev, c.name]))
+                              }}
+                              className={[
+                                'rounded-full border px-2 py-1 text-xs',
+                                active
+                                  ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                                  : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]',
+                              ].join(' ')}
+                              title={active ? 'Remove component' : 'Add component'}
+                            >
+                              {c.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
