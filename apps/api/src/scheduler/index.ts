@@ -1088,7 +1088,8 @@ internal.post('/appointments/:id/cancel', async (req: any, res) => {
       const type = await db.collection('scheduler_appointment_types').findOne({ _id: appt.appointmentTypeId } as any)
       if (type) {
         const merged: any = { ...appt, status: 'cancelled', cancelReason: reason, cancelledAt: now, cancelledByUserId: auth.userId, updatedAt: now }
-        sendCancelEmails(db, merged, type, { reason })
+        // db collections are untyped in this codebase; cast for TS compatibility.
+        sendCancelEmails(db, merged, type as any, { reason })
           .then(async () => {
             await db
               .collection('appointments')

@@ -58,6 +58,7 @@ import { integrationsRouter } from './crm/integrations.js';
 import { inboundIntegrationsRouter } from './integrations/inbound.js';
 import { schedulerRouter } from './scheduler/index.js';
 import { calendarRouter } from './calendar/index.js';
+import { stratflowRouter } from './stratflow/index.js';
 import { requireAuth } from './auth/rbac.js';
 const app = express();
 const normalize = (s) => s.trim().replace(/\/$/, '').toLowerCase();
@@ -65,6 +66,10 @@ const allowedOriginsRaw = env.ORIGIN.split(',').map((o) => o.trim()).filter(Bool
 const allowedOrigins = allowedOriginsRaw.map(normalize);
 const isAllowed = (origin) => {
     const o = normalize(origin);
+    // Allow localhost for local dev UIs hitting Railway APIs
+    if (o.startsWith('http://localhost') || o.startsWith('https://localhost') || o.startsWith('http://127.0.0.1') || o.startsWith('https://127.0.0.1')) {
+        return true;
+    }
     // Wildcard
     if (allowedOrigins.includes('*'))
         return true;
@@ -126,6 +131,7 @@ app.use('/api/crm/integrations', integrationsRouter);
 app.use('/api/integrations/inbound', inboundIntegrationsRouter);
 app.use('/api/scheduler', schedulerRouter);
 app.use('/api/calendar', calendarRouter);
+app.use('/api/stratflow', stratflowRouter);
 app.use('/api/terms', termsReviewRouter);
 app.use('/api/marketing', marketingSegmentsRouter);
 app.use('/api/marketing', marketingCampaignsRouter);

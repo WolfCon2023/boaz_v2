@@ -91,11 +91,14 @@ kbRouter.post('/kb', async (req, res) => {
     const raw = req.body ?? {};
     const title = typeof raw.title === 'string' ? raw.title.trim() : '';
     const body = typeof raw.body === 'string' ? raw.body : '';
+    const slug = typeof raw.slug === 'string' ? raw.slug.trim() : '';
     const tags = Array.isArray(raw.tags) ? raw.tags : [];
     if (!title || !body)
         return res.status(400).json({ data: null, error: 'invalid_payload' });
     const category = typeof raw.category === 'string' ? raw.category : 'Knowledge Sharing';
     const doc = { title, body, tags, category, createdAt: new Date(), updatedAt: new Date(), author: raw.author || 'system' };
+    if (slug)
+        doc.slug = slug;
     const r = await db.collection('kb_articles').insertOne(doc);
     res.status(201).json({ data: { _id: r.insertedId, ...doc }, error: null });
 });
@@ -111,6 +114,8 @@ kbRouter.put('/kb/:id', async (req, res) => {
             update.title = req.body.title;
         if (typeof req.body?.body === 'string')
             update.body = req.body.body;
+        if (typeof req.body?.slug === 'string')
+            update.slug = req.body.slug;
         if (Array.isArray(req.body?.tags))
             update.tags = req.body.tags;
         if (typeof req.body?.category === 'string')

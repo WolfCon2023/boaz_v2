@@ -58,6 +58,7 @@ import { integrationsRouter } from './crm/integrations.js'
 import { inboundIntegrationsRouter } from './integrations/inbound.js'
 import { schedulerRouter } from './scheduler/index.js'
 import { calendarRouter } from './calendar/index.js'
+import { stratflowRouter } from './stratflow/index.js'
 import { requireAuth } from './auth/rbac.js'
 
 const app = express()
@@ -128,6 +129,7 @@ app.use('/api/crm/integrations', integrationsRouter)
 app.use('/api/integrations/inbound', inboundIntegrationsRouter)
 app.use('/api/scheduler', schedulerRouter)
 app.use('/api/calendar', calendarRouter)
+app.use('/api/stratflow', stratflowRouter)
 app.use('/api/terms', termsReviewRouter)
 app.use('/api/marketing', marketingSegmentsRouter)
 app.use('/api/marketing', marketingCampaignsRouter)
