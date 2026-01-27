@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
+import { useConfirm } from '@/components/ConfirmDialog'
 import { Trash2, Users, Plus, Search, X } from 'lucide-react'
 
 type Project = {
@@ -30,6 +31,7 @@ type AdminUsersResponse = { users: AdminUser[] }
 export function AdminStratflow() {
   const qc = useQueryClient()
   const toast = useToast()
+  const { confirm, ConfirmDialog } = useConfirm()
 
   const projectsQ = useQuery<AdminProjectsResponse>({
     queryKey: ['admin', 'stratflow', 'projects'],
@@ -151,11 +153,15 @@ export function AdminStratflow() {
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 hover:bg-red-100 disabled:opacity-50"
             disabled={!selectedProjectId || delProject.isPending}
             onClick={() => {
-              const p = projects.find((x) => x._id === selectedProjectId)
-              const label = p ? `${p.name} (${p.key})` : selectedProjectId
-              if (confirm(`Delete StratFlow project ${label}? This will remove boards, issues, sprints, components, and comments.`)) {
-                delProject.mutate(selectedProjectId)
-              }
+              void (async () => {
+                const p = projects.find((x) => x._id === selectedProjectId)
+                const label = p ? `${p.name} (${p.key})` : selectedProjectId
+                const ok = await confirm(
+                  `Delete StratFlow project ${label}? This will remove boards, issues, sprints, components, and comments.`,
+                  { confirmText: 'Delete', confirmColor: 'danger' },
+                )
+                if (ok) delProject.mutate(selectedProjectId)
+              })()
             }}
           >
             <Trash2 className="h-4 w-4" />
@@ -231,8 +237,14 @@ export function AdminStratflow() {
                     type="button"
                     disabled={removeMember.isPending || m.id === ownerId}
                     onClick={() => {
-                      if (m.id === ownerId) return
-                      if (confirm(`Remove ${m.email} from this project? They will no longer be assignable.`)) removeMember.mutate(m.id)
+                      void (async () => {
+                        if (m.id === ownerId) return
+                        const ok = await confirm(`Remove ${m.email} from this project? They will no longer be assignable.`, {
+                          confirmText: 'Remove',
+                          confirmColor: 'danger',
+                        })
+                        if (ok) removeMember.mutate(m.id)
+                      })()
                     }}
                     className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
                     title={m.id === ownerId ? 'Owner cannot be removed' : 'Remove member'}
@@ -280,7 +292,13 @@ export function AdminStratflow() {
                     className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 hover:bg-red-100 disabled:opacity-50"
                     disabled={delComponent.isPending}
                     onClick={() => {
-                      if (confirm(`Delete component "${c.name}"? It will be removed from any issues using it.`)) delComponent.mutate(c._id)
+                      void (async () => {
+                        const ok = await confirm(`Delete component "${c.name}"? It will be removed from any issues using it.`, {
+                          confirmText: 'Delete',
+                          confirmColor: 'danger',
+                        })
+                        if (ok) delComponent.mutate(c._id)
+                      })()
                     }}
                   >
                     Delete
@@ -294,6 +312,7 @@ export function AdminStratflow() {
           </div>
         </div>
       ) : null}
+      {ConfirmDialog}
     </div>
   )
 }

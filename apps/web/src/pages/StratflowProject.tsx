@@ -124,24 +124,24 @@ function ColumnLane({
   column,
   issues,
   onAdd,
-  quickType,
-  setQuickType,
   onOpen,
 }: {
   column: Column
   issues: Issue[]
-  onAdd: (columnId: string, title: string) => void
-  quickType: Exclude<StratflowIssueType, 'Bug'>
-  setQuickType: (t: Exclude<StratflowIssueType, 'Bug'>) => void
+  onAdd: (columnId: string, title: string, type: Exclude<StratflowIssueType, 'Bug'>) => void
   onOpen: (id: string) => void
 }) {
   const toast = useToast()
   const [draft, setDraft] = React.useState('')
+  const [typeFilter, setTypeFilter] = React.useState<Exclude<StratflowIssueType, 'Bug'> | ''>('')
+
+  const normType = (t: StratflowIssueType) => (t === 'Bug' ? 'Defect' : t)
+  const visibleIssues = typeFilter ? issues.filter((i) => normType(i.type) === typeFilter) : issues
 
   const droppableId = `column:${column._id}`
   const { setNodeRef, isOver } = useDroppable({ id: droppableId, data: { type: 'column', columnId: column._id } })
 
-  const issueIds = issues.map((i) => i._id)
+  const issueIds = visibleIssues.map((i) => i._id)
   return (
     <div
       ref={setNodeRef}
@@ -152,25 +152,41 @@ function ColumnLane({
     >
       <div className="flex items-center justify-between gap-2 border-b border-[color:var(--color-border)] px-3 py-2">
         <div className="text-sm font-semibold">{column.name}</div>
-        <div className="text-xs text-[color:var(--color-text-muted)]">{issues.length}</div>
+        <div className="text-xs text-[color:var(--color-text-muted)]">
+          {visibleIssues.length}
+          {typeFilter ? `/${issues.length}` : ''}
+        </div>
       </div>
 
       <div className="p-2">
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setTypeFilter('')}
+            className={[
+              'rounded-full border px-2 py-0.5 text-[10px]',
+              typeFilter === ''
+                ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+            title="Show all issue types"
+          >
+            All
+          </button>
           {(['Story', 'Task', 'Defect', 'Epic'] as Array<Exclude<StratflowIssueType, 'Bug'>>).map((t) => {
-            const active = quickType === t
+            const active = typeFilter === t
             return (
               <button
                 key={t}
                 type="button"
-                onClick={() => setQuickType(t)}
+                onClick={() => setTypeFilter((prev) => (prev === t ? '' : t))}
                 className={[
                   'rounded-full border px-2 py-0.5 text-[10px]',
                   active
                     ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
                     : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]',
                 ].join(' ')}
-                title={`Quick type: ${t}`}
+                title={`Filter: ${t}`}
               >
                 {t}
               </button>
@@ -187,7 +203,8 @@ function ColumnLane({
               if (e.key === 'Enter') {
                 const t = draft.trim()
                 if (!t) return
-                onAdd(column._id, t)
+                const newType: Exclude<StratflowIssueType, 'Bug'> = typeFilter || 'Task'
+                onAdd(column._id, t, newType)
                 setDraft('')
               }
             }}
@@ -201,7 +218,8 @@ function ColumnLane({
                 toast.showToast('Enter a title first.', 'info')
                 return
               }
-              onAdd(column._id, t)
+              const newType: Exclude<StratflowIssueType, 'Bug'> = typeFilter || 'Task'
+              onAdd(column._id, t, newType)
               setDraft('')
             }}
             aria-label="Add issue"
@@ -215,10 +233,14 @@ function ColumnLane({
       <div className="flex-1 px-2 pb-2">
         <SortableContext items={issueIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
-            {issues.map((issue) => (
+            {visibleIssues.map((issue) => (
               <IssueCard key={issue._id} issue={issue} onOpen={onOpen} />
             ))}
-            {!issues.length ? <div className="px-2 py-6 text-center text-xs text-[color:var(--color-text-muted)]">Drop here</div> : null}
+            {!visibleIssues.length ? (
+              <div className="px-2 py-6 text-center text-xs text-[color:var(--color-text-muted)]">
+                {typeFilter ? 'No matches' : 'Drop here'}
+              </div>
+            ) : null}
           </div>
         </SortableContext>
       </div>
@@ -284,7 +306,6 @@ export default function StratflowProject() {
 
   const columns = boardQ.data?.data.columns ?? []
   const loadedIssues = issuesQ.data?.data.items ?? []
-  const currentBoardKind = boardQ.data?.data.board?.kind
   const columnNameById = React.useMemo(() => {
     const m: Record<string, string> = {}
     for (const c of columns) m[c._id] = c.name
@@ -298,11 +319,6 @@ export default function StratflowProject() {
 
   const [listQ, setListQ] = React.useState('')
   const [listColumnId, setListColumnId] = React.useState<string>('all')
-  const defaultQuickType = currentBoardKind === 'BACKLOG' ? 'Story' : 'Task'
-  const [quickType, setQuickType] = React.useState<Exclude<StratflowIssueType, 'Bug'>>(defaultQuickType)
-  React.useEffect(() => {
-    setQuickType(defaultQuickType)
-  }, [defaultQuickType])
 
   const sprintsQ = useQuery<{ data: { items: Sprint[] } }>({
     queryKey: ['stratflow', 'sprints', projectId],
@@ -386,9 +402,9 @@ export default function StratflowProject() {
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
   )
 
-  function onAdd(columnId: string, title: string) {
+  function onAdd(columnId: string, title: string, type: Exclude<StratflowIssueType, 'Bug'>) {
     if (!boardId) return
-    createIssue.mutate({ columnId, title, type: quickType })
+    createIssue.mutate({ columnId, title, type })
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -597,8 +613,6 @@ export default function StratflowProject() {
                           column={col}
                           issues={localByColumn[col._id] ?? []}
                           onAdd={onAdd}
-                          quickType={quickType}
-                          setQuickType={setQuickType}
                           onOpen={(id) => setFocusedIssueId(id)}
                         />
                       ))}
