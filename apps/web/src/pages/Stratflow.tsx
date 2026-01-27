@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMNav } from '@/components/CRMNav'
@@ -19,6 +19,7 @@ type Project = {
 export default function Stratflow() {
   const qc = useQueryClient()
   const toast = useToast()
+  const nav = useNavigate()
 
   const projectsQ = useQuery<{ data: { items: Project[] } }>({
     queryKey: ['stratflow', 'projects'],
@@ -42,14 +43,20 @@ export default function Stratflow() {
       }
       return (await http.post('/api/stratflow/projects', payload)).data
     },
-    onSuccess: async () => {
+    onSuccess: async (data: any) => {
       toast.showToast('Project created.', 'success')
       setCreateOpen(false)
+      const newId = data?.data?._id
+      const defaultBoardId = data?.data?.defaultBoardId
       setName('')
       setKey('')
       setDescription('')
       setType('KANBAN')
       await qc.invalidateQueries({ queryKey: ['stratflow', 'projects'] })
+      if (newId) {
+        const qs = defaultBoardId ? `?board=${encodeURIComponent(String(defaultBoardId))}` : ''
+        nav(`/apps/stratflow/${encodeURIComponent(String(newId))}${qs}`)
+      }
     },
     onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to create project.', 'error'),
   })
@@ -99,13 +106,12 @@ export default function Stratflow() {
                 </div>
                 {p.description ? <div className="text-xs text-[color:var(--color-text-muted)]">{p.description}</div> : null}
               </div>
-              <button
-                type="button"
-                className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
-                onClick={() => toast.showToast('Flow Hub coming next (Board / List / Timeline / Reports).', 'info')}
+              <Link
+                to={`/apps/stratflow/${encodeURIComponent(p._id)}`}
+                className="inline-flex items-center justify-center rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
               >
                 Open Flow Hub
-              </button>
+              </Link>
             </div>
           ))}
           {!projects.length && !projectsQ.isLoading && (
@@ -186,7 +192,7 @@ export default function Stratflow() {
                 onClick={() => createProject.mutate()}
                 className="px-4 py-2 text-sm rounded-lg border bg-[color:var(--color-primary-600)] text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
               >
-                Create project
+                {createProject.isPending ? 'Creating…' : 'Create project'}
               </button>
             </div>
           </div>
