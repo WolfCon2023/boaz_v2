@@ -7,7 +7,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMNav } from '@/components/CRMNav'
-import { Plus } from 'lucide-react'
+import { BarChart3, ListChecks, Plus, Presentation, Trello } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
 
 type Board = {
@@ -44,6 +44,8 @@ type Project = {
   status: 'Active' | 'On Hold' | 'Completed' | 'Archived'
 }
 
+type ViewMode = 'board' | 'list' | 'timeline' | 'reports'
+
 function groupIssuesByColumn(issues: Issue[]) {
   const m: Record<string, Issue[]> = {}
   for (const it of issues) {
@@ -61,6 +63,12 @@ function findIssueColumnId(map: Record<string, Issue[]>, issueId: string) {
     if (map[colId].some((i) => i._id === issueId)) return colId
   }
   return null
+}
+
+function normView(v: string | null): ViewMode {
+  const x = String(v || '').toLowerCase()
+  if (x === 'list' || x === 'timeline' || x === 'reports') return x
+  return 'board'
 }
 
 function IssueCard({ issue }: { issue: Issue }) {
@@ -177,6 +185,7 @@ export default function StratflowProject() {
   const [sp, setSp] = useSearchParams()
   const qc = useQueryClient()
   const toast = useToast()
+  const view = normView(sp.get('view'))
 
   const projectQ = useQuery<{ data: Project }>({
     queryKey: ['stratflow', 'project', projectId],
@@ -228,11 +237,19 @@ export default function StratflowProject() {
 
   const columns = boardQ.data?.data.columns ?? []
   const loadedIssues = issuesQ.data?.data.items ?? []
+  const columnNameById = React.useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const c of columns) m[c._id] = c.name
+    return m
+  }, [columns])
 
   const [localByColumn, setLocalByColumn] = React.useState<Record<string, Issue[]>>({})
   React.useEffect(() => {
     setLocalByColumn(groupIssuesByColumn(loadedIssues))
   }, [boardId, issuesQ.data])
+
+  const [listQ, setListQ] = React.useState('')
+  const [listColumnId, setListColumnId] = React.useState<string>('all')
 
   const createIssue = useMutation({
     mutationFn: async (payload: { columnId: string; title: string }) => {
@@ -317,6 +334,26 @@ export default function StratflowProject() {
 
   const project = projectQ.data?.data
   const currentBoard = boards.find((b) => b._id === boardId) ?? null
+  const filteredListIssues = React.useMemo(() => {
+    const q = listQ.trim().toLowerCase()
+    const colId = listColumnId
+    return loadedIssues
+      .filter((it) => (colId === 'all' ? true : it.columnId === colId))
+      .filter((it) => (!q ? true : String(it.title || '').toLowerCase().includes(q)))
+      .slice()
+      .sort((a, b) => {
+        const ca = columnNameById[a.columnId] || ''
+        const cb = columnNameById[b.columnId] || ''
+        if (ca !== cb) return ca.localeCompare(cb)
+        return (a.order || 0) - (b.order || 0)
+      })
+  }, [loadedIssues, listQ, listColumnId, columnNameById])
+
+  function setView(next: ViewMode) {
+    const sp2 = new URLSearchParams(sp)
+    sp2.set('view', next)
+    setSp(sp2, { replace: true })
+  }
 
   return (
     <div className="space-y-4">
@@ -363,32 +400,173 @@ export default function StratflowProject() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setView('board')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'board' ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            <Trello className="h-4 w-4" />
+            Board
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('list')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'list' ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            <ListChecks className="h-4 w-4" />
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('timeline')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'timeline' ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            <Presentation className="h-4 w-4" />
+            Timeline
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('reports')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'reports' ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Reports
+          </button>
+        </div>
+        <div className="text-xs text-[color:var(--color-text-muted)]">
+          {issuesQ.isFetching || boardQ.isFetching ? 'Syncing…' : 'Synced'}
+        </div>
+      </div>
+
       {!boardId ? (
         <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-sm text-[color:var(--color-text-muted)]">
           No boards yet for this project.
         </div>
       ) : (
-        <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
-          <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
-            <div className="text-sm font-semibold">{currentBoard?.name || 'Board'}</div>
-            <div className="text-xs text-[color:var(--color-text-muted)]">
-              {issuesQ.isFetching || boardQ.isFetching ? 'Loading…' : `${loadedIssues.length} issues`}
-            </div>
-          </div>
-
-          <div className="overflow-x-auto p-3">
-            <DndContext sensors={sensors} onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
-              <div className="flex gap-3">
-                {columns
-                  .slice()
-                  .sort((a, b) => (a.order || 0) - (b.order || 0))
-                  .map((col) => (
-                    <ColumnLane key={col._id} column={col} issues={localByColumn[col._id] ?? []} onAdd={onAdd} />
-                  ))}
+        <>
+          {view === 'board' && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+              <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                <div className="text-sm font-semibold">{currentBoard?.name || 'Board'}</div>
+                <div className="text-xs text-[color:var(--color-text-muted)]">
+                  {issuesQ.isFetching || boardQ.isFetching ? 'Loading…' : `${loadedIssues.length} issues`}
+                </div>
               </div>
-            </DndContext>
-          </div>
-        </section>
+
+              <div className="overflow-x-auto p-3">
+                <DndContext sensors={sensors} onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
+                  <div className="flex gap-3">
+                    {columns
+                      .slice()
+                      .sort((a, b) => (a.order || 0) - (b.order || 0))
+                      .map((col) => (
+                        <ColumnLane key={col._id} column={col} issues={localByColumn[col._id] ?? []} onAdd={onAdd} />
+                      ))}
+                  </div>
+                </DndContext>
+              </div>
+            </section>
+          )}
+
+          {view === 'list' && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+              <div className="flex flex-col gap-3 border-b border-[color:var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm font-semibold">Issues</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={listQ}
+                    onChange={(e) => setListQ(e.target.value)}
+                    placeholder="Search title…"
+                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                  />
+                  <select
+                    value={listColumnId}
+                    onChange={(e) => setListColumnId(e.target.value)}
+                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                  >
+                    <option value="all">All columns</option>
+                    {columns
+                      .slice()
+                      .sort((a, b) => (a.order || 0) - (b.order || 0))
+                      .map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-[color:var(--color-text-muted)]">
+                    <tr className="border-b border-[color:var(--color-border)]">
+                      <th className="px-4 py-2 text-left font-medium">Title</th>
+                      <th className="px-4 py-2 text-left font-medium">Type</th>
+                      <th className="px-4 py-2 text-left font-medium">Priority</th>
+                      <th className="px-4 py-2 text-left font-medium">Column</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[color:var(--color-border)]">
+                    {filteredListIssues.map((it) => (
+                      <tr key={it._id} className="hover:bg-[color:var(--color-muted)]">
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{it.title}</div>
+                        </td>
+                        <td className="px-4 py-3 text-[color:var(--color-text-muted)]">{it.type}</td>
+                        <td className="px-4 py-3">
+                          <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                            {it.priority}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-[color:var(--color-text-muted)]">{columnNameById[it.columnId] || '—'}</td>
+                      </tr>
+                    ))}
+                    {!filteredListIssues.length && !issuesQ.isLoading ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+                          No issues match your filters.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {view === 'timeline' && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+              <div className="text-base font-semibold">Timeline</div>
+              <div className="mt-2 text-sm text-[color:var(--color-text-muted)]">
+                Coming next: milestones + phases, dates, and a zoomable roadmap timeline. We’ll start with Traditional milestones and then add Scrum sprint timelines.
+              </div>
+            </section>
+          )}
+
+          {view === 'reports' && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+              <div className="text-base font-semibold">Reports</div>
+              <div className="mt-2 text-sm text-[color:var(--color-text-muted)]">
+                Coming next: WIP by column, cycle time, throughput, and a simple “Work health” dashboard. We’ll wire these to real aggregates once issue metadata (dates/assignees) is expanded.
+              </div>
+            </section>
+          )}
+        </>
       )}
     </div>
   )

@@ -16,6 +16,45 @@ type Project = {
   updatedAt?: string | null
 }
 
+type TemplateKey = Project['type']
+type WizardStep = 'template' | 'details'
+
+function suggestKeyFromName(name: string) {
+  const n = String(name || '').trim()
+  if (!n) return ''
+  const letters = n
+    .split(/\s+/g)
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((w) => w.replace(/[^A-Za-z0-9]/g, '').charAt(0))
+    .join('')
+    .toUpperCase()
+  return letters || n.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase()
+}
+
+const TEMPLATE_PREVIEWS: Record<TemplateKey, { name: string; bullets: string[]; creates: string[] }> = {
+  KANBAN: {
+    name: 'Kanban',
+    bullets: ['Continuous flow', 'WIP visibility', 'Great for ops + support'],
+    creates: ['Board (To Do / In Progress / Done)'],
+  },
+  SCRUM: {
+    name: 'Scrum',
+    bullets: ['Backlog + sprint board', 'Sprint planning friendly', 'Velocity-ready'],
+    creates: ['Backlog', 'Sprint Board (To Do / In Progress / Done)'],
+  },
+  TRADITIONAL: {
+    name: 'Traditional',
+    bullets: ['Milestones + phases', 'Great for fixed-scope projects', 'Roadmap oriented'],
+    creates: ['Milestones board (Not Started / In Progress / Blocked / Complete)'],
+  },
+  HYBRID: {
+    name: 'Hybrid',
+    bullets: ['Mix of backlog + board', 'Flexible for teams', 'Good transition path'],
+    creates: ['Board (To Do / In Progress / Done)', 'Backlog'],
+  },
+}
+
 export default function Stratflow() {
   const qc = useQueryClient()
   const toast = useToast()
@@ -28,10 +67,24 @@ export default function Stratflow() {
   })
 
   const [createOpen, setCreateOpen] = React.useState(false)
+  const [step, setStep] = React.useState<WizardStep>('template')
   const [name, setName] = React.useState('')
   const [key, setKey] = React.useState('')
   const [type, setType] = React.useState<Project['type']>('KANBAN')
   const [description, setDescription] = React.useState('')
+
+  React.useEffect(() => {
+    if (!createOpen) return
+    setStep('template')
+  }, [createOpen])
+
+  React.useEffect(() => {
+    if (!createOpen) return
+    if (key.trim()) return
+    const suggested = suggestKeyFromName(name)
+    if (suggested) setKey(suggested)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, createOpen])
 
   const createProject = useMutation({
     mutationFn: async () => {
@@ -131,68 +184,144 @@ export default function Stratflow() {
             <div className="mb-4 flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] pb-3">
               <div>
                 <div className="text-base font-semibold">New project</div>
-                <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">Choose a template and we’ll create an opinionated setup.</div>
+                <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                  {step === 'template' ? 'Step 1 of 2 · Choose a template' : 'Step 2 of 2 · Name and details'}
+                </div>
               </div>
               <button type="button" onClick={() => setCreateOpen(false)} className="p-2 rounded hover:bg-[color:var(--color-muted)]">
                 ✕
               </button>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Project name</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
-                  placeholder="e.g., Website Revamp"
-                />
+            {step === 'template' ? (
+              <div className="space-y-3">
+                <div className="text-sm text-[color:var(--color-text-muted)]">
+                  Pick the workflow you want. We’ll generate a default board setup you can refine later.
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(Object.keys(TEMPLATE_PREVIEWS) as TemplateKey[]).map((k) => {
+                    const t = TEMPLATE_PREVIEWS[k]
+                    const active = type === k
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setType(k)}
+                        className={[
+                          'text-left rounded-2xl border p-4 hover:bg-[color:var(--color-muted)]',
+                          active ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]' : 'border-[color:var(--color-border)]',
+                        ].join(' ')}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-sm font-semibold">{t.name}</div>
+                          {active ? (
+                            <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                              Selected
+                            </span>
+                          ) : null}
+                        </div>
+                        <ul className="mt-2 space-y-1 text-xs text-[color:var(--color-text-muted)]">
+                          {t.bullets.map((b) => (
+                            <li key={b}>- {b}</li>
+                          ))}
+                        </ul>
+                        <div className="mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+                          <div className="text-[10px] font-semibold text-[color:var(--color-text-muted)]">Creates</div>
+                          <div className="mt-1 space-y-1 text-xs text-[color:var(--color-text-muted)]">
+                            {t.creates.map((c) => (
+                              <div key={c}>{c}</div>
+                            ))}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Project key</label>
-                <input
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
-                  placeholder="e.g., WEB"
-                />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Project name</label>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                    placeholder="e.g., Website Revamp"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Project key</label>
+                  <input
+                    value={key}
+                    onChange={(e) => setKey(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                    placeholder="e.g., WEB"
+                  />
+                  <div className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">Short identifier. We’ll auto-format it (A–Z, 0–9, hyphen).</div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Template</label>
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value as any)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                  >
+                    <option value="SCRUM">Scrum</option>
+                    <option value="KANBAN">Kanban</option>
+                    <option value="TRADITIONAL">Traditional</option>
+                    <option value="HYBRID">Hybrid</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Description (optional)</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                    placeholder="What are you trying to manage?"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Template</label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as any)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
-                >
-                  <option value="SCRUM">Scrum</option>
-                  <option value="KANBAN">Kanban</option>
-                  <option value="TRADITIONAL">Traditional</option>
-                  <option value="HYBRID">Hybrid</option>
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Description (optional)</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
-                  placeholder="What are you trying to manage?"
-                />
-              </div>
-            </div>
+            )}
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-[color:var(--color-border)] mt-4">
-              <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 text-sm rounded-lg border border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+              {step === 'details' ? (
+                <button
+                  type="button"
+                  onClick={() => setStep('template')}
+                  className="px-4 py-2 text-sm rounded-lg border border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]"
+                >
+                  Back
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setCreateOpen(false)}
+                className="px-4 py-2 text-sm rounded-lg border border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]"
+              >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={createProject.isPending || !name.trim() || !key.trim()}
-                onClick={() => createProject.mutate()}
+                disabled={
+                  createProject.isPending ||
+                  (step === 'details' ? (!name.trim() || !key.trim()) : false)
+                }
+                onClick={() => {
+                  if (step === 'template') {
+                    setStep('details')
+                    return
+                  }
+                  createProject.mutate()
+                }}
                 className="px-4 py-2 text-sm rounded-lg border bg-[color:var(--color-primary-600)] text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
               >
-                {createProject.isPending ? 'Creating…' : 'Create project'}
+                {step === 'template'
+                  ? 'Continue'
+                  : createProject.isPending
+                    ? 'Creating…'
+                    : 'Create project'}
               </button>
             </div>
           </div>
