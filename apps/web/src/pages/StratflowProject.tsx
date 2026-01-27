@@ -10,6 +10,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { BarChart3, CalendarDays, ListChecks, Plus, Presentation, Trello } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
 import { StratflowIssueDrawer, type StratflowIssueType, type StratflowPriority } from '@/components/StratflowIssueDrawer'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 type Board = {
   _id: string
@@ -160,36 +161,43 @@ function ColumnLane({
 
       <div className="p-2">
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setTypeFilter('')}
-            className={[
-              'rounded-full border px-2 py-0.5 text-[10px]',
-              typeFilter === ''
-                ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
-                : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]',
-            ].join(' ')}
-            title="Show all issue types"
-          >
-            All
-          </button>
-          {(['Story', 'Task', 'Defect', 'Epic'] as Array<Exclude<StratflowIssueType, 'Bug'>>).map((t) => {
-            const active = typeFilter === t
-            return (
+          <Tooltip>
+            <TooltipTrigger asChild>
               <button
-                key={t}
                 type="button"
-                onClick={() => setTypeFilter((prev) => (prev === t ? '' : t))}
+                onClick={() => setTypeFilter('')}
                 className={[
                   'rounded-full border px-2 py-0.5 text-[10px]',
-                  active
+                  typeFilter === ''
                     ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
                     : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]',
                 ].join(' ')}
-                title={`Filter: ${t}`}
               >
-                {t}
+                All
               </button>
+            </TooltipTrigger>
+            <TooltipContent>Show all issue types</TooltipContent>
+          </Tooltip>
+          {(['Story', 'Task', 'Defect', 'Epic'] as Array<Exclude<StratflowIssueType, 'Bug'>>).map((t) => {
+            const active = typeFilter === t
+            return (
+              <Tooltip key={t}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setTypeFilter((prev) => (prev === t ? '' : t))}
+                    className={[
+                      'rounded-full border px-2 py-0.5 text-[10px]',
+                      active
+                        ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                        : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]',
+                    ].join(' ')}
+                  >
+                    {t}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Filter by {t}</TooltipContent>
+              </Tooltip>
             )
           })}
         </div>
@@ -479,8 +487,9 @@ export default function StratflowProject() {
   }
 
   return (
-    <div className="space-y-4">
-      <CRMNav />
+    <TooltipProvider>
+      <div className="space-y-4">
+        <CRMNav />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
@@ -523,7 +532,7 @@ export default function StratflowProject() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -839,7 +848,8 @@ export default function StratflowProject() {
       {focusedIssueId ? (
         <StratflowIssueDrawer issueId={focusedIssueId} projectId={String(projectId || '')} onClose={() => setFocusedIssueId(null)} />
       ) : null}
-    </div>
+      </div>
+    </TooltipProvider>
   )
 }
 
