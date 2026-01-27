@@ -7,8 +7,9 @@ import { CSS } from '@dnd-kit/utilities'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMNav } from '@/components/CRMNav'
-import { BarChart3, ListChecks, Plus, Presentation, Trello } from 'lucide-react'
+import { BarChart3, CalendarDays, ListChecks, Plus, Presentation, Trello } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
+import { StratflowIssueDrawer, type StratflowIssueType, type StratflowPriority } from '@/components/StratflowIssueDrawer'
 
 type Board = {
   _id: string
@@ -31,9 +32,26 @@ type Issue = {
   columnId: string
   title: string
   description?: string | null
-  type: 'Epic' | 'Story' | 'Task' | 'Bug' | 'Spike'
-  priority: 'Low' | 'Medium' | 'High' | 'Critical'
+  type: StratflowIssueType
+  priority: StratflowPriority
+  statusKey?: 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | null
+  acceptanceCriteria?: string | null
+  storyPoints?: number | null
+  sprintId?: string | null
+  epicId?: string | null
+  labels?: string[]
+  components?: string[]
   order: number
+}
+
+type Sprint = {
+  _id: string
+  projectId: string
+  name: string
+  goal?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  state: 'planned' | 'active' | 'closed'
 }
 
 type Project = {
@@ -44,7 +62,7 @@ type Project = {
   status: 'Active' | 'On Hold' | 'Completed' | 'Archived'
 }
 
-type ViewMode = 'board' | 'list' | 'timeline' | 'reports'
+type ViewMode = 'board' | 'list' | 'sprint' | 'timeline' | 'reports'
 
 function groupIssuesByColumn(issues: Issue[]) {
   const m: Record<string, Issue[]> = {}
@@ -67,11 +85,11 @@ function findIssueColumnId(map: Record<string, Issue[]>, issueId: string) {
 
 function normView(v: string | null): ViewMode {
   const x = String(v || '').toLowerCase()
-  if (x === 'list' || x === 'timeline' || x === 'reports') return x
+  if (x === 'list' || x === 'sprint' || x === 'timeline' || x === 'reports') return x
   return 'board'
 }
 
-function IssueCard({ issue }: { issue: Issue }) {
+function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: issue._id,
     data: { type: 'issue', columnId: issue.columnId },
@@ -83,8 +101,9 @@ function IssueCard({ issue }: { issue: Issue }) {
       style={style}
       {...attributes}
       {...listeners}
+      onClick={() => onOpen(issue._id)}
       className={[
-        'rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm shadow-sm',
+        'rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm shadow-sm cursor-pointer',
         isDragging ? 'opacity-70' : '',
       ].join(' ')}
     >
@@ -105,10 +124,16 @@ function ColumnLane({
   column,
   issues,
   onAdd,
+  quickType,
+  setQuickType,
+  onOpen,
 }: {
   column: Column
   issues: Issue[]
   onAdd: (columnId: string, title: string) => void
+  quickType: Exclude<StratflowIssueType, 'Bug'>
+  setQuickType: (t: Exclude<StratflowIssueType, 'Bug'>) => void
+  onOpen: (id: string) => void
 }) {
   const toast = useToast()
   const [draft, setDraft] = React.useState('')
@@ -131,6 +156,27 @@ function ColumnLane({
       </div>
 
       <div className="p-2">
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          {(['Story', 'Task', 'Defect', 'Epic'] as Array<Exclude<StratflowIssueType, 'Bug'>>).map((t) => {
+            const active = quickType === t
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setQuickType(t)}
+                className={[
+                  'rounded-full border px-2 py-0.5 text-[10px]',
+                  active
+                    ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                    : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]',
+                ].join(' ')}
+                title={`Quick type: ${t}`}
+              >
+                {t}
+              </button>
+            )
+          })}
+        </div>
         <div className="flex items-center gap-2">
           <input
             value={draft}
@@ -170,7 +216,7 @@ function ColumnLane({
         <SortableContext items={issueIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
             {issues.map((issue) => (
-              <IssueCard key={issue._id} issue={issue} />
+              <IssueCard key={issue._id} issue={issue} onOpen={onOpen} />
             ))}
             {!issues.length ? <div className="px-2 py-6 text-center text-xs text-[color:var(--color-text-muted)]">Drop here</div> : null}
           </div>
@@ -186,6 +232,7 @@ export default function StratflowProject() {
   const qc = useQueryClient()
   const toast = useToast()
   const view = normView(sp.get('view'))
+  const [focusedIssueId, setFocusedIssueId] = React.useState<string | null>(null)
 
   const projectQ = useQuery<{ data: Project }>({
     queryKey: ['stratflow', 'project', projectId],
@@ -237,6 +284,7 @@ export default function StratflowProject() {
 
   const columns = boardQ.data?.data.columns ?? []
   const loadedIssues = issuesQ.data?.data.items ?? []
+  const currentBoardKind = boardQ.data?.data.board?.kind
   const columnNameById = React.useMemo(() => {
     const m: Record<string, string> = {}
     for (const c of columns) m[c._id] = c.name
@@ -250,10 +298,69 @@ export default function StratflowProject() {
 
   const [listQ, setListQ] = React.useState('')
   const [listColumnId, setListColumnId] = React.useState<string>('all')
+  const defaultQuickType = currentBoardKind === 'BACKLOG' ? 'Story' : 'Task'
+  const [quickType, setQuickType] = React.useState<Exclude<StratflowIssueType, 'Bug'>>(defaultQuickType)
+  React.useEffect(() => {
+    setQuickType(defaultQuickType)
+  }, [defaultQuickType])
+
+  const sprintsQ = useQuery<{ data: { items: Sprint[] } }>({
+    queryKey: ['stratflow', 'sprints', projectId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/sprints`)).data,
+    retry: false,
+    enabled: Boolean(projectId),
+  })
+  const sprints = sprintsQ.data?.data.items ?? []
+  const activeSprint = sprints.find((s) => s.state === 'active') ?? null
+
+  const backlogIssuesQ = useQuery<{ data: { items: Issue[] } }>({
+    queryKey: ['stratflow', 'projectIssues', projectId, 'backlog'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/issues?sprintId=null`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'sprint',
+  })
+  const activeSprintIssuesQ = useQuery<{ data: { items: Issue[] } }>({
+    queryKey: ['stratflow', 'projectIssues', projectId, 'activeSprint', activeSprint?._id],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/issues?sprintId=${encodeURIComponent(String(activeSprint?._id || ''))}`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && Boolean(activeSprint?._id) && view === 'sprint',
+  })
+
+  const createSprint = useMutation({
+    mutationFn: async (payload: { name: string; goal?: string | null; startDate?: string | null; endDate?: string | null }) => {
+      return (await http.post(`/api/stratflow/projects/${projectId}/sprints`, payload)).data
+    },
+    onSuccess: async () => {
+      toast.showToast('Sprint created.', 'success')
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'sprints', projectId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to create sprint.', 'error'),
+  })
+
+  const setActiveSprint = useMutation({
+    mutationFn: async (sprintId: string) => (await http.post(`/api/stratflow/sprints/${sprintId}/set-active`, {})).data,
+    onSuccess: async () => {
+      toast.showToast('Active sprint set.', 'success')
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'sprints', projectId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to set active sprint.', 'error'),
+  })
+
+  const assignToSprint = useMutation({
+    mutationFn: async (payload: { issueId: string; sprintId: string | null }) => {
+      return (await http.patch(`/api/stratflow/issues/${payload.issueId}`, { sprintId: payload.sprintId })).data
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'projectIssues', projectId, 'backlog'] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'projectIssues', projectId, 'activeSprint', activeSprint?._id] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issues', boardId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to update sprint assignment.', 'error'),
+  })
 
   const createIssue = useMutation({
-    mutationFn: async (payload: { columnId: string; title: string }) => {
-      return (await http.post(`/api/stratflow/boards/${boardId}/issues`, { columnId: payload.columnId, title: payload.title })).data
+    mutationFn: async (payload: { columnId: string; title: string; type: Exclude<StratflowIssueType, 'Bug'> }) => {
+      return (await http.post(`/api/stratflow/boards/${boardId}/issues`, { columnId: payload.columnId, title: payload.title, type: payload.type })).data
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['stratflow', 'issues', boardId] })
@@ -281,7 +388,7 @@ export default function StratflowProject() {
 
   function onAdd(columnId: string, title: string) {
     if (!boardId) return
-    createIssue.mutate({ columnId, title })
+    createIssue.mutate({ columnId, title, type: quickType })
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -446,6 +553,17 @@ export default function StratflowProject() {
             <BarChart3 className="h-4 w-4" />
             Reports
           </button>
+          <button
+            type="button"
+            onClick={() => setView('sprint')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'sprint' ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            <CalendarDays className="h-4 w-4" />
+            Sprint
+          </button>
         </div>
         <div className="text-xs text-[color:var(--color-text-muted)]">
           {issuesQ.isFetching || boardQ.isFetching ? 'Syncing…' : 'Synced'}
@@ -474,7 +592,15 @@ export default function StratflowProject() {
                       .slice()
                       .sort((a, b) => (a.order || 0) - (b.order || 0))
                       .map((col) => (
-                        <ColumnLane key={col._id} column={col} issues={localByColumn[col._id] ?? []} onAdd={onAdd} />
+                        <ColumnLane
+                          key={col._id}
+                          column={col}
+                          issues={localByColumn[col._id] ?? []}
+                          onAdd={onAdd}
+                          quickType={quickType}
+                          setQuickType={setQuickType}
+                          onOpen={(id) => setFocusedIssueId(id)}
+                        />
                       ))}
                   </div>
                 </DndContext>
@@ -523,7 +649,12 @@ export default function StratflowProject() {
                   </thead>
                   <tbody className="divide-y divide-[color:var(--color-border)]">
                     {filteredListIssues.map((it) => (
-                      <tr key={it._id} className="hover:bg-[color:var(--color-muted)]">
+                      <tr
+                        key={it._id}
+                        className="hover:bg-[color:var(--color-muted)] cursor-pointer"
+                        onClick={() => setFocusedIssueId(it._id)}
+                        title="Open Issue Focus"
+                      >
                         <td className="px-4 py-3">
                           <div className="font-medium">{it.title}</div>
                         </td>
@@ -549,6 +680,128 @@ export default function StratflowProject() {
             </section>
           )}
 
+          {view === 'sprint' && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+              <div className="flex flex-col gap-3 border-b border-[color:var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-sm font-semibold">Sprint Planning</div>
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                    {activeSprint ? `Active: ${activeSprint.name}` : 'No active sprint yet.'}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                    onClick={() => {
+                      const name = `Sprint ${sprints.length + 1}`
+                      createSprint.mutate({ name, goal: null, startDate: null, endDate: null })
+                    }}
+                    disabled={createSprint.isPending}
+                  >
+                    {createSprint.isPending ? 'Creating…' : 'New sprint'}
+                  </button>
+                  <select
+                    value={activeSprint?._id || ''}
+                    onChange={(e) => {
+                      const sid = e.target.value
+                      if (!sid) return
+                      setActiveSprint.mutate(sid)
+                    }}
+                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                    title="Set active sprint"
+                  >
+                    <option value="" disabled>
+                      Set active…
+                    </option>
+                    {sprints.map((s) => (
+                      <option key={s._id} value={s._id}>
+                        {s.state === 'active' ? 'Active: ' : ''}{s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 p-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+                  <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                    <div className="text-sm font-semibold">Backlog</div>
+                    <div className="text-xs text-[color:var(--color-text-muted)]">
+                      {backlogIssuesQ.isFetching ? 'Loading…' : `${(backlogIssuesQ.data?.data.items ?? []).length}`}
+                    </div>
+                  </div>
+                  <div className="divide-y divide-[color:var(--color-border)]">
+                    {(backlogIssuesQ.data?.data.items ?? [])
+                      .filter((i) => i.type !== 'Epic')
+                      .slice(0, 250)
+                      .map((i) => (
+                        <div key={i._id} className="flex items-center justify-between gap-3 px-4 py-3">
+                          <button type="button" className="text-left flex-1" onClick={() => setFocusedIssueId(i._id)}>
+                            <div className="text-sm font-medium">{i.title}</div>
+                            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{i.type}</div>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!activeSprint?._id || assignToSprint.isPending}
+                            onClick={() => {
+                              if (!activeSprint?._id) return
+                              assignToSprint.mutate({ issueId: i._id, sprintId: activeSprint._id })
+                            }}
+                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                            title={!activeSprint?._id ? 'Set an active sprint first' : 'Assign to active sprint'}
+                          >
+                            Add →
+                          </button>
+                        </div>
+                      ))}
+                    {!backlogIssuesQ.isLoading && !(backlogIssuesQ.data?.data.items ?? []).length ? (
+                      <div className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">Backlog is empty.</div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+                  <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                    <div className="text-sm font-semibold">Active sprint</div>
+                    <div className="text-xs text-[color:var(--color-text-muted)]">
+                      {activeSprintIssuesQ.isFetching ? 'Loading…' : `${(activeSprintIssuesQ.data?.data.items ?? []).length}`}
+                    </div>
+                  </div>
+                  <div className="divide-y divide-[color:var(--color-border)]">
+                    {(activeSprintIssuesQ.data?.data.items ?? [])
+                      .filter((i) => i.type !== 'Epic')
+                      .slice(0, 250)
+                      .map((i) => (
+                        <div key={i._id} className="flex items-center justify-between gap-3 px-4 py-3">
+                          <button type="button" className="text-left flex-1" onClick={() => setFocusedIssueId(i._id)}>
+                            <div className="text-sm font-medium">{i.title}</div>
+                            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{i.type}</div>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={assignToSprint.isPending}
+                            onClick={() => assignToSprint.mutate({ issueId: i._id, sprintId: null })}
+                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                            title="Move back to backlog"
+                          >
+                            ← Remove
+                          </button>
+                        </div>
+                      ))}
+                    {!activeSprint ? (
+                      <div className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+                        No active sprint. Create one and set it active.
+                      </div>
+                    ) : !activeSprintIssuesQ.isLoading && !(activeSprintIssuesQ.data?.data.items ?? []).length ? (
+                      <div className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">No issues in the active sprint yet.</div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
           {view === 'timeline' && (
             <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
               <div className="text-base font-semibold">Timeline</div>
@@ -568,6 +821,10 @@ export default function StratflowProject() {
           )}
         </>
       )}
+
+      {focusedIssueId ? (
+        <StratflowIssueDrawer issueId={focusedIssueId} projectId={String(projectId || '')} onClose={() => setFocusedIssueId(null)} />
+      ) : null}
     </div>
   )
 }
