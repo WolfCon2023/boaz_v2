@@ -7,7 +7,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMNav } from '@/components/CRMNav'
-import { BarChart3, CalendarDays, ListChecks, Plus, Presentation, Trello } from 'lucide-react'
+import { BarChart3, CalendarDays, ListChecks, Plus, Presentation, Trello, Activity } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
 import { StratflowIssueDrawer, type StratflowIssueType, type StratflowPriority } from '@/components/StratflowIssueDrawer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -44,6 +44,7 @@ type Issue = {
   phase?: string | null
   targetStartDate?: string | null
   targetEndDate?: string | null
+  links?: IssueLink[]
   labels?: string[]
   components?: string[]
   order: number
@@ -71,7 +72,7 @@ type Project = {
   status: 'Active' | 'On Hold' | 'Completed' | 'Archived'
 }
 
-type ViewMode = 'board' | 'list' | 'sprint' | 'timeline' | 'reports'
+type ViewMode = 'board' | 'list' | 'sprint' | 'timeline' | 'reports' | 'activity'
 
 type UserInfo = {
   id: string
@@ -81,6 +82,33 @@ type UserInfo = {
 
 type ProjectMember = { id: string; email: string; name: string }
 type ProjectMembersResponse = { data: { users: ProjectMember[] } }
+
+type IssueLinkType = 'blocks' | 'blocked_by' | 'relates_to'
+type IssueLink = { type: IssueLinkType; issueId: string }
+
+type ActivityItem = {
+  _id: string
+  projectId: string
+  actorId: string
+  kind: string
+  issueId?: string | null
+  sprintId?: string | null
+  meta?: any
+  createdAt?: string | null
+}
+
+type EpicRollup = {
+  epicId: string
+  epicTitle: string
+  phase?: string | null
+  targetStartDate?: string | null
+  targetEndDate?: string | null
+  totalIssues: number
+  doneIssues: number
+  totalPoints: number
+  donePoints: number
+  blockedCount: number
+}
 
 function groupIssuesByColumn(issues: Issue[]) {
   const m: Record<string, Issue[]> = {}
@@ -103,7 +131,7 @@ function findIssueColumnId(map: Record<string, Issue[]>, issueId: string) {
 
 function normView(v: string | null): ViewMode {
   const x = String(v || '').toLowerCase()
-  if (x === 'list' || x === 'sprint' || x === 'timeline' || x === 'reports') return x
+  if (x === 'list' || x === 'sprint' || x === 'timeline' || x === 'reports' || x === 'activity') return x as any
   return 'board'
 }
 
@@ -175,7 +203,12 @@ function IssueCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="font-medium">{issue.title}</div>
-        <div className="text-[10px] text-[color:var(--color-text-muted)]">{issue.type}</div>
+        <div className="flex items-center gap-2">
+          {issue.links?.some((l) => l.type === 'blocked_by') ? (
+            <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-800">Blocked</span>
+          ) : null}
+          <div className="text-[10px] text-[color:var(--color-text-muted)]">{issue.type}</div>
+        </div>
       </div>
       <div className="mt-1 flex items-center justify-between gap-2">
         <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
@@ -536,6 +569,30 @@ export default function StratflowProject() {
     onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to update sprint.', 'error'),
   })
 
+  const closeSprint = useMutation({
+    mutationFn: async ({ sprintId, force }: { sprintId: string; force: boolean }) => {
+      return (await http.post(`/api/stratflow/sprints/${sprintId}/close`, { force })).data
+    },
+    onSuccess: async () => {
+      toast.showToast('Sprint closed.', 'success')
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'sprints', projectId] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'projectIssues', projectId] })
+    },
+    onError: (err: any) => {
+      const code = err?.response?.data?.error
+      if (code === 'owner_only') toast.showToast('Only the project owner can close sprints.', 'error')
+      else if (code === 'sprint_has_open_work') toast.showToast('Sprint has open work. Move remaining issues to Done or force-close.', 'error')
+      else toast.showToast(code || err?.message || 'Failed to close sprint.', 'error')
+    },
+  })
+
+  const activityQ = useQuery<{ data: { items: ActivityItem[] } }>({
+    queryKey: ['stratflow', 'activity', projectId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/activity?limit=200`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'activity',
+  })
+
   const milestoneBoardId = boards.find((b) => b.kind === 'MILESTONES')?._id ?? null
   const milestoneBoardQ = useQuery<{ data: { board: Board; columns: Column[] } }>({
     queryKey: ['stratflow', 'board', milestoneBoardId],
@@ -553,6 +610,13 @@ export default function StratflowProject() {
   const epicsForRoadmapQ = useQuery<{ data: { items: Issue[] } }>({
     queryKey: ['stratflow', 'roadmap', projectId, 'epics'],
     queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/issues?type=Epic`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'timeline',
+  })
+
+  const epicRollupsQ = useQuery<{ data: { items: EpicRollup[] } }>({
+    queryKey: ['stratflow', 'roadmap', projectId, 'epicRollups'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/epic-rollups`)).data,
     retry: false,
     enabled: Boolean(projectId) && view === 'timeline',
   })
@@ -933,6 +997,19 @@ export default function StratflowProject() {
           >
             <BarChart3 className="h-4 w-4" />
             Reports
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('activity')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'activity'
+                ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            <Activity className="h-4 w-4" />
+            Activity
           </button>
           <button
             type="button"
@@ -1356,6 +1433,28 @@ export default function StratflowProject() {
                           </option>
                         ))}
                       </select>
+                      {selectedSprint && selectedSprint.state !== 'closed' ? (
+                        <button
+                          type="button"
+                          className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                          disabled={closeSprint.isPending || !selectedSprintId}
+                          onClick={() => closeSprint.mutate({ sprintId: selectedSprintId, force: false })}
+                          title="Close sprint (owner only)"
+                        >
+                          {closeSprint.isPending ? 'Closing…' : 'Close sprint'}
+                        </button>
+                      ) : null}
+                      {selectedSprint && selectedSprint.state !== 'closed' ? (
+                        <button
+                          type="button"
+                          className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                          disabled={closeSprint.isPending || !selectedSprintId}
+                          onClick={() => closeSprint.mutate({ sprintId: selectedSprintId, force: true })}
+                          title="Force close sprint even with open work (owner only)"
+                        >
+                          Force close
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
@@ -1591,6 +1690,9 @@ export default function StratflowProject() {
 
               {(() => {
                 const epics = (epicsForRoadmapQ.data?.data.items ?? []).filter((e) => e.type === 'Epic')
+                const rollups = epicRollupsQ.data?.data.items ?? []
+                const rollupByEpicId = new Map<string, EpicRollup>()
+                rollups.forEach((r) => rollupByEpicId.set(r.epicId, r))
                 const withDates = epics
                   .map((e) => {
                     const start = parseIsoDate(e.targetStartDate) ?? parseIsoDate(e.targetEndDate)
@@ -1647,7 +1749,9 @@ export default function StratflowProject() {
                           {withDates.length} epic(s) with target dates · grouped by phase
                         </div>
                       </div>
-                      <div className="text-xs text-[color:var(--color-text-muted)]">{epicsForRoadmapQ.isFetching ? 'Loading…' : 'Ready'}</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">
+                        {epicsForRoadmapQ.isFetching || epicRollupsQ.isFetching ? 'Loading…' : 'Ready'}
+                      </div>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -1677,6 +1781,8 @@ export default function StratflowProject() {
                                 {byPhase[phase].map(({ e, start, end }) => {
                                   const left = (daysBetween(minStart, start) / spanDays) * totalW
                                   const width = Math.max(10, (daysBetween(start, end) / spanDays) * totalW)
+                                  const r = rollupByEpicId.get(e._id) || null
+                                  const pct = r && r.totalPoints > 0 ? Math.round((r.donePoints / r.totalPoints) * 100) : r && r.totalIssues > 0 ? Math.round((r.doneIssues / r.totalIssues) * 100) : 0
                                   return (
                                     <div key={e._id} className="flex items-center gap-3">
                                       <button
@@ -1689,6 +1795,11 @@ export default function StratflowProject() {
                                         <div className="text-[10px] text-[color:var(--color-text-muted)]">
                                           {start.toLocaleDateString()} → {end.toLocaleDateString()}
                                         </div>
+                                        {r ? (
+                                          <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+                                            {pct}% · {r.donePoints}/{r.totalPoints} pts · {r.blockedCount ? `${r.blockedCount} blocked` : 'no blocks'}
+                                          </div>
+                                        ) : null}
                                       </button>
                                       <div className="relative h-8 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] overflow-hidden" style={{ width: totalW }}>
                                         <div
@@ -2056,6 +2167,54 @@ export default function StratflowProject() {
                   </>
                 )
               })()}
+            </section>
+          )}
+
+          {view === 'activity' && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+              <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                <div>
+                  <div className="text-sm font-semibold">Activity feed</div>
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">Recent changes across issues and sprints.</div>
+                </div>
+                <div className="text-xs text-[color:var(--color-text-muted)]">{activityQ.isFetching ? 'Loading…' : 'Live'}</div>
+              </div>
+              <div className="divide-y divide-[color:var(--color-border)]">
+                {(activityQ.data?.data.items ?? []).map((a) => (
+                  <div key={a._id} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm">
+                          <span className="font-medium">{a.kind.replaceAll('_', ' ')}</span>
+                          {a.issueId ? (
+                            <button
+                              type="button"
+                              className="ml-2 text-sm text-[color:var(--color-primary-600)] hover:underline"
+                              onClick={() => setFocusedIssueId(String(a.issueId))}
+                            >
+                              Open issue
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                          {a.createdAt ? new Date(String(a.createdAt)).toLocaleString() : '—'} · Actor: {a.actorId}
+                        </div>
+                        {a.meta ? (
+                          <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)] break-words">
+                            {JSON.stringify(a.meta)}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">
+                        {a.sprintId ? <span>Sprint</span> : a.issueId ? <span>Issue</span> : <span>Project</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!activityQ.isLoading && !(activityQ.data?.data.items ?? []).length ? (
+                  <div className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">No activity yet.</div>
+                ) : null}
+              </div>
             </section>
           )}
         </>

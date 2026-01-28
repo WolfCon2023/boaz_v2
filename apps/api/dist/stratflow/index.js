@@ -99,9 +99,20 @@ async function ensureStratflowIndexes(db) {
         await db.collection('sf_sprints').createIndex({ projectId: 1, state: 1 }).catch(() => { });
         await db.collection('sf_issue_comments').createIndex({ issueId: 1, createdAt: 1 }).catch(() => { });
         await db.collection('sf_components').createIndex({ projectId: 1, nameLower: 1 }, { unique: true }).catch(() => { });
+        await db.collection('sf_activity').createIndex({ projectId: 1, createdAt: -1 }).catch(() => { });
+        await db.collection('sf_activity').createIndex({ issueId: 1, createdAt: -1 }).catch(() => { });
+        await db.collection('sf_activity').createIndex({ sprintId: 1, createdAt: -1 }).catch(() => { });
     }
     catch {
         // noop
+    }
+}
+async function logActivity(db, doc) {
+    try {
+        await db.collection('sf_activity').insertOne({ _id: new ObjectId(), ...doc });
+    }
+    catch {
+        // best effort
     }
 }
 function projectMemberIds(project) {
@@ -543,6 +554,14 @@ stratflowRouter.post('/boards/:boardId/issues', async (req, res) => {
             return res.status(400).json({ data: null, error: 'invalid_components' });
     }
     await db.collection('sf_issues').insertOne(doc);
+    await logActivity(db, {
+        projectId: board.projectId,
+        actorId: auth.userId,
+        kind: 'issue_created',
+        issueId: doc._id,
+        meta: { boardId: String(bid), columnId: String(colId), type: doc.type, priority: doc.priority },
+        createdAt: now,
+    });
     res.status(201).json({ data: { _id: String(doc._id) }, error: null });
 });
 const issueMoveSchema = z.object({
@@ -643,6 +662,17 @@ stratflowRouter.patch('/issues/:issueId/move', async (req, res) => {
     if (wipLimit != null && destItems.length >= wipLimit) {
         return res.status(400).json({ data: null, error: 'wip_limit_reached' });
     }
+    // Governance: required fields to move to Done
+    const nextStatusKey = statusKeyFromColumnName(String(col.name || ''));
+    if (nextStatusKey === 'done') {
+        const t = normIssueType(issue.type);
+        if (t === 'Story' && !String(issue.acceptanceCriteria || '').trim()) {
+            return res.status(400).json({ data: null, error: 'missing_acceptance_criteria' });
+        }
+        if (t === 'Defect' && !String(issue.description || '').trim()) {
+            return res.status(400).json({ data: null, error: 'missing_description' });
+        }
+    }
     const before = destItems[parsed.data.toIndex - 1]?.order ?? null;
     const after = destItems[parsed.data.toIndex]?.order ?? null;
     let newOrder;
@@ -680,9 +710,17 @@ stratflowRouter.patch('/issues/:issueId/move', async (req, res) => {
         $set: {
             columnId: toCol,
             order: newOrder,
-            statusKey: statusKeyFromColumnName(String(col.name || '')),
+            statusKey: nextStatusKey,
             updatedAt: now,
         },
+    });
+    await logActivity(db, {
+        projectId: board.projectId,
+        actorId: auth.userId,
+        kind: 'issue_moved',
+        issueId: iid,
+        meta: { toColumnId: String(toCol), toColumnName: String(col.name || ''), toIndex: parsed.data.toIndex },
+        createdAt: now,
     });
     res.json({ data: { ok: true }, error: null });
 });
@@ -750,6 +788,7 @@ stratflowRouter.post('/projects/:projectId/sprints', async (req, res) => {
         updatedAt: now,
     };
     await db.collection('sf_sprints').insertOne(doc);
+    await logActivity(db, { projectId: pid, actorId: auth.userId, kind: 'sprint_created', sprintId: doc._id, meta: { name: doc.name }, createdAt: now });
     res.status(201).json({ data: { _id: String(doc._id) }, error: null });
 });
 // PATCH /api/stratflow/sprints/:sprintId
@@ -787,6 +826,7 @@ stratflowRouter.patch('/sprints/:sprintId', async (req, res) => {
     if (parsed.data.state !== undefined)
         update.state = parsed.data.state;
     await db.collection('sf_sprints').updateOne({ _id: sid }, { $set: update });
+    await logActivity(db, { projectId: sprint.projectId, actorId: auth.userId, kind: 'sprint_updated', sprintId: sid, meta: { fields: Object.keys(parsed.data || {}) }, createdAt: update.updatedAt });
     res.json({ data: { ok: true }, error: null });
 });
 // POST /api/stratflow/sprints/:sprintId/set-active
@@ -811,6 +851,39 @@ stratflowRouter.post('/sprints/:sprintId/set-active', async (req, res) => {
     // Enforce only one active sprint per project
     await db.collection('sf_sprints').updateMany({ projectId: sprint.projectId, state: 'active' }, { $set: { state: 'planned', updatedAt: now } });
     await db.collection('sf_sprints').updateOne({ _id: sid }, { $set: { state: 'active', updatedAt: now } });
+    await logActivity(db, { projectId: sprint.projectId, actorId: auth.userId, kind: 'sprint_set_active', sprintId: sid, createdAt: now });
+    res.json({ data: { ok: true }, error: null });
+});
+// POST /api/stratflow/sprints/:sprintId/close
+stratflowRouter.post('/sprints/:sprintId/close', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const sid = objIdOrNull(String(req.params.sprintId || ''));
+    if (!sid)
+        return res.status(400).json({ data: null, error: 'invalid_sprint_id' });
+    const force = Boolean((req.body ?? {}).force);
+    const sprint = await db.collection('sf_sprints').findOne({ _id: sid });
+    if (!sprint)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const project = await loadProjectForUser(db, sprint.projectId, auth.userId);
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    // Governance: only owner can close
+    if (String(project.ownerId) !== String(auth.userId))
+        return res.status(403).json({ data: null, error: 'owner_only' });
+    if (!force) {
+        const openCount = await db.collection('sf_issues').countDocuments({ projectId: sprint.projectId, sprintId: sid, statusKey: { $ne: 'done' } });
+        if (openCount > 0)
+            return res.status(400).json({ data: null, error: 'sprint_has_open_work', openCount });
+    }
+    const now = new Date();
+    await db.collection('sf_sprints').updateOne({ _id: sid }, { $set: { state: 'closed', updatedAt: now } });
+    await logActivity(db, { projectId: sprint.projectId, actorId: auth.userId, kind: 'sprint_closed', sprintId: sid, meta: { force }, createdAt: now });
     res.json({ data: { ok: true }, error: null });
 });
 const issueUpdateSchema = z.object({
@@ -863,6 +936,85 @@ stratflowRouter.get('/issues/:issueId', async (req, res) => {
         },
         error: null,
     });
+});
+const issueLinkSchema = z.object({
+    type: z.enum(['blocks', 'blocked_by', 'relates_to']),
+    otherIssueId: z.string().min(6),
+});
+// POST /api/stratflow/issues/:issueId/links
+stratflowRouter.post('/issues/:issueId/links', async (req, res) => {
+    const parsed = issueLinkSchema.safeParse(req.body ?? {});
+    if (!parsed.success)
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const iid = objIdOrNull(String(req.params.issueId || ''));
+    if (!iid)
+        return res.status(400).json({ data: null, error: 'invalid_issue_id' });
+    const oid = objIdOrNull(String(parsed.data.otherIssueId || ''));
+    if (!oid)
+        return res.status(400).json({ data: null, error: 'invalid_other_issue_id' });
+    if (String(iid) === String(oid))
+        return res.status(400).json({ data: null, error: 'cannot_link_self' });
+    const issue = await db.collection('sf_issues').findOne({ _id: iid });
+    if (!issue)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const project = await loadProjectForUser(db, issue.projectId, auth.userId);
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const other = await db.collection('sf_issues').findOne({ _id: oid, projectId: issue.projectId });
+    if (!other)
+        return res.status(400).json({ data: null, error: 'invalid_other_issue' });
+    await db.collection('sf_issues').updateOne({ _id: iid }, { $addToSet: { links: { type: parsed.data.type, issueId: oid } }, $set: { updatedAt: new Date() } });
+    await logActivity(db, {
+        projectId: issue.projectId,
+        actorId: auth.userId,
+        kind: 'issue_link_added',
+        issueId: iid,
+        meta: { type: parsed.data.type, otherIssueId: String(oid) },
+        createdAt: new Date(),
+    });
+    res.json({ data: { ok: true }, error: null });
+});
+// POST /api/stratflow/issues/:issueId/links/remove
+stratflowRouter.post('/issues/:issueId/links/remove', async (req, res) => {
+    const parsed = issueLinkSchema.safeParse(req.body ?? {});
+    if (!parsed.success)
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const iid = objIdOrNull(String(req.params.issueId || ''));
+    if (!iid)
+        return res.status(400).json({ data: null, error: 'invalid_issue_id' });
+    const oid = objIdOrNull(String(parsed.data.otherIssueId || ''));
+    if (!oid)
+        return res.status(400).json({ data: null, error: 'invalid_other_issue_id' });
+    const issue = await db.collection('sf_issues').findOne({ _id: iid });
+    if (!issue)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const project = await loadProjectForUser(db, issue.projectId, auth.userId);
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    await db.collection('sf_issues').updateOne({ _id: iid }, { $pull: { links: { type: parsed.data.type, issueId: oid } }, $set: { updatedAt: new Date() } });
+    await logActivity(db, {
+        projectId: issue.projectId,
+        actorId: auth.userId,
+        kind: 'issue_link_removed',
+        issueId: iid,
+        meta: { type: parsed.data.type, otherIssueId: String(oid) },
+        createdAt: new Date(),
+    });
+    res.json({ data: { ok: true }, error: null });
 });
 // PATCH /api/stratflow/issues/:issueId
 stratflowRouter.patch('/issues/:issueId', async (req, res) => {
@@ -949,6 +1101,14 @@ stratflowRouter.patch('/issues/:issueId', async (req, res) => {
         }
     }
     await db.collection('sf_issues').updateOne({ _id: iid }, { $set: update });
+    await logActivity(db, {
+        projectId: issue.projectId,
+        actorId: auth.userId,
+        kind: 'issue_updated',
+        issueId: iid,
+        meta: { fields: Object.keys(parsed.data || {}) },
+        createdAt: update.updatedAt,
+    });
     res.json({ data: { ok: true }, error: null });
 });
 const bulkUpdateSchema = z.object({
@@ -1039,6 +1199,13 @@ stratflowRouter.post('/issues/bulk-update', async (req, res) => {
     if (Object.keys(pull).length)
         updateDoc.$pull = pull;
     const result = await db.collection('sf_issues').updateMany({ _id: { $in: ids } }, updateDoc);
+    await logActivity(db, {
+        projectId,
+        actorId: auth.userId,
+        kind: 'bulk_update',
+        meta: { issueCount: ids.length, patch: Object.keys(patch || {}) },
+        createdAt: now,
+    });
     res.json({ data: { matched: result.matchedCount, modified: result.modifiedCount }, error: null });
 });
 // GET /api/stratflow/projects/:projectId/issues
@@ -1176,6 +1343,14 @@ stratflowRouter.post('/issues/:issueId/comments', async (req, res) => {
         createdAt: now,
     };
     await db.collection('sf_issue_comments').insertOne(doc);
+    await logActivity(db, {
+        projectId: issue.projectId,
+        actorId: auth.userId,
+        kind: 'issue_commented',
+        issueId: iid,
+        meta: { length: doc.body.length },
+        createdAt: now,
+    });
     res.status(201).json({ data: { _id: String(doc._id) }, error: null });
 });
 // GET /api/stratflow/projects/:projectId/members (project members + owner; used for assignees)
@@ -1201,6 +1376,110 @@ stratflowRouter.get('/projects/:projectId/members', async (req, res) => {
             ownerId: String(project.ownerId),
             teamIds: Array.isArray(project.teamIds) ? project.teamIds : [],
             users,
+        },
+        error: null,
+    });
+});
+// GET /api/stratflow/projects/:projectId/activity
+stratflowRouter.get('/projects/:projectId/activity', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const pid = objIdOrNull(String(req.params.projectId || ''));
+    if (!pid)
+        return res.status(400).json({ data: null, error: 'invalid_project_id' });
+    const project = await loadProjectForUser(db, pid, auth.userId);
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    const limit = Math.min(parseInt(String(req.query.limit || '100'), 10) || 100, 500);
+    const items = await db.collection('sf_activity').find({ projectId: pid }).sort({ createdAt: -1 }).limit(limit).toArray();
+    res.json({
+        data: {
+            items: items.map((d) => ({
+                ...d,
+                _id: String(d._id),
+                projectId: String(d.projectId),
+                issueId: d.issueId ? String(d.issueId) : null,
+                sprintId: d.sprintId ? String(d.sprintId) : null,
+                createdAt: toIsoOrNull(d.createdAt),
+            })),
+        },
+        error: null,
+    });
+});
+// GET /api/stratflow/projects/:projectId/epic-rollups
+stratflowRouter.get('/projects/:projectId/epic-rollups', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const pid = objIdOrNull(String(req.params.projectId || ''));
+    if (!pid)
+        return res.status(400).json({ data: null, error: 'invalid_project_id' });
+    const project = await loadProjectForUser(db, pid, auth.userId);
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    const epicDocs = await db.collection('sf_issues').find({ projectId: pid, type: 'Epic' }).sort({ updatedAt: -1 }).limit(2000).toArray();
+    const epicIds = epicDocs.map((e) => e._id);
+    const rows = await db
+        .collection('sf_issues')
+        .aggregate([
+        { $match: { projectId: pid, epicId: { $in: epicIds } } },
+        {
+            $group: {
+                _id: '$epicId',
+                totalIssues: { $sum: 1 },
+                doneIssues: { $sum: { $cond: [{ $eq: ['$statusKey', 'done'] }, 1, 0] } },
+                totalPoints: { $sum: { $ifNull: ['$storyPoints', 0] } },
+                donePoints: { $sum: { $cond: [{ $eq: ['$statusKey', 'done'] }, { $ifNull: ['$storyPoints', 0] }, 0] } },
+                blockedCount: {
+                    $sum: {
+                        $cond: [
+                            {
+                                $gt: [
+                                    {
+                                        $size: {
+                                            $filter: { input: { $ifNull: ['$links', []] }, as: 'l', cond: { $eq: ['$$l.type', 'blocked_by'] } },
+                                        },
+                                    },
+                                    0,
+                                ],
+                            },
+                            1,
+                            0,
+                        ],
+                    },
+                },
+            },
+        },
+    ])
+        .toArray();
+    const byEpicId = new Map();
+    rows.forEach((r) => byEpicId.set(String(r._id), r));
+    res.json({
+        data: {
+            items: epicDocs.map((e) => {
+                const roll = byEpicId.get(String(e._id)) || { totalIssues: 0, doneIssues: 0, totalPoints: 0, donePoints: 0, blockedCount: 0 };
+                return {
+                    epicId: String(e._id),
+                    epicTitle: String(e.title || ''),
+                    phase: e.phase ? String(e.phase) : null,
+                    targetStartDate: toIsoOrNull(e.targetStartDate),
+                    targetEndDate: toIsoOrNull(e.targetEndDate),
+                    totalIssues: Number(roll.totalIssues || 0),
+                    doneIssues: Number(roll.doneIssues || 0),
+                    totalPoints: Number(roll.totalPoints || 0),
+                    donePoints: Number(roll.donePoints || 0),
+                    blockedCount: Number(roll.blockedCount || 0),
+                };
+            }),
         },
         error: null,
     });

@@ -25,6 +25,7 @@ export type StratflowIssue = {
   targetEndDate?: string | null
   labels?: string[]
   components?: string[]
+  links?: { type: 'blocks' | 'blocked_by' | 'relates_to'; issueId: string }[]
   reporterId?: string
   assigneeId?: string | null
   createdAt?: string | null
@@ -126,6 +127,20 @@ export function StratflowIssueDrawer({
   const projectComponents = componentsQ.data?.data.items ?? []
   const epics = (epicsQ.data?.data.items ?? []).filter((e) => e._id !== issueId)
   const comments = commentsQ.data?.data.items ?? []
+  const issueLinks = issue?.links ?? []
+
+  const projectIssuesQ = useQuery<{ data: { items: StratflowIssue[] } }>({
+    queryKey: ['stratflow', 'projectIssues', projectId, 'linkSearch'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/issues`)).data,
+    retry: false,
+    enabled: Boolean(projectId),
+  })
+  const projectIssues = projectIssuesQ.data?.data.items ?? []
+  const issuesById = React.useMemo(() => {
+    const m = new Map<string, StratflowIssue>()
+    projectIssues.forEach((it) => m.set(it._id, it))
+    return m
+  }, [projectIssues])
 
   const [title, setTitle] = React.useState('')
   const [type, setType] = React.useState<'Epic' | 'Story' | 'Task' | 'Defect' | 'Spike'>('Task')
@@ -143,6 +158,9 @@ export function StratflowIssueDrawer({
   const [targetEndDate, setTargetEndDate] = React.useState<string>('')
   const [newComment, setNewComment] = React.useState<string>('')
 
+  const [linkType, setLinkType] = React.useState<'blocks' | 'blocked_by' | 'relates_to'>('relates_to')
+  const [linkOtherId, setLinkOtherId] = React.useState<string>('')
+
   React.useEffect(() => {
     if (!issue) return
     setTitle(String(issue.title || ''))
@@ -159,6 +177,7 @@ export function StratflowIssueDrawer({
     setPhase(String(issue.phase || ''))
     setTargetStartDate(issue.targetStartDate ? String(issue.targetStartDate).slice(0, 10) : '')
     setTargetEndDate(issue.targetEndDate ? String(issue.targetEndDate).slice(0, 10) : '')
+    setLinkOtherId('')
   }, [issue, issueId])
 
   const save = useMutation({
@@ -210,6 +229,33 @@ export function StratflowIssueDrawer({
       await qc.invalidateQueries({ queryKey: ['stratflow', 'issue', issueId, 'comments'] })
     },
     onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to add comment.', 'error'),
+  })
+
+  const addLink = useMutation({
+    mutationFn: async () => {
+      const otherIssueId = linkOtherId
+      if (!otherIssueId) throw new Error('Pick an issue to link.')
+      return (await http.post(`/api/stratflow/issues/${issueId}/links`, { type: linkType, otherIssueId })).data
+    },
+    onSuccess: async () => {
+      setLinkOtherId('')
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issue', issueId] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issues'] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'projectIssues', projectId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to add link.', 'error'),
+  })
+
+  const removeLink = useMutation({
+    mutationFn: async ({ type, otherIssueId }: { type: 'blocks' | 'blocked_by' | 'relates_to'; otherIssueId: string }) => {
+      return (await http.post(`/api/stratflow/issues/${issueId}/links/remove`, { type, otherIssueId })).data
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issue', issueId] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issues'] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'projectIssues', projectId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to remove link.', 'error'),
   })
 
   return (
@@ -445,6 +491,88 @@ export function StratflowIssueDrawer({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Dependencies</div>
+                  <div className="text-[10px] text-[color:var(--color-text-muted)]">{issueLinks.length ? `${issueLinks.length}` : 'None'}</div>
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Link type</label>
+                    <select
+                      value={linkType}
+                      onChange={(e) => setLinkType(e.target.value as any)}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                    >
+                      <option value="relates_to">Relates to</option>
+                      <option value="blocks">Blocks</option>
+                      <option value="blocked_by">Blocked by</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Issue</label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={linkOtherId}
+                        onChange={(e) => setLinkOtherId(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                      >
+                        <option value="">Select issue…</option>
+                        {projectIssues
+                          .filter((it) => it._id !== issueId)
+                          .slice()
+                          .sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
+                          .slice(0, 500)
+                          .map((it) => (
+                            <option key={it._id} value={it._id}>
+                              {it.type}: {it.title}
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={addLink.isPending || !linkOtherId}
+                        onClick={() => addLink.mutate()}
+                        className="shrink-0 rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                        title="Add link"
+                      >
+                        {addLink.isPending ? 'Adding…' : 'Add'}
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-[color:var(--color-text-muted)]">
+                      Tip: Mark an issue as <b>Blocked by</b> to make the “Blocked” badge appear on cards and enable blocked filtering later.
+                    </div>
+                  </div>
+                </div>
+
+                {issueLinks.length ? (
+                  <div className="mt-3 space-y-2">
+                    {issueLinks.map((l, idx) => {
+                      const other = issuesById.get(String(l.issueId))
+                      const label = other ? `${other.type}: ${other.title}` : `Issue ${String(l.issueId)}`
+                      return (
+                        <div key={`${l.type}-${String(l.issueId)}-${idx}`} className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--color-border)] px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="text-xs text-[color:var(--color-text-muted)]">{l.type.replaceAll('_', ' ')}</div>
+                            <div className="mt-0.5 truncate text-sm">{label}</div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={removeLink.isPending}
+                            onClick={() => removeLink.mutate({ type: l.type as any, otherIssueId: String(l.issueId) })}
+                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                            title="Remove link"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex items-center justify-end gap-2 border-t border-[color:var(--color-border)] pt-3">
