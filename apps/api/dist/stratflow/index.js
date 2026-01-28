@@ -951,6 +951,96 @@ stratflowRouter.patch('/issues/:issueId', async (req, res) => {
     await db.collection('sf_issues').updateOne({ _id: iid }, { $set: update });
     res.json({ data: { ok: true }, error: null });
 });
+const bulkUpdateSchema = z.object({
+    issueIds: z.array(z.string().min(6)).min(1).max(200),
+    patch: z.object({
+        assigneeId: z.string().min(6).nullable().optional(),
+        sprintId: z.string().nullable().optional(), // null to clear
+        addLabels: z.array(z.string()).optional(),
+        removeLabels: z.array(z.string()).optional(),
+        addComponents: z.array(z.string()).optional(),
+        removeComponents: z.array(z.string()).optional(),
+    }),
+});
+// POST /api/stratflow/issues/bulk-update
+stratflowRouter.post('/issues/bulk-update', async (req, res) => {
+    const parsed = bulkUpdateSchema.safeParse(req.body ?? {});
+    if (!parsed.success)
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const ids = parsed.data.issueIds
+        .map((x) => objIdOrNull(String(x)))
+        .filter(Boolean);
+    if (!ids.length)
+        return res.status(400).json({ data: null, error: 'invalid_issue_ids' });
+    const issues = await db.collection('sf_issues').find({ _id: { $in: ids } }).toArray();
+    if (!issues.length)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const projectId = issues[0].projectId;
+    if (!issues.every((it) => String(it.projectId) === String(projectId))) {
+        return res.status(400).json({ data: null, error: 'mixed_projects' });
+    }
+    const project = await loadProjectForUser(db, projectId, auth.userId);
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const now = new Date();
+    const patch = parsed.data.patch;
+    const update = { updatedAt: now };
+    const addToSet = {};
+    const pull = {};
+    if (patch.assigneeId !== undefined) {
+        const nextAssignee = patch.assigneeId ? String(patch.assigneeId).trim() : null;
+        if (nextAssignee) {
+            const allowed = projectMemberIds(project);
+            if (!allowed.includes(nextAssignee))
+                return res.status(400).json({ data: null, error: 'invalid_assignee' });
+        }
+        update.assigneeId = nextAssignee;
+    }
+    if (patch.sprintId !== undefined) {
+        if (!patch.sprintId) {
+            update.sprintId = null;
+        }
+        else {
+            const sid = objIdOrNull(String(patch.sprintId));
+            if (!sid)
+                return res.status(400).json({ data: null, error: 'invalid_sprint' });
+            const sp = await db.collection('sf_sprints').findOne({ _id: sid, projectId });
+            if (!sp)
+                return res.status(400).json({ data: null, error: 'invalid_sprint' });
+            update.sprintId = sid;
+        }
+    }
+    const addLabels = normStrArray(patch.addLabels, 50);
+    const removeLabels = normStrArray(patch.removeLabels, 50);
+    if (addLabels.length)
+        addToSet.labels = { $each: addLabels };
+    if (removeLabels.length)
+        pull.labels = { $in: removeLabels };
+    const addComponents = normStrArray(patch.addComponents, 50);
+    const removeComponents = normStrArray(patch.removeComponents, 50);
+    if (addComponents.length) {
+        const ok = await validateComponentsExist(db, projectId, addComponents);
+        if (!ok)
+            return res.status(400).json({ data: null, error: 'invalid_components' });
+        addToSet.components = { $each: addComponents };
+    }
+    if (removeComponents.length)
+        pull.components = { $in: removeComponents };
+    const updateDoc = { $set: update };
+    if (Object.keys(addToSet).length)
+        updateDoc.$addToSet = addToSet;
+    if (Object.keys(pull).length)
+        updateDoc.$pull = pull;
+    const result = await db.collection('sf_issues').updateMany({ _id: { $in: ids } }, updateDoc);
+    res.json({ data: { matched: result.matchedCount, modified: result.modifiedCount }, error: null });
+});
 // GET /api/stratflow/projects/:projectId/issues
 stratflowRouter.get('/projects/:projectId/issues', async (req, res) => {
     const db = await getDb();

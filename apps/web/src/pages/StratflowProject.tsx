@@ -126,6 +126,25 @@ function initialsFromName(name: string) {
   return letters.toUpperCase() || n.slice(0, 2).toUpperCase()
 }
 
+function downloadCsv(filename: string, rows: Array<Record<string, any>>) {
+  const keySet = new Set<string>()
+  for (const r of rows) {
+    for (const k of Object.keys(r || {})) keySet.add(k)
+  }
+  const headers = Array.from(keySet)
+  const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => esc(r[h])).join(','))].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 function IssueCard({
   issue,
   onOpen,
@@ -330,6 +349,23 @@ export default function StratflowProject() {
   const view = normView(sp.get('view'))
   const [focusedIssueId, setFocusedIssueId] = React.useState<string | null>(null)
   const [assignedToMeOnly, setAssignedToMeOnly] = React.useState(false)
+  const [listType, setListType] = React.useState<string>('all')
+  const [listPreset, setListPreset] = React.useState<string>('') // id or built-in
+  const [saveFilterOpen, setSaveFilterOpen] = React.useState(false)
+  const [saveFilterName, setSaveFilterName] = React.useState('')
+  const savedFiltersKey = `sfSavedFilters:${projectId || ''}`
+  const [savedFilters, setSavedFilters] = React.useState<Array<{ id: string; name: string; state: any }>>([])
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(savedFiltersKey)
+      const parsed = raw ? JSON.parse(raw) : []
+      setSavedFilters(Array.isArray(parsed) ? parsed : [])
+    } catch {
+      setSavedFilters([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedFiltersKey])
 
   const meQ = useQuery<UserInfo>({
     queryKey: ['user', 'me'],
@@ -661,9 +697,23 @@ export default function StratflowProject() {
     const q = listQ.trim().toLowerCase()
     const colId = listColumnId
     const uid = meQ.data?.id || ''
+    const dueSoonCutoff = new Date(Date.now() + 14 * 24 * 3600 * 1000)
     return loadedIssues
       .filter((it) => (colId === 'all' ? true : it.columnId === colId))
       .filter((it) => (!assignedToMeOnly || !uid ? true : String(it.assigneeId || '') === uid))
+      .filter((it) => (listType === 'all' ? true : String(it.type || '') === listType))
+      .filter((it) => {
+        if (listPreset !== 'due-soon') return true
+        const d = parseIsoDate((it as any).targetEndDate)
+        if (!d) return false
+        return d.getTime() <= dueSoonCutoff.getTime()
+      })
+      .filter((it) => {
+        if (listPreset !== 'hot-defects') return true
+        const isDefect = String(it.type || '') === 'Defect'
+        const pr = String(it.priority || '')
+        return isDefect && (pr === 'Highest' || pr === 'High')
+      })
       .filter((it) => (!q ? true : String(it.title || '').toLowerCase().includes(q)))
       .slice()
       .sort((a, b) => {
@@ -672,7 +722,47 @@ export default function StratflowProject() {
         if (ca !== cb) return ca.localeCompare(cb)
         return (a.order || 0) - (b.order || 0)
       })
-  }, [loadedIssues, listQ, listColumnId, columnNameById, assignedToMeOnly, meQ.data?.id])
+  }, [loadedIssues, listQ, listColumnId, columnNameById, assignedToMeOnly, meQ.data?.id, listType, listPreset])
+
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  React.useEffect(() => {
+    setSelectedIds(new Set())
+  }, [boardId, view, listQ, listColumnId, assignedToMeOnly, listType, listPreset])
+
+  const [bulkAction, setBulkAction] = React.useState<'setAssignee' | 'setSprint' | 'addLabels' | 'removeLabels' | 'addComponents' | 'removeComponents'>('setAssignee')
+  const [bulkAssignee, setBulkAssignee] = React.useState<string>('')
+  const [bulkSprint, setBulkSprint] = React.useState<string>('')
+  const [bulkLabels, setBulkLabels] = React.useState<string>('')
+  const [bulkComponents, setBulkComponents] = React.useState<string[]>([])
+
+  const componentsQ = useQuery<{ data: { items: Array<{ _id: string; name: string }> } }>({
+    queryKey: ['stratflow', 'project', projectId, 'components'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/components`)).data,
+    retry: false,
+    enabled: Boolean(projectId),
+  })
+  const projectComponents = componentsQ.data?.data.items ?? []
+
+  const bulkUpdate = useMutation({
+    mutationFn: async () => {
+      const issueIds = Array.from(selectedIds)
+      const patch: any = {}
+      if (bulkAction === 'setAssignee') patch.assigneeId = bulkAssignee ? bulkAssignee : null
+      if (bulkAction === 'setSprint') patch.sprintId = bulkSprint ? bulkSprint : null
+      if (bulkAction === 'addLabels') patch.addLabels = bulkLabels.split(',').map((x) => x.trim()).filter(Boolean)
+      if (bulkAction === 'removeLabels') patch.removeLabels = bulkLabels.split(',').map((x) => x.trim()).filter(Boolean)
+      if (bulkAction === 'addComponents') patch.addComponents = bulkComponents
+      if (bulkAction === 'removeComponents') patch.removeComponents = bulkComponents
+      return (await http.post('/api/stratflow/issues/bulk-update', { issueIds, patch })).data
+    },
+    onSuccess: async () => {
+      toast.showToast('Bulk update applied.', 'success')
+      setSelectedIds(new Set())
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issues', boardId] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'projectIssues', projectId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Bulk update failed.', 'error'),
+  })
 
   const [wipEdits, setWipEdits] = React.useState<Record<string, string>>({})
   React.useEffect(() => {
@@ -705,6 +795,57 @@ export default function StratflowProject() {
     <TooltipProvider>
       <div className="space-y-4">
         <CRMNav />
+
+        {saveFilterOpen ? (
+          <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={() => setSaveFilterOpen(false)}>
+            <div
+              className="mx-auto mt-24 w-[min(92vw,28rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-sm font-semibold">Save filter</div>
+              <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">Save the current List filters for quick reuse.</div>
+              <div className="mt-4 space-y-2">
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Name</label>
+                <input
+                  value={saveFilterName}
+                  onChange={(e) => setSaveFilterName(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  placeholder="e.g., My triage"
+                />
+              </div>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                  onClick={() => setSaveFilterOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                  disabled={!saveFilterName.trim()}
+                  onClick={() => {
+                    const id = `f_${Date.now()}`
+                    const state = { assignedToMeOnly, listQ, listColumnId, listType }
+                    const next = [...savedFilters, { id, name: saveFilterName.trim(), state }]
+                    setSavedFilters(next)
+                    try {
+                      localStorage.setItem(savedFiltersKey, JSON.stringify(next))
+                    } catch {
+                      // ignore
+                    }
+                    setSaveFilterName('')
+                    setSaveFilterOpen(false)
+                    toast.showToast('Filter saved.', 'success')
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
@@ -862,12 +1003,72 @@ export default function StratflowProject() {
               <div className="flex flex-col gap-3 border-b border-[color:var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-semibold">Issues</div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={listPreset || ''}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setListPreset(v)
+                      if (v === '') return
+                      if (v === 'my-work') {
+                        setAssignedToMeOnly(true)
+                      } else if (v === 'hot-defects') {
+                        setListType('Defect')
+                      } else if (v === 'due-soon') {
+                        // uses targetEndDate window filter
+                      } else {
+                        const found = savedFilters.find((x) => x.id === v)
+                        if (found?.state) {
+                          setAssignedToMeOnly(Boolean(found.state.assignedToMeOnly))
+                          setListQ(String(found.state.listQ || ''))
+                          setListColumnId(String(found.state.listColumnId || 'all'))
+                          setListType(String(found.state.listType || 'all'))
+                        }
+                      }
+                    }}
+                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                    title="Saved filters"
+                  >
+                    <option value="">Saved filters</option>
+                    <option value="my-work">My work</option>
+                    <option value="hot-defects">Hot defects</option>
+                    <option value="due-soon">Due soon</option>
+                    {savedFilters.length ? (
+                      <optgroup label="Custom">
+                        {savedFilters.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </select>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                    onClick={() => setSaveFilterOpen(true)}
+                    title="Save current filters"
+                  >
+                    Save filter
+                  </button>
                   <input
                     value={listQ}
                     onChange={(e) => setListQ(e.target.value)}
                     placeholder="Search title…"
                     className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
                   />
+                  <select
+                    value={listType}
+                    onChange={(e) => setListType(e.target.value)}
+                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                    title="Type"
+                  >
+                    <option value="all">All types</option>
+                    <option value="Story">Story</option>
+                    <option value="Task">Task</option>
+                    <option value="Defect">Defect</option>
+                    <option value="Epic">Epic</option>
+                    <option value="Spike">Spike</option>
+                  </select>
                   <select
                     value={listColumnId}
                     onChange={(e) => setListColumnId(e.target.value)}
@@ -883,13 +1084,157 @@ export default function StratflowProject() {
                         </option>
                       ))}
                   </select>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                    onClick={() => {
+                      downloadCsv(
+                        `stratflow-issues-${project?.key || projectId || 'project'}.csv`,
+                        filteredListIssues.map((it) => ({
+                          id: it._id,
+                          title: it.title,
+                          type: it.type,
+                          priority: it.priority,
+                          statusKey: it.statusKey || '',
+                          assignee: it.assigneeId ? memberLabelForUserId(it.assigneeId).label : '',
+                          sprintId: it.sprintId || '',
+                          epicId: it.epicId || '',
+                          phase: (it as any).phase || '',
+                          targetStartDate: (it as any).targetStartDate || '',
+                          targetEndDate: (it as any).targetEndDate || '',
+                          labels: (it.labels || []).join('|'),
+                          components: (it.components || []).join('|'),
+                          column: columnNameById[it.columnId] || '',
+                          createdAt: it.createdAt || '',
+                          updatedAt: it.updatedAt || '',
+                        })),
+                      )
+                    }}
+                    title="Export the current list to CSV"
+                  >
+                    Export CSV
+                  </button>
                 </div>
               </div>
+
+              {selectedIds.size > 0 ? (
+                <div className="border-b border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-4 py-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-sm">
+                      <span className="font-semibold">{selectedIds.size}</span> selected
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={bulkAction}
+                        onChange={(e) => setBulkAction(e.target.value as any)}
+                        className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                      >
+                        <option value="setAssignee">Set assignee</option>
+                        <option value="setSprint">Set sprint</option>
+                        <option value="addLabels">Add labels</option>
+                        <option value="removeLabels">Remove labels</option>
+                        <option value="addComponents">Add components</option>
+                        <option value="removeComponents">Remove components</option>
+                      </select>
+
+                      {bulkAction === 'setAssignee' ? (
+                        <select
+                          value={bulkAssignee}
+                          onChange={(e) => setBulkAssignee(e.target.value)}
+                          className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                        >
+                          <option value="">Unassigned</option>
+                          {(membersQ.data?.data.users ?? []).map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {(m.name || m.email) + (m.email ? ` (${m.email})` : '')}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+
+                      {bulkAction === 'setSprint' ? (
+                        <select
+                          value={bulkSprint}
+                          onChange={(e) => setBulkSprint(e.target.value)}
+                          className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                        >
+                          <option value="">No sprint</option>
+                          {sprints.map((s) => (
+                            <option key={s._id} value={s._id}>
+                              {s.state === 'active' ? 'Active: ' : ''}{s.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+
+                      {bulkAction === 'addLabels' || bulkAction === 'removeLabels' ? (
+                        <input
+                          value={bulkLabels}
+                          onChange={(e) => setBulkLabels(e.target.value)}
+                          className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                          placeholder="labels, comma-separated"
+                        />
+                      ) : null}
+
+                      {bulkAction === 'addComponents' || bulkAction === 'removeComponents' ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {projectComponents.map((c) => {
+                            const active = bulkComponents.includes(c.name)
+                            return (
+                              <button
+                                key={c._id}
+                                type="button"
+                                onClick={() => setBulkComponents((p) => (p.includes(c.name) ? p.filter((x) => x !== c.name) : [...p, c.name]))}
+                                className={[
+                                  'rounded-full border px-2 py-1 text-xs',
+                                  active
+                                    ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                                    : 'border-[color:var(--color-border)] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]',
+                                ].join(' ')}
+                              >
+                                {c.name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        disabled={bulkUpdate.isPending}
+                        onClick={() => bulkUpdate.mutate()}
+                        className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                      >
+                        {bulkUpdate.isPending ? 'Applying…' : 'Apply'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedIds(new Set())}
+                        className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="text-xs text-[color:var(--color-text-muted)]">
                     <tr className="border-b border-[color:var(--color-border)]">
+                      <th className="px-4 py-2 text-left font-medium">
+                        <input
+                          type="checkbox"
+                          checked={filteredListIssues.length > 0 && filteredListIssues.every((i) => selectedIds.has(i._id))}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedIds(new Set(filteredListIssues.map((i) => i._id)))
+                            else setSelectedIds(new Set())
+                          }}
+                          className="h-4 w-4 rounded border-[color:var(--color-border)] text-[color:var(--color-primary-600)] focus:ring-[color:var(--color-primary-600)]"
+                          aria-label="Select all"
+                        />
+                      </th>
                       <th className="px-4 py-2 text-left font-medium">Title</th>
                       <th className="px-4 py-2 text-left font-medium">Type</th>
                       <th className="px-4 py-2 text-left font-medium">Priority</th>
@@ -901,10 +1246,24 @@ export default function StratflowProject() {
                     {filteredListIssues.map((it) => (
                       <tr
                         key={it._id}
-                        className="hover:bg-[color:var(--color-muted)] cursor-pointer"
+                        className="hover:bg-[color:var(--color-muted)]"
                         onClick={() => setFocusedIssueId(it._id)}
                         title="Open Issue Focus"
                       >
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(it._id)}
+                            onChange={(e) => {
+                              const next = new Set(selectedIds)
+                              if (e.target.checked) next.add(it._id)
+                              else next.delete(it._id)
+                              setSelectedIds(next)
+                            }}
+                            className="h-4 w-4 rounded border-[color:var(--color-border)] text-[color:var(--color-primary-600)] focus:ring-[color:var(--color-primary-600)]"
+                            aria-label="Select row"
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           <div className="font-medium">{it.title}</div>
                         </td>
@@ -922,7 +1281,7 @@ export default function StratflowProject() {
                     ))}
                     {!filteredListIssues.length && !issuesQ.isLoading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+                        <td colSpan={6} className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
                           No issues match your filters.
                         </td>
                       </tr>
@@ -1513,7 +1872,33 @@ export default function StratflowProject() {
                             Reports v2: real counts + throughput + approximate cycle time + WIP limits.
                           </div>
                         </div>
-                        <div className="text-xs text-[color:var(--color-text-muted)]">{issuesQ.isFetching ? 'Syncing…' : 'Live'}</div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                            onClick={() => {
+                              downloadCsv(
+                                `stratflow-reports-${project?.key || projectId || 'project'}.csv`,
+                                [
+                                  { metric: 'total', value: total },
+                                  { metric: 'done', value: done },
+                                  { metric: 'pctDone', value: pctDone },
+                                  { metric: 'wip', value: wip },
+                                  { metric: 'backlog', value: backlog },
+                                  { metric: 'avgOpenAgeDays', value: avgOpenAge ?? '' },
+                                  { metric: 'throughput7d', value: throughput(7) },
+                                  { metric: 'throughput14d', value: throughput(14) },
+                                  { metric: 'throughput30d', value: throughput(30) },
+                                  { metric: 'avgCycleDaysApprox', value: avgCycle ?? '' },
+                                  { metric: 'medianCycleDaysApprox', value: p50Cycle ?? '' },
+                                ],
+                              )
+                            }}
+                          >
+                            Export CSV
+                          </button>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">{issuesQ.isFetching ? 'Syncing…' : 'Live'}</div>
+                        </div>
                       </div>
 
                       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
