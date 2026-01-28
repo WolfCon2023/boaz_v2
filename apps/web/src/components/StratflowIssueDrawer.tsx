@@ -20,6 +20,9 @@ export type StratflowIssue = {
   storyPoints?: number | null
   sprintId?: string | null
   epicId?: string | null
+  phase?: string | null
+  targetStartDate?: string | null
+  targetEndDate?: string | null
   labels?: string[]
   components?: string[]
   reporterId?: string
@@ -135,6 +138,9 @@ export function StratflowIssueDrawer({
   const [labelsText, setLabelsText] = React.useState<string>('')
   const [selectedComponents, setSelectedComponents] = React.useState<string[]>([])
   const [assigneeId, setAssigneeId] = React.useState<string>('')
+  const [phase, setPhase] = React.useState<string>('')
+  const [targetStartDate, setTargetStartDate] = React.useState<string>('')
+  const [targetEndDate, setTargetEndDate] = React.useState<string>('')
   const [newComment, setNewComment] = React.useState<string>('')
 
   React.useEffect(() => {
@@ -150,6 +156,9 @@ export function StratflowIssueDrawer({
     setLabelsText((issue.labels || []).join(', '))
     setSelectedComponents(issue.components || [])
     setAssigneeId(issue.assigneeId || '')
+    setPhase(String(issue.phase || ''))
+    setTargetStartDate(issue.targetStartDate ? String(issue.targetStartDate).slice(0, 10) : '')
+    setTargetEndDate(issue.targetEndDate ? String(issue.targetEndDate).slice(0, 10) : '')
   }, [issue, issueId])
 
   const save = useMutation({
@@ -168,6 +177,9 @@ export function StratflowIssueDrawer({
         sprintId: sprintId || null,
         epicId: epicId || null,
         assigneeId: assigneeId || null,
+        phase: phase.trim() || null,
+        targetStartDate: targetStartDate ? new Date(targetStartDate).toISOString() : null,
+        targetEndDate: targetEndDate ? new Date(targetEndDate).toISOString() : null,
         labels: labelsText
           .split(',')
           .map((x) => x.trim())
@@ -394,6 +406,43 @@ export function StratflowIssueDrawer({
                         })}
                       </div>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Roadmap</div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Phase</label>
+                    <input
+                      value={phase}
+                      onChange={(e) => setPhase(e.target.value)}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                      placeholder="e.g., Discovery, Build, Launch"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Target dates</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        value={targetStartDate}
+                        onChange={(e) => setTargetStartDate(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                        title="Target start"
+                      />
+                      <input
+                        type="date"
+                        value={targetEndDate}
+                        onChange={(e) => setTargetEndDate(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                        title="Target end"
+                      />
+                    </div>
+                    <div className="text-[10px] text-[color:var(--color-text-muted)]">
+                      Tip: Use these on Epics to populate the Roadmap timeline.
+                    </div>
                   </div>
                 </div>
               </div>

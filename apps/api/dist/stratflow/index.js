@@ -161,6 +161,7 @@ async function createTemplateForProject(db, projectId, type, now) {
         boardId,
         name,
         order: (idx + 1) * 1000,
+        wipLimit: null,
         createdAt: now,
         updatedAt: now,
     }));
@@ -359,6 +360,37 @@ stratflowRouter.get('/boards/:boardId', async (req, res) => {
         error: null,
     });
 });
+const columnUpdateSchema = z.object({
+    wipLimit: z.number().min(0).max(999).nullable(),
+});
+// PATCH /api/stratflow/columns/:columnId
+stratflowRouter.patch('/columns/:columnId', async (req, res) => {
+    const parsed = columnUpdateSchema.safeParse(req.body ?? {});
+    if (!parsed.success)
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    const auth = req.auth;
+    const cid = objIdOrNull(String(req.params.columnId || ''));
+    if (!cid)
+        return res.status(400).json({ data: null, error: 'invalid_column_id' });
+    const col = await db.collection('sf_columns').findOne({ _id: cid });
+    if (!col)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const board = await db.collection('sf_boards').findOne({ _id: col.boardId });
+    if (!board)
+        return res.status(404).json({ data: null, error: 'board_not_found' });
+    const project = await loadProjectForUser(db, board.projectId, auth.userId);
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    await db
+        .collection('sf_columns')
+        .updateOne({ _id: cid }, { $set: { wipLimit: parsed.data.wipLimit, updatedAt: new Date() } });
+    res.json({ data: { ok: true }, error: null });
+});
 // GET /api/stratflow/boards/:boardId/issues
 stratflowRouter.get('/boards/:boardId/issues', async (req, res) => {
     const db = await getDb();
@@ -414,6 +446,9 @@ const issueCreateSchema = z.object({
     storyPoints: z.number().min(0).max(200).optional().nullable(),
     sprintId: z.string().optional().nullable(),
     epicId: z.string().optional().nullable(),
+    phase: z.string().max(80).optional().nullable(),
+    targetStartDate: z.string().optional().nullable(),
+    targetEndDate: z.string().optional().nullable(),
     labels: z.array(z.string()).optional(),
     components: z.array(z.string()).optional(),
 });
@@ -444,6 +479,13 @@ stratflowRouter.post('/boards/:boardId/issues', async (req, res) => {
     const col = await db.collection('sf_columns').findOne({ _id: colId, boardId: bid });
     if (!col)
         return res.status(404).json({ data: null, error: 'column_not_found' });
+    // Enforce WIP limit for the destination column (if set)
+    const wipLimit = typeof col.wipLimit === 'number' ? col.wipLimit : null;
+    if (wipLimit != null) {
+        const curCount = await db.collection('sf_issues').countDocuments({ boardId: bid, columnId: colId });
+        if (curCount >= wipLimit)
+            return res.status(400).json({ data: null, error: 'wip_limit_reached' });
+    }
     const now = new Date();
     const last = await db
         .collection('sf_issues')
@@ -466,6 +508,9 @@ stratflowRouter.post('/boards/:boardId/issues', async (req, res) => {
         storyPoints: parsed.data.storyPoints ?? null,
         sprintId: parsed.data.sprintId ? objIdOrNull(parsed.data.sprintId) : null,
         epicId: parsed.data.epicId ? objIdOrNull(parsed.data.epicId) : null,
+        phase: parsed.data.phase ? String(parsed.data.phase).trim() : null,
+        targetStartDate: parsed.data.targetStartDate ? new Date(parsed.data.targetStartDate) : null,
+        targetEndDate: parsed.data.targetEndDate ? new Date(parsed.data.targetEndDate) : null,
         labels: normStrArray(parsed.data.labels, 50),
         components: normStrArray(parsed.data.components, 50),
         links: [],
@@ -509,12 +554,14 @@ const sprintCreateSchema = z.object({
     goal: z.string().max(2000).optional().nullable(),
     startDate: z.string().optional().nullable(),
     endDate: z.string().optional().nullable(),
+    capacityPoints: z.number().min(0).max(10000).optional().nullable(),
 });
 const sprintUpdateSchema = z.object({
     name: z.string().min(2).max(140).optional(),
     goal: z.string().max(2000).optional().nullable(),
     startDate: z.string().optional().nullable(),
     endDate: z.string().optional().nullable(),
+    capacityPoints: z.number().min(0).max(10000).optional().nullable(),
     state: z.enum(['planned', 'active', 'closed']).optional(),
 });
 async function reindexColumnIssues(db, boardId, columnId, now) {
@@ -591,6 +638,11 @@ stratflowRouter.patch('/issues/:issueId/move', async (req, res) => {
         .find({ boardId: issue.boardId, columnId: toCol, _id: { $ne: iid } })
         .sort({ order: 1 })
         .toArray();
+    // Enforce WIP limit for the destination column (if set)
+    const wipLimit = typeof col.wipLimit === 'number' ? col.wipLimit : null;
+    if (wipLimit != null && destItems.length >= wipLimit) {
+        return res.status(400).json({ data: null, error: 'wip_limit_reached' });
+    }
     const before = destItems[parsed.data.toIndex - 1]?.order ?? null;
     const after = destItems[parsed.data.toIndex]?.order ?? null;
     let newOrder;
@@ -658,6 +710,7 @@ stratflowRouter.get('/projects/:projectId/sprints', async (req, res) => {
                 projectId: String(d.projectId),
                 startDate: toIsoOrNull(d.startDate),
                 endDate: toIsoOrNull(d.endDate),
+                capacityPoints: d.capacityPoints ?? null,
                 createdAt: toIsoOrNull(d.createdAt),
                 updatedAt: toIsoOrNull(d.updatedAt),
             })),
@@ -691,6 +744,7 @@ stratflowRouter.post('/projects/:projectId/sprints', async (req, res) => {
         goal: parsed.data.goal ? String(parsed.data.goal).trim() : null,
         startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,
         endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : null,
+        capacityPoints: parsed.data.capacityPoints ?? null,
         state: 'planned',
         createdAt: now,
         updatedAt: now,
@@ -728,6 +782,8 @@ stratflowRouter.patch('/sprints/:sprintId', async (req, res) => {
         update.startDate = parsed.data.startDate ? new Date(parsed.data.startDate) : null;
     if (parsed.data.endDate !== undefined)
         update.endDate = parsed.data.endDate ? new Date(parsed.data.endDate) : null;
+    if (parsed.data.capacityPoints !== undefined)
+        update.capacityPoints = parsed.data.capacityPoints ?? null;
     if (parsed.data.state !== undefined)
         update.state = parsed.data.state;
     await db.collection('sf_sprints').updateOne({ _id: sid }, { $set: update });
@@ -767,6 +823,9 @@ const issueUpdateSchema = z.object({
     assigneeId: z.string().optional().nullable(),
     sprintId: z.string().optional().nullable(),
     epicId: z.string().optional().nullable(),
+    phase: z.string().max(80).optional().nullable(),
+    targetStartDate: z.string().optional().nullable(),
+    targetEndDate: z.string().optional().nullable(),
     labels: z.array(z.string()).optional(),
     components: z.array(z.string()).optional(),
 });
@@ -857,6 +916,12 @@ stratflowRouter.patch('/issues/:issueId', async (req, res) => {
             return res.status(400).json({ data: null, error: 'invalid_components' });
         update.components = next;
     }
+    if (parsed.data.phase !== undefined)
+        update.phase = parsed.data.phase ? String(parsed.data.phase).trim() : null;
+    if (parsed.data.targetStartDate !== undefined)
+        update.targetStartDate = parsed.data.targetStartDate ? new Date(parsed.data.targetStartDate) : null;
+    if (parsed.data.targetEndDate !== undefined)
+        update.targetEndDate = parsed.data.targetEndDate ? new Date(parsed.data.targetEndDate) : null;
     if (parsed.data.sprintId !== undefined) {
         if (!parsed.data.sprintId)
             update.sprintId = null;

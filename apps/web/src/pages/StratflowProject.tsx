@@ -24,6 +24,7 @@ type Column = {
   boardId: string
   name: string
   order: number
+  wipLimit?: number | null
 }
 
 type Issue = {
@@ -40,9 +41,13 @@ type Issue = {
   storyPoints?: number | null
   sprintId?: string | null
   epicId?: string | null
+  phase?: string | null
+  targetStartDate?: string | null
+  targetEndDate?: string | null
   labels?: string[]
   components?: string[]
   order: number
+  assigneeId?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -54,6 +59,7 @@ type Sprint = {
   goal?: string | null
   startDate?: string | null
   endDate?: string | null
+  capacityPoints?: number | null
   state: 'planned' | 'active' | 'closed'
 }
 
@@ -66,6 +72,15 @@ type Project = {
 }
 
 type ViewMode = 'board' | 'list' | 'sprint' | 'timeline' | 'reports'
+
+type UserInfo = {
+  id: string
+  email: string
+  name?: string
+}
+
+type ProjectMember = { id: string; email: string; name: string }
+type ProjectMembersResponse = { data: { users: ProjectMember[] } }
 
 function groupIssuesByColumn(issues: Issue[]) {
   const m: Record<string, Issue[]> = {}
@@ -103,7 +118,25 @@ function daysBetween(a: Date, b: Date) {
   return ms / (1000 * 60 * 60 * 24)
 }
 
-function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: (id: string) => void }) {
+function initialsFromName(name: string) {
+  const n = String(name || '').trim()
+  if (!n) return '?'
+  const parts = n.split(/\s+/).filter(Boolean)
+  const letters = (parts[0]?.[0] || '') + (parts[1]?.[0] || '')
+  return letters.toUpperCase() || n.slice(0, 2).toUpperCase()
+}
+
+function IssueCard({
+  issue,
+  onOpen,
+  assigneeLabel,
+  assigneeInitials,
+}: {
+  issue: Issue
+  onOpen: (id: string) => void
+  assigneeLabel?: string | null
+  assigneeInitials?: string | null
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: issue._id,
     data: { type: 'issue', columnId: issue.columnId },
@@ -125,10 +158,22 @@ function IssueCard({ issue, onOpen }: { issue: Issue; onOpen: (id: string) => vo
         <div className="font-medium">{issue.title}</div>
         <div className="text-[10px] text-[color:var(--color-text-muted)]">{issue.type}</div>
       </div>
-      <div className="mt-1 flex items-center gap-2">
+      <div className="mt-1 flex items-center justify-between gap-2">
         <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
           {issue.priority}
         </span>
+        {issue.assigneeId ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="h-6 w-6 rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-muted)] text-[10px] font-semibold flex items-center justify-center">
+                {assigneeInitials || 'U'}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>{assigneeLabel || 'Assigned'}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <span className="text-[10px] text-[color:var(--color-text-muted)]">Unassigned</span>
+        )}
       </div>
     </div>
   )
@@ -139,11 +184,13 @@ function ColumnLane({
   issues,
   onAdd,
   onOpen,
+  memberLabelForUserId,
 }: {
   column: Column
   issues: Issue[]
   onAdd: (columnId: string, title: string, type: Exclude<StratflowIssueType, 'Bug'>) => void
   onOpen: (id: string) => void
+  memberLabelForUserId?: (userId: string) => { label: string; initials: string } | null
 }) {
   const toast = useToast()
   const [draft, setDraft] = React.useState('')
@@ -255,7 +302,13 @@ function ColumnLane({
         <SortableContext items={issueIds} strategy={verticalListSortingStrategy}>
           <div className="space-y-2">
             {visibleIssues.map((issue) => (
-              <IssueCard key={issue._id} issue={issue} onOpen={onOpen} />
+              <IssueCard
+                key={issue._id}
+                issue={issue}
+                onOpen={onOpen}
+                assigneeLabel={issue.assigneeId ? memberLabelForUserId?.(issue.assigneeId)?.label : null}
+                assigneeInitials={issue.assigneeId ? memberLabelForUserId?.(issue.assigneeId)?.initials : null}
+              />
             ))}
             {!visibleIssues.length ? (
               <div className="px-2 py-6 text-center text-xs text-[color:var(--color-text-muted)]">
@@ -276,6 +329,34 @@ export default function StratflowProject() {
   const toast = useToast()
   const view = normView(sp.get('view'))
   const [focusedIssueId, setFocusedIssueId] = React.useState<string | null>(null)
+  const [assignedToMeOnly, setAssignedToMeOnly] = React.useState(false)
+
+  const meQ = useQuery<UserInfo>({
+    queryKey: ['user', 'me'],
+    queryFn: async () => (await http.get('/api/auth/me')).data,
+    retry: false,
+  })
+
+  const membersQ = useQuery<ProjectMembersResponse>({
+    queryKey: ['stratflow', 'project', projectId, 'members'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/members`)).data,
+    retry: false,
+    enabled: Boolean(projectId),
+  })
+  const memberMap = React.useMemo(() => {
+    const m = new Map<string, ProjectMember>()
+    for (const u of membersQ.data?.data.users ?? []) m.set(u.id, u)
+    return m
+  }, [membersQ.data])
+  const memberLabelForUserId = React.useCallback(
+    (userId: string) => {
+      const u = memberMap.get(userId)
+      const label = u ? `${u.name || u.email}${u.email ? ` (${u.email})` : ''}` : userId
+      const init = initialsFromName(u?.name || u?.email || userId)
+      return { label, initials: init }
+    },
+    [memberMap],
+  )
 
   const projectQ = useQuery<{ data: Project }>({
     queryKey: ['stratflow', 'project', projectId],
@@ -338,6 +419,16 @@ export default function StratflowProject() {
     setLocalByColumn(groupIssuesByColumn(loadedIssues))
   }, [boardId, issuesQ.data])
 
+  const visibleByColumn = React.useMemo(() => {
+    const uid = meQ.data?.id || ''
+    if (!assignedToMeOnly || !uid) return localByColumn
+    const next: Record<string, Issue[]> = {}
+    for (const k of Object.keys(localByColumn)) {
+      next[k] = (localByColumn[k] || []).filter((i) => String(i.assigneeId || '') === uid)
+    }
+    return next
+  }, [localByColumn, assignedToMeOnly, meQ.data?.id])
+
   const [listQ, setListQ] = React.useState('')
   const [listColumnId, setListColumnId] = React.useState<string>('all')
 
@@ -349,6 +440,65 @@ export default function StratflowProject() {
   })
   const sprints = sprintsQ.data?.data.items ?? []
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null
+
+  const [selectedSprintId, setSelectedSprintId] = React.useState<string>('')
+  React.useEffect(() => {
+    const next = activeSprint?._id || sprints[0]?._id || ''
+    setSelectedSprintId((prev) => (prev ? prev : next))
+  }, [activeSprint?._id, sprints])
+
+  const selectedSprint = sprints.find((s) => s._id === selectedSprintId) ?? null
+
+  const selectedSprintIssuesQ = useQuery<{ data: { items: Issue[] } }>({
+    queryKey: ['stratflow', 'projectIssues', projectId, 'sprint', selectedSprintId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/issues?sprintId=${encodeURIComponent(String(selectedSprintId || ''))}`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && Boolean(selectedSprintId) && view === 'sprint',
+  })
+
+  const [sprintForm, setSprintForm] = React.useState<{
+    name: string
+    goal: string
+    startDate: string
+    endDate: string
+    capacityPoints: string
+  }>({ name: '', goal: '', startDate: '', endDate: '', capacityPoints: '' })
+
+  React.useEffect(() => {
+    if (!selectedSprint) return
+    const sd = selectedSprint.startDate ? String(selectedSprint.startDate).slice(0, 10) : ''
+    const ed = selectedSprint.endDate ? String(selectedSprint.endDate).slice(0, 10) : ''
+    setSprintForm({
+      name: selectedSprint.name || '',
+      goal: String(selectedSprint.goal || ''),
+      startDate: sd,
+      endDate: ed,
+      capacityPoints: selectedSprint.capacityPoints == null ? '' : String(selectedSprint.capacityPoints),
+    })
+  }, [selectedSprintId])
+
+  const updateSprint = useMutation({
+    mutationFn: async () => {
+      if (!selectedSprintId) throw new Error('No sprint selected')
+      const cap = sprintForm.capacityPoints.trim()
+      const capNum = cap === '' ? null : Number(cap)
+      if (cap !== '' && !Number.isFinite(capNum)) throw new Error('Capacity must be a number')
+      const payload: any = {
+        name: sprintForm.name.trim(),
+        goal: sprintForm.goal.trim() || null,
+        startDate: sprintForm.startDate ? new Date(sprintForm.startDate).toISOString() : null,
+        endDate: sprintForm.endDate ? new Date(sprintForm.endDate).toISOString() : null,
+        capacityPoints: capNum,
+      }
+      return (await http.patch(`/api/stratflow/sprints/${selectedSprintId}`, payload)).data
+    },
+    onSuccess: async () => {
+      toast.showToast('Sprint updated.', 'success')
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'sprints', projectId] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'projectIssues', projectId, 'sprint', selectedSprintId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to update sprint.', 'error'),
+  })
 
   const milestoneBoardId = boards.find((b) => b.kind === 'MILESTONES')?._id ?? null
   const milestoneBoardQ = useQuery<{ data: { board: Board; columns: Column[] } }>({
@@ -363,6 +513,15 @@ export default function StratflowProject() {
     retry: false,
     enabled: Boolean(milestoneBoardId) && view === 'timeline',
   })
+
+  const epicsForRoadmapQ = useQuery<{ data: { items: Issue[] } }>({
+    queryKey: ['stratflow', 'roadmap', projectId, 'epics'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/issues?type=Epic`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'timeline',
+  })
+
+  const [roadmapZoom, setRoadmapZoom] = React.useState<'month' | 'quarter'>('month')
 
   const backlogIssuesQ = useQuery<{ data: { items: Issue[] } }>({
     queryKey: ['stratflow', 'projectIssues', projectId, 'backlog'],
@@ -416,7 +575,11 @@ export default function StratflowProject() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['stratflow', 'issues', boardId] })
     },
-    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to create issue.', 'error'),
+    onError: (err: any) => {
+      const code = err?.response?.data?.error
+      if (code === 'wip_limit_reached') return toast.showToast('WIP limit reached for that column.', 'error')
+      return toast.showToast(code || 'Failed to create issue.', 'error')
+    },
   })
 
   const moveIssue = useMutation({
@@ -427,7 +590,9 @@ export default function StratflowProject() {
       await qc.invalidateQueries({ queryKey: ['stratflow', 'issues', boardId] })
     },
     onError: async (err: any) => {
-      toast.showToast(err?.response?.data?.error || 'Failed to move issue.', 'error')
+      const code = err?.response?.data?.error
+      if (code === 'wip_limit_reached') toast.showToast('WIP limit reached for that column.', 'error')
+      else toast.showToast(code || 'Failed to move issue.', 'error')
       await qc.invalidateQueries({ queryKey: ['stratflow', 'issues', boardId] })
     },
   })
@@ -495,8 +660,10 @@ export default function StratflowProject() {
   const filteredListIssues = React.useMemo(() => {
     const q = listQ.trim().toLowerCase()
     const colId = listColumnId
+    const uid = meQ.data?.id || ''
     return loadedIssues
       .filter((it) => (colId === 'all' ? true : it.columnId === colId))
+      .filter((it) => (!assignedToMeOnly || !uid ? true : String(it.assigneeId || '') === uid))
       .filter((it) => (!q ? true : String(it.title || '').toLowerCase().includes(q)))
       .slice()
       .sort((a, b) => {
@@ -505,7 +672,28 @@ export default function StratflowProject() {
         if (ca !== cb) return ca.localeCompare(cb)
         return (a.order || 0) - (b.order || 0)
       })
-  }, [loadedIssues, listQ, listColumnId, columnNameById])
+  }, [loadedIssues, listQ, listColumnId, columnNameById, assignedToMeOnly, meQ.data?.id])
+
+  const [wipEdits, setWipEdits] = React.useState<Record<string, string>>({})
+  React.useEffect(() => {
+    if (view !== 'reports') return
+    const next: Record<string, string> = {}
+    for (const c of columns) {
+      next[c._id] = c.wipLimit == null ? '' : String(c.wipLimit)
+    }
+    setWipEdits(next)
+  }, [view, columns])
+
+  const updateWipLimit = useMutation({
+    mutationFn: async (payload: { columnId: string; wipLimit: number | null }) => {
+      return (await http.patch(`/api/stratflow/columns/${payload.columnId}`, { wipLimit: payload.wipLimit })).data
+    },
+    onSuccess: async () => {
+      toast.showToast('WIP limit saved.', 'success')
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'board', boardId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to update WIP limit.', 'error'),
+  })
 
   function setView(next: ViewMode) {
     const sp2 = new URLSearchParams(sp)
@@ -617,8 +805,18 @@ export default function StratflowProject() {
             Sprint
           </button>
         </div>
-        <div className="text-xs text-[color:var(--color-text-muted)]">
-          {issuesQ.isFetching || boardQ.isFetching ? 'Syncing…' : 'Synced'}
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)] select-none">
+            <input
+              type="checkbox"
+              checked={assignedToMeOnly}
+              onChange={(e) => setAssignedToMeOnly(e.target.checked)}
+              className="h-4 w-4 rounded border-[color:var(--color-border)] text-[color:var(--color-primary-600)] focus:ring-[color:var(--color-primary-600)]"
+              disabled={!meQ.data?.id}
+            />
+            Assigned to me
+          </label>
+          <div className="text-xs text-[color:var(--color-text-muted)]">{issuesQ.isFetching || boardQ.isFetching ? 'Syncing…' : 'Synced'}</div>
         </div>
       </div>
 
@@ -647,9 +845,10 @@ export default function StratflowProject() {
                         <ColumnLane
                           key={col._id}
                           column={col}
-                          issues={localByColumn[col._id] ?? []}
+                          issues={visibleByColumn[col._id] ?? []}
                           onAdd={onAdd}
                           onOpen={(id) => setFocusedIssueId(id)}
+                          memberLabelForUserId={memberLabelForUserId}
                         />
                       ))}
                   </div>
@@ -694,6 +893,7 @@ export default function StratflowProject() {
                       <th className="px-4 py-2 text-left font-medium">Title</th>
                       <th className="px-4 py-2 text-left font-medium">Type</th>
                       <th className="px-4 py-2 text-left font-medium">Priority</th>
+                      <th className="px-4 py-2 text-left font-medium">Assignee</th>
                       <th className="px-4 py-2 text-left font-medium">Column</th>
                     </tr>
                   </thead>
@@ -714,12 +914,15 @@ export default function StratflowProject() {
                             {it.priority}
                           </span>
                         </td>
+                        <td className="px-4 py-3 text-[color:var(--color-text-muted)]">
+                          {it.assigneeId ? memberLabelForUserId(it.assigneeId).label : '—'}
+                        </td>
                         <td className="px-4 py-3 text-[color:var(--color-text-muted)]">{columnNameById[it.columnId] || '—'}</td>
                       </tr>
                     ))}
                     {!filteredListIssues.length && !issuesQ.isLoading ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+                        <td colSpan={5} className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
                           No issues match your filters.
                         </td>
                       </tr>
@@ -774,6 +977,135 @@ export default function StratflowProject() {
               </div>
 
               <div className="grid gap-4 p-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] lg:col-span-2">
+                  <div className="flex flex-col gap-3 border-b border-[color:var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">Sprint details</div>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                        Edit dates, goal, and capacity. Only project members can edit.
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={selectedSprintId || ''}
+                        onChange={(e) => setSelectedSprintId(e.target.value)}
+                        className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                      >
+                        {sprints.map((s) => (
+                          <option key={s._id} value={s._id}>
+                            {s.state === 'active' ? 'Active: ' : ''}{s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                        disabled={updateSprint.isPending || !selectedSprintId || !sprintForm.name.trim()}
+                        onClick={() => updateSprint.mutate()}
+                      >
+                        {updateSprint.isPending ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {selectedSprint ? (
+                    <div className="grid gap-4 p-4 lg:grid-cols-3">
+                      <div className="lg:col-span-2 space-y-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <div className="text-xs font-medium text-[color:var(--color-text-muted)]">Name</div>
+                            <input
+                              value={sprintForm.name}
+                              onChange={(e) => setSprintForm((p) => ({ ...p, name: e.target.value }))}
+                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                              placeholder="Sprint name"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="text-xs font-medium text-[color:var(--color-text-muted)]">Capacity (points)</div>
+                            <input
+                              value={sprintForm.capacityPoints}
+                              onChange={(e) => setSprintForm((p) => ({ ...p, capacityPoints: e.target.value }))}
+                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                              placeholder="e.g., 30"
+                              inputMode="numeric"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <div className="text-xs font-medium text-[color:var(--color-text-muted)]">Start date</div>
+                            <input
+                              type="date"
+                              value={sprintForm.startDate}
+                              onChange={(e) => setSprintForm((p) => ({ ...p, startDate: e.target.value }))}
+                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="text-xs font-medium text-[color:var(--color-text-muted)]">End date</div>
+                            <input
+                              type="date"
+                              value={sprintForm.endDate}
+                              onChange={(e) => setSprintForm((p) => ({ ...p, endDate: e.target.value }))}
+                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="text-xs font-medium text-[color:var(--color-text-muted)]">Goal</div>
+                          <textarea
+                            value={sprintForm.goal}
+                            onChange={(e) => setSprintForm((p) => ({ ...p, goal: e.target.value }))}
+                            className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm min-h-[6rem]"
+                            placeholder="Sprint goal (optional)"
+                          />
+                        </div>
+                      </div>
+
+                      {(() => {
+                        const issues = (selectedSprintIssuesQ.data?.data.items ?? []).filter((i) => i.type !== 'Epic')
+                        const planned = issues.reduce((sum, i) => sum + (i.storyPoints || 0), 0)
+                        const done = issues.filter((i) => i.statusKey === 'done').reduce((sum, i) => sum + (i.storyPoints || 0), 0)
+                        const cap = selectedSprint.capacityPoints ?? null
+                        const pct = planned > 0 ? Math.round((done / planned) * 100) : 0
+                        const capPct = cap && cap > 0 ? Math.round((planned / cap) * 100) : null
+                        return (
+                          <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                            <div className="text-sm font-semibold">Sprint progress</div>
+                            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                              {selectedSprintIssuesQ.isFetching ? 'Loading…' : `${issues.length} issue(s) (excluding Epics)`}
+                            </div>
+                            <div className="mt-4 space-y-3">
+                              <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] h-3 overflow-hidden">
+                                <div className="h-full bg-[color:var(--color-primary-600)]" style={{ width: `${pct}%` }} />
+                              </div>
+                              <div className="flex items-center justify-between text-sm">
+                                <div className="text-[color:var(--color-text-muted)]">Done</div>
+                                <div className="font-medium tabular-nums">{done} / {planned} pts</div>
+                              </div>
+                              {cap != null ? (
+                                <div className="flex items-center justify-between text-sm">
+                                  <div className="text-[color:var(--color-text-muted)]">Capacity</div>
+                                  <div className="font-medium tabular-nums">
+                                    {planned} / {cap} pts {capPct != null ? `(${capPct}%)` : ''}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-[color:var(--color-text-muted)]">Set capacity to track utilization.</div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-sm text-[color:var(--color-text-muted)]">No sprints yet. Create one to edit details.</div>
+                  )}
+                </div>
+
                 <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
                   <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
                     <div className="text-sm font-semibold">Backlog</div>
@@ -784,12 +1116,16 @@ export default function StratflowProject() {
                   <div className="divide-y divide-[color:var(--color-border)]">
                     {(backlogIssuesQ.data?.data.items ?? [])
                       .filter((i) => i.type !== 'Epic')
+                      .filter((i) => (!assignedToMeOnly || !meQ.data?.id ? true : String(i.assigneeId || '') === meQ.data.id))
                       .slice(0, 250)
                       .map((i) => (
                         <div key={i._id} className="flex items-center justify-between gap-3 px-4 py-3">
                           <button type="button" className="text-left flex-1" onClick={() => setFocusedIssueId(i._id)}>
                             <div className="text-sm font-medium">{i.title}</div>
-                            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{i.type}</div>
+                            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                              {i.type}
+                              {i.assigneeId ? ` · ${memberLabelForUserId(i.assigneeId).label}` : ''}
+                            </div>
                           </button>
                           <button
                             type="button"
@@ -821,12 +1157,16 @@ export default function StratflowProject() {
                   <div className="divide-y divide-[color:var(--color-border)]">
                     {(activeSprintIssuesQ.data?.data.items ?? [])
                       .filter((i) => i.type !== 'Epic')
+                      .filter((i) => (!assignedToMeOnly || !meQ.data?.id ? true : String(i.assigneeId || '') === meQ.data.id))
                       .slice(0, 250)
                       .map((i) => (
                         <div key={i._id} className="flex items-center justify-between gap-3 px-4 py-3">
                           <button type="button" className="text-left flex-1" onClick={() => setFocusedIssueId(i._id)}>
                             <div className="text-sm font-medium">{i.title}</div>
-                            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{i.type}</div>
+                            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                              {i.type}
+                              {i.assigneeId ? ` · ${memberLabelForUserId(i.assigneeId).label}` : ''}
+                            </div>
                           </button>
                           <button
                             type="button"
@@ -862,8 +1202,154 @@ export default function StratflowProject() {
                       MVP: shows sprint timelines when dates exist, plus Traditional milestone boards when present.
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs text-[color:var(--color-text-muted)]">Roadmap zoom</div>
+                    <div className="inline-flex rounded-xl border border-[color:var(--color-border)] overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setRoadmapZoom('month')}
+                        className={[
+                          'px-3 py-2 text-xs',
+                          roadmapZoom === 'month' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]',
+                        ].join(' ')}
+                      >
+                        Month
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRoadmapZoom('quarter')}
+                        className={[
+                          'px-3 py-2 text-xs border-l border-[color:var(--color-border)]',
+                          roadmapZoom === 'quarter' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]',
+                        ].join(' ')}
+                      >
+                        Quarter
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              {(() => {
+                const epics = (epicsForRoadmapQ.data?.data.items ?? []).filter((e) => e.type === 'Epic')
+                const withDates = epics
+                  .map((e) => {
+                    const start = parseIsoDate(e.targetStartDate) ?? parseIsoDate(e.targetEndDate)
+                    const end = parseIsoDate(e.targetEndDate) ?? parseIsoDate(e.targetStartDate)
+                    return { e, start, end }
+                  })
+                  .filter((x) => x.start && x.end) as Array<{ e: Issue; start: Date; end: Date }>
+                if (!withDates.length) return null
+
+                const minStart = withDates.reduce((m, x) => (x.start.getTime() < m.getTime() ? x.start : m), withDates[0].start)
+                const maxEnd = withDates.reduce((m, x) => (x.end.getTime() > m.getTime() ? x.end : m), withDates[0].end)
+                const spanDays = Math.max(1, daysBetween(minStart, maxEnd))
+
+                const segs: Array<{ label: string; start: Date }> = []
+                const d0 = new Date(minStart.getFullYear(), minStart.getMonth(), 1)
+                const d1 = new Date(maxEnd.getFullYear(), maxEnd.getMonth(), 1)
+                if (roadmapZoom === 'month') {
+                  const cur = new Date(d0)
+                  while (cur.getTime() <= d1.getTime()) {
+                    const label = cur.toLocaleString(undefined, { month: 'short', year: 'numeric' })
+                    segs.push({ label, start: new Date(cur) })
+                    cur.setMonth(cur.getMonth() + 1)
+                  }
+                } else {
+                  const qStart = (dt: Date) => new Date(dt.getFullYear(), Math.floor(dt.getMonth() / 3) * 3, 1)
+                  const cur = qStart(d0)
+                  const endQ = qStart(d1)
+                  while (cur.getTime() <= endQ.getTime()) {
+                    const q = Math.floor(cur.getMonth() / 3) + 1
+                    segs.push({ label: `Q${q} ${cur.getFullYear()}`, start: new Date(cur) })
+                    cur.setMonth(cur.getMonth() + 3)
+                  }
+                }
+                const segW = roadmapZoom === 'month' ? 120 : 200
+                const totalW = Math.max(1, segs.length * segW)
+
+                const byPhase: Record<string, Array<{ e: Issue; start: Date; end: Date }>> = {}
+                for (const x of withDates) {
+                  const key = (x.e.phase || '').trim() || 'Unphased'
+                  if (!byPhase[key]) byPhase[key] = []
+                  byPhase[key].push(x)
+                }
+                const phaseKeys = Object.keys(byPhase).sort((a, b) => a.localeCompare(b))
+                for (const k of phaseKeys) {
+                  byPhase[k].sort((a, b) => a.start.getTime() - b.start.getTime())
+                }
+
+                return (
+                  <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+                    <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                      <div>
+                        <div className="text-sm font-semibold">Epic roadmap</div>
+                        <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                          {withDates.length} epic(s) with target dates · grouped by phase
+                        </div>
+                      </div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">{epicsForRoadmapQ.isFetching ? 'Loading…' : 'Ready'}</div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <div className="min-w-max p-4" style={{ width: totalW + 220 }}>
+                        <div className="grid gap-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-52 text-xs text-[color:var(--color-text-muted)]"> </div>
+                            <div className="flex" style={{ width: totalW }}>
+                              {segs.map((s, idx) => (
+                                <div
+                                  key={idx}
+                                  className="border-l border-[color:var(--color-border)] px-2 text-[10px] text-[color:var(--color-text-muted)]"
+                                  style={{ width: segW }}
+                                >
+                                  {s.label}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {phaseKeys.map((phase) => (
+                            <div key={phase} className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+                              <div className="border-b border-[color:var(--color-border)] px-3 py-2 text-xs font-semibold">
+                                {phase}
+                              </div>
+                              <div className="p-3 space-y-2">
+                                {byPhase[phase].map(({ e, start, end }) => {
+                                  const left = (daysBetween(minStart, start) / spanDays) * totalW
+                                  const width = Math.max(10, (daysBetween(start, end) / spanDays) * totalW)
+                                  return (
+                                    <div key={e._id} className="flex items-center gap-3">
+                                      <button
+                                        type="button"
+                                        className="w-52 text-left"
+                                        onClick={() => setFocusedIssueId(e._id)}
+                                        title="Open Epic"
+                                      >
+                                        <div className="text-sm font-medium truncate">{e.title}</div>
+                                        <div className="text-[10px] text-[color:var(--color-text-muted)]">
+                                          {start.toLocaleDateString()} → {end.toLocaleDateString()}
+                                        </div>
+                                      </button>
+                                      <div className="relative h-8 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] overflow-hidden" style={{ width: totalW }}>
+                                        <div
+                                          className="absolute top-1/2 h-4 -translate-y-1/2 rounded-lg bg-[color:var(--color-primary-600)]"
+                                          style={{ left, width }}
+                                          title={e.title}
+                                        />
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
 
               {(() => {
                 const datedSprints = sprints
@@ -989,6 +1475,28 @@ export default function StratflowProject() {
                   .map((d) => daysBetween(d as Date, now))
                 const avgOpenAge = openAges.length ? Math.round((openAges.reduce((a, b) => a + b, 0) / openAges.length) * 10) / 10 : null
 
+                const doneWithDates = loadedIssues
+                  .filter((i) => i.statusKey === 'done')
+                  .map((i) => ({ created: parseIsoDate(i.createdAt), doneAt: parseIsoDate(i.updatedAt) }))
+                  .filter((x) => x.created && x.doneAt) as Array<{ created: Date; doneAt: Date }>
+                const cycleDays = doneWithDates.map((x) => Math.max(0, daysBetween(x.created, x.doneAt)))
+                const avgCycle = cycleDays.length ? Math.round((cycleDays.reduce((a, b) => a + b, 0) / cycleDays.length) * 10) / 10 : null
+                const p50Cycle = cycleDays.length
+                  ? (() => {
+                      const s = cycleDays.slice().sort((a, b) => a - b)
+                      return Math.round(s[Math.floor(s.length / 2)] * 10) / 10
+                    })()
+                  : null
+
+                const doneIssuesWithUpdatedAt = loadedIssues
+                  .filter((i) => i.statusKey === 'done')
+                  .map((i) => parseIsoDate(i.updatedAt))
+                  .filter(Boolean) as Date[]
+                const throughput = (days: number) => {
+                  const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000)
+                  return doneIssuesWithUpdatedAt.filter((d) => d.getTime() >= cutoff.getTime()).length
+                }
+
                 const colCounts = columns
                   .slice()
                   .sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -1001,7 +1509,9 @@ export default function StratflowProject() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <div className="text-base font-semibold">Reports</div>
-                          <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">MVP: real counts + simple health signals from current issue state.</div>
+                          <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                            Reports v2: real counts + throughput + approximate cycle time + WIP limits.
+                          </div>
                         </div>
                         <div className="text-xs text-[color:var(--color-text-muted)]">{issuesQ.isFetching ? 'Syncing…' : 'Live'}</div>
                       </div>
@@ -1029,6 +1539,44 @@ export default function StratflowProject() {
                           </div>
                         </div>
                       </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="text-xs text-[color:var(--color-text-muted)]">Throughput</div>
+                          <div className="mt-2 space-y-1 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[color:var(--color-text-muted)]">Last 7d</span>
+                              <span className="font-medium tabular-nums">{throughput(7)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[color:var(--color-text-muted)]">Last 14d</span>
+                              <span className="font-medium tabular-nums">{throughput(14)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[color:var(--color-text-muted)]">Last 30d</span>
+                              <span className="font-medium tabular-nums">{throughput(30)}</span>
+                            </div>
+                          </div>
+                          <div className="mt-2 text-[10px] text-[color:var(--color-text-muted)]">Based on issues in Done with recent updates.</div>
+                        </div>
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="text-xs text-[color:var(--color-text-muted)]">Cycle time (approx)</div>
+                          <div className="mt-1 text-2xl font-semibold">{avgCycle == null ? '—' : `${avgCycle}d`}</div>
+                          <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                            Median: {p50Cycle == null ? '—' : `${p50Cycle}d`}
+                          </div>
+                          <div className="mt-2 text-[10px] text-[color:var(--color-text-muted)]">
+                            Approximation: createdAt → updatedAt when status is Done.
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="text-xs text-[color:var(--color-text-muted)]">Work health</div>
+                          <div className="mt-2 text-sm text-[color:var(--color-text-muted)]">
+                            {wip > Math.max(10, backlog) ? 'High WIP relative to backlog.' : 'WIP looks reasonable.'}
+                          </div>
+                          <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">Next: true cycle time via status transition timestamps.</div>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
@@ -1046,6 +1594,78 @@ export default function StratflowProject() {
                             <div className="text-sm font-medium tabular-nums">{c.count}</div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold">WIP limits</div>
+                        <div className="text-xs text-[color:var(--color-text-muted)]">Set per column (0–999)</div>
+                      </div>
+                      <div className="mt-4 overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="text-xs text-[color:var(--color-text-muted)]">
+                            <tr className="border-b border-[color:var(--color-border)]">
+                              <th className="px-3 py-2 text-left font-medium">Column</th>
+                              <th className="px-3 py-2 text-left font-medium">Count</th>
+                              <th className="px-3 py-2 text-left font-medium">Limit</th>
+                              <th className="px-3 py-2 text-left font-medium">Status</th>
+                              <th className="px-3 py-2"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[color:var(--color-border)]">
+                            {columns
+                              .slice()
+                              .sort((a, b) => (a.order || 0) - (b.order || 0))
+                              .map((col) => {
+                                const count = loadedIssues.filter((i) => i.columnId === col._id).length
+                                const raw = wipEdits[col._id] ?? ''
+                                const limit = raw.trim() === '' ? null : Number(raw)
+                                const invalid = raw.trim() !== '' && !Number.isFinite(limit)
+                                const over = col.wipLimit != null && count > (col.wipLimit || 0)
+                                return (
+                                  <tr key={col._id}>
+                                    <td className="px-3 py-2 font-medium">{col.name}</td>
+                                    <td className="px-3 py-2 tabular-nums">{count}</td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        value={raw}
+                                        onChange={(e) => setWipEdits((p) => ({ ...p, [col._id]: e.target.value }))}
+                                        className="w-24 rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-sm"
+                                        placeholder="—"
+                                        inputMode="numeric"
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2 text-xs">
+                                      {invalid ? (
+                                        <span className="text-red-600">Invalid</span>
+                                      ) : over ? (
+                                        <span className="text-amber-700">Over limit</span>
+                                      ) : (
+                                        <span className="text-[color:var(--color-text-muted)]">OK</span>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <button
+                                        type="button"
+                                        className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                                        disabled={updateWipLimit.isPending || invalid}
+                                        onClick={() => {
+                                          const nextLimit = raw.trim() === '' ? null : Number(raw)
+                                          updateWipLimit.mutate({ columnId: col._id, wipLimit: Number.isFinite(nextLimit as any) ? (nextLimit as any) : null })
+                                        }}
+                                      >
+                                        Save
+                                      </button>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-3 text-[10px] text-[color:var(--color-text-muted)]">
+                        Next: highlight over-limit columns directly on the board and optionally block new work.
                       </div>
                     </div>
                   </>
