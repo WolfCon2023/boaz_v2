@@ -1199,7 +1199,7 @@ export default function StratflowProject() {
                   <div>
                     <div className="text-base font-semibold">Timeline</div>
                     <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                      MVP: shows sprint timelines when dates exist, plus Traditional milestone boards when present.
+                      Epic Roadmap · Sprint Timeline · Milestones (when available)
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
