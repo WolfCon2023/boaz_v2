@@ -44,7 +44,7 @@ kbRouter.get('/kb', async (req, res) => {
         return res.json({ data: { items: [] }, error: null });
     const q = String(req.query.q ?? '').trim();
     const tag = String(req.query.tag ?? '');
-    const category = String(req.query.category ?? '');
+    const category = String(req.query.category ?? '').trim();
     const dir = (req.query.dir ?? 'desc').toLowerCase() === 'asc' ? 1 : -1;
     const sortKey = req.query.sort ?? 'updatedAt';
     const sort = { [sortKey]: dir };
@@ -53,8 +53,11 @@ kbRouter.get('/kb', async (req, res) => {
         filter.$or = [{ title: { $regex: q, $options: 'i' } }, { body: { $regex: q, $options: 'i' } }];
     if (tag)
         filter.tags = tag;
-    if (category)
-        filter.category = category;
+    if (category) {
+        // Be tolerant of whitespace/casing drift in stored data.
+        const escaped = category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        filter.category = { $regex: `^\\s*${escaped}\\s*$`, $options: 'i' };
+    }
     const items = await db.collection('kb_articles').find(filter).sort(sort).limit(200).toArray();
     res.json({ data: { items }, error: null });
 });
@@ -95,7 +98,7 @@ kbRouter.post('/kb', async (req, res) => {
     const tags = Array.isArray(raw.tags) ? raw.tags : [];
     if (!title || !body)
         return res.status(400).json({ data: null, error: 'invalid_payload' });
-    const category = typeof raw.category === 'string' ? raw.category : 'Knowledge Sharing';
+    const category = typeof raw.category === 'string' ? raw.category.trim() : 'Knowledge Sharing';
     const doc = { title, body, tags, category, createdAt: new Date(), updatedAt: new Date(), author: raw.author || 'system' };
     if (slug)
         doc.slug = slug;
@@ -119,7 +122,7 @@ kbRouter.put('/kb/:id', async (req, res) => {
         if (Array.isArray(req.body?.tags))
             update.tags = req.body.tags;
         if (typeof req.body?.category === 'string')
-            update.category = req.body.category;
+            update.category = req.body.category.trim();
         await db.collection('kb_articles').updateOne({ _id }, { $set: update });
         res.json({ data: { ok: true }, error: null });
     }

@@ -6,6 +6,10 @@ import { http, apiBaseURL } from '@/lib/http'
 
 type Article = { _id: string; title?: string; body?: string; tags?: string[]; category?: string; updatedAt?: string; attachments?: { _id: string; filename: string; contentType?: string; size?: number }[] }
 
+function normalizeLabel(s: unknown) {
+  return String(s ?? '').replace(/\s+/g, ' ').trim()
+}
+
 export default function KnowledgeBase() {
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -18,11 +22,23 @@ export default function KnowledgeBase() {
   const [tag, setTag] = React.useState(initialTag)
   const [dir, setDir] = React.useState<'asc' | 'desc'>(initialDir)
   const [category, setCategory] = React.useState(initialCategory)
+
+  // Base (unfiltered) list for building dropdowns/chips that always match real data.
+  // We keep `q` so categories/tags stay relevant to the current search term.
+  const baseQ = useQuery({
+    queryKey: ['kb', 'base', q],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/support/kb', { params: { q, sort: 'updatedAt', dir: 'desc' } })
+      return res.data as { data: { items: Article[] } }
+    },
+  })
+
   const { data, isFetching } = useQuery({
     queryKey: ['kb', q, tag, category, dir],
     queryFn: async () => { const res = await http.get('/api/crm/support/kb', { params: { q, tag, category, sort: 'updatedAt', dir } }); return res.data as { data: { items: Article[] } } },
   })
   const items = data?.data.items ?? []
+  const baseItems = baseQ.data?.data.items ?? []
 
   const create = useMutation({
     mutationFn: async (payload: any) => { const res = await http.post('/api/crm/support/kb', payload); return res.data },
@@ -58,24 +74,41 @@ export default function KnowledgeBase() {
   // Pagination (client-side)
   const [page, setPage] = React.useState(0)
   const [pageSize, setPageSize] = React.useState(10)
-  React.useEffect(() => { setPage(0) }, [q, tag, dir, pageSize])
+  React.useEffect(() => { setPage(0) }, [q, tag, category, dir, pageSize])
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
   const pageItems = React.useMemo(() => items.slice(page * pageSize, page * pageSize + pageSize), [items, page, pageSize])
 
   // Derived tags list for chips
-  const allTags = React.useMemo(() => Array.from(new Set(items.flatMap(a => a.tags ?? []))).sort(), [items])
-  const categories = [
-    'Company & Operations',
-    'IT Systems',
-    'Product / Service',
-    'Sales & Clients',
-    'Finance',
-    'HR',
-    'Knowledge Sharing',
-    'Support',
-    'Security',
-    'Strategy',
-  ]
+  const allTags = React.useMemo(() => {
+    const set = new Map<string, string>()
+    for (const t of baseItems.flatMap((a) => a.tags ?? [])) {
+      const raw = normalizeLabel(t)
+      if (!raw) continue
+      const key = raw.toLowerCase()
+      if (!set.has(key)) set.set(key, raw)
+    }
+    return Array.from(set.values()).sort((a, b) => a.localeCompare(b))
+  }, [baseItems])
+
+  const categories = React.useMemo(() => {
+    const set = new Map<string, string>()
+    for (const a of baseItems) {
+      const raw = normalizeLabel(a.category)
+      if (!raw) continue
+      const key = raw.toLowerCase()
+      if (!set.has(key)) set.set(key, raw)
+    }
+    // Always include our historical default category so create/edit dropdowns have a sane option.
+    const defaultCategory = 'Knowledge Sharing'
+    if (!set.has(defaultCategory.toLowerCase())) set.set(defaultCategory.toLowerCase(), defaultCategory)
+    return Array.from(set.values()).sort((a, b) => a.localeCompare(b))
+  }, [baseItems])
+
+  const categoryFilterOptions = React.useMemo(() => {
+    const current = normalizeLabel(category)
+    if (current && !categories.includes(current)) return [current, ...categories]
+    return categories
+  }, [categories, category])
 
   const [editing, setEditing] = React.useState<Article | null>(null)
 
@@ -104,7 +137,7 @@ export default function KnowledgeBase() {
           </div>
           <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="">All categories</option>
-            {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
+            {categoryFilterOptions.map((c) => (<option key={c} value={c}>{c}</option>))}
           </select>
           <select value={dir} onChange={(e) => setDir(e.target.value as any)} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-2 text-sm text-[color:var(--color-text)] font-semibold">
             <option value="desc">Newest</option>
@@ -112,11 +145,12 @@ export default function KnowledgeBase() {
           </select>
           {isFetching && <span className="text-xs text-[color:var(--color-text-muted)]">Loading...</span>}
         </div>
-        <form className="grid gap-2 p-4 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = String(fd.get('title')||''); const body = String(fd.get('body')||''); const category = String(fd.get('category')||'') || 'Knowledge Sharing'; const tags = String(fd.get('tags')||'').split(',').map(s => s.trim()).filter(Boolean); if (!title || !body) return; create.mutate({ title, body, category, tags }); (e.currentTarget as HTMLFormElement).reset() }}>
+        <form className="grid gap-2 p-4 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const title = String(fd.get('title')||''); const body = String(fd.get('body')||''); const category = normalizeLabel(fd.get('category')) || 'Knowledge Sharing'; const tags = String(fd.get('tags')||'').split(',').map(s => s.trim()).filter(Boolean); if (!title || !body) return; create.mutate({ title, body, category, tags }); (e.currentTarget as HTMLFormElement).reset() }}>
           <input name="title" required placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <select name="category" defaultValue="Knowledge Sharing" className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
-            {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
-          </select>
+          <input list="kb-category-options" name="category" defaultValue="Knowledge Sharing" placeholder="Category" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+          <datalist id="kb-category-options">
+            {categories.map((c) => (<option key={c} value={c} />))}
+          </datalist>
           <input name="tags" placeholder="Tags (comma-separated)" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
           <textarea name="body" required placeholder="Body" className="sm:col-span-2 h-32 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
           <div className="flex items-center gap-2">
@@ -167,11 +201,9 @@ export default function KnowledgeBase() {
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
               <div className="mb-3 text-base font-semibold">Edit article</div>
-              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, title: String(fd.get('title')||'')||undefined, body: String(fd.get('body')||'')||undefined, category: String(fd.get('category')||'')||undefined, tags: String(fd.get('tags')||'').split(',').map(s=>s.trim()).filter(Boolean) }; update.mutate(payload); setEditing(null) }}>
+              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, title: String(fd.get('title')||'')||undefined, body: String(fd.get('body')||'')||undefined, category: normalizeLabel(fd.get('category')) || undefined, tags: String(fd.get('tags')||'').split(',').map(s=>s.trim()).filter(Boolean) }; update.mutate(payload); setEditing(null) }}>
                 <input name="title" defaultValue={editing.title ?? ''} placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <select name="category" defaultValue={editing.category ?? 'Knowledge Sharing'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
-                  {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
-                </select>
+                <input list="kb-category-options" name="category" defaultValue={editing.category ?? 'Knowledge Sharing'} placeholder="Category" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <input name="tags" defaultValue={(editing.tags ?? []).join(', ')} placeholder="Tags" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                 <textarea name="body" defaultValue={editing.body ?? ''} placeholder="Body" className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
 
