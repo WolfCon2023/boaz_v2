@@ -97,6 +97,21 @@ export function StratflowIssueDrawer({
 }) {
   const toast = useToast()
   const qc = useQueryClient()
+  const [fullScreen, setFullScreen] = React.useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sfIssueFocusFullScreen') === '1'
+    } catch {
+      return false
+    }
+  })
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('sfIssueFocusFullScreen', fullScreen ? '1' : '0')
+    } catch {
+      // ignore
+    }
+  }, [fullScreen])
 
   const meQ = useQuery<UserInfo>({
     queryKey: ['user', 'me'],
@@ -381,7 +396,10 @@ export function StratflowIssueDrawer({
   return (
     <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={onClose}>
       <div
-        className="absolute right-0 top-0 h-full w-[min(95vw,34rem)] border-l border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl"
+        className={[
+          'absolute top-0 h-full border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl',
+          fullScreen ? 'left-0 right-0 w-full border-l-0' : 'right-0 w-[min(95vw,34rem)] border-l',
+        ].join(' ')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] px-4 py-3">
@@ -391,9 +409,19 @@ export function StratflowIssueDrawer({
               {issue?.statusKey ? `Status: ${issue.statusKey.replaceAll('_', ' ')}` : 'Status: —'}
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[color:var(--color-muted)]">
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFullScreen((v) => !v)}
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+              title={fullScreen ? 'Exit full window' : 'Full window'}
+            >
+              {fullScreen ? 'Exit full' : 'Full window'}
+            </button>
+            <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[color:var(--color-muted)]" title="Close">
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="h-[calc(100%-3.25rem)] overflow-y-auto px-4 py-4 space-y-4">
