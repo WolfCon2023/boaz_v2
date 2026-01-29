@@ -410,7 +410,7 @@ export default function StratflowProject() {
   const qc = useQueryClient()
   const toast = useToast()
   const view = normView(sp.get('view'))
-  const [focusedIssueId, setFocusedIssueId] = React.useState<string | null>(null)
+  const focusedIssueId = sp.get('issue') || null
   const [exportingTime, setExportingTime] = React.useState(false)
   const [assignedToMeOnly, setAssignedToMeOnly] = React.useState(false)
   const [blockedOnly, setBlockedOnly] = React.useState(false)
@@ -432,6 +432,21 @@ export default function StratflowProject() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedFiltersKey])
+
+  const openIssueFocus = React.useCallback(
+    (issueId: string) => {
+      const next = new URLSearchParams(sp)
+      next.set('issue', issueId)
+      setSp(next)
+    },
+    [sp, setSp],
+  )
+
+  const closeIssueFocus = React.useCallback(() => {
+    const next = new URLSearchParams(sp)
+    next.delete('issue')
+    setSp(next)
+  }, [sp, setSp])
 
   const meQ = useQuery<UserInfo>({
     queryKey: ['user', 'me'],
@@ -1123,7 +1138,7 @@ export default function StratflowProject() {
                           column={col}
                           issues={visibleByColumn[col._id] ?? []}
                           onAdd={onAdd}
-                          onOpen={(id) => setFocusedIssueId(id)}
+                          onOpen={(id) => openIssueFocus(id)}
                           memberLabelForUserId={memberLabelForUserId}
                         />
                       ))}
@@ -1411,7 +1426,7 @@ export default function StratflowProject() {
                       <tr
                         key={it._id}
                         className="hover:bg-[color:var(--color-muted)]"
-                        onClick={() => setFocusedIssueId(it._id)}
+                        onClick={() => openIssueFocus(it._id)}
                         title="Open Issue Focus"
                       >
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -1669,7 +1684,7 @@ export default function StratflowProject() {
                       .slice(0, 250)
                       .map((i) => (
                         <div key={i._id} className="flex items-center justify-between gap-3 px-4 py-3">
-                          <button type="button" className="text-left flex-1" onClick={() => setFocusedIssueId(i._id)}>
+                          <button type="button" className="text-left flex-1" onClick={() => openIssueFocus(i._id)}>
                             <div className="text-sm font-medium">{i.title}</div>
                             <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                               {i.type}
@@ -1711,7 +1726,7 @@ export default function StratflowProject() {
                       .slice(0, 250)
                       .map((i) => (
                         <div key={i._id} className="flex items-center justify-between gap-3 px-4 py-3">
-                          <button type="button" className="text-left flex-1" onClick={() => setFocusedIssueId(i._id)}>
+                          <button type="button" className="text-left flex-1" onClick={() => openIssueFocus(i._id)}>
                             <div className="text-sm font-medium">{i.title}</div>
                             <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                               {i.type}
@@ -1880,7 +1895,7 @@ export default function StratflowProject() {
                                       <button
                                         type="button"
                                         className="w-52 text-left"
-                                        onClick={() => setFocusedIssueId(e._id)}
+                                        onClick={() => openIssueFocus(e._id)}
                                         title="Open Epic"
                                       >
                                         <div className="text-sm font-medium truncate">{e.title}</div>
@@ -2016,7 +2031,7 @@ export default function StratflowProject() {
                                     key={i._id}
                                     type="button"
                                     className="w-full text-left px-3 py-2 hover:bg-[color:var(--color-muted)]"
-                                    onClick={() => setFocusedIssueId(i._id)}
+                                    onClick={() => openIssueFocus(i._id)}
                                   >
                                     <div className="text-sm font-medium">{i.title}</div>
                                     <div className="mt-0.5 text-[10px] text-[color:var(--color-text-muted)]">{i.type}</div>
@@ -2433,7 +2448,7 @@ export default function StratflowProject() {
                             <button
                               type="button"
                               className="ml-2 text-sm text-[color:var(--color-primary-600)] hover:underline"
-                              onClick={() => setFocusedIssueId(String(a.issueId))}
+                              onClick={() => openIssueFocus(String(a.issueId))}
                             >
                               Open issue
                             </button>
@@ -2464,7 +2479,7 @@ export default function StratflowProject() {
       )}
 
       {focusedIssueId ? (
-        <StratflowIssueDrawer issueId={focusedIssueId} projectId={String(projectId || '')} onClose={() => setFocusedIssueId(null)} />
+        <StratflowIssueDrawer issueId={focusedIssueId} projectId={String(projectId || '')} onClose={closeIssueFocus} />
       ) : null}
       </div>
     </TooltipProvider>
