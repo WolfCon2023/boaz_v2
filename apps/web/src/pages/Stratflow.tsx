@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMNav } from '@/components/CRMNav'
+import { KBHelpButton } from '@/components/KBHelpButton'
 
 type Project = {
   _id: string
@@ -126,6 +127,7 @@ export default function Stratflow() {
           <p className="text-xs text-[color:var(--color-text-muted)]">A modern project + work management hub (Scrum, Kanban, Traditional).</p>
         </div>
         <div className="flex items-center gap-2">
+          <KBHelpButton href="/apps/crm/support/kb/stratflow-guide" title="StratFlow KB: Getting started" ariaLabel="Open StratFlow Knowledge Base (Getting started)" />
           <button
             type="button"
             onClick={() => setCreateOpen(true)}

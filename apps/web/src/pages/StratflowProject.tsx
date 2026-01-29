@@ -11,6 +11,7 @@ import { BarChart3, CalendarDays, ListChecks, Plus, Presentation, Trello, Activi
 import { useDroppable } from '@dnd-kit/core'
 import { StratflowIssueDrawer, type StratflowIssueType, type StratflowPriority } from '@/components/StratflowIssueDrawer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { KBHelpButton } from '@/components/KBHelpButton'
 
 type Board = {
   _id: string
@@ -923,6 +924,14 @@ export default function StratflowProject() {
     <TooltipProvider>
       <div className="space-y-4">
         <CRMNav />
+
+        <div className="flex items-center justify-end">
+          <KBHelpButton
+            href={`/apps/crm/support/kb/${encodeURIComponent(view === 'reports' ? 'stratflow-reports' : view === 'sprint' ? 'stratflow-sprints' : 'stratflow-guide')}`}
+            title="StratFlow Knowledge Base"
+            ariaLabel="Open StratFlow Knowledge Base for this view"
+          />
+        </div>
 
         {saveFilterOpen ? (
           <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={() => setSaveFilterOpen(false)}>

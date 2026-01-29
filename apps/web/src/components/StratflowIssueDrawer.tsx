@@ -447,6 +447,10 @@ export function StratflowIssueDrawer({
             <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
               {issue?.statusKey ? `Status: ${issue.statusKey.replaceAll('_', ' ')}` : 'Status: —'}
             </div>
+            <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
+              Shortcuts: <span className="font-medium">Esc</span> close · <span className="font-medium">F</span> full window ·{' '}
+              <span className="font-medium">Ctrl/Cmd+Enter</span> save
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
