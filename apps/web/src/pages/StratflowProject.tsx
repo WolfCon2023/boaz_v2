@@ -7,7 +7,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMNav } from '@/components/CRMNav'
-import { BarChart3, CalendarDays, ListChecks, Plus, Presentation, Trello, Activity } from 'lucide-react'
+import { Activity, BarChart3, Bell, CalendarDays, ListChecks, Plus, Presentation, Star, Trello } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
 import { StratflowIssueDrawer, type StratflowIssueType, type StratflowPriority } from '@/components/StratflowIssueDrawer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -83,6 +83,24 @@ type UserInfo = {
 
 type ProjectMember = { id: string; email: string; name: string }
 type ProjectMembersResponse = { data: { users: ProjectMember[] } }
+
+type WatchesMeResponse = { data: { projectId: string; project: boolean; issueIds: string[] } }
+
+type NotificationItem = {
+  _id: string
+  projectId: string
+  userId: string
+  kind: string
+  actorId?: string | null
+  issueId?: string | null
+  sprintId?: string | null
+  title: string
+  body?: string | null
+  createdAt?: string | null
+  readAt?: string | null
+  meta?: any
+}
+type NotificationsResponse = { data: { projectId: string; items: NotificationItem[] } }
 
 type IssueLinkType = 'blocks' | 'blocked_by' | 'relates_to'
 type IssueLink = { type: IssueLinkType; issueId: string }
@@ -475,6 +493,56 @@ export default function StratflowProject() {
     },
     [memberMap],
   )
+
+  const watchesQ = useQuery<WatchesMeResponse>({
+    queryKey: ['stratflow', 'project', projectId, 'watches', 'me'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/watches/me`)).data,
+    retry: false,
+    enabled: Boolean(projectId),
+  })
+  const isWatchingProject = Boolean(watchesQ.data?.data.project)
+
+  const [notifOpen, setNotifOpen] = React.useState(false)
+  const notificationsQ = useQuery<NotificationsResponse>({
+    queryKey: ['stratflow', 'project', projectId, 'notifications'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/notifications`, { params: { limit: 50 } })).data,
+    retry: false,
+    enabled: Boolean(projectId),
+    refetchInterval: 15000,
+  })
+  const notifications = notificationsQ.data?.data.items ?? []
+  const unreadCount = notifications.reduce((n, x) => n + (x.readAt ? 0 : 1), 0)
+
+  const toggleProjectWatch = useMutation({
+    mutationFn: async () => {
+      if (!projectId) throw new Error('No project selected.')
+      return (await http.post(`/api/stratflow/projects/${projectId}/watch`, { enabled: !isWatchingProject })).data
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'project', projectId, 'watches', 'me'] })
+      toast.showToast(isWatchingProject ? 'Stopped watching project.' : 'Watching project.', 'success')
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to update watch.', 'error'),
+  })
+
+  const markNotifRead = useMutation({
+    mutationFn: async (notificationId: string) => (await http.post(`/api/stratflow/notifications/${notificationId}/read`)).data,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'project', projectId, 'notifications'] })
+    },
+  })
+
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      if (!projectId) throw new Error('No project selected.')
+      return (await http.post(`/api/stratflow/projects/${projectId}/notifications/mark-all-read`)).data
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'project', projectId, 'notifications'] })
+      toast.showToast('Marked all notifications as read.', 'success')
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to mark all read.', 'error'),
+  })
 
   const projectQ = useQuery<{ data: Project }>({
     queryKey: ['stratflow', 'project', projectId],
@@ -925,12 +993,90 @@ export default function StratflowProject() {
       <div className="space-y-4">
         <CRMNav />
 
-        <div className="flex items-center justify-end">
+        <div className="relative flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setNotifOpen((v) => !v)}
+            className="relative inline-flex items-center gap-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            title="Notifications"
+          >
+            <Bell className="h-4 w-4" />
+            <span className="hidden sm:inline">Notifications</span>
+            {unreadCount > 0 ? (
+              <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-[color:var(--color-primary-600)] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            ) : null}
+          </button>
           <KBHelpButton
             href={`/apps/crm/support/kb/${encodeURIComponent(view === 'reports' ? 'stratflow-reports' : view === 'sprint' ? 'stratflow-sprints' : 'stratflow-guide')}`}
             title="StratFlow Knowledge Base"
             ariaLabel="Open StratFlow Knowledge Base for this view"
           />
+
+          {notifOpen ? (
+            <>
+              <div className="fixed inset-0 z-[2147483000]" onClick={() => setNotifOpen(false)} />
+              <div className="absolute right-0 top-12 z-[2147483001] w-[min(92vw,28rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl">
+                <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                  <div className="text-sm font-semibold">Notifications</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={markAllRead.isPending || unreadCount === 0}
+                      onClick={() => markAllRead.mutate()}
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                    >
+                      Mark all read
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNotifOpen(false)}
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+                <div className="max-h-[60vh] overflow-y-auto divide-y divide-[color:var(--color-border)]">
+                  {notifications.length ? (
+                    notifications.slice(0, 50).map((n) => {
+                      const unread = !n.readAt
+                      const when = n.createdAt ? new Date(n.createdAt).toLocaleString() : ''
+                      return (
+                        <button
+                          key={n._id}
+                          type="button"
+                          onClick={async () => {
+                            if (unread) await markNotifRead.mutateAsync(n._id)
+                            if (n.issueId) openIssueFocus(n.issueId)
+                            setNotifOpen(false)
+                          }}
+                          className={[
+                            'w-full text-left px-4 py-3 hover:bg-[color:var(--color-muted)]',
+                            unread ? 'bg-[color:var(--color-muted)]' : '',
+                          ].join(' ')}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium truncate">{n.title}</div>
+                              {n.body ? <div className="mt-1 text-xs text-[color:var(--color-text-muted)] whitespace-pre-wrap">{n.body}</div> : null}
+                              {when ? <div className="mt-2 text-[10px] text-[color:var(--color-text-muted)]">{when}</div> : null}
+                            </div>
+                            {unread ? (
+                              <span className="mt-1 inline-flex h-2 w-2 shrink-0 rounded-full bg-[color:var(--color-primary-600)]" />
+                            ) : null}
+                          </div>
+                        </button>
+                      )
+                    })
+                  ) : (
+                    <div className="px-4 py-6 text-sm text-[color:var(--color-text-muted)]">No notifications yet.</div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : null}
         </div>
 
         {saveFilterOpen ? (
@@ -1000,6 +1146,19 @@ export default function StratflowProject() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={toggleProjectWatch.isPending || !projectId}
+            onClick={() => toggleProjectWatch.mutate()}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              isWatchingProject ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]' : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+            title={isWatchingProject ? 'You will receive notifications for updates in this project.' : 'Watch this project to receive notifications.'}
+          >
+            <Star className="h-4 w-4" />
+            {isWatchingProject ? 'Watching' : 'Watch project'}
+          </button>
           <Link to="/apps/stratflow" className="rounded-xl border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]">
             All projects
           </Link>

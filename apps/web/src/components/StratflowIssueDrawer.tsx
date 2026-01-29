@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
+import { Star } from 'lucide-react'
 
 export type StratflowIssueType = 'Epic' | 'Story' | 'Task' | 'Defect' | 'Spike' | 'Bug'
 export type StratflowPriority = 'Highest' | 'High' | 'Medium' | 'Low' | 'Critical'
@@ -140,6 +141,13 @@ export function StratflowIssueDrawer({
     enabled: Boolean(projectId),
   })
 
+  const watchesQ = useQuery<{ data: { projectId: string; project: boolean; issueIds: string[] } }>({
+    queryKey: ['stratflow', 'project', projectId, 'watches', 'me'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/watches/me`)).data,
+    retry: false,
+    enabled: Boolean(projectId),
+  })
+
   const componentsQ = useQuery<ProjectComponentsResponse>({
     queryKey: ['stratflow', 'project', projectId, 'components'],
     queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/components`)).data,
@@ -176,6 +184,7 @@ export function StratflowIssueDrawer({
   const comments = commentsQ.data?.data.items ?? []
   const timeEntries = timeQ.data?.data.items ?? []
   const myUserId = meQ.data?.id || ''
+  const watchingIssue = Boolean(issueId && (watchesQ.data?.data.issueIds ?? []).includes(issueId))
   const issueLinks = issue?.links ?? []
   const blockedBy = issueLinks.filter((l) => l.type === 'blocked_by')
 
@@ -277,6 +286,18 @@ export function StratflowIssueDrawer({
     onError: (err: any) => {
       toast.showToast(err?.response?.data?.error || err?.message || 'Failed to save issue.', 'error')
     },
+  })
+
+  const toggleIssueWatch = useMutation({
+    mutationFn: async () => {
+      if (!issueId) throw new Error('No issue selected.')
+      return (await http.post(`/api/stratflow/issues/${issueId}/watch`, { enabled: !watchingIssue })).data
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'project', projectId, 'watches', 'me'] })
+      toast.showToast(watchingIssue ? 'Stopped watching issue.' : 'Watching issue.', 'success')
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to update watch.', 'error'),
   })
 
   const addComment = useMutation({
@@ -453,6 +474,19 @@ export function StratflowIssueDrawer({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={toggleIssueWatch.isPending || !issueId}
+              onClick={() => toggleIssueWatch.mutate()}
+              className={[
+                'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50',
+                watchingIssue ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]' : 'border-[color:var(--color-border)]',
+              ].join(' ')}
+              title={watchingIssue ? 'You will receive notifications for updates on this issue.' : 'Watch this issue to receive notifications.'}
+            >
+              <Star className="h-4 w-4" />
+              {watchingIssue ? 'Watching' : 'Watch'}
+            </button>
             <button
               type="button"
               onClick={() => setFullScreen((v) => !v)}
@@ -982,7 +1016,7 @@ export function StratflowIssueDrawer({
                     onChange={(e) => setNewComment(e.target.value)}
                     rows={3}
                     className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
-                    placeholder="Add a comment…"
+                    placeholder="Add a comment… (Tip: use @name or @email to mention a teammate)"
                   />
                   <div className="mt-2 flex items-center justify-end">
                     <button

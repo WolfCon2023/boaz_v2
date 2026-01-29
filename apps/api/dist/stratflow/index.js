@@ -105,14 +105,195 @@ async function ensureStratflowIndexes(db) {
         await db.collection('sf_time_entries').createIndex({ projectId: 1, workDate: -1, createdAt: -1 }).catch(() => { });
         await db.collection('sf_time_entries').createIndex({ issueId: 1, workDate: -1, createdAt: -1 }).catch(() => { });
         await db.collection('sf_time_entries').createIndex({ userId: 1, workDate: -1, createdAt: -1 }).catch(() => { });
+        await db.collection('sf_watches').createIndex({ projectId: 1, userId: 1, issueId: 1 }, { unique: true }).catch(() => { });
+        await db.collection('sf_notifications').createIndex({ projectId: 1, userId: 1, createdAt: -1 }).catch(() => { });
+        await db.collection('sf_notifications').createIndex({ userId: 1, readAt: 1, createdAt: -1 }).catch(() => { });
     }
     catch {
         // noop
     }
 }
+function escapeRegex(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+function candidateMentionHandlesForUser(u) {
+    const out = new Set();
+    const email = String(u.email || '').trim().toLowerCase();
+    const name = String(u.name || '').trim().toLowerCase();
+    if (email) {
+        const local = email.split('@')[0] || '';
+        if (local)
+            out.add(local);
+        out.add(email);
+    }
+    if (name) {
+        name
+            .split(/[\s._-]+/g)
+            .map((p) => p.trim())
+            .filter(Boolean)
+            .forEach((p) => out.add(p));
+        out.add(name);
+    }
+    return Array.from(out).filter((x) => x.length >= 2 && x.length <= 64);
+}
+function extractMentionedUserIds(body, users) {
+    const text = String(body || '');
+    if (!text.includes('@'))
+        return [];
+    const tokens = Array.from(text.matchAll(/(^|\s)@([a-zA-Z0-9._-]{2,64})/g)).map((m) => String(m[2] || '').toLowerCase());
+    if (!tokens.length)
+        return [];
+    const uniqTokens = Array.from(new Set(tokens));
+    const handleToUserId = new Map();
+    for (const u of users) {
+        for (const h of candidateMentionHandlesForUser(u)) {
+            handleToUserId.set(h.toLowerCase(), u.id);
+        }
+    }
+    const out = [];
+    for (const t of uniqTokens) {
+        // exact
+        const exact = handleToUserId.get(t);
+        if (exact) {
+            out.push(exact);
+            continue;
+        }
+        // prefix match against email localparts / name parts
+        for (const [h, uid] of handleToUserId.entries()) {
+            if (h.startsWith(t)) {
+                out.push(uid);
+                break;
+            }
+        }
+    }
+    return Array.from(new Set(out)).filter((id) => ObjectId.isValid(id));
+}
+async function notifyFromActivity(db, activity) {
+    try {
+        const projectId = activity.projectId;
+        const issueId = activity.issueId ? activity.issueId : null;
+        const sprintId = activity.sprintId ? activity.sprintId : null;
+        const actorId = String(activity.actorId || '').trim();
+        const meta = activity.meta || {};
+        const watcherQuery = { projectId };
+        if (issueId)
+            watcherQuery.$or = [{ issueId: null }, { issueId }];
+        else
+            watcherQuery.issueId = null;
+        const watchRows = (await db.collection('sf_watches').find(watcherQuery).project({ userId: 1 }).toArray());
+        const watchUserIds = watchRows.map((r) => String(r.userId || '').trim()).filter(Boolean);
+        const mentionUserIds = Array.isArray(meta.mentions)
+            ? meta.mentions.map((x) => String(x || '').trim()).filter(Boolean)
+            : [];
+        const extraDirectUserIds = Array.isArray(meta.notifyUserIds)
+            ? meta.notifyUserIds.map((x) => String(x || '').trim()).filter(Boolean)
+            : [];
+        const recipients = Array.from(new Set([...watchUserIds, ...mentionUserIds, ...extraDirectUserIds])).filter((uid) => uid && uid !== actorId);
+        if (!recipients.length)
+            return;
+        const actor = ObjectId.isValid(actorId) ? await db.collection('users').findOne({ _id: new ObjectId(actorId) }) : null;
+        const actorLabel = String(actor?.name || actor?.email || actorId || 'Someone');
+        const issue = issueId ? await db.collection('sf_issues').findOne({ _id: issueId }) : null;
+        const issueLabel = issue ? `${normIssueType(issue.type)}: ${String(issue.title || '').trim() || 'Untitled'}` : issueId ? `Issue ${String(issueId)}` : null;
+        const sprint = sprintId ? await db.collection('sf_sprints').findOne({ _id: sprintId }) : null;
+        const sprintLabel = sprint ? String(sprint.name || '').trim() : sprintId ? `Sprint ${String(sprintId)}` : null;
+        const kindMap = {
+            issue_created: 'issue_created',
+            issue_moved: 'issue_moved',
+            issue_updated: 'issue_updated',
+            issue_commented: 'issue_commented',
+            issue_link_added: 'issue_link_added',
+            issue_link_removed: 'issue_link_removed',
+            time_logged: 'time_logged',
+            time_updated: 'time_updated',
+            time_deleted: 'time_deleted',
+            bulk_update: 'bulk_update',
+            sprint_created: 'sprint_created',
+            sprint_updated: 'sprint_updated',
+            sprint_set_active: 'sprint_set_active',
+            sprint_closed: 'sprint_closed',
+        };
+        const notifKind = kindMap[activity.kind] || 'issue_updated';
+        let title = 'Update';
+        let body = null;
+        if (activity.kind === 'issue_commented') {
+            title = issueLabel ? `Commented: ${issueLabel}` : 'New comment';
+            body = meta.preview ? `${actorLabel}: ${String(meta.preview).trim()}` : `${actorLabel} commented.`;
+        }
+        else if (activity.kind === 'issue_moved') {
+            title = issueLabel ? `Moved: ${issueLabel}` : 'Issue moved';
+            const toName = meta.toColumnName ? String(meta.toColumnName) : '';
+            body = toName ? `${actorLabel} moved this to “${toName}”.` : `${actorLabel} moved an issue.`;
+        }
+        else if (activity.kind === 'issue_created') {
+            title = issueLabel ? `Created: ${issueLabel}` : 'New issue';
+            body = `${actorLabel} created a new issue.`;
+        }
+        else if (activity.kind === 'issue_updated') {
+            title = issueLabel ? `Updated: ${issueLabel}` : 'Issue updated';
+            const fields = Array.isArray(meta.fields) ? meta.fields.join(', ') : '';
+            body = fields ? `${actorLabel} updated: ${fields}.` : `${actorLabel} updated an issue.`;
+        }
+        else if (activity.kind === 'issue_link_added' || activity.kind === 'issue_link_removed') {
+            title = issueLabel ? `Dependency updated: ${issueLabel}` : 'Dependency updated';
+            body = `${actorLabel} updated dependencies.`;
+        }
+        else if (activity.kind === 'sprint_set_active' || activity.kind === 'sprint_updated' || activity.kind === 'sprint_created' || activity.kind === 'sprint_closed') {
+            title = sprintLabel ? `Sprint: ${sprintLabel}` : 'Sprint update';
+            body = `${actorLabel} updated sprint settings.`;
+        }
+        else if (activity.kind === 'bulk_update') {
+            title = 'Bulk update';
+            body = `${actorLabel} updated multiple issues.`;
+        }
+        else if (activity.kind.startsWith('time_')) {
+            title = issueLabel ? `Time: ${issueLabel}` : 'Time update';
+            body = `${actorLabel} updated time tracking.`;
+        }
+        const now = activity.createdAt || new Date();
+        const docs = recipients.map((userId) => ({
+            _id: new ObjectId(),
+            projectId,
+            userId,
+            kind: notifKind,
+            actorId: actorId || null,
+            issueId: issueId || null,
+            sprintId: sprintId || null,
+            title,
+            body,
+            createdAt: now,
+            readAt: null,
+            meta: { activityKind: activity.kind, ...(meta || {}) },
+        }));
+        // If someone was mentioned, create a higher-signal "mentioned" notification too (in addition to watchers),
+        // but only for those explicitly mentioned.
+        const mentionedOnly = mentionUserIds.filter((uid) => uid && uid !== actorId);
+        const mentionDocs = mentionedOnly.length
+            ? mentionedOnly.map((userId) => ({
+                _id: new ObjectId(),
+                projectId,
+                userId,
+                kind: 'mentioned',
+                actorId: actorId || null,
+                issueId: issueId || null,
+                sprintId: sprintId || null,
+                title: issueLabel ? `You were mentioned: ${issueLabel}` : 'You were mentioned',
+                body: meta.preview ? `${actorLabel}: ${String(meta.preview).trim()}` : `${actorLabel} mentioned you.`,
+                createdAt: now,
+                readAt: null,
+                meta: { activityKind: activity.kind, ...(meta || {}) },
+            }))
+            : [];
+        await db.collection('sf_notifications').insertMany([...docs, ...mentionDocs], { ordered: false }).catch(() => { });
+    }
+    catch {
+        // best-effort
+    }
+}
 async function logActivity(db, doc) {
     try {
         await db.collection('sf_activity').insertOne({ _id: new ObjectId(), ...doc });
+        await notifyFromActivity(db, doc);
     }
     catch {
         // best effort
@@ -136,7 +317,7 @@ async function loadUsersByIds(db, userIds) {
     const oids = valid.map((id) => new ObjectId(id));
     const users = await db.collection('users').find({ _id: { $in: oids } }).project({ _id: 1, email: 1, name: 1 }).toArray();
     const map = new Map(users.map((u) => [String(u._id), { id: String(u._id), email: u.email || '', name: u.name || '' }]));
-    return valid.map((id) => map.get(id)).filter(Boolean);
+    return valid.map((id) => map.get(id)).filter((x) => Boolean(x));
 }
 async function validateComponentsExist(db, projectId, components) {
     const names = Array.from(new Set((components || []).map((x) => String(x || '').trim()).filter(Boolean)));
@@ -1365,12 +1546,15 @@ stratflowRouter.post('/issues/:issueId/comments', async (req, res) => {
         createdAt: now,
     };
     await db.collection('sf_issue_comments').insertOne(doc);
+    // Mentions are parsed against project member names/emails.
+    const mentionUserIds = doc.body.includes('@') ? extractMentionedUserIds(doc.body, await loadUsersByIds(db, projectMemberIds(project))) : [];
+    const preview = doc.body.length > 240 ? `${doc.body.slice(0, 240)}…` : doc.body;
     await logActivity(db, {
         projectId: issue.projectId,
         actorId: auth.userId,
         kind: 'issue_commented',
         issueId: iid,
-        meta: { length: doc.body.length },
+        meta: { length: doc.body.length, preview, mentions: mentionUserIds },
         createdAt: now,
     });
     res.status(201).json({ data: { _id: String(doc._id) }, error: null });
@@ -1588,6 +1772,170 @@ stratflowRouter.get('/projects/:projectId/members', async (req, res) => {
         },
         error: null,
     });
+});
+// GET /api/stratflow/projects/:projectId/watches/me
+stratflowRouter.get('/projects/:projectId/watches/me', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const pid = objIdOrNull(String(req.params.projectId || ''));
+    if (!pid)
+        return res.status(400).json({ data: null, error: 'invalid_project_id' });
+    const project = await loadProjectForUser(db, pid, auth.userId);
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    const rows = await db.collection('sf_watches').find({ projectId: pid, userId: auth.userId }).toArray();
+    const projectWatch = rows.some((r) => !r.issueId);
+    const issueIds = rows.filter((r) => r.issueId).map((r) => String(r.issueId));
+    res.json({ data: { projectId: String(pid), project: projectWatch, issueIds }, error: null });
+});
+const watchToggleSchema = z.object({ enabled: z.boolean().optional() });
+// POST /api/stratflow/projects/:projectId/watch
+stratflowRouter.post('/projects/:projectId/watch', async (req, res) => {
+    const parsed = watchToggleSchema.safeParse(req.body ?? {});
+    if (!parsed.success)
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const pid = objIdOrNull(String(req.params.projectId || ''));
+    if (!pid)
+        return res.status(400).json({ data: null, error: 'invalid_project_id' });
+    const project = await loadProjectForUser(db, pid, auth.userId);
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    const enabled = parsed.data.enabled !== false;
+    if (!enabled) {
+        await db.collection('sf_watches').deleteOne({ projectId: pid, userId: auth.userId, issueId: null });
+    }
+    else {
+        const now = new Date();
+        await db.collection('sf_watches').updateOne({ projectId: pid, userId: auth.userId, issueId: null }, { $setOnInsert: { _id: new ObjectId(), projectId: pid, userId: auth.userId, issueId: null, createdAt: now } }, { upsert: true });
+    }
+    res.json({ data: { ok: true, enabled }, error: null });
+});
+// POST /api/stratflow/issues/:issueId/watch
+stratflowRouter.post('/issues/:issueId/watch', async (req, res) => {
+    const parsed = watchToggleSchema.safeParse(req.body ?? {});
+    if (!parsed.success)
+        return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() });
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const iid = objIdOrNull(String(req.params.issueId || ''));
+    if (!iid)
+        return res.status(400).json({ data: null, error: 'invalid_issue_id' });
+    const issue = await db.collection('sf_issues').findOne({ _id: iid });
+    if (!issue)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const project = await loadProjectForUser(db, issue.projectId, auth.userId);
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    const enabled = parsed.data.enabled !== false;
+    if (!enabled) {
+        await db.collection('sf_watches').deleteOne({ projectId: issue.projectId, userId: auth.userId, issueId: iid });
+    }
+    else {
+        const now = new Date();
+        await db.collection('sf_watches').updateOne({ projectId: issue.projectId, userId: auth.userId, issueId: iid }, { $setOnInsert: { _id: new ObjectId(), projectId: issue.projectId, userId: auth.userId, issueId: iid, createdAt: now } }, { upsert: true });
+    }
+    res.json({ data: { ok: true, enabled }, error: null });
+});
+// GET /api/stratflow/projects/:projectId/notifications
+stratflowRouter.get('/projects/:projectId/notifications', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const pid = objIdOrNull(String(req.params.projectId || ''));
+    if (!pid)
+        return res.status(400).json({ data: null, error: 'invalid_project_id' });
+    const project = await loadProjectForUser(db, pid, auth.userId);
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    const unreadOnly = String(req.query.unreadOnly || '').toLowerCase() === 'true';
+    const limit = Math.min(parseInt(String(req.query.limit || '50'), 10) || 50, 200);
+    const query = { projectId: pid, userId: auth.userId };
+    if (unreadOnly)
+        query.readAt = null;
+    const items = await db.collection('sf_notifications').find(query).sort({ createdAt: -1 }).limit(limit).toArray();
+    res.json({
+        data: {
+            projectId: String(pid),
+            items: items.map((n) => ({
+                _id: String(n._id),
+                projectId: String(n.projectId),
+                userId: String(n.userId),
+                kind: String(n.kind || ''),
+                actorId: n.actorId ? String(n.actorId) : null,
+                issueId: n.issueId ? String(n.issueId) : null,
+                sprintId: n.sprintId ? String(n.sprintId) : null,
+                title: String(n.title || ''),
+                body: n.body ? String(n.body) : null,
+                createdAt: toIsoOrNull(n.createdAt),
+                readAt: toIsoOrNull(n.readAt),
+                meta: n.meta ?? null,
+            })),
+        },
+        error: null,
+    });
+});
+// POST /api/stratflow/notifications/:notificationId/read
+stratflowRouter.post('/notifications/:notificationId/read', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const nid = objIdOrNull(String(req.params.notificationId || ''));
+    if (!nid)
+        return res.status(400).json({ data: null, error: 'invalid_notification_id' });
+    const existing = await db.collection('sf_notifications').findOne({ _id: nid });
+    if (!existing)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    if (String(existing.userId) !== String(auth.userId))
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    const project = await loadProjectForUser(db, existing.projectId, auth.userId);
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    await db.collection('sf_notifications').updateOne({ _id: nid }, { $set: { readAt: new Date() } });
+    res.json({ data: { ok: true }, error: null });
+});
+// POST /api/stratflow/projects/:projectId/notifications/mark-all-read
+stratflowRouter.post('/projects/:projectId/notifications/mark-all-read', async (req, res) => {
+    const db = await getDb();
+    if (!db)
+        return res.status(500).json({ data: null, error: 'db_unavailable' });
+    await ensureStratflowIndexes(db);
+    const auth = req.auth;
+    const pid = objIdOrNull(String(req.params.projectId || ''));
+    if (!pid)
+        return res.status(400).json({ data: null, error: 'invalid_project_id' });
+    const project = await loadProjectForUser(db, pid, auth.userId);
+    if (!project)
+        return res.status(404).json({ data: null, error: 'not_found' });
+    if (project === 'forbidden')
+        return res.status(403).json({ data: null, error: 'forbidden' });
+    const now = new Date();
+    const r = await db.collection('sf_notifications').updateMany({ projectId: pid, userId: auth.userId, readAt: null }, { $set: { readAt: now } });
+    res.json({ data: { ok: true, modified: r.modifiedCount }, error: null });
 });
 // GET /api/stratflow/projects/:projectId/time-rollups
 stratflowRouter.get('/projects/:projectId/time-rollups', async (req, res) => {
@@ -1940,6 +2288,9 @@ async function deleteProjectCascade(db, projectId) {
     const issues = await db.collection('sf_issues').deleteMany({ projectId });
     const comments = await db.collection('sf_issue_comments').deleteMany({ projectId });
     const timeEntries = await db.collection('sf_time_entries').deleteMany({ projectId });
+    const watches = await db.collection('sf_watches').deleteMany({ projectId });
+    const notifications = await db.collection('sf_notifications').deleteMany({ projectId });
+    const activity = await db.collection('sf_activity').deleteMany({ projectId });
     const sprints = await db.collection('sf_sprints').deleteMany({ projectId });
     const components = await db.collection('sf_components').deleteMany({ projectId });
     const columns = boardIds.length ? await db.collection('sf_columns').deleteMany({ boardId: { $in: boardIds } }) : { deletedCount: 0 };
@@ -1953,6 +2304,9 @@ async function deleteProjectCascade(db, projectId) {
         issues: issues.deletedCount || 0,
         comments: comments.deletedCount || 0,
         timeEntries: timeEntries.deletedCount || 0,
+        watches: watches.deletedCount || 0,
+        notifications: notifications.deletedCount || 0,
+        activity: activity.deletedCount || 0,
         sprints: sprints.deletedCount || 0,
         components: components.deletedCount || 0,
     };

@@ -157,6 +157,46 @@ type TimeEntryDoc = {
   updatedAt: Date
 }
 
+type WatchDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  userId: string
+  issueId?: ObjectId | null
+  createdAt: Date
+}
+
+type NotificationKind =
+  | 'mentioned'
+  | 'issue_commented'
+  | 'issue_moved'
+  | 'issue_updated'
+  | 'issue_created'
+  | 'issue_link_added'
+  | 'issue_link_removed'
+  | 'time_logged'
+  | 'time_updated'
+  | 'time_deleted'
+  | 'bulk_update'
+  | 'sprint_created'
+  | 'sprint_updated'
+  | 'sprint_set_active'
+  | 'sprint_closed'
+
+type NotificationDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  userId: string
+  kind: NotificationKind
+  actorId?: string | null
+  issueId?: ObjectId | null
+  sprintId?: ObjectId | null
+  title: string
+  body?: string | null
+  createdAt: Date
+  readAt?: Date | null
+  meta?: any
+}
+
 function normStr(v: any) {
   return typeof v === 'string' ? v.trim() : ''
 }
@@ -248,14 +288,199 @@ async function ensureStratflowIndexes(db: any) {
     await db.collection('sf_time_entries').createIndex({ projectId: 1, workDate: -1, createdAt: -1 }).catch(() => {})
     await db.collection('sf_time_entries').createIndex({ issueId: 1, workDate: -1, createdAt: -1 }).catch(() => {})
     await db.collection('sf_time_entries').createIndex({ userId: 1, workDate: -1, createdAt: -1 }).catch(() => {})
+    await db.collection('sf_watches').createIndex({ projectId: 1, userId: 1, issueId: 1 }, { unique: true }).catch(() => {})
+    await db.collection('sf_notifications').createIndex({ projectId: 1, userId: 1, createdAt: -1 }).catch(() => {})
+    await db.collection('sf_notifications').createIndex({ userId: 1, readAt: 1, createdAt: -1 }).catch(() => {})
   } catch {
     // noop
+  }
+}
+
+function escapeRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function candidateMentionHandlesForUser(u: { id: string; email?: string; name?: string }) {
+  const out = new Set<string>()
+  const email = String(u.email || '').trim().toLowerCase()
+  const name = String(u.name || '').trim().toLowerCase()
+  if (email) {
+    const local = email.split('@')[0] || ''
+    if (local) out.add(local)
+    out.add(email)
+  }
+  if (name) {
+    name
+      .split(/[\s._-]+/g)
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .forEach((p) => out.add(p))
+    out.add(name)
+  }
+  return Array.from(out).filter((x) => x.length >= 2 && x.length <= 64)
+}
+
+function extractMentionedUserIds(body: string, users: Array<{ id: string; email?: string; name?: string }>) {
+  const text = String(body || '')
+  if (!text.includes('@')) return []
+  const tokens = Array.from(text.matchAll(/(^|\s)@([a-zA-Z0-9._-]{2,64})/g)).map((m) => String(m[2] || '').toLowerCase())
+  if (!tokens.length) return []
+  const uniqTokens = Array.from(new Set(tokens))
+
+  const handleToUserId = new Map<string, string>()
+  for (const u of users) {
+    for (const h of candidateMentionHandlesForUser(u)) {
+      handleToUserId.set(h.toLowerCase(), u.id)
+    }
+  }
+
+  const out: string[] = []
+  for (const t of uniqTokens) {
+    // exact
+    const exact = handleToUserId.get(t)
+    if (exact) {
+      out.push(exact)
+      continue
+    }
+    // prefix match against email localparts / name parts
+    for (const [h, uid] of handleToUserId.entries()) {
+      if (h.startsWith(t)) {
+        out.push(uid)
+        break
+      }
+    }
+  }
+  return Array.from(new Set(out)).filter((id) => ObjectId.isValid(id))
+}
+
+async function notifyFromActivity(db: any, activity: Omit<ActivityDoc, '_id'>) {
+  try {
+    const projectId = activity.projectId as ObjectId
+    const issueId = activity.issueId ? (activity.issueId as ObjectId) : null
+    const sprintId = activity.sprintId ? (activity.sprintId as ObjectId) : null
+    const actorId = String(activity.actorId || '').trim()
+    const meta = activity.meta || {}
+
+    const watcherQuery: any = { projectId }
+    if (issueId) watcherQuery.$or = [{ issueId: null }, { issueId }]
+    else watcherQuery.issueId = null
+    const watchRows = (await db.collection('sf_watches').find(watcherQuery).project({ userId: 1 }).toArray()) as Array<{ userId: string }>
+    const watchUserIds = watchRows.map((r) => String(r.userId || '').trim()).filter(Boolean)
+
+    const mentionUserIds: string[] = Array.isArray(meta.mentions)
+      ? meta.mentions.map((x: any) => String(x || '').trim()).filter(Boolean)
+      : []
+    const extraDirectUserIds: string[] = Array.isArray(meta.notifyUserIds)
+      ? meta.notifyUserIds.map((x: any) => String(x || '').trim()).filter(Boolean)
+      : []
+
+    const recipients = Array.from(new Set([...watchUserIds, ...mentionUserIds, ...extraDirectUserIds])).filter((uid) => uid && uid !== actorId)
+    if (!recipients.length) return
+
+    const actor = ObjectId.isValid(actorId) ? await db.collection('users').findOne({ _id: new ObjectId(actorId) } as any) : null
+    const actorLabel = String((actor as any)?.name || (actor as any)?.email || actorId || 'Someone')
+
+    const issue = issueId ? await db.collection('sf_issues').findOne({ _id: issueId } as any) : null
+    const issueLabel = issue ? `${normIssueType((issue as any).type)}: ${String((issue as any).title || '').trim() || 'Untitled'}` : issueId ? `Issue ${String(issueId)}` : null
+
+    const sprint = sprintId ? await db.collection('sf_sprints').findOne({ _id: sprintId } as any) : null
+    const sprintLabel = sprint ? String((sprint as any).name || '').trim() : sprintId ? `Sprint ${String(sprintId)}` : null
+
+    const kindMap: Record<ActivityKind, NotificationKind> = {
+      issue_created: 'issue_created',
+      issue_moved: 'issue_moved',
+      issue_updated: 'issue_updated',
+      issue_commented: 'issue_commented',
+      issue_link_added: 'issue_link_added',
+      issue_link_removed: 'issue_link_removed',
+      time_logged: 'time_logged',
+      time_updated: 'time_updated',
+      time_deleted: 'time_deleted',
+      bulk_update: 'bulk_update',
+      sprint_created: 'sprint_created',
+      sprint_updated: 'sprint_updated',
+      sprint_set_active: 'sprint_set_active',
+      sprint_closed: 'sprint_closed',
+    }
+
+    const notifKind: NotificationKind = kindMap[activity.kind] || 'issue_updated'
+
+    let title = 'Update'
+    let body: string | null = null
+    if (activity.kind === 'issue_commented') {
+      title = issueLabel ? `Commented: ${issueLabel}` : 'New comment'
+      body = meta.preview ? `${actorLabel}: ${String(meta.preview).trim()}` : `${actorLabel} commented.`
+    } else if (activity.kind === 'issue_moved') {
+      title = issueLabel ? `Moved: ${issueLabel}` : 'Issue moved'
+      const toName = meta.toColumnName ? String(meta.toColumnName) : ''
+      body = toName ? `${actorLabel} moved this to “${toName}”.` : `${actorLabel} moved an issue.`
+    } else if (activity.kind === 'issue_created') {
+      title = issueLabel ? `Created: ${issueLabel}` : 'New issue'
+      body = `${actorLabel} created a new issue.`
+    } else if (activity.kind === 'issue_updated') {
+      title = issueLabel ? `Updated: ${issueLabel}` : 'Issue updated'
+      const fields = Array.isArray(meta.fields) ? meta.fields.join(', ') : ''
+      body = fields ? `${actorLabel} updated: ${fields}.` : `${actorLabel} updated an issue.`
+    } else if (activity.kind === 'issue_link_added' || activity.kind === 'issue_link_removed') {
+      title = issueLabel ? `Dependency updated: ${issueLabel}` : 'Dependency updated'
+      body = `${actorLabel} updated dependencies.`
+    } else if (activity.kind === 'sprint_set_active' || activity.kind === 'sprint_updated' || activity.kind === 'sprint_created' || activity.kind === 'sprint_closed') {
+      title = sprintLabel ? `Sprint: ${sprintLabel}` : 'Sprint update'
+      body = `${actorLabel} updated sprint settings.`
+    } else if (activity.kind === 'bulk_update') {
+      title = 'Bulk update'
+      body = `${actorLabel} updated multiple issues.`
+    } else if (activity.kind.startsWith('time_')) {
+      title = issueLabel ? `Time: ${issueLabel}` : 'Time update'
+      body = `${actorLabel} updated time tracking.`
+    }
+
+    const now = activity.createdAt || new Date()
+    const docs: NotificationDoc[] = recipients.map((userId) => ({
+      _id: new ObjectId(),
+      projectId,
+      userId,
+      kind: notifKind,
+      actorId: actorId || null,
+      issueId: issueId || null,
+      sprintId: sprintId || null,
+      title,
+      body,
+      createdAt: now,
+      readAt: null,
+      meta: { activityKind: activity.kind, ...(meta || {}) },
+    }))
+
+    // If someone was mentioned, create a higher-signal "mentioned" notification too (in addition to watchers),
+    // but only for those explicitly mentioned.
+    const mentionedOnly = mentionUserIds.filter((uid: string) => uid && uid !== actorId)
+    const mentionDocs: NotificationDoc[] = mentionedOnly.length
+      ? mentionedOnly.map((userId: string) => ({
+          _id: new ObjectId(),
+          projectId,
+          userId,
+          kind: 'mentioned',
+          actorId: actorId || null,
+          issueId: issueId || null,
+          sprintId: sprintId || null,
+          title: issueLabel ? `You were mentioned: ${issueLabel}` : 'You were mentioned',
+          body: meta.preview ? `${actorLabel}: ${String(meta.preview).trim()}` : `${actorLabel} mentioned you.`,
+          createdAt: now,
+          readAt: null,
+          meta: { activityKind: activity.kind, ...(meta || {}) },
+        }))
+      : []
+
+    await db.collection('sf_notifications').insertMany([...docs, ...mentionDocs] as any, { ordered: false } as any).catch(() => {})
+  } catch {
+    // best-effort
   }
 }
 
 async function logActivity(db: any, doc: Omit<ActivityDoc, '_id'>) {
   try {
     await db.collection('sf_activity').insertOne({ _id: new ObjectId(), ...doc } as any)
+    await notifyFromActivity(db, doc)
   } catch {
     // best effort
   }
@@ -273,12 +498,12 @@ function projectMemberIds(project: any): string[] {
   return Array.from(new Set(ids))
 }
 
-async function loadUsersByIds(db: any, userIds: string[]) {
+async function loadUsersByIds(db: any, userIds: string[]): Promise<Array<{ id: string; email: string; name: string }>> {
   const valid = userIds.filter((id) => ObjectId.isValid(id))
   const oids = valid.map((id) => new ObjectId(id))
   const users = await db.collection('users').find({ _id: { $in: oids } } as any).project({ _id: 1, email: 1, name: 1 }).toArray()
   const map = new Map(users.map((u: any) => [String(u._id), { id: String(u._id), email: u.email || '', name: u.name || '' }]))
-  return valid.map((id) => map.get(id)).filter(Boolean)
+  return valid.map((id) => map.get(id)).filter((x): x is { id: string; email: string; name: string } => Boolean(x))
 }
 
 async function validateComponentsExist(db: any, projectId: ObjectId, components: string[]) {
@@ -1467,12 +1692,15 @@ stratflowRouter.post('/issues/:issueId/comments', async (req: any, res) => {
   }
 
   await db.collection('sf_issue_comments').insertOne(doc as any)
+  // Mentions are parsed against project member names/emails.
+  const mentionUserIds = doc.body.includes('@') ? extractMentionedUserIds(doc.body, await loadUsersByIds(db, projectMemberIds(project))) : []
+  const preview = doc.body.length > 240 ? `${doc.body.slice(0, 240)}…` : doc.body
   await logActivity(db, {
     projectId: issue.projectId,
     actorId: auth.userId,
     kind: 'issue_commented',
     issueId: iid,
-    meta: { length: doc.body.length },
+    meta: { length: doc.body.length, preview, mentions: mentionUserIds },
     createdAt: now,
   })
   res.status(201).json({ data: { _id: String(doc._id) }, error: null })
@@ -1681,6 +1909,167 @@ stratflowRouter.get('/projects/:projectId/members', async (req: any, res) => {
     },
     error: null,
   })
+})
+
+// GET /api/stratflow/projects/:projectId/watches/me
+stratflowRouter.get('/projects/:projectId/watches/me', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const rows = await db.collection('sf_watches').find({ projectId: pid, userId: auth.userId } as any).toArray()
+  const projectWatch = rows.some((r: any) => !r.issueId)
+  const issueIds = rows.filter((r: any) => r.issueId).map((r: any) => String(r.issueId))
+  res.json({ data: { projectId: String(pid), project: projectWatch, issueIds }, error: null })
+})
+
+const watchToggleSchema = z.object({ enabled: z.boolean().optional() })
+
+// POST /api/stratflow/projects/:projectId/watch
+stratflowRouter.post('/projects/:projectId/watch', async (req: any, res) => {
+  const parsed = watchToggleSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const enabled = parsed.data.enabled !== false
+  if (!enabled) {
+    await db.collection('sf_watches').deleteOne({ projectId: pid, userId: auth.userId, issueId: null } as any)
+  } else {
+    const now = new Date()
+    await db.collection('sf_watches').updateOne(
+      { projectId: pid, userId: auth.userId, issueId: null } as any,
+      { $setOnInsert: { _id: new ObjectId(), projectId: pid, userId: auth.userId, issueId: null, createdAt: now } } as any,
+      { upsert: true } as any,
+    )
+  }
+  res.json({ data: { ok: true, enabled }, error: null })
+})
+
+// POST /api/stratflow/issues/:issueId/watch
+stratflowRouter.post('/issues/:issueId/watch', async (req: any, res) => {
+  const parsed = watchToggleSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const iid = objIdOrNull(String(req.params.issueId || ''))
+  if (!iid) return res.status(400).json({ data: null, error: 'invalid_issue_id' })
+
+  const issue = await db.collection('sf_issues').findOne({ _id: iid } as any)
+  if (!issue) return res.status(404).json({ data: null, error: 'not_found' })
+  const project = await loadProjectForUser(db, issue.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const enabled = parsed.data.enabled !== false
+  if (!enabled) {
+    await db.collection('sf_watches').deleteOne({ projectId: issue.projectId, userId: auth.userId, issueId: iid } as any)
+  } else {
+    const now = new Date()
+    await db.collection('sf_watches').updateOne(
+      { projectId: issue.projectId, userId: auth.userId, issueId: iid } as any,
+      { $setOnInsert: { _id: new ObjectId(), projectId: issue.projectId, userId: auth.userId, issueId: iid, createdAt: now } } as any,
+      { upsert: true } as any,
+    )
+  }
+  res.json({ data: { ok: true, enabled }, error: null })
+})
+
+// GET /api/stratflow/projects/:projectId/notifications
+stratflowRouter.get('/projects/:projectId/notifications', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const unreadOnly = String(req.query.unreadOnly || '').toLowerCase() === 'true'
+  const limit = Math.min(parseInt(String(req.query.limit || '50'), 10) || 50, 200)
+  const query: any = { projectId: pid, userId: auth.userId }
+  if (unreadOnly) query.readAt = null
+
+  const items = await db.collection('sf_notifications').find(query).sort({ createdAt: -1 } as any).limit(limit).toArray()
+  res.json({
+    data: {
+      projectId: String(pid),
+      items: items.map((n: any) => ({
+        _id: String(n._id),
+        projectId: String(n.projectId),
+        userId: String(n.userId),
+        kind: String(n.kind || ''),
+        actorId: n.actorId ? String(n.actorId) : null,
+        issueId: n.issueId ? String(n.issueId) : null,
+        sprintId: n.sprintId ? String(n.sprintId) : null,
+        title: String(n.title || ''),
+        body: n.body ? String(n.body) : null,
+        createdAt: toIsoOrNull(n.createdAt),
+        readAt: toIsoOrNull(n.readAt),
+        meta: n.meta ?? null,
+      })),
+    },
+    error: null,
+  })
+})
+
+// POST /api/stratflow/notifications/:notificationId/read
+stratflowRouter.post('/notifications/:notificationId/read', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const nid = objIdOrNull(String(req.params.notificationId || ''))
+  if (!nid) return res.status(400).json({ data: null, error: 'invalid_notification_id' })
+
+  const existing = await db.collection('sf_notifications').findOne({ _id: nid } as any)
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+  if (String(existing.userId) !== String(auth.userId)) return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const project = await loadProjectForUser(db, existing.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  await db.collection('sf_notifications').updateOne({ _id: nid } as any, { $set: { readAt: new Date() } } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// POST /api/stratflow/projects/:projectId/notifications/mark-all-read
+stratflowRouter.post('/projects/:projectId/notifications/mark-all-read', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const now = new Date()
+  const r = await db.collection('sf_notifications').updateMany({ projectId: pid, userId: auth.userId, readAt: null } as any, { $set: { readAt: now } } as any)
+  res.json({ data: { ok: true, modified: r.modifiedCount }, error: null })
 })
 
 // GET /api/stratflow/projects/:projectId/time-rollups
@@ -2039,6 +2428,9 @@ async function deleteProjectCascade(db: any, projectId: ObjectId) {
   const issues = await db.collection('sf_issues').deleteMany({ projectId } as any)
   const comments = await db.collection('sf_issue_comments').deleteMany({ projectId } as any)
   const timeEntries = await db.collection('sf_time_entries').deleteMany({ projectId } as any)
+  const watches = await db.collection('sf_watches').deleteMany({ projectId } as any)
+  const notifications = await db.collection('sf_notifications').deleteMany({ projectId } as any)
+  const activity = await db.collection('sf_activity').deleteMany({ projectId } as any)
   const sprints = await db.collection('sf_sprints').deleteMany({ projectId } as any)
   const components = await db.collection('sf_components').deleteMany({ projectId } as any)
   const columns = boardIds.length ? await db.collection('sf_columns').deleteMany({ boardId: { $in: boardIds } } as any) : { deletedCount: 0 }
@@ -2052,6 +2444,9 @@ async function deleteProjectCascade(db: any, projectId: ObjectId) {
     issues: issues.deletedCount || 0,
     comments: comments.deletedCount || 0,
     timeEntries: timeEntries.deletedCount || 0,
+    watches: watches.deletedCount || 0,
+    notifications: notifications.deletedCount || 0,
+    activity: activity.deletedCount || 0,
     sprints: sprints.deletedCount || 0,
     components: components.deletedCount || 0,
   }
