@@ -393,6 +393,45 @@ export function StratflowIssueDrawer({
     return { totalMinutes, billableMinutes }
   }, [timeEntries])
 
+  React.useEffect(() => {
+    const isTypingTarget = (t: EventTarget | null) => {
+      const el = t as any
+      if (!el) return false
+      const tag = String(el.tagName || '').toUpperCase()
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+      if (Boolean(el.isContentEditable)) return true
+      return false
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+
+      // Full window toggle (avoid when typing)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+        if (isTypingTarget(e.target)) return
+        e.preventDefault()
+        setFullScreen((v) => !v)
+        return
+      }
+
+      // Save (Ctrl/Cmd+Enter)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        if (save.isPending) return
+        if (!title.trim()) return
+        e.preventDefault()
+        save.mutate()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose, save.isPending, title, setFullScreen])
+
   return (
     <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={onClose}>
       <div
