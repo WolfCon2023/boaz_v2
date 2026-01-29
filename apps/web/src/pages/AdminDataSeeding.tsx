@@ -802,28 +802,18 @@ Related:
     setSeedingStratflowKB(true)
     setStratflowKBResult(null)
     try {
-      // Try dedicated seed endpoint first; fall back to upsert-by-slug (more stable when edge routing is flaky).
-      try {
-        const res = await seedPost('/api/admin/seed/stratflow-kb')
-        if (res.data.error) throw new Error(res.data.error)
-        setStratflowKBResult(res.data.data)
-        showToast('StratFlow KB articles seeded successfully', 'success')
-      } catch (err: any) {
-        if (err?.response?.status === 404) {
-          const results: any[] = []
-          for (const art of STRATFLOW_KB_ARTICLES) {
-            const r = await upsertKbArticleBySlug(art as any)
-            results.push(r)
-          }
-          setStratflowKBResult({
-            message: `StratFlow KB seeded successfully (${results.length} articles)`,
-            results,
-          })
-          showToast('StratFlow KB articles seeded successfully', 'success')
-        } else {
-          throw err
-        }
+      // Canonical StratFlow KB source is the web-side STRATFLOW_KB_ARTICLES array.
+      // We upsert via standard KB CRUD endpoints so updates always reflect the latest KB content.
+      const results: any[] = []
+      for (const art of STRATFLOW_KB_ARTICLES) {
+        const r = await upsertKbArticleBySlug(art as any)
+        results.push(r)
       }
+      setStratflowKBResult({
+        message: `StratFlow KB seeded successfully (${results.length} articles)`,
+        results,
+      })
+      showToast('StratFlow KB articles seeded successfully', 'success')
     } catch (err: any) {
       showToast(err?.response?.data?.error || err?.message || 'Failed to seed StratFlow KB', 'error')
     } finally {

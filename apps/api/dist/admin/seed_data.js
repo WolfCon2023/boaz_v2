@@ -3691,7 +3691,7 @@ adminSeedDataRouter.post('/stratflow-kb', async (_req, res) => {
                 title: 'StratFlow — Getting Started (Projects, Flow Hub, and Navigation)',
                 category: 'StratFlow',
                 slug: 'stratflow-guide',
-                tags: ['stratflow', 'projects', 'flow hub', 'board', 'list', 'sprint', 'timeline', 'reports', 'activity'],
+                tags: ['stratflow', 'projects', 'flow hub', 'board', 'list', 'sprint', 'timeline', 'reports', 'activity', 'notifications', 'mentions', 'watching'],
                 body: `# StratFlow — Getting Started (Projects, Flow Hub, and Navigation)
 
 StratFlow is BOAZ’s strategic delivery workspace. It combines **project planning**, **agile execution**, and **portfolio visibility** into one Flow Hub.
@@ -3705,6 +3705,7 @@ StratFlow is BOAZ’s strategic delivery workspace. It combines **project planni
 - Plan issues into sprints and manage sprint capacity
 - Visualize delivery through Board, List, Sprint, Timeline, Reports, and Activity views
 - Track dependencies (Blocked / Blocks) and log time (billable vs non-billable)
+- Stay informed with **in‑app notifications** (watch project/issue + @mentions)
 
 ---
 
@@ -3754,6 +3755,35 @@ Use Activity to see changes as a feed.
 - Issue updates/moves/comments/links
 - Sprint lifecycle events
 - Bulk updates and time events
+
+---
+
+## Notifications, watching, and @mentions (stay in the loop)
+
+StratFlow includes an in‑app notification system so teams don’t miss important changes.
+
+### Where notifications appear
+
+- In a project’s Flow Hub, use the **Notifications (bell)** button at the top.
+- Unread notifications show an **unread badge count**.
+
+### How to watch
+
+- **Watch project**: In the Flow Hub header, click **Watch project**. You’ll receive notifications for key updates in that project.
+- **Watch issue**: In Issue Focus, click **Watch**. You’ll receive notifications for updates to that issue.
+
+### How @mentions work
+
+In Issue Focus → Comments, you can mention teammates using:
+- \`@name\` (or part of a name)
+- \`@email\` (or email local-part)
+
+When you mention someone, they receive a **“You were mentioned”** notification.
+
+### Marking notifications read
+
+- Clicking a notification marks it as **read**
+- Use **Mark all read** to clear everything at once
 
 ---
 
@@ -3838,7 +3868,7 @@ Need help? Click the **?** icon in StratFlow projects.
                 title: 'StratFlow — Issues (Epics, Stories, Tasks, Defects, Spikes)',
                 category: 'StratFlow',
                 slug: 'stratflow-issues',
-                tags: ['stratflow', 'issues', 'epic', 'story', 'task', 'defect', 'spike', 'priority', 'labels', 'components'],
+                tags: ['stratflow', 'issues', 'epic', 'story', 'task', 'defect', 'spike', 'priority', 'labels', 'components', 'notifications', 'mentions', 'watching'],
                 body: `# StratFlow — Issues (Epics, Stories, Tasks, Defects, Spikes)
 
 Issues are the units of work in StratFlow.
@@ -3871,6 +3901,28 @@ Click an issue card to open **Issue Focus** and edit fields:
 - Story points
 - Assignee (project members only)
 - Labels and Components
+
+---
+
+## Watching and notifications (Issue Focus)
+
+Issue Focus includes a **Watch** button in the header.
+
+- If you click **Watch**, StratFlow will notify you when important updates happen on that issue (comments, moves, etc.).
+- If you click **Watching**, you’ll stop watching that issue.
+
+Tip: Use **Watch issue** for work you depend on or anything you’re actively collaborating on.
+
+---
+
+## @mentions in comments
+
+In the Comments section of Issue Focus, you can mention a teammate:
+
+- \`@name\` (or part of a name)
+- \`@email\` (or email local-part)
+
+Mentions create a dedicated **“You were mentioned”** notification for the person you tagged.
 
 ---
 
