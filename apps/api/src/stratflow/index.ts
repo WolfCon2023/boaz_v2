@@ -64,6 +64,7 @@ type ActivityKind =
   | 'issue_commented'
   | 'issue_link_added'
   | 'issue_link_removed'
+  | 'automation_applied'
   | 'time_logged'
   | 'time_updated'
   | 'time_deleted'
@@ -197,6 +198,35 @@ type NotificationDoc = {
   meta?: any
 }
 
+type AutomationTriggerKind = 'issue_moved' | 'issue_link_added' | 'issue_link_removed' | 'sprint_closed'
+
+type AutomationRuleDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  name: string
+  enabled: boolean
+  trigger: {
+    kind: AutomationTriggerKind
+    // Optional filters (MVP)
+    toStatusKey?: IssueStatusKey | null
+    linkType?: IssueLinkType | null
+  }
+  conditions?: {
+    issueType?: IssueType | null
+    hasLabel?: string | null
+    notHasLabel?: string | null
+    isBlocked?: boolean | null
+  } | null
+  actions: {
+    addLabels?: string[]
+    removeLabels?: string[]
+    // Sprint close actions
+    moveOpenIssuesToBacklog?: boolean
+  }
+  createdAt: Date
+  updatedAt: Date
+}
+
 function normStr(v: any) {
   return typeof v === 'string' ? v.trim() : ''
 }
@@ -291,9 +321,109 @@ async function ensureStratflowIndexes(db: any) {
     await db.collection('sf_watches').createIndex({ projectId: 1, userId: 1, issueId: 1 }, { unique: true }).catch(() => {})
     await db.collection('sf_notifications').createIndex({ projectId: 1, userId: 1, createdAt: -1 }).catch(() => {})
     await db.collection('sf_notifications').createIndex({ userId: 1, readAt: 1, createdAt: -1 }).catch(() => {})
+    await db.collection('sf_automation_rules').createIndex({ projectId: 1, updatedAt: -1 }).catch(() => {})
   } catch {
     // noop
   }
+}
+
+function isIssueBlocked(issue: any) {
+  const links = (issue?.links || []) as Array<{ type: string }>
+  return links.some((l) => String(l?.type || '') === 'blocked_by')
+}
+
+function canEditAutomation(project: any, authUserId: string) {
+  return String(project?.ownerId || '') === String(authUserId || '')
+}
+
+async function applyAutomationForIssue(
+  db: any,
+  project: any,
+  authUserId: string,
+  trigger: { kind: AutomationTriggerKind; toStatusKey?: IssueStatusKey | null; linkType?: IssueLinkType | null },
+  issue: any,
+) {
+  const rules = await db
+    .collection('sf_automation_rules')
+    .find({ projectId: project._id, enabled: true, 'trigger.kind': trigger.kind } as any)
+    .sort({ updatedAt: -1 } as any)
+    .limit(200)
+    .toArray()
+
+  if (!rules.length) return { applied: 0 }
+
+  let applied = 0
+  for (const r of rules as any[]) {
+    const t = r.trigger || {}
+    if (t.toStatusKey != null && t.toStatusKey !== (trigger.toStatusKey ?? null)) continue
+    if (t.linkType != null && t.linkType !== (trigger.linkType ?? null)) continue
+
+    const c = r.conditions || {}
+    if (c.issueType != null && normIssueType(issue.type) !== c.issueType) continue
+    if (c.hasLabel) {
+      const labels = Array.isArray(issue.labels) ? issue.labels.map((x: any) => String(x || '').trim()) : []
+      if (!labels.includes(String(c.hasLabel))) continue
+    }
+    if (c.notHasLabel) {
+      const labels = Array.isArray(issue.labels) ? issue.labels.map((x: any) => String(x || '').trim()) : []
+      if (labels.includes(String(c.notHasLabel))) continue
+    }
+    if (c.isBlocked != null) {
+      const blocked = isIssueBlocked(issue)
+      if (Boolean(c.isBlocked) !== blocked) continue
+    }
+
+    const addLabels = normStrArray((r.actions || {}).addLabels, 50)
+    const removeLabels = normStrArray((r.actions || {}).removeLabels, 50)
+    const updateDoc: any = { $set: { updatedAt: new Date() } }
+    if (addLabels.length) updateDoc.$addToSet = { labels: { $each: addLabels } }
+    if (removeLabels.length) updateDoc.$pull = { labels: { $in: removeLabels } }
+    if (!addLabels.length && !removeLabels.length) continue
+
+    await db.collection('sf_issues').updateOne({ _id: issue._id } as any, updateDoc as any)
+    applied++
+
+    await logActivity(db, {
+      projectId: project._id,
+      actorId: authUserId,
+      kind: 'automation_applied',
+      issueId: issue._id,
+      meta: { ruleId: String(r._id), ruleName: String(r.name || ''), trigger },
+      createdAt: new Date(),
+    })
+  }
+  return { applied }
+}
+
+async function applyAutomationForSprintClose(db: any, project: any, authUserId: string, sprintId: ObjectId) {
+  const rules = await db
+    .collection('sf_automation_rules')
+    .find({ projectId: project._id, enabled: true, 'trigger.kind': 'sprint_closed' } as any)
+    .sort({ updatedAt: -1 } as any)
+    .limit(200)
+    .toArray()
+  if (!rules.length) return { applied: 0 }
+
+  let applied = 0
+  for (const r of rules as any[]) {
+    const acts = r.actions || {}
+    if (!acts.moveOpenIssuesToBacklog) continue
+
+    const now = new Date()
+    const result = await db
+      .collection('sf_issues')
+      .updateMany({ projectId: project._id, sprintId, statusKey: { $ne: 'done' } } as any, { $set: { sprintId: null, updatedAt: now } } as any)
+    applied++
+    await logActivity(db, {
+      projectId: project._id,
+      actorId: authUserId,
+      kind: 'automation_applied',
+      sprintId,
+      meta: { ruleId: String(r._id), ruleName: String(r.name || ''), trigger: { kind: 'sprint_closed' }, modified: result.modifiedCount },
+      createdAt: now,
+    })
+  }
+  return { applied }
 }
 
 function escapeRegex(s: string) {
@@ -393,6 +523,7 @@ async function notifyFromActivity(db: any, activity: Omit<ActivityDoc, '_id'>) {
       issue_commented: 'issue_commented',
       issue_link_added: 'issue_link_added',
       issue_link_removed: 'issue_link_removed',
+      automation_applied: 'issue_updated',
       time_logged: 'time_logged',
       time_updated: 'time_updated',
       time_deleted: 'time_deleted',
@@ -1105,6 +1236,18 @@ stratflowRouter.patch('/issues/:issueId/move', async (req: any, res) => {
     } as any,
   )
 
+  // Re-read issue so automation can evaluate on the updated state.
+  const nextIssue = await db.collection('sf_issues').findOne({ _id: iid } as any)
+  if (nextIssue) {
+    await applyAutomationForIssue(
+      db,
+      project,
+      auth.userId,
+      { kind: 'issue_moved', toStatusKey: nextStatusKey },
+      nextIssue,
+    )
+  }
+
   await logActivity(db, {
     projectId: board.projectId,
     actorId: auth.userId,
@@ -1261,6 +1404,10 @@ stratflowRouter.post('/sprints/:sprintId/close', async (req: any, res) => {
 
   const now = new Date()
   await db.collection('sf_sprints').updateOne({ _id: sid } as any, { $set: { state: 'closed', updatedAt: now } } as any)
+
+  // Apply automation (e.g., move open issues back to backlog when a sprint closes)
+  await applyAutomationForSprintClose(db, project, auth.userId, sid)
+
   await logActivity(db, { projectId: sprint.projectId, actorId: auth.userId, kind: 'sprint_closed', sprintId: sid, meta: { force }, createdAt: now })
   res.json({ data: { ok: true }, error: null })
 })
@@ -1348,6 +1495,17 @@ stratflowRouter.post('/issues/:issueId/links', async (req: any, res) => {
     { _id: iid } as any,
     { $addToSet: { links: { type: parsed.data.type, issueId: oid } }, $set: { updatedAt: new Date() } } as any,
   )
+
+  const nextIssue = await db.collection('sf_issues').findOne({ _id: iid } as any)
+  if (nextIssue) {
+    await applyAutomationForIssue(
+      db,
+      project,
+      auth.userId,
+      { kind: 'issue_link_added', linkType: parsed.data.type as any },
+      nextIssue,
+    )
+  }
   await logActivity(db, {
     projectId: issue.projectId,
     actorId: auth.userId,
@@ -1382,6 +1540,17 @@ stratflowRouter.post('/issues/:issueId/links/remove', async (req: any, res) => {
     { _id: iid } as any,
     { $pull: { links: { type: parsed.data.type, issueId: oid } }, $set: { updatedAt: new Date() } } as any,
   )
+
+  const nextIssue = await db.collection('sf_issues').findOne({ _id: iid } as any)
+  if (nextIssue) {
+    await applyAutomationForIssue(
+      db,
+      project,
+      auth.userId,
+      { kind: 'issue_link_removed', linkType: parsed.data.type as any },
+      nextIssue,
+    )
+  }
   await logActivity(db, {
     projectId: issue.projectId,
     actorId: auth.userId,
@@ -2070,6 +2239,159 @@ stratflowRouter.post('/projects/:projectId/notifications/mark-all-read', async (
   const now = new Date()
   const r = await db.collection('sf_notifications').updateMany({ projectId: pid, userId: auth.userId, readAt: null } as any, { $set: { readAt: now } } as any)
   res.json({ data: { ok: true, modified: r.modifiedCount }, error: null })
+})
+
+const automationRuleCreateSchema = z.object({
+  name: z.string().min(2).max(120),
+  enabled: z.boolean().optional(),
+  trigger: z.object({
+    kind: z.enum(['issue_moved', 'issue_link_added', 'issue_link_removed', 'sprint_closed']),
+    toStatusKey: z.enum(['backlog', 'todo', 'in_progress', 'in_review', 'done']).optional().nullable(),
+    linkType: z.enum(['blocks', 'blocked_by', 'relates_to']).optional().nullable(),
+  }),
+  conditions: z
+    .object({
+      issueType: z.enum(['Epic', 'Story', 'Task', 'Defect', 'Spike']).optional().nullable(),
+      hasLabel: z.string().max(80).optional().nullable(),
+      notHasLabel: z.string().max(80).optional().nullable(),
+      isBlocked: z.boolean().optional().nullable(),
+    })
+    .optional()
+    .nullable(),
+  actions: z.object({
+    addLabels: z.array(z.string()).optional(),
+    removeLabels: z.array(z.string()).optional(),
+    moveOpenIssuesToBacklog: z.boolean().optional(),
+  }),
+})
+
+const automationRuleUpdateSchema = automationRuleCreateSchema.partial()
+
+// GET /api/stratflow/projects/:projectId/automation-rules
+stratflowRouter.get('/projects/:projectId/automation-rules', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const items = await db.collection('sf_automation_rules').find({ projectId: pid } as any).sort({ updatedAt: -1 } as any).limit(200).toArray()
+  res.json({
+    data: {
+      projectId: String(pid),
+      items: items.map((r: any) => ({
+        ...r,
+        _id: String(r._id),
+        projectId: String(r.projectId),
+        createdAt: toIsoOrNull(r.createdAt),
+        updatedAt: toIsoOrNull(r.updatedAt),
+      })),
+    },
+    error: null,
+  })
+})
+
+// POST /api/stratflow/projects/:projectId/automation-rules (owner-only)
+stratflowRouter.post('/projects/:projectId/automation-rules', async (req: any, res) => {
+  const parsed = automationRuleCreateSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!canEditAutomation(project, auth.userId)) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const now = new Date()
+  const doc: AutomationRuleDoc = {
+    _id: new ObjectId(),
+    projectId: pid,
+    name: parsed.data.name.trim(),
+    enabled: parsed.data.enabled !== false,
+    trigger: {
+      kind: parsed.data.trigger.kind as any,
+      toStatusKey: parsed.data.trigger.toStatusKey ?? null,
+      linkType: parsed.data.trigger.linkType ?? null,
+    },
+    conditions: parsed.data.conditions ?? null,
+    actions: {
+      addLabels: normStrArray(parsed.data.actions.addLabels, 50),
+      removeLabels: normStrArray(parsed.data.actions.removeLabels, 50),
+      moveOpenIssuesToBacklog: Boolean(parsed.data.actions.moveOpenIssuesToBacklog),
+    },
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  await db.collection('sf_automation_rules').insertOne(doc as any)
+  res.status(201).json({ data: { _id: String(doc._id) }, error: null })
+})
+
+// PATCH /api/stratflow/automation-rules/:ruleId (owner-only)
+stratflowRouter.patch('/automation-rules/:ruleId', async (req: any, res) => {
+  const parsed = automationRuleUpdateSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const rid = objIdOrNull(String(req.params.ruleId || ''))
+  if (!rid) return res.status(400).json({ data: null, error: 'invalid_rule_id' })
+
+  const existing = await db.collection('sf_automation_rules').findOne({ _id: rid } as any)
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+  const project = await loadProjectForUser(db, existing.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (!canEditAutomation(project, auth.userId)) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const update: any = { updatedAt: new Date() }
+  if (parsed.data.name !== undefined) update.name = String(parsed.data.name).trim()
+  if (parsed.data.enabled !== undefined) update.enabled = Boolean(parsed.data.enabled)
+  if (parsed.data.trigger !== undefined) update.trigger = { ...(existing.trigger || {}), ...(parsed.data.trigger as any) }
+  if (parsed.data.conditions !== undefined) update.conditions = parsed.data.conditions ?? null
+  if (parsed.data.actions !== undefined) {
+    update.actions = {
+      ...(existing.actions || {}),
+      ...(parsed.data.actions as any),
+    }
+    if (update.actions.addLabels !== undefined) update.actions.addLabels = normStrArray(update.actions.addLabels, 50)
+    if (update.actions.removeLabels !== undefined) update.actions.removeLabels = normStrArray(update.actions.removeLabels, 50)
+    if (update.actions.moveOpenIssuesToBacklog !== undefined) update.actions.moveOpenIssuesToBacklog = Boolean(update.actions.moveOpenIssuesToBacklog)
+  }
+
+  await db.collection('sf_automation_rules').updateOne({ _id: rid } as any, { $set: update } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// DELETE /api/stratflow/automation-rules/:ruleId (owner-only)
+stratflowRouter.delete('/automation-rules/:ruleId', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const rid = objIdOrNull(String(req.params.ruleId || ''))
+  if (!rid) return res.status(400).json({ data: null, error: 'invalid_rule_id' })
+
+  const existing = await db.collection('sf_automation_rules').findOne({ _id: rid } as any)
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+  const project = await loadProjectForUser(db, existing.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (!canEditAutomation(project, auth.userId)) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  await db.collection('sf_automation_rules').deleteOne({ _id: rid } as any)
+  res.json({ data: { ok: true }, error: null })
 })
 
 // GET /api/stratflow/projects/:projectId/time-rollups

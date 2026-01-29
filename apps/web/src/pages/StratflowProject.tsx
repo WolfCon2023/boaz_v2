@@ -7,7 +7,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMNav } from '@/components/CRMNav'
-import { Activity, BarChart3, Bell, CalendarDays, ListChecks, Plus, Presentation, Star, Trello } from 'lucide-react'
+import { Activity, BarChart3, Bell, CalendarDays, ListChecks, Plus, Presentation, Star, Trello, Zap } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
 import { StratflowIssueDrawer, type StratflowIssueType, type StratflowPriority } from '@/components/StratflowIssueDrawer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -73,7 +73,7 @@ type Project = {
   status: 'Active' | 'On Hold' | 'Completed' | 'Archived'
 }
 
-type ViewMode = 'board' | 'list' | 'sprint' | 'timeline' | 'reports' | 'activity'
+type ViewMode = 'board' | 'list' | 'sprint' | 'timeline' | 'reports' | 'activity' | 'automation'
 
 type UserInfo = {
   id: string
@@ -82,7 +82,7 @@ type UserInfo = {
 }
 
 type ProjectMember = { id: string; email: string; name: string }
-type ProjectMembersResponse = { data: { users: ProjectMember[] } }
+type ProjectMembersResponse = { data: { ownerId?: string; teamIds?: string[]; users: ProjectMember[] } }
 
 type WatchesMeResponse = { data: { projectId: string; project: boolean; issueIds: string[] } }
 
@@ -101,6 +101,19 @@ type NotificationItem = {
   meta?: any
 }
 type NotificationsResponse = { data: { projectId: string; items: NotificationItem[] } }
+
+type AutomationRule = {
+  _id: string
+  projectId: string
+  name: string
+  enabled: boolean
+  trigger: { kind: 'issue_moved' | 'issue_link_added' | 'issue_link_removed' | 'sprint_closed'; toStatusKey?: string | null; linkType?: string | null }
+  conditions?: { issueType?: string | null; hasLabel?: string | null; notHasLabel?: string | null; isBlocked?: boolean | null } | null
+  actions: { addLabels?: string[]; removeLabels?: string[]; moveOpenIssuesToBacklog?: boolean }
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+type AutomationRulesResponse = { data: { projectId: string; items: AutomationRule[] } }
 
 type IssueLinkType = 'blocks' | 'blocked_by' | 'relates_to'
 type IssueLink = { type: IssueLinkType; issueId: string }
@@ -176,7 +189,7 @@ function findIssueColumnId(map: Record<string, Issue[]>, issueId: string) {
 
 function normView(v: string | null): ViewMode {
   const x = String(v || '').toLowerCase()
-  if (x === 'list' || x === 'sprint' || x === 'timeline' || x === 'reports' || x === 'activity') return x as any
+  if (x === 'list' || x === 'sprint' || x === 'timeline' || x === 'reports' || x === 'activity' || x === 'automation') return x as any
   return 'board'
 }
 
@@ -493,6 +506,7 @@ export default function StratflowProject() {
     },
     [memberMap],
   )
+  const isOwner = Boolean(meQ.data?.id && membersQ.data?.data.ownerId && meQ.data?.id === membersQ.data?.data.ownerId)
 
   const watchesQ = useQuery<WatchesMeResponse>({
     queryKey: ['stratflow', 'project', projectId, 'watches', 'me'],
@@ -542,6 +556,107 @@ export default function StratflowProject() {
       toast.showToast('Marked all notifications as read.', 'success')
     },
     onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to mark all read.', 'error'),
+  })
+
+  const rulesQ = useQuery<AutomationRulesResponse>({
+    queryKey: ['stratflow', 'project', projectId, 'automationRules'],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/automation-rules`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'automation',
+  })
+  const rules = rulesQ.data?.data.items ?? []
+
+  const [ruleModalOpen, setRuleModalOpen] = React.useState(false)
+  const [ruleForm, setRuleForm] = React.useState({
+    name: '',
+    enabled: true,
+    triggerKind: 'issue_moved' as AutomationRule['trigger']['kind'],
+    toStatusKey: 'done' as string,
+    linkType: 'blocked_by' as string,
+    issueType: '' as string,
+    isBlocked: '' as '' | 'true' | 'false',
+    addLabels: '' as string,
+    removeLabels: '' as string,
+    moveOpenIssuesToBacklog: true,
+  })
+
+  const createRule = useMutation({
+    mutationFn: async () => {
+      if (!projectId) throw new Error('No project selected.')
+      const payload: any = {
+        name: ruleForm.name.trim(),
+        enabled: Boolean(ruleForm.enabled),
+        trigger: {
+          kind: ruleForm.triggerKind,
+          toStatusKey: ruleForm.triggerKind === 'issue_moved' ? (ruleForm.toStatusKey || null) : null,
+          linkType: ruleForm.triggerKind.startsWith('issue_link_') ? (ruleForm.linkType || null) : null,
+        },
+        conditions: {
+          issueType: ruleForm.issueType ? ruleForm.issueType : null,
+          isBlocked: ruleForm.isBlocked === '' ? null : ruleForm.isBlocked === 'true',
+        },
+        actions: {
+          addLabels: ruleForm.addLabels
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean),
+          removeLabels: ruleForm.removeLabels
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean),
+          moveOpenIssuesToBacklog: Boolean(ruleForm.moveOpenIssuesToBacklog),
+        },
+      }
+      if (ruleForm.triggerKind === 'sprint_closed') {
+        payload.actions = { moveOpenIssuesToBacklog: Boolean(ruleForm.moveOpenIssuesToBacklog) }
+        payload.conditions = null
+      }
+      return (await http.post(`/api/stratflow/projects/${projectId}/automation-rules`, payload)).data
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'project', projectId, 'automationRules'] })
+      setRuleModalOpen(false)
+      setRuleForm((p) => ({ ...p, name: '' }))
+      toast.showToast('Automation rule created.', 'success')
+    },
+    onError: (err: any) => {
+      const code = err?.response?.data?.error
+      if (code === 'owner_only') toast.showToast('Only the project owner can manage automation rules.', 'error')
+      else toast.showToast(code || err?.message || 'Failed to create rule.', 'error')
+    },
+  })
+
+  const toggleRule = useMutation({
+    mutationFn: async (r: AutomationRule) => (await http.patch(`/api/stratflow/automation-rules/${r._id}`, { enabled: !r.enabled })).data,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'project', projectId, 'automationRules'] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to update rule.', 'error'),
+  })
+
+  const deleteRule = useMutation({
+    mutationFn: async (ruleId: string) => (await http.delete(`/api/stratflow/automation-rules/${ruleId}`)).data,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'project', projectId, 'automationRules'] })
+      toast.showToast('Rule deleted.', 'success')
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to delete rule.', 'error'),
+  })
+
+  const createPresetRule = useMutation({
+    mutationFn: async (payload: any) => {
+      if (!projectId) throw new Error('No project selected.')
+      return (await http.post(`/api/stratflow/projects/${projectId}/automation-rules`, payload)).data
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'project', projectId, 'automationRules'] })
+      toast.showToast('Automation rule created.', 'success')
+    },
+    onError: (err: any) => {
+      const code = err?.response?.data?.error
+      if (code === 'owner_only') toast.showToast('Only the project owner can manage automation rules.', 'error')
+      else toast.showToast(code || err?.message || 'Failed to create rule.', 'error')
+    },
   })
 
   const projectQ = useQuery<{ data: Project }>({
@@ -1130,6 +1245,176 @@ export default function StratflowProject() {
           </div>
         ) : null}
 
+        {ruleModalOpen ? (
+          <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={() => setRuleModalOpen(false)}>
+            <div
+              className="mx-auto mt-20 w-[min(92vw,44rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">New automation rule</div>
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                    Automation runs on the server and is logged in Activity when applied.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                  onClick={() => setRuleModalOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+
+              {!isOwner ? (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  Only the <b>project owner</b> can create or edit automation rules.
+                </div>
+              ) : null}
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Name</label>
+                  <input
+                    value={ruleForm.name}
+                    onChange={(e) => setRuleForm((p) => ({ ...p, name: e.target.value }))}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                    placeholder="e.g., Mark blocked issues"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Trigger</label>
+                  <select
+                    value={ruleForm.triggerKind}
+                    onChange={(e) => setRuleForm((p) => ({ ...p, triggerKind: e.target.value as any }))}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+                  >
+                    <option value="issue_moved">Issue moved</option>
+                    <option value="issue_link_added">Dependency added</option>
+                    <option value="issue_link_removed">Dependency removed</option>
+                    <option value="sprint_closed">Sprint closed</option>
+                  </select>
+                </div>
+
+                {ruleForm.triggerKind === 'issue_moved' ? (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">To status</label>
+                    <select
+                      value={ruleForm.toStatusKey}
+                      onChange={(e) => setRuleForm((p) => ({ ...p, toStatusKey: e.target.value }))}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+                    >
+                      <option value="backlog">Backlog</option>
+                      <option value="todo">To do</option>
+                      <option value="in_progress">In progress</option>
+                      <option value="in_review">In review</option>
+                      <option value="done">Done</option>
+                    </select>
+                  </div>
+                ) : null}
+
+                {ruleForm.triggerKind === 'issue_link_added' || ruleForm.triggerKind === 'issue_link_removed' ? (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Link type</label>
+                    <select
+                      value={ruleForm.linkType}
+                      onChange={(e) => setRuleForm((p) => ({ ...p, linkType: e.target.value }))}
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+                    >
+                      <option value="blocked_by">Blocked by</option>
+                      <option value="blocks">Blocks</option>
+                      <option value="relates_to">Relates to</option>
+                    </select>
+                  </div>
+                ) : null}
+
+                {ruleForm.triggerKind !== 'sprint_closed' ? (
+                  <>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Issue type (optional)</label>
+                      <select
+                        value={ruleForm.issueType}
+                        onChange={(e) => setRuleForm((p) => ({ ...p, issueType: e.target.value }))}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+                      >
+                        <option value="">Any</option>
+                        <option value="Epic">Epic</option>
+                        <option value="Story">Story</option>
+                        <option value="Task">Task</option>
+                        <option value="Defect">Defect</option>
+                        <option value="Spike">Spike</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Blocked? (optional)</label>
+                      <select
+                        value={ruleForm.isBlocked}
+                        onChange={(e) => setRuleForm((p) => ({ ...p, isBlocked: e.target.value as any }))}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+                      >
+                        <option value="">Any</option>
+                        <option value="true">Only blocked</option>
+                        <option value="false">Only not-blocked</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Add labels</label>
+                      <input
+                        value={ruleForm.addLabels}
+                        onChange={(e) => setRuleForm((p) => ({ ...p, addLabels: e.target.value }))}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                        placeholder="e.g., blocked, needs-review"
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Remove labels</label>
+                      <input
+                        value={ruleForm.removeLabels}
+                        onChange={(e) => setRuleForm((p) => ({ ...p, removeLabels: e.target.value }))}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                        placeholder="e.g., blocked"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={ruleForm.moveOpenIssuesToBacklog}
+                        onChange={(e) => setRuleForm((p) => ({ ...p, moveOpenIssuesToBacklog: e.target.checked }))}
+                      />
+                      Move open sprint issues back to backlog when sprint closes
+                    </label>
+                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                      This runs after the sprint is closed. It only moves issues that are not Done.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                  onClick={() => setRuleModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!isOwner || createRule.isPending || !ruleForm.name.trim()}
+                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                  onClick={() => createRule.mutate()}
+                >
+                  {createRule.isPending ? 'Creating…' : 'Create rule'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -1229,6 +1514,19 @@ export default function StratflowProject() {
           >
             <BarChart3 className="h-4 w-4" />
             Reports
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('automation')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'automation'
+                ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            <Zap className="h-4 w-4" />
+            Automation
           </button>
           <button
             type="button"
@@ -2593,6 +2891,148 @@ export default function StratflowProject() {
                   </>
                 )
               })()}
+            </section>
+          )}
+
+          {view === 'automation' && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+              <div className="flex flex-col gap-3 border-b border-[color:var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-sm font-semibold">Automation</div>
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                    Server-side rules that reduce manual work (labeling, sprint cleanup) and keep flow consistent.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!isOwner}
+                    onClick={() => setRuleModalOpen(true)}
+                    className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                    title={!isOwner ? 'Only the project owner can create rules.' : 'Create a new automation rule'}
+                  >
+                    New rule
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">Quick add</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={!isOwner || createPresetRule.isPending}
+                      onClick={() =>
+                        createPresetRule.mutate({
+                          name: 'Auto-label blocked issues',
+                          enabled: true,
+                          trigger: { kind: 'issue_link_added', linkType: 'blocked_by' },
+                          conditions: { isBlocked: true },
+                          actions: { addLabels: ['blocked'] },
+                        })
+                      }
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                    >
+                      Blocked → add label
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isOwner || createPresetRule.isPending}
+                      onClick={() =>
+                        createPresetRule.mutate({
+                          name: 'Auto-label Done items',
+                          enabled: true,
+                          trigger: { kind: 'issue_moved', toStatusKey: 'done' },
+                          actions: { addLabels: ['done'] },
+                        })
+                      }
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                    >
+                      Done → add label
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!isOwner || createPresetRule.isPending}
+                      onClick={() =>
+                        createPresetRule.mutate({
+                          name: 'On sprint close: move open issues to backlog',
+                          enabled: true,
+                          trigger: { kind: 'sprint_closed' },
+                          actions: { moveOpenIssuesToBacklog: true },
+                        })
+                      }
+                      className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                    >
+                      Close sprint → backlog
+                    </button>
+                  </div>
+                  {!isOwner ? <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">Only the project owner can add rules.</div> : null}
+                </div>
+
+                <div className="rounded-xl border border-[color:var(--color-border)]">
+                  <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                    <div className="text-sm font-semibold">Rules</div>
+                    <div className="text-xs text-[color:var(--color-text-muted)]">{rulesQ.isFetching ? 'Loading…' : `${rules.length}`}</div>
+                  </div>
+                  <div className="divide-y divide-[color:var(--color-border)]">
+                    {rules.map((r) => (
+                      <div key={r._id} className="px-4 py-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-medium truncate">{r.name}</div>
+                              {r.enabled ? (
+                                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-900">Enabled</span>
+                              ) : (
+                                <span className="rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                                  Disabled
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                              Trigger: {String(r.trigger?.kind || '').replaceAll('_', ' ')}
+                              {r.trigger?.toStatusKey ? ` → ${r.trigger.toStatusKey}` : ''}
+                              {r.trigger?.linkType ? ` (${r.trigger.linkType})` : ''}
+                            </div>
+                            {r.actions?.addLabels?.length || r.actions?.removeLabels?.length || r.actions?.moveOpenIssuesToBacklog ? (
+                              <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                                {r.actions?.addLabels?.length ? <span>Add labels: {r.actions.addLabels.join(', ')}. </span> : null}
+                                {r.actions?.removeLabels?.length ? <span>Remove labels: {r.actions.removeLabels.join(', ')}. </span> : null}
+                                {r.actions?.moveOpenIssuesToBacklog ? <span>Move open sprint issues to backlog on sprint close.</span> : null}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={!isOwner || toggleRule.isPending}
+                              onClick={() => toggleRule.mutate(r)}
+                              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                            >
+                              {r.enabled ? 'Disable' : 'Enable'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!isOwner || deleteRule.isPending}
+                              onClick={() => {
+                                if (!confirm('Delete this automation rule?')) return
+                                deleteRule.mutate(r._id)
+                              }}
+                              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!rulesQ.isLoading && rules.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">No automation rules yet.</div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             </section>
           )}
 
