@@ -64,6 +64,9 @@ type ActivityKind =
   | 'issue_commented'
   | 'issue_link_added'
   | 'issue_link_removed'
+  | 'time_logged'
+  | 'time_updated'
+  | 'time_deleted'
   | 'bulk_update'
   | 'sprint_created'
   | 'sprint_updated'
@@ -137,6 +140,19 @@ type ProjectComponentDoc = {
   projectId: ObjectId
   name: string
   nameLower: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+type TimeEntryDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  issueId: ObjectId
+  userId: string
+  minutes: number
+  billable: boolean
+  note?: string | null
+  workDate: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -229,6 +245,9 @@ async function ensureStratflowIndexes(db: any) {
     await db.collection('sf_activity').createIndex({ projectId: 1, createdAt: -1 }).catch(() => {})
     await db.collection('sf_activity').createIndex({ issueId: 1, createdAt: -1 }).catch(() => {})
     await db.collection('sf_activity').createIndex({ sprintId: 1, createdAt: -1 }).catch(() => {})
+    await db.collection('sf_time_entries').createIndex({ projectId: 1, workDate: -1, createdAt: -1 }).catch(() => {})
+    await db.collection('sf_time_entries').createIndex({ issueId: 1, workDate: -1, createdAt: -1 }).catch(() => {})
+    await db.collection('sf_time_entries').createIndex({ userId: 1, workDate: -1, createdAt: -1 }).catch(() => {})
   } catch {
     // noop
   }
@@ -348,6 +367,25 @@ async function createTemplateForProject(db: any, projectId: ObjectId, type: Proj
 
 function toIsoOrNull(d: any) {
   return d?.toISOString?.() ?? null
+}
+
+function isValidUserId(userId: string) {
+  return ObjectId.isValid(String(userId || '').trim())
+}
+
+function parseDateOnlyOrIsoToUtcMidnight(input: any): Date | null {
+  const raw = String(input || '').trim()
+  if (!raw) return null
+  // date-only
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const d0 = new Date(`${raw}T00:00:00.000Z`)
+    return Number.isFinite(d0.getTime()) ? d0 : null
+  }
+  const d = new Date(raw)
+  if (!Number.isFinite(d.getTime())) return null
+  const isoDay = d.toISOString().slice(0, 10)
+  const d0 = new Date(`${isoDay}T00:00:00.000Z`)
+  return Number.isFinite(d0.getTime()) ? d0 : null
 }
 
 // GET /api/stratflow/projects
@@ -1440,6 +1478,185 @@ stratflowRouter.post('/issues/:issueId/comments', async (req: any, res) => {
   res.status(201).json({ data: { _id: String(doc._id) }, error: null })
 })
 
+const timeEntryCreateSchema = z.object({
+  minutes: z.number().int().min(1).max(24 * 60),
+  billable: z.boolean().optional(),
+  note: z.string().max(2000).optional().nullable(),
+  workDate: z.string().optional().nullable(), // YYYY-MM-DD or ISO
+})
+
+const timeEntryUpdateSchema = z.object({
+  minutes: z.number().int().min(1).max(24 * 60).optional(),
+  billable: z.boolean().optional(),
+  note: z.string().max(2000).optional().nullable(),
+  workDate: z.string().optional().nullable(),
+})
+
+// GET /api/stratflow/issues/:issueId/time-entries
+stratflowRouter.get('/issues/:issueId/time-entries', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const iid = objIdOrNull(String(req.params.issueId || ''))
+  if (!iid) return res.status(400).json({ data: null, error: 'invalid_issue_id' })
+
+  const issue = await db.collection('sf_issues').findOne({ _id: iid } as any)
+  if (!issue) return res.status(404).json({ data: null, error: 'not_found' })
+  const project = await loadProjectForUser(db, issue.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const items = await db
+    .collection('sf_time_entries')
+    .find({ issueId: iid } as any)
+    .sort({ workDate: -1, createdAt: -1 } as any)
+    .limit(2000)
+    .toArray()
+
+  res.json({
+    data: {
+      items: items.map((d: any) => ({
+        ...d,
+        _id: String(d._id),
+        projectId: String(d.projectId),
+        issueId: String(d.issueId),
+        userId: String(d.userId || ''),
+        minutes: Number(d.minutes || 0),
+        billable: Boolean(d.billable),
+        workDate: toIsoOrNull(d.workDate),
+        createdAt: toIsoOrNull(d.createdAt),
+        updatedAt: toIsoOrNull(d.updatedAt),
+      })),
+    },
+    error: null,
+  })
+})
+
+// POST /api/stratflow/issues/:issueId/time-entries
+stratflowRouter.post('/issues/:issueId/time-entries', async (req: any, res) => {
+  const parsed = timeEntryCreateSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const iid = objIdOrNull(String(req.params.issueId || ''))
+  if (!iid) return res.status(400).json({ data: null, error: 'invalid_issue_id' })
+  if (!isValidUserId(auth.userId)) return res.status(400).json({ data: null, error: 'invalid_user_id' })
+
+  const issue = await db.collection('sf_issues').findOne({ _id: iid } as any)
+  if (!issue) return res.status(404).json({ data: null, error: 'not_found' })
+  const project = await loadProjectForUser(db, issue.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Governance: only project members can log time
+  const allowed = projectMemberIds(project)
+  if (!allowed.includes(String(auth.userId))) return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const now = new Date()
+  const workDate = parseDateOnlyOrIsoToUtcMidnight(parsed.data.workDate) ?? parseDateOnlyOrIsoToUtcMidnight(now.toISOString())!
+  const doc: TimeEntryDoc = {
+    _id: new ObjectId(),
+    projectId: issue.projectId,
+    issueId: iid,
+    userId: String(auth.userId),
+    minutes: parsed.data.minutes,
+    billable: Boolean(parsed.data.billable),
+    note: parsed.data.note ? String(parsed.data.note).trim() : null,
+    workDate,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  await db.collection('sf_time_entries').insertOne(doc as any)
+  await logActivity(db, {
+    projectId: issue.projectId,
+    actorId: auth.userId,
+    kind: 'time_logged',
+    issueId: iid,
+    meta: { minutes: doc.minutes, billable: doc.billable, workDate: doc.workDate.toISOString().slice(0, 10) },
+    createdAt: now,
+  })
+  res.status(201).json({ data: { _id: String(doc._id) }, error: null })
+})
+
+// PATCH /api/stratflow/time-entries/:timeEntryId
+stratflowRouter.patch('/time-entries/:timeEntryId', async (req: any, res) => {
+  const parsed = timeEntryUpdateSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const tid = objIdOrNull(String(req.params.timeEntryId || ''))
+  if (!tid) return res.status(400).json({ data: null, error: 'invalid_time_entry_id' })
+
+  const existing = await db.collection('sf_time_entries').findOne({ _id: tid } as any)
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+  const project = await loadProjectForUser(db, existing.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Governance: only author or project owner can edit
+  if (String(existing.userId) !== String(auth.userId) && String(project.ownerId) !== String(auth.userId)) {
+    return res.status(403).json({ data: null, error: 'forbidden' })
+  }
+
+  const update: any = { updatedAt: new Date() }
+  if (parsed.data.minutes !== undefined) update.minutes = parsed.data.minutes
+  if (parsed.data.billable !== undefined) update.billable = Boolean(parsed.data.billable)
+  if (parsed.data.note !== undefined) update.note = parsed.data.note ? String(parsed.data.note).trim() : null
+  if (parsed.data.workDate !== undefined) {
+    update.workDate = parsed.data.workDate ? parseDateOnlyOrIsoToUtcMidnight(parsed.data.workDate) : null
+    if (!update.workDate) return res.status(400).json({ data: null, error: 'invalid_work_date' })
+  }
+
+  await db.collection('sf_time_entries').updateOne({ _id: tid } as any, { $set: update } as any)
+  await logActivity(db, {
+    projectId: existing.projectId,
+    actorId: auth.userId,
+    kind: 'time_updated',
+    issueId: existing.issueId,
+    meta: { fields: Object.keys(parsed.data || {}) },
+    createdAt: update.updatedAt,
+  })
+  res.json({ data: { ok: true }, error: null })
+})
+
+// DELETE /api/stratflow/time-entries/:timeEntryId
+stratflowRouter.delete('/time-entries/:timeEntryId', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const tid = objIdOrNull(String(req.params.timeEntryId || ''))
+  if (!tid) return res.status(400).json({ data: null, error: 'invalid_time_entry_id' })
+
+  const existing = await db.collection('sf_time_entries').findOne({ _id: tid } as any)
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+  const project = await loadProjectForUser(db, existing.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Governance: only author or project owner can delete
+  if (String(existing.userId) !== String(auth.userId) && String(project.ownerId) !== String(auth.userId)) {
+    return res.status(403).json({ data: null, error: 'forbidden' })
+  }
+
+  await db.collection('sf_time_entries').deleteOne({ _id: tid } as any)
+  await logActivity(db, {
+    projectId: existing.projectId,
+    actorId: auth.userId,
+    kind: 'time_deleted',
+    issueId: existing.issueId,
+    meta: { minutes: Number(existing.minutes || 0), billable: Boolean(existing.billable), workDate: toIsoOrNull(existing.workDate) },
+    createdAt: new Date(),
+  })
+  res.json({ data: { ok: true }, error: null })
+})
+
 // GET /api/stratflow/projects/:projectId/members (project members + owner; used for assignees)
 stratflowRouter.get('/projects/:projectId/members', async (req: any, res) => {
   const db = await getDb()
@@ -1461,6 +1678,189 @@ stratflowRouter.get('/projects/:projectId/members', async (req: any, res) => {
       ownerId: String(project.ownerId),
       teamIds: Array.isArray(project.teamIds) ? project.teamIds : [],
       users,
+    },
+    error: null,
+  })
+})
+
+// GET /api/stratflow/projects/:projectId/time-rollups
+stratflowRouter.get('/projects/:projectId/time-rollups', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const from = parseDateOnlyOrIsoToUtcMidnight(req.query.from)
+  const to = parseDateOnlyOrIsoToUtcMidnight(req.query.to)
+  const match: any = { projectId: pid }
+  if (from || to) {
+    const range: any = {}
+    if (from) range.$gte = from
+    if (to) range.$lt = new Date(to.getTime() + 24 * 60 * 60 * 1000)
+    match.workDate = range
+  }
+
+  const totalsRow = (
+    await db
+      .collection('sf_time_entries')
+      .aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            totalMinutes: { $sum: { $ifNull: ['$minutes', 0] } },
+            billableMinutes: { $sum: { $cond: [{ $eq: ['$billable', true] }, { $ifNull: ['$minutes', 0] }, 0] } },
+            entryCount: { $sum: 1 },
+          },
+        },
+      ])
+      .toArray()
+  )[0] || { totalMinutes: 0, billableMinutes: 0, entryCount: 0 }
+
+  const byUser = await db
+    .collection('sf_time_entries')
+    .aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$userId',
+          totalMinutes: { $sum: { $ifNull: ['$minutes', 0] } },
+          billableMinutes: { $sum: { $cond: [{ $eq: ['$billable', true] }, { $ifNull: ['$minutes', 0] }, 0] } },
+          entryCount: { $sum: 1 },
+        },
+      },
+      { $sort: { totalMinutes: -1 } },
+      { $limit: 200 },
+    ])
+    .toArray()
+
+  const byIssue = await db
+    .collection('sf_time_entries')
+    .aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$issueId',
+          totalMinutes: { $sum: { $ifNull: ['$minutes', 0] } },
+          billableMinutes: { $sum: { $cond: [{ $eq: ['$billable', true] }, { $ifNull: ['$minutes', 0] }, 0] } },
+          entryCount: { $sum: 1 },
+        },
+      },
+      { $sort: { totalMinutes: -1 } },
+      { $limit: 200 },
+    ])
+    .toArray()
+
+  res.json({
+    data: {
+      projectId: String(pid),
+      from: from ? from.toISOString().slice(0, 10) : null,
+      to: to ? to.toISOString().slice(0, 10) : null,
+      totals: {
+        totalMinutes: Number(totalsRow.totalMinutes || 0),
+        billableMinutes: Number(totalsRow.billableMinutes || 0),
+        nonBillableMinutes: Math.max(0, Number(totalsRow.totalMinutes || 0) - Number(totalsRow.billableMinutes || 0)),
+        entryCount: Number(totalsRow.entryCount || 0),
+      },
+      byUser: byUser.map((r: any) => ({
+        userId: String(r._id || ''),
+        totalMinutes: Number(r.totalMinutes || 0),
+        billableMinutes: Number(r.billableMinutes || 0),
+        nonBillableMinutes: Math.max(0, Number(r.totalMinutes || 0) - Number(r.billableMinutes || 0)),
+        entryCount: Number(r.entryCount || 0),
+      })),
+      byIssue: byIssue.map((r: any) => ({
+        issueId: r._id ? String(r._id) : null,
+        totalMinutes: Number(r.totalMinutes || 0),
+        billableMinutes: Number(r.billableMinutes || 0),
+        nonBillableMinutes: Math.max(0, Number(r.totalMinutes || 0) - Number(r.billableMinutes || 0)),
+        entryCount: Number(r.entryCount || 0),
+      })),
+    },
+    error: null,
+  })
+})
+
+// GET /api/stratflow/projects/:projectId/time-entries (for CSV/export)
+stratflowRouter.get('/projects/:projectId/time-entries', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const from = parseDateOnlyOrIsoToUtcMidnight(req.query.from)
+  const to = parseDateOnlyOrIsoToUtcMidnight(req.query.to)
+  const issueIdQ = objIdOrNull(String(req.query.issueId || ''))
+  const userIdQ = String(req.query.userId || '').trim()
+  const billableQ = String(req.query.billable || '').trim()
+
+  const match: any = { projectId: pid }
+  if (issueIdQ) match.issueId = issueIdQ
+  if (userIdQ) match.userId = userIdQ
+  if (billableQ === 'true') match.billable = true
+  if (billableQ === 'false') match.billable = false
+  if (from || to) {
+    const range: any = {}
+    if (from) range.$gte = from
+    if (to) range.$lt = new Date(to.getTime() + 24 * 60 * 60 * 1000)
+    match.workDate = range
+  }
+
+  const items = await db
+    .collection('sf_time_entries')
+    .find(match)
+    .sort({ workDate: -1, createdAt: -1 } as any)
+    .limit(5000)
+    .toArray()
+
+  const issueIds = Array.from(new Set(items.map((it: any) => it.issueId).filter(Boolean))) as ObjectId[]
+  const userIds = Array.from(new Set(items.map((it: any) => String(it.userId || '')).filter((x: string) => ObjectId.isValid(x))))
+
+  const issues = issueIds.length
+    ? await db.collection('sf_issues').find({ _id: { $in: issueIds }, projectId: pid } as any).project({ _id: 1, title: 1, type: 1 }).toArray()
+    : []
+  const issueMap = new Map(issues.map((i: any) => [String(i._id), { title: String(i.title || ''), type: String(i.type || '') }]))
+
+  const users = userIds.length ? await loadUsersByIds(db, userIds) : []
+  const userMap = new Map(users.map((u: any) => [String(u.id), u]))
+
+  res.json({
+    data: {
+      projectId: String(pid),
+      items: items.map((d: any) => {
+        const iid = d.issueId ? String(d.issueId) : ''
+        const uid = String(d.userId || '')
+        const i = iid ? issueMap.get(iid) : null
+        const u = uid ? userMap.get(uid) : null
+        return {
+          _id: String(d._id),
+          projectId: String(d.projectId),
+          issueId: iid,
+          userId: uid,
+          minutes: Number(d.minutes || 0),
+          billable: Boolean(d.billable),
+          note: d.note ? String(d.note) : null,
+          workDate: toIsoOrNull(d.workDate),
+          createdAt: toIsoOrNull(d.createdAt),
+          updatedAt: toIsoOrNull(d.updatedAt),
+          issueTitle: i ? i.title : null,
+          issueType: i ? i.type : null,
+          userEmail: u?.email || null,
+          userName: u?.name || null,
+        }
+      }),
     },
     error: null,
   })
@@ -1638,6 +2038,7 @@ async function deleteProjectCascade(db: any, projectId: ObjectId) {
   // delete children first
   const issues = await db.collection('sf_issues').deleteMany({ projectId } as any)
   const comments = await db.collection('sf_issue_comments').deleteMany({ projectId } as any)
+  const timeEntries = await db.collection('sf_time_entries').deleteMany({ projectId } as any)
   const sprints = await db.collection('sf_sprints').deleteMany({ projectId } as any)
   const components = await db.collection('sf_components').deleteMany({ projectId } as any)
   const columns = boardIds.length ? await db.collection('sf_columns').deleteMany({ boardId: { $in: boardIds } } as any) : { deletedCount: 0 }
@@ -1650,6 +2051,7 @@ async function deleteProjectCascade(db: any, projectId: ObjectId) {
     columns: (columns as any).deletedCount || 0,
     issues: issues.deletedCount || 0,
     comments: comments.deletedCount || 0,
+    timeEntries: timeEntries.deletedCount || 0,
     sprints: sprints.deletedCount || 0,
     components: components.deletedCount || 0,
   }

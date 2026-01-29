@@ -32,6 +32,12 @@ export type StratflowIssue = {
   updatedAt?: string | null
 }
 
+type UserInfo = {
+  id: string
+  email: string
+  name?: string
+}
+
 type Sprint = {
   _id: string
   projectId: string
@@ -57,6 +63,19 @@ type ProjectMembersResponse = { data: { users: ProjectMember[] } }
 type ProjectComponent = { _id: string; name: string }
 type ProjectComponentsResponse = { data: { items: ProjectComponent[] } }
 
+type TimeEntry = {
+  _id: string
+  projectId: string
+  issueId: string
+  userId: string
+  minutes: number
+  billable: boolean
+  note?: string | null
+  workDate?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
 function normalizeIssueType(t: StratflowIssueType): 'Epic' | 'Story' | 'Task' | 'Defect' | 'Spike' {
   if (t === 'Bug') return 'Defect'
   return t
@@ -78,6 +97,12 @@ export function StratflowIssueDrawer({
 }) {
   const toast = useToast()
   const qc = useQueryClient()
+
+  const meQ = useQuery<UserInfo>({
+    queryKey: ['user', 'me'],
+    queryFn: async () => (await http.get('/api/auth/me')).data,
+    retry: false,
+  })
 
   const issueQ = useQuery<{ data: StratflowIssue }>({
     queryKey: ['stratflow', 'issue', issueId],
@@ -121,13 +146,23 @@ export function StratflowIssueDrawer({
     enabled: Boolean(issueId),
   })
 
+  const timeQ = useQuery<{ data: { items: TimeEntry[] } }>({
+    queryKey: ['stratflow', 'issue', issueId, 'time'],
+    queryFn: async () => (await http.get(`/api/stratflow/issues/${issueId}/time-entries`)).data,
+    retry: false,
+    enabled: Boolean(issueId),
+  })
+
   const issue = issueQ.data?.data
   const sprints = sprintsQ.data?.data.items ?? []
   const members = membersQ.data?.data.users ?? []
   const projectComponents = componentsQ.data?.data.items ?? []
   const epics = (epicsQ.data?.data.items ?? []).filter((e) => e._id !== issueId)
   const comments = commentsQ.data?.data.items ?? []
+  const timeEntries = timeQ.data?.data.items ?? []
+  const myUserId = meQ.data?.id || ''
   const issueLinks = issue?.links ?? []
+  const blockedBy = issueLinks.filter((l) => l.type === 'blocked_by')
 
   const projectIssuesQ = useQuery<{ data: { items: StratflowIssue[] } }>({
     queryKey: ['stratflow', 'projectIssues', projectId, 'linkSearch'],
@@ -158,6 +193,12 @@ export function StratflowIssueDrawer({
   const [targetEndDate, setTargetEndDate] = React.useState<string>('')
   const [newComment, setNewComment] = React.useState<string>('')
 
+  const [timeEditingId, setTimeEditingId] = React.useState<string>('')
+  const [timeHours, setTimeHours] = React.useState<string>('') // hours, e.g. 1.5
+  const [timeBillable, setTimeBillable] = React.useState<boolean>(false)
+  const [timeWorkDate, setTimeWorkDate] = React.useState<string>(new Date().toISOString().slice(0, 10))
+  const [timeNote, setTimeNote] = React.useState<string>('')
+
   const [linkType, setLinkType] = React.useState<'blocks' | 'blocked_by' | 'relates_to'>('relates_to')
   const [linkOtherId, setLinkOtherId] = React.useState<string>('')
 
@@ -178,6 +219,11 @@ export function StratflowIssueDrawer({
     setTargetStartDate(issue.targetStartDate ? String(issue.targetStartDate).slice(0, 10) : '')
     setTargetEndDate(issue.targetEndDate ? String(issue.targetEndDate).slice(0, 10) : '')
     setLinkOtherId('')
+    setTimeEditingId('')
+    setTimeHours('')
+    setTimeBillable(false)
+    setTimeWorkDate(new Date().toISOString().slice(0, 10))
+    setTimeNote('')
   }, [issue, issueId])
 
   const save = useMutation({
@@ -257,6 +303,80 @@ export function StratflowIssueDrawer({
     },
     onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to remove link.', 'error'),
   })
+
+  const unblockAll = useMutation({
+    mutationFn: async () => {
+      for (const l of blockedBy) {
+        await http.post(`/api/stratflow/issues/${issueId}/links/remove`, { type: 'blocked_by', otherIssueId: String(l.issueId) })
+      }
+      return { ok: true }
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issue', issueId] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issues'] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'projectIssues', projectId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to unblock.', 'error'),
+  })
+
+  const logTime = useMutation({
+    mutationFn: async () => {
+      const hours = Number(String(timeHours || '').trim())
+      if (!Number.isFinite(hours) || hours <= 0) throw new Error('Enter hours (e.g., 1.5).')
+      const minutes = Math.round(hours * 60)
+      if (minutes <= 0) throw new Error('Time must be greater than 0.')
+      if (!timeWorkDate) throw new Error('Pick a work date.')
+      return (await http.post(`/api/stratflow/issues/${issueId}/time-entries`, { minutes, billable: timeBillable, workDate: timeWorkDate, note: timeNote.trim() || null })).data
+    },
+    onSuccess: async () => {
+      toast.showToast('Time logged.', 'success')
+      setTimeHours('')
+      setTimeBillable(false)
+      setTimeNote('')
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issue', issueId, 'time'] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'timeRollups', projectId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to log time.', 'error'),
+  })
+
+  const updateTime = useMutation({
+    mutationFn: async () => {
+      if (!timeEditingId) throw new Error('No time entry selected.')
+      const hours = Number(String(timeHours || '').trim())
+      if (!Number.isFinite(hours) || hours <= 0) throw new Error('Enter hours (e.g., 1.5).')
+      const minutes = Math.round(hours * 60)
+      if (!timeWorkDate) throw new Error('Pick a work date.')
+      return (await http.patch(`/api/stratflow/time-entries/${timeEditingId}`, { minutes, billable: timeBillable, workDate: timeWorkDate, note: timeNote.trim() || null })).data
+    },
+    onSuccess: async () => {
+      toast.showToast('Time updated.', 'success')
+      setTimeEditingId('')
+      setTimeHours('')
+      setTimeBillable(false)
+      setTimeNote('')
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issue', issueId, 'time'] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'timeRollups', projectId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to update time.', 'error'),
+  })
+
+  const deleteTime = useMutation({
+    mutationFn: async (timeEntryId: string) => {
+      return (await http.delete(`/api/stratflow/time-entries/${timeEntryId}`)).data
+    },
+    onSuccess: async () => {
+      toast.showToast('Time entry deleted.', 'success')
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'issue', issueId, 'time'] })
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'timeRollups', projectId] })
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || err?.message || 'Failed to delete time.', 'error'),
+  })
+
+  const timeTotals = React.useMemo(() => {
+    const totalMinutes = timeEntries.reduce((a, b) => a + (Number(b.minutes) || 0), 0)
+    const billableMinutes = timeEntries.reduce((a, b) => a + (b.billable ? Number(b.minutes) || 0 : 0), 0)
+    return { totalMinutes, billableMinutes }
+  }, [timeEntries])
 
   return (
     <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={onClose}>
@@ -550,6 +670,22 @@ export function StratflowIssueDrawer({
 
                 {issueLinks.length ? (
                   <div className="mt-3 space-y-2">
+                    {blockedBy.length ? (
+                      <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
+                        <div className="text-xs text-amber-900">
+                          <span className="font-semibold">Blocked</span> by {blockedBy.length} issue(s).
+                        </div>
+                        <button
+                          type="button"
+                          disabled={unblockAll.isPending}
+                          onClick={() => unblockAll.mutate()}
+                          className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                          title="Remove all Blocked by links"
+                        >
+                          {unblockAll.isPending ? 'Unblocking…' : 'Unblock'}
+                        </button>
+                      </div>
+                    ) : null}
                     {issueLinks.map((l, idx) => {
                       const other = issuesById.get(String(l.issueId))
                       const label = other ? `${other.type}: ${other.title}` : `Issue ${String(l.issueId)}`
@@ -573,6 +709,166 @@ export function StratflowIssueDrawer({
                     })}
                   </div>
                 ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-[color:var(--color-border)]">
+                <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                  <div className="text-sm font-semibold">Time</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">
+                    {timeQ.isFetching
+                      ? 'Refreshing…'
+                      : `${Math.round((timeTotals.totalMinutes / 60) * 10) / 10}h (${Math.round((timeTotals.billableMinutes / 60) * 10) / 10}h billable)`}
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Work date</label>
+                      <input
+                        type="date"
+                        value={timeWorkDate}
+                        onChange={(e) => setTimeWorkDate(e.target.value)}
+                        className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Hours</label>
+                      <input
+                        value={timeHours}
+                        onChange={(e) => setTimeHours(e.target.value)}
+                        inputMode="decimal"
+                        placeholder="e.g., 1.5"
+                        className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                      />
+                      <div className="text-[10px] text-[color:var(--color-text-muted)]">
+                        Stored as minutes ({timeHours && Number.isFinite(Number(timeHours)) ? `${Math.round(Number(timeHours) * 60)}m` : '—'}).
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Billable</label>
+                      <button
+                        type="button"
+                        onClick={() => setTimeBillable((v) => !v)}
+                        className={[
+                          'w-full rounded-lg border px-3 py-2 text-sm text-left',
+                          timeBillable
+                            ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                            : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+                        ].join(' ')}
+                        title="Toggle billable"
+                      >
+                        {timeBillable ? 'Yes (billable)' : 'No (non-billable)'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Note</label>
+                    <input
+                      value={timeNote}
+                      onChange={(e) => setTimeNote(e.target.value)}
+                      placeholder="What was done?"
+                      className="w-full rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-transparent"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-[color:var(--color-text-muted)]">
+                      {timeEditingId ? 'Editing your time entry' : 'Log time against this issue'}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {timeEditingId ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTimeEditingId('')
+                            setTimeHours('')
+                            setTimeBillable(false)
+                            setTimeNote('')
+                            setTimeWorkDate(new Date().toISOString().slice(0, 10))
+                          }}
+                          className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={(timeEditingId ? updateTime.isPending : logTime.isPending) || !String(timeHours || '').trim()}
+                        onClick={() => (timeEditingId ? updateTime.mutate() : logTime.mutate())}
+                        className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                      >
+                        {timeEditingId ? (updateTime.isPending ? 'Saving…' : 'Save edit') : logTime.isPending ? 'Logging…' : 'Log time'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[color:var(--color-border)] divide-y divide-[color:var(--color-border)]">
+                    {timeEntries
+                      .slice()
+                      .sort((a, b) => String(b.workDate || '').localeCompare(String(a.workDate || '')))
+                      .slice(0, 50)
+                      .map((t) => {
+                        const canEdit = myUserId && String(t.userId || '') === myUserId
+                        const hours = Math.round(((Number(t.minutes) || 0) / 60) * 10) / 10
+                        const date = t.workDate ? String(t.workDate).slice(0, 10) : ''
+                        return (
+                          <div key={t._id} className="px-3 py-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm">
+                                  <span className="font-medium tabular-nums">{hours}h</span>{' '}
+                                  {t.billable ? (
+                                    <span className="ml-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-900">Billable</span>
+                                  ) : (
+                                    <span className="ml-1 rounded-full border border-[color:var(--color-border)] px-2 py-0.5 text-[10px] text-[color:var(--color-text-muted)]">
+                                      Non-billable
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-0.5 text-xs text-[color:var(--color-text-muted)]">
+                                  {date || '—'} · {t.userId ? (members.find((m) => m.id === t.userId)?.name || members.find((m) => m.id === t.userId)?.email || t.userId) : '—'}
+                                </div>
+                                {t.note ? <div className="mt-1 text-sm break-words">{t.note}</div> : null}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {canEdit ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTimeEditingId(t._id)
+                                      setTimeHours(String(Math.round(((Number(t.minutes) || 0) / 60) * 10) / 10))
+                                      setTimeBillable(Boolean(t.billable))
+                                      setTimeWorkDate(t.workDate ? String(t.workDate).slice(0, 10) : new Date().toISOString().slice(0, 10))
+                                      setTimeNote(String(t.note || ''))
+                                    }}
+                                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                                    title="Edit time entry"
+                                  >
+                                    Edit
+                                  </button>
+                                ) : null}
+                                {canEdit ? (
+                                  <button
+                                    type="button"
+                                    disabled={deleteTime.isPending}
+                                    onClick={() => deleteTime.mutate(t._id)}
+                                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                                    title="Delete time entry"
+                                  >
+                                    Delete
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    {!timeEntries.length && !timeQ.isLoading ? (
+                      <div className="px-3 py-4 text-sm text-[color:var(--color-text-muted)]">No time entries yet.</div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 border-t border-[color:var(--color-border)] pt-3">

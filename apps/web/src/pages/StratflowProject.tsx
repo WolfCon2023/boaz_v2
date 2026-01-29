@@ -110,6 +110,32 @@ type EpicRollup = {
   blockedCount: number
 }
 
+type TimeRollups = {
+  projectId: string
+  from?: string | null
+  to?: string | null
+  totals: {
+    totalMinutes: number
+    billableMinutes: number
+    nonBillableMinutes: number
+    entryCount: number
+  }
+  byUser: Array<{
+    userId: string
+    totalMinutes: number
+    billableMinutes: number
+    nonBillableMinutes: number
+    entryCount: number
+  }>
+  byIssue: Array<{
+    issueId: string | null
+    totalMinutes: number
+    billableMinutes: number
+    nonBillableMinutes: number
+    entryCount: number
+  }>
+}
+
 function groupIssuesByColumn(issues: Issue[]) {
   const m: Record<string, Issue[]> = {}
   for (const it of issues) {
@@ -152,6 +178,10 @@ function initialsFromName(name: string) {
   const parts = n.split(/\s+/).filter(Boolean)
   const letters = (parts[0]?.[0] || '') + (parts[1]?.[0] || '')
   return letters.toUpperCase() || n.slice(0, 2).toUpperCase()
+}
+
+function isBlocked(issue: { links?: IssueLink[] } | null | undefined) {
+  return Boolean(issue?.links?.some((l) => l.type === 'blocked_by'))
 }
 
 function downloadCsv(filename: string, rows: Array<Record<string, any>>) {
@@ -381,9 +411,12 @@ export default function StratflowProject() {
   const toast = useToast()
   const view = normView(sp.get('view'))
   const [focusedIssueId, setFocusedIssueId] = React.useState<string | null>(null)
+  const [exportingTime, setExportingTime] = React.useState(false)
   const [assignedToMeOnly, setAssignedToMeOnly] = React.useState(false)
+  const [blockedOnly, setBlockedOnly] = React.useState(false)
   const [listType, setListType] = React.useState<string>('all')
   const [listPreset, setListPreset] = React.useState<string>('') // id or built-in
+  const [listEpicId, setListEpicId] = React.useState<string>('all')
   const [saveFilterOpen, setSaveFilterOpen] = React.useState(false)
   const [saveFilterName, setSaveFilterName] = React.useState('')
   const savedFiltersKey = `sfSavedFilters:${projectId || ''}`
@@ -490,13 +523,16 @@ export default function StratflowProject() {
 
   const visibleByColumn = React.useMemo(() => {
     const uid = meQ.data?.id || ''
-    if (!assignedToMeOnly || !uid) return localByColumn
+    if (!assignedToMeOnly && !blockedOnly) return localByColumn
     const next: Record<string, Issue[]> = {}
     for (const k of Object.keys(localByColumn)) {
-      next[k] = (localByColumn[k] || []).filter((i) => String(i.assigneeId || '') === uid)
+      let arr = localByColumn[k] || []
+      if (assignedToMeOnly && uid) arr = arr.filter((i) => String(i.assigneeId || '') === uid)
+      if (blockedOnly) arr = arr.filter((i) => isBlocked(i))
+      next[k] = arr
     }
     return next
-  }, [localByColumn, assignedToMeOnly, meQ.data?.id])
+  }, [localByColumn, assignedToMeOnly, meQ.data?.id, blockedOnly])
 
   const [listQ, setListQ] = React.useState('')
   const [listColumnId, setListColumnId] = React.useState<string>('all')
@@ -611,7 +647,7 @@ export default function StratflowProject() {
     queryKey: ['stratflow', 'roadmap', projectId, 'epics'],
     queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/issues?type=Epic`)).data,
     retry: false,
-    enabled: Boolean(projectId) && view === 'timeline',
+    enabled: Boolean(projectId) && (view === 'timeline' || view === 'list'),
   })
 
   const epicRollupsQ = useQuery<{ data: { items: EpicRollup[] } }>({
@@ -619,6 +655,13 @@ export default function StratflowProject() {
     queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/epic-rollups`)).data,
     retry: false,
     enabled: Boolean(projectId) && view === 'timeline',
+  })
+
+  const timeRollupsQ = useQuery<{ data: TimeRollups }>({
+    queryKey: ['stratflow', 'timeRollups', projectId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/time-rollups`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'reports',
   })
 
   const [roadmapZoom, setRoadmapZoom] = React.useState<'month' | 'quarter'>('month')
@@ -765,7 +808,9 @@ export default function StratflowProject() {
     return loadedIssues
       .filter((it) => (colId === 'all' ? true : it.columnId === colId))
       .filter((it) => (!assignedToMeOnly || !uid ? true : String(it.assigneeId || '') === uid))
+      .filter((it) => (!blockedOnly ? true : isBlocked(it)))
       .filter((it) => (listType === 'all' ? true : String(it.type || '') === listType))
+      .filter((it) => (listEpicId === 'all' ? true : String((it as any).epicId || '') === String(listEpicId)))
       .filter((it) => {
         if (listPreset !== 'due-soon') return true
         const d = parseIsoDate((it as any).targetEndDate)
@@ -778,6 +823,10 @@ export default function StratflowProject() {
         const pr = String(it.priority || '')
         return isDefect && (pr === 'Highest' || pr === 'High')
       })
+      .filter((it) => {
+        if (listPreset !== 'blocked') return true
+        return isBlocked(it)
+      })
       .filter((it) => (!q ? true : String(it.title || '').toLowerCase().includes(q)))
       .slice()
       .sort((a, b) => {
@@ -786,7 +835,7 @@ export default function StratflowProject() {
         if (ca !== cb) return ca.localeCompare(cb)
         return (a.order || 0) - (b.order || 0)
       })
-  }, [loadedIssues, listQ, listColumnId, columnNameById, assignedToMeOnly, meQ.data?.id, listType, listPreset])
+  }, [loadedIssues, listQ, listColumnId, columnNameById, assignedToMeOnly, meQ.data?.id, listType, listPreset, blockedOnly, listEpicId])
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
   React.useEffect(() => {
@@ -891,7 +940,7 @@ export default function StratflowProject() {
                   disabled={!saveFilterName.trim()}
                   onClick={() => {
                     const id = `f_${Date.now()}`
-                    const state = { assignedToMeOnly, listQ, listColumnId, listType }
+                    const state = { assignedToMeOnly, blockedOnly, listQ, listColumnId, listType, listEpicId }
                     const next = [...savedFilters, { id, name: saveFilterName.trim(), state }]
                     setSavedFilters(next)
                     try {
@@ -1034,6 +1083,15 @@ export default function StratflowProject() {
             />
             Assigned to me
           </label>
+          <label className="flex items-center gap-2 text-xs text-[color:var(--color-text-muted)] select-none">
+            <input
+              type="checkbox"
+              checked={blockedOnly}
+              onChange={(e) => setBlockedOnly(e.target.checked)}
+              className="h-4 w-4 rounded border-[color:var(--color-border)] text-amber-600 focus:ring-amber-600"
+            />
+            Blocked
+          </label>
           <div className="text-xs text-[color:var(--color-text-muted)]">{issuesQ.isFetching || boardQ.isFetching ? 'Syncing…' : 'Synced'}</div>
         </div>
       </div>
@@ -1088,10 +1146,18 @@ export default function StratflowProject() {
                       if (v === '') return
                       if (v === 'my-work') {
                         setAssignedToMeOnly(true)
+                        setBlockedOnly(false)
+                        setListEpicId('all')
                       } else if (v === 'hot-defects') {
                         setListType('Defect')
+                        setBlockedOnly(false)
+                        setListEpicId('all')
                       } else if (v === 'due-soon') {
                         // uses targetEndDate window filter
+                        setBlockedOnly(false)
+                        setListEpicId('all')
+                      } else if (v === 'blocked') {
+                        setBlockedOnly(true)
                       } else {
                         const found = savedFilters.find((x) => x.id === v)
                         if (found?.state) {
@@ -1099,6 +1165,8 @@ export default function StratflowProject() {
                           setListQ(String(found.state.listQ || ''))
                           setListColumnId(String(found.state.listColumnId || 'all'))
                           setListType(String(found.state.listType || 'all'))
+                          setBlockedOnly(Boolean(found.state.blockedOnly))
+                          setListEpicId(String(found.state.listEpicId || 'all'))
                         }
                       }
                     }}
@@ -1109,6 +1177,7 @@ export default function StratflowProject() {
                     <option value="my-work">My work</option>
                     <option value="hot-defects">Hot defects</option>
                     <option value="due-soon">Due soon</option>
+                    <option value="blocked">Blocked</option>
                     {savedFilters.length ? (
                       <optgroup label="Custom">
                         {savedFilters.map((f) => (
@@ -1145,6 +1214,24 @@ export default function StratflowProject() {
                     <option value="Defect">Defect</option>
                     <option value="Epic">Epic</option>
                     <option value="Spike">Spike</option>
+                  </select>
+                  <select
+                    value={listEpicId}
+                    onChange={(e) => setListEpicId(e.target.value)}
+                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm bg-[color:var(--color-panel)]"
+                    title="Epic"
+                    disabled={!(epicsForRoadmapQ.data?.data.items ?? []).length}
+                  >
+                    <option value="all">All epics</option>
+                    {(epicsForRoadmapQ.data?.data.items ?? [])
+                      .filter((e) => String(e.type || '') === 'Epic')
+                      .slice()
+                      .sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')))
+                      .map((e) => (
+                        <option key={e._id} value={e._id}>
+                          {e.title}
+                        </option>
+                      ))}
                   </select>
                   <select
                     value={listColumnId}
@@ -1524,7 +1611,10 @@ export default function StratflowProject() {
                       </div>
 
                       {(() => {
-                        const issues = (selectedSprintIssuesQ.data?.data.items ?? []).filter((i) => i.type !== 'Epic')
+                        const issues = (selectedSprintIssuesQ.data?.data.items ?? [])
+                          .filter((i) => i.type !== 'Epic')
+                          .filter((i) => (!blockedOnly ? true : isBlocked(i)))
+                          .filter((i) => (!assignedToMeOnly || !meQ.data?.id ? true : String(i.assigneeId || '') === meQ.data.id))
                         const planned = issues.reduce((sum, i) => sum + (i.storyPoints || 0), 0)
                         const done = issues.filter((i) => i.statusKey === 'done').reduce((sum, i) => sum + (i.storyPoints || 0), 0)
                         const cap = selectedSprint.capacityPoints ?? null
@@ -1575,6 +1665,7 @@ export default function StratflowProject() {
                     {(backlogIssuesQ.data?.data.items ?? [])
                       .filter((i) => i.type !== 'Epic')
                       .filter((i) => (!assignedToMeOnly || !meQ.data?.id ? true : String(i.assigneeId || '') === meQ.data.id))
+                      .filter((i) => (!blockedOnly ? true : isBlocked(i)))
                       .slice(0, 250)
                       .map((i) => (
                         <div key={i._id} className="flex items-center justify-between gap-3 px-4 py-3">
@@ -1616,6 +1707,7 @@ export default function StratflowProject() {
                     {(activeSprintIssuesQ.data?.data.items ?? [])
                       .filter((i) => i.type !== 'Epic')
                       .filter((i) => (!assignedToMeOnly || !meQ.data?.id ? true : String(i.assigneeId || '') === meQ.data.id))
+                      .filter((i) => (!blockedOnly ? true : isBlocked(i)))
                       .slice(0, 250)
                       .map((i) => (
                         <div key={i._id} className="flex items-center justify-between gap-3 px-4 py-3">
@@ -1800,6 +1892,27 @@ export default function StratflowProject() {
                                             {pct}% · {r.donePoints}/{r.totalPoints} pts · {r.blockedCount ? `${r.blockedCount} blocked` : 'no blocks'}
                                           </div>
                                         ) : null}
+                                        {r?.blockedCount ? (
+                                          <button
+                                            type="button"
+                                            className="mt-1 text-[10px] text-amber-700 hover:underline"
+                                            onClick={(ev) => {
+                                              ev.preventDefault()
+                                              ev.stopPropagation()
+                                              setView('list')
+                                              setListPreset('blocked')
+                                              setBlockedOnly(true)
+                                              setAssignedToMeOnly(false)
+                                              setListQ('')
+                                              setListColumnId('all')
+                                              setListType('all')
+                                              setListEpicId(e._id)
+                                            }}
+                                            title="Show blocked issues for this epic"
+                                          >
+                                            View blocked items →
+                                          </button>
+                                        ) : null}
                                       </button>
                                       <div className="relative h-8 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] overflow-hidden" style={{ width: totalW }}>
                                         <div
@@ -1936,6 +2049,8 @@ export default function StratflowProject() {
                 const backlog = loadedIssues.filter((i) => i.statusKey === 'backlog').length
                 const wip = loadedIssues.filter((i) => i.statusKey === 'todo' || i.statusKey === 'in_progress' || i.statusKey === 'in_review').length
                 const pctDone = total ? Math.round((done / total) * 100) : 0
+                const blocked = loadedIssues.filter((i) => isBlocked(i))
+                const blockedCount = blocked.length
 
                 const now = new Date()
                 const openAges = loadedIssues
@@ -1944,6 +2059,17 @@ export default function StratflowProject() {
                   .filter(Boolean)
                   .map((d) => daysBetween(d as Date, now))
                 const avgOpenAge = openAges.length ? Math.round((openAges.reduce((a, b) => a + b, 0) / openAges.length) * 10) / 10 : null
+
+                const blockedAges = blocked
+                  .map((i) => parseIsoDate(i.updatedAt) ?? parseIsoDate(i.createdAt))
+                  .filter(Boolean)
+                  .map((d) => daysBetween(d as Date, now))
+                const oldestBlockedAge = blockedAges.length ? Math.round(Math.max(...blockedAges) * 10) / 10 : null
+
+                const timeTotals = timeRollupsQ.data?.data?.totals ?? null
+                const timeTotalHours = timeTotals ? Math.round(((timeTotals.totalMinutes || 0) / 60) * 10) / 10 : null
+                const timeBillableHours = timeTotals ? Math.round(((timeTotals.billableMinutes || 0) / 60) * 10) / 10 : null
+                const timeNonBillableHours = timeTotals ? Math.round(((timeTotals.nonBillableMinutes || 0) / 60) * 10) / 10 : null
 
                 const doneWithDates = loadedIssues
                   .filter((i) => i.statusKey === 'done')
@@ -2002,11 +2128,54 @@ export default function StratflowProject() {
                                   { metric: 'throughput30d', value: throughput(30) },
                                   { metric: 'avgCycleDaysApprox', value: avgCycle ?? '' },
                                   { metric: 'medianCycleDaysApprox', value: p50Cycle ?? '' },
+                                  { metric: 'blockedCount', value: blockedCount },
+                                  { metric: 'oldestBlockedAgeDays', value: oldestBlockedAge ?? '' },
+                                  { metric: 'timeTotalHours', value: timeTotalHours ?? '' },
+                                  { metric: 'timeBillableHours', value: timeBillableHours ?? '' },
+                                  { metric: 'timeNonBillableHours', value: timeNonBillableHours ?? '' },
+                                  { metric: 'timeEntryCount', value: timeTotals?.entryCount ?? '' },
                                 ],
                               )
                             }}
                           >
                             Export CSV
+                          </button>
+                          <button
+                            type="button"
+                            disabled={exportingTime}
+                            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+                            onClick={async () => {
+                              try {
+                                setExportingTime(true)
+                                if (!projectId) throw new Error('No project selected.')
+                                const resp = await http.get(`/api/stratflow/projects/${projectId}/time-entries`)
+                                const items = resp?.data?.data?.items ?? []
+                                downloadCsv(
+                                  `stratflow-time-${project?.key || projectId || 'project'}.csv`,
+                                  (items as any[]).map((t) => ({
+                                    id: t._id,
+                                    workDate: (t.workDate || '').slice(0, 10),
+                                    hours: Math.round(((Number(t.minutes || 0) / 60) * 10)) / 10,
+                                    minutes: Number(t.minutes || 0),
+                                    billable: Boolean(t.billable),
+                                    user: t.userName || t.userEmail || t.userId || '',
+                                    issueType: t.issueType || '',
+                                    issueTitle: t.issueTitle || '',
+                                    issueId: t.issueId || '',
+                                    note: t.note || '',
+                                    createdAt: t.createdAt || '',
+                                  })),
+                                )
+                                toast.showToast('Exported time CSV.', 'success')
+                              } catch (err: any) {
+                                toast.showToast(err?.response?.data?.error || err?.message || 'Failed to export time CSV.', 'error')
+                              } finally {
+                                setExportingTime(false)
+                              }
+                            }}
+                            title="Export time entries to CSV"
+                          >
+                            {exportingTime ? 'Exporting…' : 'Export time CSV'}
                           </button>
                           <div className="text-xs text-[color:var(--color-text-muted)]">{issuesQ.isFetching ? 'Syncing…' : 'Live'}</div>
                         </div>
@@ -2032,6 +2201,27 @@ export default function StratflowProject() {
                           <div className="mt-1 text-2xl font-semibold">{backlog}</div>
                           <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
                             Avg open age: {avgOpenAge == null ? '—' : `${avgOpenAge}d`}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                          <div className="text-xs text-amber-900">Blocked</div>
+                          <div className="mt-1 text-2xl font-semibold text-amber-950">{blockedCount}</div>
+                          <div className="mt-1 text-xs text-amber-900">
+                            Oldest blocked: {oldestBlockedAge == null ? '—' : `${oldestBlockedAge}d`}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="text-xs text-[color:var(--color-text-muted)]">Time logged</div>
+                          <div className="mt-1 text-2xl font-semibold">{timeTotalHours == null ? '—' : `${timeTotalHours}h`}</div>
+                          <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                            Entries: {timeTotals?.entryCount ?? (timeRollupsQ.isLoading ? '…' : '—')}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                          <div className="text-xs text-emerald-900">Billable time</div>
+                          <div className="mt-1 text-2xl font-semibold text-emerald-950">{timeBillableHours == null ? '—' : `${timeBillableHours}h`}</div>
+                          <div className="mt-1 text-xs text-emerald-900">
+                            Non-billable: {timeNonBillableHours == null ? '—' : `${timeNonBillableHours}h`}
                           </div>
                         </div>
                       </div>
@@ -2068,9 +2258,62 @@ export default function StratflowProject() {
                         <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
                           <div className="text-xs text-[color:var(--color-text-muted)]">Work health</div>
                           <div className="mt-2 text-sm text-[color:var(--color-text-muted)]">
-                            {wip > Math.max(10, backlog) ? 'High WIP relative to backlog.' : 'WIP looks reasonable.'}
+                            {blockedCount > 0
+                              ? `${blockedCount} blocked item(s) need attention.`
+                              : wip > Math.max(10, backlog)
+                              ? 'High WIP relative to backlog.'
+                              : 'WIP looks reasonable.'}
                           </div>
                           <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">Next: true cycle time via status transition timestamps.</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold">Time by person</div>
+                            <div className="text-xs text-[color:var(--color-text-muted)]">{timeRollupsQ.isFetching ? 'Loading…' : 'Live'}</div>
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            {(timeRollupsQ.data?.data?.byUser ?? []).slice(0, 10).map((r) => {
+                              const label = memberLabelForUserId(String(r.userId || '')).label
+                              const h = Math.round(((Number(r.totalMinutes || 0) / 60) * 10)) / 10
+                              const bh = Math.round(((Number(r.billableMinutes || 0) / 60) * 10)) / 10
+                              return (
+                                <div key={r.userId} className="flex items-center justify-between gap-3 text-sm">
+                                  <div className="min-w-0 truncate text-[color:var(--color-text-muted)]">{label}</div>
+                                  <div className="shrink-0 font-medium tabular-nums">
+                                    {h}h <span className="text-[10px] text-[color:var(--color-text-muted)]">({bh}h billable)</span>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                            {!timeRollupsQ.isLoading && !(timeRollupsQ.data?.data?.byUser ?? []).length ? (
+                              <div className="text-sm text-[color:var(--color-text-muted)]">No time entries yet.</div>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold">Top issues (time)</div>
+                            <div className="text-xs text-[color:var(--color-text-muted)]">Top 10</div>
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            {(timeRollupsQ.data?.data?.byIssue ?? []).slice(0, 10).map((r, idx) => {
+                              const iid = String(r.issueId || '')
+                              const title = loadedIssues.find((i) => i._id === iid)?.title || iid || '—'
+                              const h = Math.round(((Number(r.totalMinutes || 0) / 60) * 10)) / 10
+                              return (
+                                <div key={`${iid || 'null'}-${idx}`} className="flex items-center justify-between gap-3 text-sm">
+                                  <div className="min-w-0 truncate text-[color:var(--color-text-muted)]">{title}</div>
+                                  <div className="shrink-0 font-medium tabular-nums">{h}h</div>
+                                </div>
+                              )
+                            })}
+                            {!timeRollupsQ.isLoading && !(timeRollupsQ.data?.data?.byIssue ?? []).length ? (
+                              <div className="text-sm text-[color:var(--color-text-muted)]">No time entries yet.</div>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
