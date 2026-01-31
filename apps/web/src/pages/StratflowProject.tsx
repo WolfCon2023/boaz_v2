@@ -3838,9 +3838,9 @@ export default function StratflowProject() {
                   onChange={(e) => setReleaseForm((p) => ({ ...p, state: e.target.value as 'planned' | 'in_progress' | 'released' }))}
                   className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
                 >
-                  <option value="planned">Planned</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="released">Released</option>
+                  <option value="planned" className="text-gray-900 bg-white">Planned</option>
+                  <option value="in_progress" className="text-gray-900 bg-white">In Progress</option>
+                  <option value="released" className="text-gray-900 bg-white">Released</option>
                 </select>
               </div>
               <div>
