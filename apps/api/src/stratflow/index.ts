@@ -4244,3 +4244,302 @@ stratflowRouter.get('/projects/:projectId/financial-summary', async (req: any, r
   })
 })
 
+// ============================================================================
+// CROSS-PROJECT FINANCIAL ANALYTICS - Revenue Intelligence Integration
+// ============================================================================
+
+// GET /api/stratflow/financial-analytics
+// Provides cross-project financial data for Revenue Intelligence integration
+stratflowRouter.get('/financial-analytics', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+
+  // Parse period from query params
+  const periodParam = String(req.query.period || 'current_quarter')
+  const now = new Date()
+  let startDate: Date
+  let endDate: Date
+
+  switch (periodParam) {
+    case 'current_month':
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      break
+    case 'current_quarter':
+      const q = Math.floor(now.getMonth() / 3)
+      startDate = new Date(now.getFullYear(), q * 3, 1)
+      endDate = new Date(now.getFullYear(), q * 3 + 3, 0)
+      break
+    case 'current_year':
+      startDate = new Date(now.getFullYear(), 0, 1)
+      endDate = new Date(now.getFullYear(), 11, 31)
+      break
+    case 'last_30_days':
+      endDate = now
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      break
+    case 'last_90_days':
+      endDate = now
+      startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+      break
+    default:
+      // Default to current quarter
+      const dq = Math.floor(now.getMonth() / 3)
+      startDate = new Date(now.getFullYear(), dq * 3, 1)
+      endDate = new Date(now.getFullYear(), dq * 3 + 3, 0)
+  }
+
+  // Get all projects the user has access to
+  const userProjects = await db
+    .collection('sf_projects')
+    .find({ $or: [{ ownerId: auth.userId }, { teamIds: auth.userId }] } as any)
+    .toArray()
+
+  const projectIds = userProjects.map((p: any) => p._id)
+  if (projectIds.length === 0) {
+    return res.json({
+      data: {
+        period: periodParam,
+        dateRange: { startDate: startDate.toISOString(), endDate: endDate.toISOString() },
+        summary: {
+          totalProjects: 0,
+          totalHours: 0,
+          billableHours: 0,
+          utilizationRate: 0,
+          estimatedRevenue: 0,
+          avgHourlyRate: 150,
+        },
+        byProject: [],
+        byUser: [],
+        weeklyTrend: [],
+        insights: [],
+      },
+      error: null,
+    })
+  }
+
+  // Aggregate time across all projects
+  const totalAgg = await db
+    .collection('sf_time_entries')
+    .aggregate([
+      { $match: { projectId: { $in: projectIds }, workDate: { $gte: startDate, $lte: endDate } } },
+      {
+        $group: {
+          _id: null,
+          totalMinutes: { $sum: '$minutes' },
+          billableMinutes: { $sum: { $cond: ['$billable', '$minutes', 0] } },
+          nonBillableMinutes: { $sum: { $cond: ['$billable', 0, '$minutes'] } },
+          entryCount: { $sum: 1 },
+        },
+      },
+    ])
+    .toArray()
+
+  const totals = totalAgg[0] || { totalMinutes: 0, billableMinutes: 0, nonBillableMinutes: 0, entryCount: 0 }
+
+  // Aggregate by project
+  const byProjectAgg = await db
+    .collection('sf_time_entries')
+    .aggregate([
+      { $match: { projectId: { $in: projectIds }, workDate: { $gte: startDate, $lte: endDate } } },
+      {
+        $group: {
+          _id: '$projectId',
+          totalMinutes: { $sum: '$minutes' },
+          billableMinutes: { $sum: { $cond: ['$billable', '$minutes', 0] } },
+          entryCount: { $sum: 1 },
+        },
+      },
+      { $sort: { billableMinutes: -1 } },
+    ])
+    .toArray()
+
+  const projectMap = new Map(userProjects.map((p: any) => [String(p._id), p]))
+
+  // Aggregate by user across all projects
+  const byUserAgg = await db
+    .collection('sf_time_entries')
+    .aggregate([
+      { $match: { projectId: { $in: projectIds }, workDate: { $gte: startDate, $lte: endDate } } },
+      {
+        $group: {
+          _id: '$userId',
+          totalMinutes: { $sum: '$minutes' },
+          billableMinutes: { $sum: { $cond: ['$billable', '$minutes', 0] } },
+          projectCount: { $addToSet: '$projectId' },
+        },
+      },
+      { $sort: { billableMinutes: -1 } },
+      { $limit: 20 },
+    ])
+    .toArray()
+
+  const userIds = byUserAgg.map((u: any) => u._id).filter(Boolean)
+  const users = userIds.length ? await loadUsersByIds(db, userIds) : []
+  const userMap = new Map(users.map((u) => [u.id, u]))
+
+  // Weekly trend
+  const weeklyAgg = await db
+    .collection('sf_time_entries')
+    .aggregate([
+      { $match: { projectId: { $in: projectIds }, workDate: { $gte: startDate, $lte: endDate } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: { $dateTrunc: { date: '$workDate', unit: 'week', startOfWeek: 'monday' } } } },
+          totalMinutes: { $sum: '$minutes' },
+          billableMinutes: { $sum: { $cond: ['$billable', '$minutes', 0] } },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ])
+    .toArray()
+
+  // Calculate metrics
+  const defaultHourlyRate = 150
+  const totalHours = Math.round((totals.totalMinutes / 60) * 10) / 10
+  const billableHours = Math.round((totals.billableMinutes / 60) * 10) / 10
+  const utilizationRate = totals.totalMinutes > 0 ? Math.round((totals.billableMinutes / totals.totalMinutes) * 100) : 0
+  const estimatedRevenue = Math.round(billableHours * defaultHourlyRate * 100) / 100
+
+  // Generate AI insights
+  const insights: Array<{ type: 'positive' | 'warning' | 'info'; title: string; description: string; impact?: number }> = []
+
+  // Utilization insight
+  if (utilizationRate >= 80) {
+    insights.push({
+      type: 'positive',
+      title: 'Strong Utilization',
+      description: `${utilizationRate}% utilization rate indicates excellent billable efficiency across projects.`,
+      impact: Math.round(estimatedRevenue * 0.1),
+    })
+  } else if (utilizationRate < 60) {
+    insights.push({
+      type: 'warning',
+      title: 'Low Utilization',
+      description: `${utilizationRate}% utilization rate suggests room for improvement in billable work allocation.`,
+      impact: Math.round((0.8 - utilizationRate / 100) * totalHours * defaultHourlyRate * -1),
+    })
+  }
+
+  // Project concentration insight
+  if (byProjectAgg.length > 0) {
+    const topProject = byProjectAgg[0]
+    const topProjectPct = totals.billableMinutes > 0 ? Math.round((topProject.billableMinutes / totals.billableMinutes) * 100) : 0
+    if (topProjectPct > 50 && byProjectAgg.length > 1) {
+      const pName = projectMap.get(String(topProject._id))?.name || 'Unknown'
+      insights.push({
+        type: 'info',
+        title: 'Revenue Concentration',
+        description: `${topProjectPct}% of billable hours come from "${pName}". Consider diversifying the project portfolio.`,
+      })
+    }
+  }
+
+  // Team capacity insight
+  if (byUserAgg.length > 0) {
+    const avgHoursPerUser = totalHours / byUserAgg.length
+    const topPerformer = byUserAgg[0]
+    const topName = userMap.get(topPerformer._id)?.name || userMap.get(topPerformer._id)?.email || 'Top contributor'
+    const topHours = Math.round((topPerformer.billableMinutes / 60) * 10) / 10
+    if (topHours > avgHoursPerUser * 2) {
+      insights.push({
+        type: 'warning',
+        title: 'Workload Imbalance',
+        description: `${topName} has ${topHours}h billable vs team avg of ${Math.round(avgHoursPerUser)}h. Consider load balancing.`,
+      })
+    }
+  }
+
+  // Revenue trend insight
+  if (weeklyAgg.length >= 2) {
+    const recentWeeks = weeklyAgg.slice(-4)
+    const firstHalf = recentWeeks.slice(0, Math.floor(recentWeeks.length / 2))
+    const secondHalf = recentWeeks.slice(Math.floor(recentWeeks.length / 2))
+    const firstAvg = firstHalf.reduce((s: number, w: any) => s + w.billableMinutes, 0) / (firstHalf.length || 1)
+    const secondAvg = secondHalf.reduce((s: number, w: any) => s + w.billableMinutes, 0) / (secondHalf.length || 1)
+    const trendPct = firstAvg > 0 ? Math.round(((secondAvg - firstAvg) / firstAvg) * 100) : 0
+
+    if (trendPct > 20) {
+      insights.push({
+        type: 'positive',
+        title: 'Revenue Trending Up',
+        description: `Billable hours increased ${trendPct}% in recent weeks. Projected additional revenue: $${Math.round((secondAvg - firstAvg) / 60 * defaultHourlyRate * 4).toLocaleString()}`,
+        impact: Math.round((secondAvg - firstAvg) / 60 * defaultHourlyRate * 4),
+      })
+    } else if (trendPct < -20) {
+      insights.push({
+        type: 'warning',
+        title: 'Revenue Trending Down',
+        description: `Billable hours decreased ${Math.abs(trendPct)}% in recent weeks. Potential revenue loss: $${Math.round(Math.abs(secondAvg - firstAvg) / 60 * defaultHourlyRate * 4).toLocaleString()}`,
+        impact: Math.round((secondAvg - firstAvg) / 60 * defaultHourlyRate * 4),
+      })
+    }
+  }
+
+  // Forecast next period
+  const avgWeeklyBillable = weeklyAgg.length > 0 ? weeklyAgg.reduce((s: number, w: any) => s + w.billableMinutes, 0) / weeklyAgg.length : 0
+  const weeksInPeriod = Math.ceil((endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000))
+  const forecastRevenue = {
+    pessimistic: Math.round((avgWeeklyBillable * 0.7 * weeksInPeriod / 60) * defaultHourlyRate),
+    likely: Math.round((avgWeeklyBillable * weeksInPeriod / 60) * defaultHourlyRate),
+    optimistic: Math.round((avgWeeklyBillable * 1.2 * weeksInPeriod / 60) * defaultHourlyRate),
+  }
+
+  res.json({
+    data: {
+      period: periodParam,
+      dateRange: { startDate: startDate.toISOString(), endDate: endDate.toISOString() },
+      summary: {
+        totalProjects: userProjects.length,
+        activeProjects: byProjectAgg.length,
+        totalHours,
+        billableHours,
+        nonBillableHours: Math.round((totals.nonBillableMinutes / 60) * 10) / 10,
+        utilizationRate,
+        entryCount: totals.entryCount,
+        estimatedRevenue,
+        avgHourlyRate: defaultHourlyRate,
+      },
+      forecast: forecastRevenue,
+      byProject: byProjectAgg.map((p: any) => {
+        const proj = projectMap.get(String(p._id))
+        const bh = Math.round((p.billableMinutes / 60) * 10) / 10
+        return {
+          projectId: String(p._id),
+          projectName: proj?.name || 'Unknown',
+          projectKey: proj?.key || '',
+          status: proj?.status || 'Unknown',
+          totalHours: Math.round((p.totalMinutes / 60) * 10) / 10,
+          billableHours: bh,
+          utilizationRate: p.totalMinutes > 0 ? Math.round((p.billableMinutes / p.totalMinutes) * 100) : 0,
+          estimatedRevenue: Math.round(bh * defaultHourlyRate * 100) / 100,
+          entryCount: p.entryCount,
+        }
+      }),
+      byUser: byUserAgg.map((u: any) => {
+        const user = userMap.get(u._id)
+        const bh = Math.round((u.billableMinutes / 60) * 10) / 10
+        return {
+          userId: u._id,
+          userName: user?.name || user?.email || u._id,
+          totalHours: Math.round((u.totalMinutes / 60) * 10) / 10,
+          billableHours: bh,
+          utilizationRate: u.totalMinutes > 0 ? Math.round((u.billableMinutes / u.totalMinutes) * 100) : 0,
+          projectCount: Array.isArray(u.projectCount) ? u.projectCount.length : 0,
+          estimatedRevenue: Math.round(bh * defaultHourlyRate * 100) / 100,
+        }
+      }),
+      weeklyTrend: weeklyAgg.map((w: any) => ({
+        weekStart: w._id,
+        totalHours: Math.round((w.totalMinutes / 60) * 10) / 10,
+        billableHours: Math.round((w.billableMinutes / 60) * 10) / 10,
+        estimatedRevenue: Math.round((w.billableMinutes / 60) * defaultHourlyRate * 100) / 100,
+      })),
+      insights,
+    },
+    error: null,
+  })
+})
+

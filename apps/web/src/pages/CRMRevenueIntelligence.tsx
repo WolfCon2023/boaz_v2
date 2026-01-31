@@ -92,7 +92,7 @@ export default function CRMRevenueIntelligence() {
   const [startDate, setStartDate] = React.useState<string>(searchParams.get('startDate') || '')
   const [endDate, setEndDate] = React.useState<string>(searchParams.get('endDate') || '')
   const [excludeOverdue, setExcludeOverdue] = React.useState<boolean>(searchParams.get('excludeOverdue') === 'true')
-  const [view, setView] = React.useState<'forecast' | 'reps' | 'scenario'>(
+  const [view, setView] = React.useState<'forecast' | 'reps' | 'scenario' | 'services'>(
     (searchParams.get('view') as any) || 'forecast',
   )
   const [selectedDealId, setSelectedDealId] = React.useState<string | null>(null)
@@ -451,6 +451,65 @@ export default function CRMRevenueIntelligence() {
     },
     onSuccess: () => {
       snapshotsQ.refetch()
+    },
+  })
+
+  // Services Revenue from StratFlow
+  type ServicesData = {
+    period: string
+    dateRange: { startDate: string; endDate: string }
+    summary: {
+      totalProjects: number
+      activeProjects: number
+      totalHours: number
+      billableHours: number
+      nonBillableHours: number
+      utilizationRate: number
+      entryCount: number
+      estimatedRevenue: number
+      avgHourlyRate: number
+    }
+    forecast: { pessimistic: number; likely: number; optimistic: number }
+    byProject: Array<{
+      projectId: string
+      projectName: string
+      projectKey: string
+      status: string
+      totalHours: number
+      billableHours: number
+      utilizationRate: number
+      estimatedRevenue: number
+      entryCount: number
+    }>
+    byUser: Array<{
+      userId: string
+      userName: string
+      totalHours: number
+      billableHours: number
+      utilizationRate: number
+      projectCount: number
+      estimatedRevenue: number
+    }>
+    weeklyTrend: Array<{
+      weekStart: string
+      totalHours: number
+      billableHours: number
+      estimatedRevenue: number
+    }>
+    insights: Array<{
+      type: 'positive' | 'warning' | 'info'
+      title: string
+      description: string
+      impact?: number
+    }>
+  }
+
+  const servicesQ = useQuery<{ data: ServicesData }>({
+    queryKey: ['stratflow-financial-analytics', period],
+    enabled: view === 'services',
+    queryFn: async () => {
+      const res = await http.get('/api/stratflow/financial-analytics', { params: { period } })
+      return res.data
     },
   })
 
@@ -1088,6 +1147,19 @@ export default function CRMRevenueIntelligence() {
               >
                 <span>What-If Scenarios</span>
                 <span className="text-[10px] opacity-60">ⓘ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('services')}
+                title="Services revenue from StratFlow project time tracking - billable hours, utilization, and project profitability"
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs border-l border-[color:var(--color-border)] ${
+                  view === 'services'
+                    ? 'bg-[color:var(--color-primary-600)] text-white'
+                    : 'bg-[color:var(--color-bg)] hover:bg-[color:var(--color-muted)]'
+                }`}
+              >
+                <span>Services Revenue</span>
+                <span className="text-[10px] opacity-60">✦</span>
               </button>
             </div>
           </div>
@@ -1808,6 +1880,239 @@ export default function CRMRevenueIntelligence() {
               </div>
             )}
           </section>
+        </>
+      )}
+
+      {/* Services Revenue View - StratFlow Integration */}
+      {view === 'services' && (
+        <>
+          {servicesQ.isLoading ? (
+            <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-8 text-center">
+              <div className="text-sm text-[color:var(--color-text-muted)]">Loading services revenue data...</div>
+            </div>
+          ) : servicesQ.error ? (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-8 text-center">
+              <div className="text-sm text-amber-400">Unable to load services data</div>
+              <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                Ensure you have access to StratFlow projects with time entries.
+              </div>
+            </div>
+          ) : servicesQ.data?.data ? (
+            <>
+              {/* Summary Cards */}
+              <section className="grid gap-4 md:grid-cols-4">
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Active Projects</div>
+                  <div className="mt-1 text-2xl font-semibold">{servicesQ.data.data.summary.activeProjects}</div>
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">of {servicesQ.data.data.summary.totalProjects} total</div>
+                </div>
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Billable Hours</div>
+                  <div className="mt-1 text-2xl font-semibold text-emerald-400">{servicesQ.data.data.summary.billableHours}h</div>
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{servicesQ.data.data.summary.totalHours}h total logged</div>
+                </div>
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Utilization Rate</div>
+                  <div className={`mt-1 text-2xl font-semibold ${servicesQ.data.data.summary.utilizationRate >= 70 ? 'text-emerald-400' : servicesQ.data.data.summary.utilizationRate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                    {servicesQ.data.data.summary.utilizationRate}%
+                  </div>
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">billable vs total</div>
+                </div>
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                  <div className="text-xs text-emerald-400">Estimated Revenue</div>
+                  <div className="mt-1 text-2xl font-semibold text-emerald-300">${servicesQ.data.data.summary.estimatedRevenue.toLocaleString()}</div>
+                  <div className="mt-1 text-xs text-emerald-400/70">@ ${servicesQ.data.data.summary.avgHourlyRate}/hr</div>
+                </div>
+              </section>
+
+              {/* Forecast */}
+              {servicesQ.data.data.forecast && (
+                <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                  <h2 className="mb-3 text-sm font-semibold">Services Revenue Forecast</h2>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Pessimistic</div>
+                      <div className="mt-1 text-xl font-semibold">${servicesQ.data.data.forecast.pessimistic.toLocaleString()}</div>
+                      <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">70% of current pace</div>
+                    </div>
+                    <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+                      <div className="text-xs text-blue-400">Likely</div>
+                      <div className="mt-1 text-xl font-semibold text-blue-300">${servicesQ.data.data.forecast.likely.toLocaleString()}</div>
+                      <div className="mt-1 text-[10px] text-blue-400/70">Current pace continued</div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                      <div className="text-xs text-emerald-400">Optimistic</div>
+                      <div className="mt-1 text-xl font-semibold text-emerald-300">${servicesQ.data.data.forecast.optimistic.toLocaleString()}</div>
+                      <div className="mt-1 text-[10px] text-emerald-400/70">120% of current pace</div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* AI Insights */}
+              {servicesQ.data.data.insights && servicesQ.data.data.insights.length > 0 && (
+                <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                  <h2 className="mb-3 text-sm font-semibold">AI Insights</h2>
+                  <div className="space-y-2">
+                    {servicesQ.data.data.insights.map((insight, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-start gap-3 rounded-lg border p-3 ${
+                          insight.type === 'positive'
+                            ? 'border-emerald-500/30 bg-emerald-500/5'
+                            : insight.type === 'warning'
+                              ? 'border-amber-500/30 bg-amber-500/5'
+                              : 'border-blue-500/30 bg-blue-500/5'
+                        }`}
+                      >
+                        <span className={`mt-0.5 text-lg ${
+                          insight.type === 'positive' ? 'text-emerald-400' : insight.type === 'warning' ? 'text-amber-400' : 'text-blue-400'
+                        }`}>
+                          {insight.type === 'positive' ? '↑' : insight.type === 'warning' ? '⚠' : 'ⓘ'}
+                        </span>
+                        <div className="flex-1">
+                          <div className={`text-sm font-semibold ${
+                            insight.type === 'positive' ? 'text-emerald-300' : insight.type === 'warning' ? 'text-amber-300' : 'text-blue-300'
+                          }`}>
+                            {insight.title}
+                          </div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">{insight.description}</div>
+                          {insight.impact !== undefined && (
+                            <div className={`mt-1 text-xs font-semibold ${insight.impact >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              Impact: {insight.impact >= 0 ? '+' : ''}${Math.abs(insight.impact).toLocaleString()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Revenue by Project */}
+              {servicesQ.data.data.byProject && servicesQ.data.data.byProject.length > 0 && (
+                <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                  <h2 className="mb-3 text-sm font-semibold">Revenue by Project</h2>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[color:var(--color-border)] text-[10px] uppercase text-[color:var(--color-text-muted)]">
+                          <th className="px-2 py-2 text-left">Project</th>
+                          <th className="px-2 py-2 text-center">Status</th>
+                          <th className="px-2 py-2 text-right">Billable</th>
+                          <th className="px-2 py-2 text-right">Total</th>
+                          <th className="px-2 py-2 text-center">Util %</th>
+                          <th className="px-2 py-2 text-right">Revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {servicesQ.data.data.byProject.map((proj) => (
+                          <tr key={proj.projectId} className="border-b border-[color:var(--color-border)]">
+                            <td className="px-2 py-2">
+                              <div className="font-semibold">{proj.projectName}</div>
+                              {proj.projectKey && <div className="text-[10px] text-[color:var(--color-text-muted)]">{proj.projectKey}</div>}
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              <span className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                                proj.status === 'Active'
+                                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
+                                  : proj.status === 'Completed'
+                                    ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
+                                    : 'border-gray-500/50 bg-gray-500/10 text-gray-400'
+                              }`}>
+                                {proj.status}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2 text-right font-semibold text-emerald-400">{proj.billableHours}h</td>
+                            <td className="px-2 py-2 text-right">{proj.totalHours}h</td>
+                            <td className="px-2 py-2 text-center">
+                              <span className={proj.utilizationRate >= 70 ? 'text-emerald-400' : proj.utilizationRate >= 50 ? 'text-amber-400' : 'text-red-400'}>
+                                {proj.utilizationRate}%
+                              </span>
+                            </td>
+                            <td className="px-2 py-2 text-right font-semibold">${proj.estimatedRevenue.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {/* Revenue by Team Member */}
+              {servicesQ.data.data.byUser && servicesQ.data.data.byUser.length > 0 && (
+                <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                  <h2 className="mb-3 text-sm font-semibold">Team Performance</h2>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-[color:var(--color-border)] text-[10px] uppercase text-[color:var(--color-text-muted)]">
+                          <th className="px-2 py-2 text-left">Team Member</th>
+                          <th className="px-2 py-2 text-right">Billable</th>
+                          <th className="px-2 py-2 text-right">Total</th>
+                          <th className="px-2 py-2 text-center">Util %</th>
+                          <th className="px-2 py-2 text-center">Projects</th>
+                          <th className="px-2 py-2 text-right">Revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {servicesQ.data.data.byUser.map((user) => (
+                          <tr key={user.userId} className="border-b border-[color:var(--color-border)]">
+                            <td className="px-2 py-2 font-semibold">{user.userName}</td>
+                            <td className="px-2 py-2 text-right font-semibold text-emerald-400">{user.billableHours}h</td>
+                            <td className="px-2 py-2 text-right">{user.totalHours}h</td>
+                            <td className="px-2 py-2 text-center">
+                              <span className={user.utilizationRate >= 70 ? 'text-emerald-400' : user.utilizationRate >= 50 ? 'text-amber-400' : 'text-red-400'}>
+                                {user.utilizationRate}%
+                              </span>
+                            </td>
+                            <td className="px-2 py-2 text-center">{user.projectCount}</td>
+                            <td className="px-2 py-2 text-right font-semibold">${user.estimatedRevenue.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+
+              {/* Weekly Trend */}
+              {servicesQ.data.data.weeklyTrend && servicesQ.data.data.weeklyTrend.length > 0 && (
+                <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                  <h2 className="mb-3 text-sm font-semibold">Weekly Revenue Trend</h2>
+                  <div className="h-40 flex items-end gap-2">
+                    {servicesQ.data.data.weeklyTrend.slice(-12).map((week, idx) => {
+                      const maxRev = Math.max(...servicesQ.data!.data.weeklyTrend.map((w) => w.estimatedRevenue), 1)
+                      const pct = Math.round((week.estimatedRevenue / maxRev) * 100)
+                      return (
+                        <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                          <div
+                            className="w-full bg-emerald-600 rounded-t transition-all"
+                            style={{ height: `${pct}%`, minHeight: week.estimatedRevenue > 0 ? '4px' : '0' }}
+                            title={`$${week.estimatedRevenue.toLocaleString()}`}
+                          />
+                          <div className="text-[8px] text-[color:var(--color-text-muted)] truncate w-full text-center" title={week.weekStart}>
+                            {week.weekStart.slice(5)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-2 text-[10px] text-[color:var(--color-text-muted)]">Weekly billable revenue based on logged time entries</div>
+                </section>
+              )}
+
+              {/* Empty state if no data */}
+              {servicesQ.data.data.byProject.length === 0 && servicesQ.data.data.byUser.length === 0 && (
+                <section className="rounded-2xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-8 text-center">
+                  <div className="text-sm text-[color:var(--color-text-muted)]">No time entries found for this period</div>
+                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                    Log time in StratFlow projects to see services revenue analytics.
+                  </div>
+                </section>
+              )}
+            </>
+          ) : null}
         </>
       )}
 
