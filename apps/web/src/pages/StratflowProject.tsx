@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
@@ -3746,10 +3747,19 @@ export default function StratflowProject() {
         <StratflowIssueDrawer issueId={focusedIssueId} projectId={String(projectId || '')} onClose={closeIssueFocus} />
       ) : null}
 
-      {/* New Release Modal - rendered at top level for proper positioning */}
-      {releaseModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setReleaseModalOpen(false)}>
-          <div className="w-full max-w-md mx-4 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      {/* New Release Modal - using portal for proper positioning */}
+      {releaseModalOpen && createPortal(
+        <div 
+          className="fixed inset-0 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          style={{ zIndex: 2147483647 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setReleaseModalOpen(false)
+          }}
+        >
+          <div 
+            className="bg-[color:var(--color-panel)] rounded-2xl shadow-2xl border border-[color:var(--color-border)] w-[min(90vw,28rem)] p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="text-lg font-semibold mb-4">New Release</div>
             <div className="space-y-4">
               <div>
@@ -3808,13 +3818,23 @@ export default function StratflowProject() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* New Template Modal - rendered at top level for proper positioning */}
-      {templateModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setTemplateModalOpen(false)}>
-          <div className="w-full max-w-lg mx-4 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      {/* New Template Modal - using portal for proper positioning */}
+      {templateModalOpen && createPortal(
+        <div 
+          className="fixed inset-0 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          style={{ zIndex: 2147483647 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setTemplateModalOpen(false)
+          }}
+        >
+          <div 
+            className="bg-[color:var(--color-panel)] rounded-2xl shadow-2xl border border-[color:var(--color-border)] w-[min(90vw,32rem)] max-h-[90vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="text-lg font-semibold mb-4">New Issue Template</div>
             <div className="space-y-4">
               <div>
@@ -3934,7 +3954,8 @@ export default function StratflowProject() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       </div>
     </TooltipProvider>
