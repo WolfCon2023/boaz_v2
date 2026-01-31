@@ -3496,19 +3496,24 @@ export default function StratflowProject() {
               })()}
 
               {/* Sprint Burndown Chart - Recharts Line Chart */}
-              {activeSprint && burndownQ.data?.data && (
-                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold">Sprint Burndown</div>
-                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                        {burndownQ.data.data.sprintName} · {burndownQ.data.data.totalPoints} total points · {burndownQ.data.data.completedPoints} completed
-                      </div>
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">Sprint Burndown</div>
+                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                      {activeSprint && burndownQ.data?.data
+                        ? `${burndownQ.data.data.sprintName} · ${burndownQ.data.data.totalPoints} total points · ${burndownQ.data.data.completedPoints} completed`
+                        : 'Tracks remaining work over sprint duration'}
                     </div>
+                  </div>
+                  {activeSprint && burndownQ.data?.data && (
                     <div className="text-xs text-[color:var(--color-text-muted)]">
                       {Math.round((burndownQ.data.data.completedPoints / (burndownQ.data.data.totalPoints || 1)) * 100)}% done
                     </div>
-                  </div>
+                  )}
+                  {burndownQ.isLoading && <div className="text-xs text-[color:var(--color-text-muted)]">Loading…</div>}
+                </div>
+                {activeSprint && burndownQ.data?.data ? (
                   <div className="mt-4" style={{ height: 280 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={burndownQ.data.data.days.slice(-14).map((d) => ({
@@ -3530,64 +3535,86 @@ export default function StratflowProject() {
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
-              )}
+                ) : !burndownQ.isLoading ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-6 text-center">
+                    <div className="text-sm text-[color:var(--color-text-muted)]">No burndown data</div>
+                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                      {!activeSprint ? 'Set an active sprint to see burndown progress.' : 'Add issues with story points to the active sprint.'}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
 
               {/* Sprint Velocity Chart - Recharts Bar Chart */}
-              {velocityQ.data?.data && velocityQ.data.data.sprints.length > 0 && (
-                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold">Sprint Velocity</div>
-                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                        Average: {velocityQ.data.data.averageVelocity} pts/sprint · {velocityQ.data.data.sprintCount} closed sprints
-                      </div>
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">Sprint Velocity</div>
+                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                      {velocityQ.data?.data && velocityQ.data.data.sprints.length > 0
+                        ? `Average: ${velocityQ.data.data.averageVelocity} pts/sprint · ${velocityQ.data.data.sprintCount} closed sprints`
+                        : 'Tracks completed story points per sprint'}
                     </div>
                   </div>
-                  <div className="mt-4" style={{ height: 240 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={velocityQ.data.data.sprints.slice(-10).map((s) => ({
-                        name: s.sprintName.length > 12 ? s.sprintName.slice(0, 10) + '…' : s.sprintName,
-                        fullName: s.sprintName,
-                        points: s.completedPoints,
-                        avg: velocityQ.data?.data.averageVelocity || 0,
-                      }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                        <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                        <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                        <RechartsTooltip 
-                          contentStyle={{ backgroundColor: 'rgba(15,23,42,0.95)', border: '1px solid rgba(148,163,184,0.3)', borderRadius: '8px', fontSize: '12px' }}
-                          labelStyle={{ color: '#94a3b8' }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '11px' }} />
-                        <Bar dataKey="points" name="Completed Points" radius={[4, 4, 0, 0]}>
-                          {velocityQ.data.data.sprints.slice(-10).map((s, index) => {
-                            const avg = velocityQ.data?.data.averageVelocity || 0
-                            return <Cell key={index} fill={s.completedPoints >= avg ? '#10b981' : '#f59e0b'} />
-                          })}
-                        </Bar>
-                        <Line type="monotone" dataKey="avg" name="Average" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="mt-2 flex items-center gap-4 text-[10px] text-[color:var(--color-text-muted)]">
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-500 rounded" /> Above average</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-amber-500 rounded" /> Below average</span>
-                  </div>
+                  {velocityQ.isLoading && <div className="text-xs text-[color:var(--color-text-muted)]">Loading…</div>}
                 </div>
-              )}
+                {velocityQ.data?.data && velocityQ.data.data.sprints.length > 0 ? (
+                  <>
+                    <div className="mt-4" style={{ height: 240 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={velocityQ.data.data.sprints.slice(-10).map((s) => ({
+                          name: s.sprintName.length > 12 ? s.sprintName.slice(0, 10) + '…' : s.sprintName,
+                          fullName: s.sprintName,
+                          points: s.completedPoints,
+                          avg: velocityQ.data?.data.averageVelocity || 0,
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                          <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                          <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                          <RechartsTooltip 
+                            contentStyle={{ backgroundColor: 'rgba(15,23,42,0.95)', border: '1px solid rgba(148,163,184,0.3)', borderRadius: '8px', fontSize: '12px' }}
+                            labelStyle={{ color: '#94a3b8' }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: '11px' }} />
+                          <Bar dataKey="points" name="Completed Points" radius={[4, 4, 0, 0]}>
+                            {velocityQ.data.data.sprints.slice(-10).map((s, index) => {
+                              const avg = velocityQ.data?.data.averageVelocity || 0
+                              return <Cell key={index} fill={s.completedPoints >= avg ? '#10b981' : '#f59e0b'} />
+                            })}
+                          </Bar>
+                          <Line type="monotone" dataKey="avg" name="Average" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-2 flex items-center gap-4 text-[10px] text-[color:var(--color-text-muted)]">
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-500 rounded" /> Above average</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 bg-amber-500 rounded" /> Below average</span>
+                    </div>
+                  </>
+                ) : !velocityQ.isLoading ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-6 text-center">
+                    <div className="text-sm text-[color:var(--color-text-muted)]">No velocity data yet</div>
+                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                      Close sprints to track your team's velocity over time. Velocity measures completed story points per sprint.
+                    </div>
+                  </div>
+                ) : null}
+              </div>
 
               {/* Team Workload - Recharts Horizontal Bar Chart */}
-              {workloadQ.data?.data && workloadQ.data.data.workload.length > 0 && (
-                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold">Team Workload Distribution</div>
-                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                        {workloadQ.data.data.totalOpenIssues} open issues · {workloadQ.data.data.totalOpenPoints} total story points
-                      </div>
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">Team Workload Distribution</div>
+                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                      {workloadQ.data?.data && workloadQ.data.data.workload.length > 0
+                        ? `${workloadQ.data.data.totalOpenIssues} open issues · ${workloadQ.data.data.totalOpenPoints} total story points`
+                        : 'Shows assigned work by team member'}
                     </div>
                   </div>
+                  {workloadQ.isLoading && <div className="text-xs text-[color:var(--color-text-muted)]">Loading…</div>}
+                </div>
+                {workloadQ.data?.data && workloadQ.data.data.workload.length > 0 ? (
                   <div className="mt-4" style={{ height: Math.max(200, workloadQ.data.data.workload.slice(0, 10).length * 40) }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart 
@@ -3612,8 +3639,15 @@ export default function StratflowProject() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
-              )}
+                ) : !workloadQ.isLoading ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-6 text-center">
+                    <div className="text-sm text-[color:var(--color-text-muted)]">No workload data</div>
+                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                      Assign issues with story points to team members to see workload distribution.
+                    </div>
+                  </div>
+                ) : null}
+              </div>
 
               {/* Financial Summary - Enhanced */}
               {financialQ.data?.data && (
