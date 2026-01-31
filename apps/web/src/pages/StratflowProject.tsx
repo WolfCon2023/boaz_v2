@@ -1847,7 +1847,7 @@ export default function StratflowProject() {
                 : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
             ].join(' ')}
           >
-            Settings
+            Templates
           </button>
           <button
             type="button"
@@ -3388,70 +3388,6 @@ export default function StratflowProject() {
                 </div>
               )}
 
-              {/* New Release Modal */}
-              {releaseModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setReleaseModalOpen(false)}>
-                  <div className="w-full max-w-md rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                    <div className="text-lg font-semibold mb-4">New Release</div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Name *</label>
-                        <input
-                          value={releaseForm.name}
-                          onChange={(e) => setReleaseForm((p) => ({ ...p, name: e.target.value }))}
-                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                          placeholder="e.g., Q1 2026 Release"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Version *</label>
-                        <input
-                          value={releaseForm.version}
-                          onChange={(e) => setReleaseForm((p) => ({ ...p, version: e.target.value }))}
-                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                          placeholder="e.g., 1.0.0"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Description</label>
-                        <textarea
-                          value={releaseForm.description}
-                          onChange={(e) => setReleaseForm((p) => ({ ...p, description: e.target.value }))}
-                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                          rows={2}
-                          placeholder="Optional description"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Target Date</label>
-                        <input
-                          type="date"
-                          value={releaseForm.targetDate}
-                          onChange={(e) => setReleaseForm((p) => ({ ...p, targetDate: e.target.value }))}
-                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-6 flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setReleaseModalOpen(false)}
-                        className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        disabled={createRelease.isPending || !releaseForm.name.trim() || !releaseForm.version.trim()}
-                        onClick={() => createRelease.mutate()}
-                        className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                      >
-                        {createRelease.isPending ? 'Creating...' : 'Create Release'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </section>
           )}
 
@@ -3516,7 +3452,7 @@ export default function StratflowProject() {
                         {/* Items list */}
                         <div className="space-y-2 max-h-64 overflow-y-auto">
                           {items.map((i) => (
-                            <div key={i._id} className={`rounded p-2 text-xs ${label.bgColor} ${i.resolved ? 'opacity-50' : ''}`}>
+                            <div key={i._id} className={`rounded p-2 text-xs ${label.bgColor} text-gray-900 ${i.resolved ? 'opacity-50' : ''}`}>
                               <div className={i.resolved ? 'line-through' : ''}>{i.content}</div>
                               <div className="mt-2 flex items-center justify-between gap-2">
                                 <span className="text-[10px] text-[color:var(--color-text-muted)]">{i.authorName}</span>
@@ -3610,131 +3546,6 @@ export default function StratflowProject() {
                   </div>
                 )}
 
-                {/* New Template Modal */}
-                {templateModalOpen && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setTemplateModalOpen(false)}>
-                    <div className="w-full max-w-lg rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                      <div className="text-lg font-semibold mb-4">New Issue Template</div>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Template Name *</label>
-                          <input
-                            value={templateForm.name}
-                            onChange={(e) => setTemplateForm((p) => ({ ...p, name: e.target.value }))}
-                            className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                            placeholder="e.g., Bug Report, Feature Request"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Description</label>
-                          <input
-                            value={templateForm.description}
-                            onChange={(e) => setTemplateForm((p) => ({ ...p, description: e.target.value }))}
-                            className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                            placeholder="When to use this template"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Issue Type</label>
-                            <select
-                              value={templateForm.type}
-                              onChange={(e) => setTemplateForm((p) => ({ ...p, type: e.target.value as StratflowIssueType }))}
-                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                            >
-                              <option value="Task">Task</option>
-                              <option value="Story">Story</option>
-                              <option value="Defect">Defect</option>
-                              <option value="Epic">Epic</option>
-                              <option value="Spike">Spike</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Priority</label>
-                            <select
-                              value={templateForm.priority}
-                              onChange={(e) => setTemplateForm((p) => ({ ...p, priority: e.target.value as StratflowPriority }))}
-                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                            >
-                              <option value="Low">Low</option>
-                              <option value="Medium">Medium</option>
-                              <option value="High">High</option>
-                              <option value="Highest">Highest</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Title</label>
-                          <input
-                            value={templateForm.defaultTitle}
-                            onChange={(e) => setTemplateForm((p) => ({ ...p, defaultTitle: e.target.value }))}
-                            className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                            placeholder="Pre-filled title (optional)"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Description</label>
-                          <textarea
-                            value={templateForm.defaultDescription}
-                            onChange={(e) => setTemplateForm((p) => ({ ...p, defaultDescription: e.target.value }))}
-                            className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                            rows={3}
-                            placeholder="Pre-filled description (optional)"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Acceptance Criteria</label>
-                          <textarea
-                            value={templateForm.defaultAcceptanceCriteria}
-                            onChange={(e) => setTemplateForm((p) => ({ ...p, defaultAcceptanceCriteria: e.target.value }))}
-                            className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                            rows={2}
-                            placeholder="Pre-filled acceptance criteria (optional)"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Story Points</label>
-                            <input
-                              type="number"
-                              value={templateForm.defaultStoryPoints}
-                              onChange={(e) => setTemplateForm((p) => ({ ...p, defaultStoryPoints: e.target.value }))}
-                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                              placeholder="e.g., 3"
-                              min="0"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Labels</label>
-                            <input
-                              value={templateForm.defaultLabels}
-                              onChange={(e) => setTemplateForm((p) => ({ ...p, defaultLabels: e.target.value }))}
-                              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                              placeholder="comma, separated"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-6 flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setTemplateModalOpen(false)}
-                          className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          disabled={createTemplate.isPending || !templateForm.name.trim()}
-                          onClick={() => createTemplate.mutate()}
-                          className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                        >
-                          {createTemplate.isPending ? 'Creating...' : 'Create Template'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </section>
           )}
@@ -3934,6 +3745,197 @@ export default function StratflowProject() {
       {focusedIssueId ? (
         <StratflowIssueDrawer issueId={focusedIssueId} projectId={String(projectId || '')} onClose={closeIssueFocus} />
       ) : null}
+
+      {/* New Release Modal - rendered at top level for proper positioning */}
+      {releaseModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setReleaseModalOpen(false)}>
+          <div className="w-full max-w-md mx-4 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="text-lg font-semibold mb-4">New Release</div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Name *</label>
+                <input
+                  value={releaseForm.name}
+                  onChange={(e) => setReleaseForm((p) => ({ ...p, name: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  placeholder="e.g., Q1 2026 Release"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Version *</label>
+                <input
+                  value={releaseForm.version}
+                  onChange={(e) => setReleaseForm((p) => ({ ...p, version: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  placeholder="e.g., 1.0.0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Description</label>
+                <textarea
+                  value={releaseForm.description}
+                  onChange={(e) => setReleaseForm((p) => ({ ...p, description: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  rows={2}
+                  placeholder="Optional description"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Target Date</label>
+                <input
+                  type="date"
+                  value={releaseForm.targetDate}
+                  onChange={(e) => setReleaseForm((p) => ({ ...p, targetDate: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setReleaseModalOpen(false)}
+                className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={createRelease.isPending || !releaseForm.name.trim() || !releaseForm.version.trim()}
+                onClick={() => createRelease.mutate()}
+                className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              >
+                {createRelease.isPending ? 'Creating...' : 'Create Release'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Template Modal - rendered at top level for proper positioning */}
+      {templateModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setTemplateModalOpen(false)}>
+          <div className="w-full max-w-lg mx-4 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="text-lg font-semibold mb-4">New Issue Template</div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Template Name *</label>
+                <input
+                  value={templateForm.name}
+                  onChange={(e) => setTemplateForm((p) => ({ ...p, name: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  placeholder="e.g., Bug Report, Feature Request"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Description</label>
+                <input
+                  value={templateForm.description}
+                  onChange={(e) => setTemplateForm((p) => ({ ...p, description: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  placeholder="When to use this template"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Issue Type</label>
+                  <select
+                    value={templateForm.type}
+                    onChange={(e) => setTemplateForm((p) => ({ ...p, type: e.target.value as StratflowIssueType }))}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  >
+                    <option value="Task">Task</option>
+                    <option value="Story">Story</option>
+                    <option value="Defect">Defect</option>
+                    <option value="Epic">Epic</option>
+                    <option value="Spike">Spike</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Priority</label>
+                  <select
+                    value={templateForm.priority}
+                    onChange={(e) => setTemplateForm((p) => ({ ...p, priority: e.target.value as StratflowPriority }))}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Highest">Highest</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Title</label>
+                <input
+                  value={templateForm.defaultTitle}
+                  onChange={(e) => setTemplateForm((p) => ({ ...p, defaultTitle: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  placeholder="Pre-filled title (optional)"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Description</label>
+                <textarea
+                  value={templateForm.defaultDescription}
+                  onChange={(e) => setTemplateForm((p) => ({ ...p, defaultDescription: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  rows={3}
+                  placeholder="Pre-filled description (optional)"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Acceptance Criteria</label>
+                <textarea
+                  value={templateForm.defaultAcceptanceCriteria}
+                  onChange={(e) => setTemplateForm((p) => ({ ...p, defaultAcceptanceCriteria: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                  rows={2}
+                  placeholder="Pre-filled acceptance criteria (optional)"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Story Points</label>
+                  <input
+                    type="number"
+                    value={templateForm.defaultStoryPoints}
+                    onChange={(e) => setTemplateForm((p) => ({ ...p, defaultStoryPoints: e.target.value }))}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                    placeholder="e.g., 3"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Labels</label>
+                  <input
+                    value={templateForm.defaultLabels}
+                    onChange={(e) => setTemplateForm((p) => ({ ...p, defaultLabels: e.target.value }))}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                    placeholder="comma, separated"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTemplateModalOpen(false)}
+                className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={createTemplate.isPending || !templateForm.name.trim()}
+                onClick={() => createTemplate.mutate()}
+                className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              >
+                {createTemplate.isPending ? 'Creating...' : 'Create Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </TooltipProvider>
   )
