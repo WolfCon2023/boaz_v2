@@ -457,12 +457,14 @@ export function StratflowIssueDrawer({
     <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={onClose}>
       <div
         className={[
-          'absolute top-0 h-full border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl',
-          fullScreen ? 'left-0 right-0 w-full border-l-0' : 'right-0 w-[min(95vw,34rem)] border-l',
+          'absolute flex flex-col border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl',
+          fullScreen
+            ? 'inset-0 w-full border-l-0'
+            : 'top-0 right-0 bottom-0 w-[min(95vw,34rem)] border-l',
         ].join(' ')}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] px-4 py-3">
+        <div className="flex-shrink-0 flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] px-4 py-3">
           <div className="min-w-0">
             <div className="text-sm font-semibold truncate">Issue Focus</div>
             <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
@@ -501,7 +503,7 @@ export function StratflowIssueDrawer({
           </div>
         </div>
 
-        <div className="h-[calc(100%-3.25rem)] overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
           {issueQ.isLoading ? (
             <div className="text-sm text-[color:var(--color-text-muted)]">Loading…</div>
           ) : !issue ? (
