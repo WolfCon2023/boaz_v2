@@ -73,7 +73,7 @@ type Project = {
   status: 'Active' | 'On Hold' | 'Completed' | 'Archived'
 }
 
-type ViewMode = 'board' | 'list' | 'sprint' | 'timeline' | 'reports' | 'activity' | 'automation'
+type ViewMode = 'board' | 'list' | 'sprint' | 'timeline' | 'reports' | 'activity' | 'automation' | 'releases' | 'retro' | 'settings'
 
 type UserInfo = {
   id: string
@@ -168,6 +168,107 @@ type TimeRollups = {
   }>
 }
 
+// New types for additional features
+type BurndownDay = { date: string; remaining: number; completed: number; ideal: number }
+type BurndownData = {
+  sprintId: string
+  sprintName: string
+  startDate?: string | null
+  endDate?: string | null
+  state: string
+  totalPoints: number
+  totalIssues: number
+  completedPoints: number
+  days: BurndownDay[]
+}
+
+type VelocitySprint = {
+  sprintId: string
+  sprintName: string
+  startDate?: string | null
+  endDate?: string | null
+  plannedPoints: number
+  completedPoints: number
+  completedIssues: number
+  totalIssues: number
+}
+type VelocityData = { projectId: string; sprints: VelocitySprint[]; averageVelocity: number; sprintCount: number }
+
+type WorkloadEntry = {
+  assigneeId: string
+  assigneeName: string
+  assigneeEmail?: string | null
+  totalIssues: number
+  totalPoints: number
+  sprintIssues: number
+  sprintPoints: number
+}
+type WorkloadData = {
+  projectId: string
+  activeSprintId?: string | null
+  activeSprintName?: string | null
+  workload: WorkloadEntry[]
+  totalOpenIssues: number
+  totalOpenPoints: number
+}
+
+type Release = {
+  _id: string
+  projectId: string
+  name: string
+  version: string
+  description?: string | null
+  state: 'planned' | 'in_progress' | 'released' | 'archived'
+  targetDate?: string | null
+  releaseDate?: string | null
+  sprintIds?: string[]
+  createdAt?: string | null
+}
+
+type IssueTemplate = {
+  _id: string
+  projectId: string
+  name: string
+  description?: string | null
+  type: StratflowIssueType
+  priority: StratflowPriority
+  defaultTitle?: string | null
+  defaultDescription?: string | null
+  defaultAcceptanceCriteria?: string | null
+  defaultStoryPoints?: number | null
+  defaultLabels?: string[]
+  defaultComponents?: string[]
+}
+
+type RetroItem = {
+  _id: string
+  type: 'went_well' | 'to_improve' | 'action_item'
+  content: string
+  authorId: string
+  authorName: string
+  votes: number
+  votedByMe: boolean
+  resolved: boolean
+  createdAt?: string | null
+}
+
+type FinancialSummary = {
+  projectId: string
+  projectName: string
+  dateRange: { startDate: string; endDate: string }
+  summary: {
+    totalHours: number
+    billableHours: number
+    nonBillableHours: number
+    billablePercentage: number
+    entryCount: number
+    estimatedRevenue: number
+    hourlyRate: number
+  }
+  byUser: Array<{ userId: string; userName: string; totalHours: number; billableHours: number }>
+  weeklyTrend: Array<{ week: string; totalHours: number; billableHours: number }>
+}
+
 function groupIssuesByColumn(issues: Issue[]) {
   const m: Record<string, Issue[]> = {}
   for (const it of issues) {
@@ -189,7 +290,7 @@ function findIssueColumnId(map: Record<string, Issue[]>, issueId: string) {
 
 function normView(v: string | null): ViewMode {
   const x = String(v || '').toLowerCase()
-  if (x === 'list' || x === 'sprint' || x === 'timeline' || x === 'reports' || x === 'activity' || x === 'automation') return x as any
+  if (x === 'list' || x === 'sprint' || x === 'timeline' || x === 'reports' || x === 'activity' || x === 'automation' || x === 'releases' || x === 'retro' || x === 'settings') return x as any
   return 'board'
 }
 
@@ -861,6 +962,56 @@ export default function StratflowProject() {
     queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/time-rollups`)).data,
     retry: false,
     enabled: Boolean(projectId) && view === 'reports',
+  })
+
+  // New queries for additional features
+  const velocityQ = useQuery<{ data: VelocityData }>({
+    queryKey: ['stratflow', 'velocity', projectId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/velocity`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'reports',
+  })
+
+  const workloadQ = useQuery<{ data: WorkloadData }>({
+    queryKey: ['stratflow', 'workload', projectId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/workload`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'reports',
+  })
+
+  const burndownQ = useQuery<{ data: BurndownData }>({
+    queryKey: ['stratflow', 'burndown', activeSprint?._id],
+    queryFn: async () => (await http.get(`/api/stratflow/sprints/${activeSprint?._id}/burndown`)).data,
+    retry: false,
+    enabled: Boolean(activeSprint?._id) && view === 'reports',
+  })
+
+  const releasesQ = useQuery<{ data: { items: Release[] } }>({
+    queryKey: ['stratflow', 'releases', projectId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/releases`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'releases',
+  })
+
+  const templatesQ = useQuery<{ data: { items: IssueTemplate[] } }>({
+    queryKey: ['stratflow', 'templates', projectId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/templates`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'settings',
+  })
+
+  const financialQ = useQuery<{ data: FinancialSummary }>({
+    queryKey: ['stratflow', 'financial', projectId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/financial-summary`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'reports',
+  })
+
+  const retroQ = useQuery<{ data: { sprintId: string; sprintName: string; items: RetroItem[] } }>({
+    queryKey: ['stratflow', 'retro', activeSprint?._id],
+    queryFn: async () => (await http.get(`/api/stratflow/sprints/${activeSprint?._id}/retro`)).data,
+    retry: false,
+    enabled: Boolean(activeSprint?._id) && view === 'retro',
   })
 
   const [roadmapZoom, setRoadmapZoom] = React.useState<'month' | 'quarter'>('month')
@@ -1540,6 +1691,42 @@ export default function StratflowProject() {
           >
             <Activity className="h-4 w-4" />
             Activity
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('releases')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'releases'
+                ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            Releases
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('retro')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'retro'
+                ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            Retro
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('settings')}
+            className={[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm',
+              view === 'settings'
+                ? 'border-[color:var(--color-primary-600)] bg-[color:var(--color-muted)]'
+                : 'border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]',
+            ].join(' ')}
+          >
+            Settings
           </button>
           <button
             type="button"
@@ -2891,6 +3078,263 @@ export default function StratflowProject() {
                   </>
                 )
               })()}
+
+              {/* Sprint Burndown Chart */}
+              {activeSprint && burndownQ.data?.data && (
+                <div className="rounded-xl border border-[color:var(--color-border)] p-4">
+                  <div className="text-sm font-semibold">Sprint Burndown: {burndownQ.data.data.sprintName}</div>
+                  <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                    {burndownQ.data.data.totalPoints} total points · {burndownQ.data.data.completedPoints} completed
+                  </div>
+                  <div className="mt-4 h-48 flex items-end gap-1">
+                    {burndownQ.data.data.days.slice(-14).map((d, i) => {
+                      const maxPts = burndownQ.data?.data.totalPoints || 1
+                      const remainPct = Math.round((d.remaining / maxPts) * 100)
+                      const idealPct = Math.round((d.ideal / maxPts) * 100)
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <div className="relative w-full flex-1 flex flex-col justify-end gap-1">
+                            <div
+                              className="w-full bg-[color:var(--color-primary-600)] rounded-t"
+                              style={{ height: `${remainPct}%` }}
+                              title={`Remaining: ${d.remaining} pts`}
+                            />
+                            <div
+                              className="absolute bottom-0 left-0 w-full border-t-2 border-dashed border-amber-500"
+                              style={{ bottom: `${idealPct}%` }}
+                              title={`Ideal: ${d.ideal} pts`}
+                            />
+                          </div>
+                          <div className="text-[8px] text-[color:var(--color-text-muted)] truncate w-full text-center">
+                            {d.date.slice(5)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-2 flex items-center gap-4 text-[10px] text-[color:var(--color-text-muted)]">
+                    <span className="flex items-center gap-1"><span className="w-3 h-2 bg-[color:var(--color-primary-600)] rounded" /> Remaining</span>
+                    <span className="flex items-center gap-1"><span className="w-3 border-t-2 border-dashed border-amber-500" /> Ideal</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Sprint Velocity Chart */}
+              {velocityQ.data?.data && velocityQ.data.data.sprints.length > 0 && (
+                <div className="rounded-xl border border-[color:var(--color-border)] p-4">
+                  <div className="text-sm font-semibold">Sprint Velocity</div>
+                  <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                    Average velocity: {velocityQ.data.data.averageVelocity} pts/sprint ({velocityQ.data.data.sprintCount} sprints)
+                  </div>
+                  <div className="mt-4 h-32 flex items-end gap-2">
+                    {velocityQ.data.data.sprints.slice(-10).map((s, i) => {
+                      const maxPts = Math.max(...velocityQ.data!.data.sprints.map((x) => x.completedPoints), 1)
+                      const pct = Math.round((s.completedPoints / maxPts) * 100)
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <div
+                            className="w-full bg-emerald-600 rounded-t"
+                            style={{ height: `${pct}%`, minHeight: s.completedPoints > 0 ? '4px' : '0' }}
+                            title={`${s.sprintName}: ${s.completedPoints} pts`}
+                          />
+                          <div className="text-[8px] text-[color:var(--color-text-muted)] truncate w-full text-center" title={s.sprintName}>
+                            {s.sprintName.slice(0, 8)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Team Workload */}
+              {workloadQ.data?.data && workloadQ.data.data.workload.length > 0 && (
+                <div className="rounded-xl border border-[color:var(--color-border)] p-4">
+                  <div className="text-sm font-semibold">Team Workload</div>
+                  <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                    {workloadQ.data.data.totalOpenIssues} open issues · {workloadQ.data.data.totalOpenPoints} story points
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {workloadQ.data.data.workload.slice(0, 10).map((w) => {
+                      const maxPts = Math.max(...workloadQ.data!.data.workload.map((x) => x.totalPoints), 1)
+                      const pct = Math.round((w.totalPoints / maxPts) * 100)
+                      return (
+                        <div key={w.assigneeId} className="flex items-center gap-3">
+                          <div className="w-32 truncate text-xs">{w.assigneeName}</div>
+                          <div className="flex-1 h-4 bg-[color:var(--color-muted)] rounded overflow-hidden">
+                            <div className="h-full bg-sky-600 rounded" style={{ width: `${pct}%` }} />
+                          </div>
+                          <div className="w-16 text-right text-xs tabular-nums">{w.totalPoints} pts</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Financial Summary */}
+              {financialQ.data?.data && (
+                <div className="rounded-xl border border-[color:var(--color-border)] p-4">
+                  <div className="text-sm font-semibold">Financial Summary</div>
+                  <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
+                    {financialQ.data.data.dateRange.startDate.slice(0, 10)} – {financialQ.data.data.dateRange.endDate.slice(0, 10)}
+                  </div>
+                  <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-2xl font-bold tabular-nums">{financialQ.data.data.summary.billableHours}h</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Billable Hours</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold tabular-nums">{financialQ.data.data.summary.billablePercentage}%</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Billable Rate</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold tabular-nums text-emerald-600">${financialQ.data.data.summary.estimatedRevenue.toLocaleString()}</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Est. Revenue</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold tabular-nums">${financialQ.data.data.summary.hourlyRate}/hr</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Rate</div>
+                    </div>
+                  </div>
+                  {financialQ.data.data.byUser.length > 0 && (
+                    <div className="mt-4">
+                      <div className="text-xs font-medium mb-2">By Team Member</div>
+                      <div className="space-y-1">
+                        {financialQ.data.data.byUser.slice(0, 5).map((u) => (
+                          <div key={u.userId} className="flex items-center justify-between text-xs">
+                            <span className="truncate">{u.userName}</span>
+                            <span className="tabular-nums">{u.billableHours}h billable</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Releases View */}
+          {view === 'releases' && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <div className="text-sm font-semibold">Releases</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Group sprints into versioned releases</div>
+                </div>
+                <button
+                  type="button"
+                  disabled={!isOwner}
+                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                >
+                  New Release
+                </button>
+              </div>
+              {releasesQ.isLoading ? (
+                <div className="text-sm text-[color:var(--color-text-muted)]">Loading...</div>
+              ) : (releasesQ.data?.data.items ?? []).length === 0 ? (
+                <div className="text-sm text-[color:var(--color-text-muted)]">No releases yet. Create one to group sprints into a versioned release.</div>
+              ) : (
+                <div className="space-y-3">
+                  {(releasesQ.data?.data.items ?? []).map((r) => (
+                    <div key={r._id} className="rounded-lg border border-[color:var(--color-border)] p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{r.name} <span className="text-xs text-[color:var(--color-text-muted)]">v{r.version}</span></div>
+                          {r.description && <div className="text-xs text-[color:var(--color-text-muted)] mt-1">{r.description}</div>}
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded ${r.state === 'released' ? 'bg-emerald-100 text-emerald-800' : r.state === 'in_progress' ? 'bg-sky-100 text-sky-800' : 'bg-gray-100 text-gray-800'}`}>
+                          {r.state.replace('_', ' ')}
+                        </span>
+                      </div>
+                      {r.targetDate && <div className="text-xs text-[color:var(--color-text-muted)] mt-2">Target: {r.targetDate.slice(0, 10)}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Retrospective View */}
+          {view === 'retro' && (
+            <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <div className="text-sm font-semibold">Sprint Retrospective</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">
+                    {activeSprint ? `${activeSprint.name}` : 'No active sprint'} – Reflect on what went well, what to improve, and action items.
+                  </div>
+                </div>
+              </div>
+              {!activeSprint ? (
+                <div className="text-sm text-[color:var(--color-text-muted)]">Set a sprint active to start a retrospective.</div>
+              ) : retroQ.isLoading ? (
+                <div className="text-sm text-[color:var(--color-text-muted)]">Loading...</div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {['went_well', 'to_improve', 'action_item'].map((type) => {
+                    const items = (retroQ.data?.data.items ?? []).filter((i) => i.type === type)
+                    const labels: Record<string, { title: string; color: string }> = {
+                      went_well: { title: '✓ What Went Well', color: 'emerald' },
+                      to_improve: { title: '△ To Improve', color: 'amber' },
+                      action_item: { title: '→ Action Items', color: 'sky' },
+                    }
+                    const label = labels[type] || { title: type, color: 'gray' }
+                    return (
+                      <div key={type} className="rounded-lg border border-[color:var(--color-border)] p-3">
+                        <div className={`text-sm font-medium text-${label.color}-700 mb-3`}>{label.title}</div>
+                        <div className="space-y-2">
+                          {items.map((i) => (
+                            <div key={i._id} className={`rounded p-2 text-xs ${i.resolved ? 'opacity-50 line-through' : ''}`} style={{ background: `var(--color-muted)` }}>
+                              {i.content}
+                              <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">{i.authorName} · {i.votes} votes</div>
+                            </div>
+                          ))}
+                          {items.length === 0 && <div className="text-xs text-[color:var(--color-text-muted)]">No items yet.</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Settings View (Templates, Custom Fields, Webhooks) */}
+          {view === 'settings' && (
+            <section className="space-y-4">
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <div className="text-sm font-semibold">Issue Templates</div>
+                    <div className="text-xs text-[color:var(--color-text-muted)]">Pre-defined templates for quick issue creation</div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!isOwner}
+                    className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                  >
+                    New Template
+                  </button>
+                </div>
+                {templatesQ.isLoading ? (
+                  <div className="text-sm text-[color:var(--color-text-muted)]">Loading...</div>
+                ) : (templatesQ.data?.data.items ?? []).length === 0 ? (
+                  <div className="text-sm text-[color:var(--color-text-muted)]">No templates yet. Create one to speed up issue creation.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {(templatesQ.data?.data.items ?? []).map((t) => (
+                      <div key={t._id} className="rounded-lg border border-[color:var(--color-border)] p-3 flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-sm">{t.name}</div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">{t.type} · {t.priority}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
           )}
 

@@ -200,6 +200,111 @@ type NotificationDoc = {
 
 type AutomationTriggerKind = 'issue_moved' | 'issue_link_added' | 'issue_link_removed' | 'sprint_closed'
 
+// Issue Templates
+type IssueTemplateDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  name: string
+  description?: string | null
+  type: IssueType
+  priority: IssuePriority
+  defaultTitle?: string | null
+  defaultDescription?: string | null
+  defaultAcceptanceCriteria?: string | null
+  defaultStoryPoints?: number | null
+  defaultLabels?: string[]
+  defaultComponents?: string[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Releases
+type ReleaseState = 'planned' | 'in_progress' | 'released' | 'archived'
+type ReleaseDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  name: string
+  version: string
+  description?: string | null
+  state: ReleaseState
+  targetDate?: Date | null
+  releaseDate?: Date | null
+  sprintIds?: ObjectId[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Webhooks
+type WebhookEventType = 'issue_created' | 'issue_updated' | 'issue_moved' | 'sprint_closed' | 'comment_added'
+type WebhookDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  name: string
+  url: string
+  secret?: string | null
+  events: WebhookEventType[]
+  enabled: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Custom Fields
+type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'multiselect' | 'checkbox'
+type CustomFieldDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  name: string
+  fieldKey: string
+  fieldType: CustomFieldType
+  options?: string[] | null // For select/multiselect
+  required?: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Sprint Retrospectives
+type RetroItemType = 'went_well' | 'to_improve' | 'action_item'
+type RetroItemDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  sprintId: ObjectId
+  type: RetroItemType
+  content: string
+  authorId: string
+  votes?: string[] // user IDs who voted
+  resolved?: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Audit Log
+type AuditAction =
+  | 'project_created'
+  | 'project_updated'
+  | 'project_deleted'
+  | 'issue_created'
+  | 'issue_updated'
+  | 'issue_deleted'
+  | 'sprint_created'
+  | 'sprint_updated'
+  | 'sprint_deleted'
+  | 'member_added'
+  | 'member_removed'
+  | 'settings_changed'
+
+type AuditLogDoc = {
+  _id: ObjectId
+  projectId: ObjectId
+  actorId: string
+  action: AuditAction
+  targetType: 'project' | 'issue' | 'sprint' | 'member' | 'settings'
+  targetId?: string | null
+  changes?: any
+  ipAddress?: string | null
+  userAgent?: string | null
+  createdAt: Date
+}
+
 type AutomationRuleDoc = {
   _id: ObjectId
   projectId: ObjectId
@@ -322,6 +427,14 @@ async function ensureStratflowIndexes(db: any) {
     await db.collection('sf_notifications').createIndex({ projectId: 1, userId: 1, createdAt: -1 }).catch(() => {})
     await db.collection('sf_notifications').createIndex({ userId: 1, readAt: 1, createdAt: -1 }).catch(() => {})
     await db.collection('sf_automation_rules').createIndex({ projectId: 1, updatedAt: -1 }).catch(() => {})
+    // New indexes for additional features
+    await db.collection('sf_issue_templates').createIndex({ projectId: 1, name: 1 }).catch(() => {})
+    await db.collection('sf_releases').createIndex({ projectId: 1, state: 1, targetDate: 1 }).catch(() => {})
+    await db.collection('sf_webhooks').createIndex({ projectId: 1, enabled: 1 }).catch(() => {})
+    await db.collection('sf_custom_fields').createIndex({ projectId: 1, fieldKey: 1 }, { unique: true }).catch(() => {})
+    await db.collection('sf_retro_items').createIndex({ projectId: 1, sprintId: 1, type: 1 }).catch(() => {})
+    await db.collection('sf_audit_log').createIndex({ projectId: 1, createdAt: -1 }).catch(() => {})
+    await db.collection('sf_audit_log').createIndex({ actorId: 1, createdAt: -1 }).catch(() => {})
   } catch {
     // noop
   }
@@ -1482,6 +1595,285 @@ stratflowRouter.post('/sprints/:sprintId/close', async (req: any, res) => {
 
   await logActivity(db, { projectId: sprint.projectId, actorId: auth.userId, kind: 'sprint_closed', sprintId: sid, meta: { force }, createdAt: now })
   res.json({ data: { ok: true }, error: null })
+})
+
+// GET /api/stratflow/sprints/:sprintId/burndown - Sprint burndown/burnup chart data
+stratflowRouter.get('/sprints/:sprintId/burndown', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const sid = objIdOrNull(String(req.params.sprintId || ''))
+  if (!sid) return res.status(400).json({ data: null, error: 'invalid_sprint_id' })
+
+  const sprint = await db.collection('sf_sprints').findOne({ _id: sid } as any)
+  if (!sprint) return res.status(404).json({ data: null, error: 'not_found' })
+  const project = await loadProjectForUser(db, sprint.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Get all issues that were ever in this sprint (current + moved out via activity)
+  const currentIssues = await db.collection('sf_issues').find({ sprintId: sid } as any).toArray()
+
+  // Calculate total scope (story points)
+  const totalPoints = currentIssues.reduce((sum, i) => sum + (Number(i.storyPoints) || 0), 0)
+  const totalIssues = currentIssues.length
+
+  // Get sprint date range
+  const startDate = sprint.startDate ? new Date(sprint.startDate) : sprint.createdAt
+  const endDate = sprint.endDate ? new Date(sprint.endDate) : new Date()
+  const now = new Date()
+  const effectiveEndDate = sprint.state === 'closed' ? (sprint.updatedAt || endDate) : (now < endDate ? now : endDate)
+
+  // Get activity for issues moved to "done" in this sprint
+  const doneActivities = await db
+    .collection('sf_activity')
+    .find({
+      projectId: sprint.projectId,
+      kind: 'issue_moved',
+      'meta.toColumnName': { $regex: /done|complete/i },
+      createdAt: { $gte: startDate, $lte: effectiveEndDate },
+    } as any)
+    .sort({ createdAt: 1 } as any)
+    .toArray()
+
+  // Build a map of issueId -> storyPoints for quick lookup
+  const issuePointsMap = new Map<string, number>()
+  for (const issue of currentIssues) {
+    issuePointsMap.set(String(issue._id), Number(issue.storyPoints) || 0)
+  }
+
+  // Also fetch issues that were completed but might have been moved out
+  const completedIssueIds = doneActivities.map((a) => a.issueId).filter(Boolean)
+  if (completedIssueIds.length) {
+    const historicalIssues = await db
+      .collection('sf_issues')
+      .find({ _id: { $in: completedIssueIds } } as any)
+      .toArray()
+    for (const issue of historicalIssues) {
+      if (!issuePointsMap.has(String(issue._id))) {
+        issuePointsMap.set(String(issue._id), Number(issue.storyPoints) || 0)
+      }
+    }
+  }
+
+  // Generate daily data points
+  const dayMs = 24 * 60 * 60 * 1000
+  const days: Array<{ date: string; remaining: number; completed: number; ideal: number }> = []
+  const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / dayMs))
+
+  let completedPoints = 0
+  const completedByDay = new Map<string, number>()
+
+  // Group completions by day
+  for (const act of doneActivities) {
+    const dayKey = new Date(act.createdAt).toISOString().slice(0, 10)
+    const points = issuePointsMap.get(String(act.issueId)) || 0
+    completedByDay.set(dayKey, (completedByDay.get(dayKey) || 0) + points)
+  }
+
+  // Build daily series
+  for (let d = new Date(startDate); d <= effectiveEndDate; d = new Date(d.getTime() + dayMs)) {
+    const dayKey = d.toISOString().slice(0, 10)
+    completedPoints += completedByDay.get(dayKey) || 0
+    const dayIndex = Math.floor((d.getTime() - startDate.getTime()) / dayMs)
+    const idealRemaining = totalPoints - (totalPoints * (dayIndex + 1)) / totalDays
+
+    days.push({
+      date: dayKey,
+      remaining: Math.max(0, totalPoints - completedPoints),
+      completed: completedPoints,
+      ideal: Math.max(0, Math.round(idealRemaining * 10) / 10),
+    })
+  }
+
+  res.json({
+    data: {
+      sprintId: String(sid),
+      sprintName: sprint.name,
+      startDate: toIsoOrNull(startDate),
+      endDate: toIsoOrNull(endDate),
+      state: sprint.state,
+      totalPoints,
+      totalIssues,
+      completedPoints,
+      days,
+    },
+    error: null,
+  })
+})
+
+// GET /api/stratflow/projects/:projectId/velocity - Sprint velocity history
+stratflowRouter.get('/projects/:projectId/velocity', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  // Get all closed sprints for this project
+  const closedSprints = await db
+    .collection('sf_sprints')
+    .find({ projectId: pid, state: 'closed' } as any)
+    .sort({ endDate: 1, updatedAt: 1 } as any)
+    .limit(50)
+    .toArray()
+
+  // For each sprint, calculate completed story points
+  const velocityData: Array<{
+    sprintId: string
+    sprintName: string
+    startDate: string | null
+    endDate: string | null
+    plannedPoints: number
+    completedPoints: number
+    completedIssues: number
+    totalIssues: number
+  }> = []
+
+  for (const sprint of closedSprints) {
+    // Get issues that were in this sprint when it closed (check activity for sprint_closed)
+    // For simplicity, we'll look at current issues + done issues
+    const sprintIssues = await db
+      .collection('sf_issues')
+      .find({ $or: [{ sprintId: sprint._id }, { epicId: { $exists: true } }] } as any)
+      .toArray()
+
+    // Actually, let's query issues that have statusKey='done' and were in this sprint
+    // We need to check activity to see which issues were completed during this sprint
+    const sprintStartDate = sprint.startDate || sprint.createdAt
+    const sprintEndDate = sprint.endDate || sprint.updatedAt || new Date()
+
+    const doneActivities = await db
+      .collection('sf_activity')
+      .find({
+        projectId: pid,
+        kind: 'issue_moved',
+        'meta.toColumnName': { $regex: /done|complete/i },
+        createdAt: { $gte: sprintStartDate, $lte: sprintEndDate },
+      } as any)
+      .toArray()
+
+    const completedIssueIds = [...new Set(doneActivities.map((a) => String(a.issueId)).filter(Boolean))]
+
+    // Get the actual issues to sum points
+    const completedIssues = completedIssueIds.length
+      ? await db
+          .collection('sf_issues')
+          .find({ _id: { $in: completedIssueIds.map((id) => objIdOrNull(id)).filter(Boolean) } } as any)
+          .toArray()
+      : []
+
+    const completedPoints = completedIssues.reduce((sum, i) => sum + (Number(i.storyPoints) || 0), 0)
+
+    // Get planned points (capacity or sum of all issues assigned to sprint)
+    const plannedPoints = sprint.capacityPoints || 0
+
+    // Count total issues that were in the sprint
+    const totalIssueCount = await db.collection('sf_issues').countDocuments({ sprintId: sprint._id } as any)
+
+    velocityData.push({
+      sprintId: String(sprint._id),
+      sprintName: sprint.name || 'Unnamed Sprint',
+      startDate: toIsoOrNull(sprintStartDate),
+      endDate: toIsoOrNull(sprintEndDate),
+      plannedPoints,
+      completedPoints,
+      completedIssues: completedIssues.length,
+      totalIssues: totalIssueCount + completedIssues.length, // approximate
+    })
+  }
+
+  // Calculate average velocity
+  const avgVelocity =
+    velocityData.length > 0
+      ? Math.round((velocityData.reduce((sum, v) => sum + v.completedPoints, 0) / velocityData.length) * 10) / 10
+      : 0
+
+  res.json({
+    data: {
+      projectId: String(pid),
+      sprints: velocityData,
+      averageVelocity: avgVelocity,
+      sprintCount: velocityData.length,
+    },
+    error: null,
+  })
+})
+
+// GET /api/stratflow/projects/:projectId/workload - Team workload distribution
+stratflowRouter.get('/projects/:projectId/workload', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  // Get active sprint if any
+  const activeSprint = await db.collection('sf_sprints').findOne({ projectId: pid, state: 'active' } as any)
+
+  // Get all open issues (not done) for this project
+  const openIssues = await db
+    .collection('sf_issues')
+    .find({ projectId: pid, statusKey: { $ne: 'done' } } as any)
+    .toArray()
+
+  // Group by assignee
+  const byAssignee = new Map<string, { issues: number; points: number; inSprint: number; inSprintPoints: number }>()
+
+  for (const issue of openIssues) {
+    const assigneeId = String(issue.assigneeId || 'unassigned')
+    if (!byAssignee.has(assigneeId)) {
+      byAssignee.set(assigneeId, { issues: 0, points: 0, inSprint: 0, inSprintPoints: 0 })
+    }
+    const entry = byAssignee.get(assigneeId)!
+    entry.issues++
+    entry.points += Number(issue.storyPoints) || 0
+    if (activeSprint && String(issue.sprintId) === String(activeSprint._id)) {
+      entry.inSprint++
+      entry.inSprintPoints += Number(issue.storyPoints) || 0
+    }
+  }
+
+  // Load user details for assignees
+  const assigneeIds = Array.from(byAssignee.keys()).filter((id) => id !== 'unassigned')
+  const users = assigneeIds.length ? await loadUsersByIds(db, assigneeIds) : []
+  const userMap = new Map(users.map((u) => [u.id, u]))
+
+  const workload = Array.from(byAssignee.entries()).map(([assigneeId, data]) => ({
+    assigneeId,
+    assigneeName: assigneeId === 'unassigned' ? 'Unassigned' : userMap.get(assigneeId)?.name || userMap.get(assigneeId)?.email || assigneeId,
+    assigneeEmail: assigneeId === 'unassigned' ? null : userMap.get(assigneeId)?.email || null,
+    totalIssues: data.issues,
+    totalPoints: data.points,
+    sprintIssues: data.inSprint,
+    sprintPoints: data.inSprintPoints,
+  }))
+
+  // Sort by total points descending
+  workload.sort((a, b) => b.totalPoints - a.totalPoints)
+
+  res.json({
+    data: {
+      projectId: String(pid),
+      activeSprintId: activeSprint ? String(activeSprint._id) : null,
+      activeSprintName: activeSprint?.name || null,
+      workload,
+      totalOpenIssues: openIssues.length,
+      totalOpenPoints: openIssues.reduce((sum, i) => sum + (Number(i.storyPoints) || 0), 0),
+    },
+    error: null,
+  })
 })
 
 const issueUpdateSchema = z.object({
@@ -2988,5 +3380,867 @@ stratflowAdminRouter.delete('/projects/:projectId/components/:componentId', asyn
   }
 
   res.json({ data: { ok: true }, error: null })
+})
+
+// ============================================================================
+// ISSUE TEMPLATES
+// ============================================================================
+
+const issueTemplateSchema = z.object({
+  name: z.string().min(2).max(120),
+  description: z.string().max(500).optional().nullable(),
+  type: z.enum(['Epic', 'Story', 'Task', 'Defect', 'Spike']),
+  priority: z.enum(['Highest', 'High', 'Medium', 'Low']).optional(),
+  defaultTitle: z.string().max(280).optional().nullable(),
+  defaultDescription: z.string().max(4000).optional().nullable(),
+  defaultAcceptanceCriteria: z.string().max(8000).optional().nullable(),
+  defaultStoryPoints: z.number().min(0).max(200).optional().nullable(),
+  defaultLabels: z.array(z.string()).optional(),
+  defaultComponents: z.array(z.string()).optional(),
+})
+
+// GET /api/stratflow/projects/:projectId/templates
+stratflowRouter.get('/projects/:projectId/templates', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const items = await db.collection('sf_issue_templates').find({ projectId: pid } as any).sort({ name: 1 } as any).toArray()
+  res.json({
+    data: {
+      items: items.map((t: any) => ({
+        ...t,
+        _id: String(t._id),
+        projectId: String(t.projectId),
+        createdAt: toIsoOrNull(t.createdAt),
+        updatedAt: toIsoOrNull(t.updatedAt),
+      })),
+    },
+    error: null,
+  })
+})
+
+// POST /api/stratflow/projects/:projectId/templates (owner only)
+stratflowRouter.post('/projects/:projectId/templates', async (req: any, res) => {
+  const parsed = issueTemplateSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const now = new Date()
+  const doc: IssueTemplateDoc = {
+    _id: new ObjectId(),
+    projectId: pid,
+    name: parsed.data.name.trim(),
+    description: parsed.data.description || null,
+    type: parsed.data.type as IssueType,
+    priority: (parsed.data.priority || 'Medium') as IssuePriority,
+    defaultTitle: parsed.data.defaultTitle || null,
+    defaultDescription: parsed.data.defaultDescription || null,
+    defaultAcceptanceCriteria: parsed.data.defaultAcceptanceCriteria || null,
+    defaultStoryPoints: parsed.data.defaultStoryPoints ?? null,
+    defaultLabels: normStrArray(parsed.data.defaultLabels, 50),
+    defaultComponents: normStrArray(parsed.data.defaultComponents, 50),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  await db.collection('sf_issue_templates').insertOne(doc as any)
+  res.status(201).json({ data: { _id: String(doc._id) }, error: null })
+})
+
+// DELETE /api/stratflow/templates/:templateId
+stratflowRouter.delete('/templates/:templateId', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const tid = objIdOrNull(String(req.params.templateId || ''))
+  if (!tid) return res.status(400).json({ data: null, error: 'invalid_template_id' })
+
+  const template = await db.collection('sf_issue_templates').findOne({ _id: tid } as any)
+  if (!template) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, template.projectId as any, auth.userId)
+  if (project === 'forbidden' || !project) return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  await db.collection('sf_issue_templates').deleteOne({ _id: tid } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// POST /api/stratflow/issues/:issueId/clone - Clone an issue
+stratflowRouter.post('/issues/:issueId/clone', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const iid = objIdOrNull(String(req.params.issueId || ''))
+  if (!iid) return res.status(400).json({ data: null, error: 'invalid_issue_id' })
+
+  const issue = await db.collection('sf_issues').findOne({ _id: iid } as any)
+  if (!issue) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, issue.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const now = new Date()
+  const lastIssue = await db.collection('sf_issues').findOne({ columnId: issue.columnId } as any, { sort: { order: -1 } as any })
+  const newOrder = (Number(lastIssue?.order) || 0) + 1000
+
+  const cloned: IssueDoc = {
+    _id: new ObjectId(),
+    projectId: issue.projectId,
+    boardId: issue.boardId,
+    columnId: issue.columnId,
+    title: `[Clone] ${issue.title}`,
+    description: issue.description || null,
+    type: issue.type,
+    statusKey: issue.statusKey || 'todo',
+    priority: issue.priority || 'Medium',
+    acceptanceCriteria: issue.acceptanceCriteria || null,
+    storyPoints: issue.storyPoints ?? null,
+    sprintId: null, // Don't copy sprint assignment
+    epicId: issue.epicId || null,
+    phase: issue.phase || null,
+    targetStartDate: null,
+    targetEndDate: null,
+    labels: issue.labels ? [...issue.labels] : [],
+    components: issue.components ? [...issue.components] : [],
+    links: [], // Don't copy links
+    attachments: [], // Don't copy attachments
+    order: newOrder,
+    reporterId: auth.userId,
+    assigneeId: null, // Don't copy assignee
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  await db.collection('sf_issues').insertOne(cloned as any)
+  await logActivity(db, { projectId: issue.projectId, actorId: auth.userId, kind: 'issue_created', issueId: cloned._id, meta: { clonedFrom: String(iid) }, createdAt: now })
+
+  res.status(201).json({ data: { _id: String(cloned._id) }, error: null })
+})
+
+// ============================================================================
+// RELEASES
+// ============================================================================
+
+const releaseSchema = z.object({
+  name: z.string().min(2).max(120),
+  version: z.string().min(1).max(40),
+  description: z.string().max(2000).optional().nullable(),
+  state: z.enum(['planned', 'in_progress', 'released', 'archived']).optional(),
+  targetDate: z.string().optional().nullable(),
+  releaseDate: z.string().optional().nullable(),
+  sprintIds: z.array(z.string()).optional(),
+})
+
+// GET /api/stratflow/projects/:projectId/releases
+stratflowRouter.get('/projects/:projectId/releases', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const items = await db.collection('sf_releases').find({ projectId: pid } as any).sort({ targetDate: -1, createdAt: -1 } as any).toArray()
+  res.json({
+    data: {
+      items: items.map((r: any) => ({
+        ...r,
+        _id: String(r._id),
+        projectId: String(r.projectId),
+        sprintIds: (r.sprintIds || []).map((s: any) => String(s)),
+        targetDate: toIsoOrNull(r.targetDate),
+        releaseDate: toIsoOrNull(r.releaseDate),
+        createdAt: toIsoOrNull(r.createdAt),
+        updatedAt: toIsoOrNull(r.updatedAt),
+      })),
+    },
+    error: null,
+  })
+})
+
+// POST /api/stratflow/projects/:projectId/releases
+stratflowRouter.post('/projects/:projectId/releases', async (req: any, res) => {
+  const parsed = releaseSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const now = new Date()
+  const doc: ReleaseDoc = {
+    _id: new ObjectId(),
+    projectId: pid,
+    name: parsed.data.name.trim(),
+    version: parsed.data.version.trim(),
+    description: parsed.data.description || null,
+    state: (parsed.data.state || 'planned') as ReleaseState,
+    targetDate: parsed.data.targetDate ? new Date(parsed.data.targetDate) : null,
+    releaseDate: parsed.data.releaseDate ? new Date(parsed.data.releaseDate) : null,
+    sprintIds: (parsed.data.sprintIds || []).map((s) => objIdOrNull(s)).filter(Boolean) as ObjectId[],
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  await db.collection('sf_releases').insertOne(doc as any)
+  res.status(201).json({ data: { _id: String(doc._id) }, error: null })
+})
+
+// PATCH /api/stratflow/releases/:releaseId
+stratflowRouter.patch('/releases/:releaseId', async (req: any, res) => {
+  const parsed = releaseSchema.partial().safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const rid = objIdOrNull(String(req.params.releaseId || ''))
+  if (!rid) return res.status(400).json({ data: null, error: 'invalid_release_id' })
+
+  const release = await db.collection('sf_releases').findOne({ _id: rid } as any)
+  if (!release) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, release.projectId as any, auth.userId)
+  if (project === 'forbidden' || !project) return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const update: any = { updatedAt: new Date() }
+  if (parsed.data.name !== undefined) update.name = parsed.data.name.trim()
+  if (parsed.data.version !== undefined) update.version = parsed.data.version.trim()
+  if (parsed.data.description !== undefined) update.description = parsed.data.description || null
+  if (parsed.data.state !== undefined) update.state = parsed.data.state
+  if (parsed.data.targetDate !== undefined) update.targetDate = parsed.data.targetDate ? new Date(parsed.data.targetDate) : null
+  if (parsed.data.releaseDate !== undefined) update.releaseDate = parsed.data.releaseDate ? new Date(parsed.data.releaseDate) : null
+  if (parsed.data.sprintIds !== undefined) update.sprintIds = (parsed.data.sprintIds || []).map((s) => objIdOrNull(s)).filter(Boolean)
+
+  await db.collection('sf_releases').updateOne({ _id: rid } as any, { $set: update } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// DELETE /api/stratflow/releases/:releaseId
+stratflowRouter.delete('/releases/:releaseId', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const rid = objIdOrNull(String(req.params.releaseId || ''))
+  if (!rid) return res.status(400).json({ data: null, error: 'invalid_release_id' })
+
+  const release = await db.collection('sf_releases').findOne({ _id: rid } as any)
+  if (!release) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, release.projectId as any, auth.userId)
+  if (project === 'forbidden' || !project) return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  await db.collection('sf_releases').deleteOne({ _id: rid } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// ============================================================================
+// WEBHOOKS
+// ============================================================================
+
+const webhookSchema = z.object({
+  name: z.string().min(2).max(120),
+  url: z.string().url().max(500),
+  secret: z.string().max(200).optional().nullable(),
+  events: z.array(z.enum(['issue_created', 'issue_updated', 'issue_moved', 'sprint_closed', 'comment_added'])),
+  enabled: z.boolean().optional(),
+})
+
+// GET /api/stratflow/projects/:projectId/webhooks
+stratflowRouter.get('/projects/:projectId/webhooks', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const items = await db.collection('sf_webhooks').find({ projectId: pid } as any).sort({ createdAt: -1 } as any).toArray()
+  res.json({
+    data: {
+      items: items.map((w: any) => ({
+        _id: String(w._id),
+        projectId: String(w.projectId),
+        name: w.name,
+        url: w.url,
+        events: w.events || [],
+        enabled: Boolean(w.enabled),
+        createdAt: toIsoOrNull(w.createdAt),
+        updatedAt: toIsoOrNull(w.updatedAt),
+      })),
+    },
+    error: null,
+  })
+})
+
+// POST /api/stratflow/projects/:projectId/webhooks
+stratflowRouter.post('/projects/:projectId/webhooks', async (req: any, res) => {
+  const parsed = webhookSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const now = new Date()
+  const doc: WebhookDoc = {
+    _id: new ObjectId(),
+    projectId: pid,
+    name: parsed.data.name.trim(),
+    url: parsed.data.url.trim(),
+    secret: parsed.data.secret || null,
+    events: parsed.data.events as WebhookEventType[],
+    enabled: parsed.data.enabled !== false,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  await db.collection('sf_webhooks').insertOne(doc as any)
+  res.status(201).json({ data: { _id: String(doc._id) }, error: null })
+})
+
+// PATCH /api/stratflow/webhooks/:webhookId
+stratflowRouter.patch('/webhooks/:webhookId', async (req: any, res) => {
+  const parsed = webhookSchema.partial().safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const wid = objIdOrNull(String(req.params.webhookId || ''))
+  if (!wid) return res.status(400).json({ data: null, error: 'invalid_webhook_id' })
+
+  const webhook = await db.collection('sf_webhooks').findOne({ _id: wid } as any)
+  if (!webhook) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, webhook.projectId as any, auth.userId)
+  if (project === 'forbidden' || !project) return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const update: any = { updatedAt: new Date() }
+  if (parsed.data.name !== undefined) update.name = parsed.data.name.trim()
+  if (parsed.data.url !== undefined) update.url = parsed.data.url.trim()
+  if (parsed.data.secret !== undefined) update.secret = parsed.data.secret || null
+  if (parsed.data.events !== undefined) update.events = parsed.data.events
+  if (parsed.data.enabled !== undefined) update.enabled = Boolean(parsed.data.enabled)
+
+  await db.collection('sf_webhooks').updateOne({ _id: wid } as any, { $set: update } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// DELETE /api/stratflow/webhooks/:webhookId
+stratflowRouter.delete('/webhooks/:webhookId', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const wid = objIdOrNull(String(req.params.webhookId || ''))
+  if (!wid) return res.status(400).json({ data: null, error: 'invalid_webhook_id' })
+
+  const webhook = await db.collection('sf_webhooks').findOne({ _id: wid } as any)
+  if (!webhook) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, webhook.projectId as any, auth.userId)
+  if (project === 'forbidden' || !project) return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  await db.collection('sf_webhooks').deleteOne({ _id: wid } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// ============================================================================
+// CUSTOM FIELDS
+// ============================================================================
+
+const customFieldSchema = z.object({
+  name: z.string().min(2).max(80),
+  fieldKey: z.string().min(2).max(40).regex(/^[a-z_][a-z0-9_]*$/),
+  fieldType: z.enum(['text', 'number', 'date', 'select', 'multiselect', 'checkbox']),
+  options: z.array(z.string()).optional().nullable(),
+  required: z.boolean().optional(),
+})
+
+// GET /api/stratflow/projects/:projectId/custom-fields
+stratflowRouter.get('/projects/:projectId/custom-fields', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const items = await db.collection('sf_custom_fields').find({ projectId: pid } as any).sort({ name: 1 } as any).toArray()
+  res.json({
+    data: {
+      items: items.map((f: any) => ({
+        _id: String(f._id),
+        projectId: String(f.projectId),
+        name: f.name,
+        fieldKey: f.fieldKey,
+        fieldType: f.fieldType,
+        options: f.options || null,
+        required: Boolean(f.required),
+        createdAt: toIsoOrNull(f.createdAt),
+        updatedAt: toIsoOrNull(f.updatedAt),
+      })),
+    },
+    error: null,
+  })
+})
+
+// POST /api/stratflow/projects/:projectId/custom-fields
+stratflowRouter.post('/projects/:projectId/custom-fields', async (req: any, res) => {
+  const parsed = customFieldSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const now = new Date()
+  const doc: CustomFieldDoc = {
+    _id: new ObjectId(),
+    projectId: pid,
+    name: parsed.data.name.trim(),
+    fieldKey: parsed.data.fieldKey.trim().toLowerCase(),
+    fieldType: parsed.data.fieldType as CustomFieldType,
+    options: parsed.data.options ? normStrArray(parsed.data.options, 100) : null,
+    required: Boolean(parsed.data.required),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  try {
+    await db.collection('sf_custom_fields').insertOne(doc as any)
+  } catch {
+    return res.status(409).json({ data: null, error: 'field_key_exists' })
+  }
+  res.status(201).json({ data: { _id: String(doc._id) }, error: null })
+})
+
+// DELETE /api/stratflow/custom-fields/:fieldId
+stratflowRouter.delete('/custom-fields/:fieldId', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const fid = objIdOrNull(String(req.params.fieldId || ''))
+  if (!fid) return res.status(400).json({ data: null, error: 'invalid_field_id' })
+
+  const field = await db.collection('sf_custom_fields').findOne({ _id: fid } as any)
+  if (!field) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, field.projectId as any, auth.userId)
+  if (project === 'forbidden' || !project) return res.status(403).json({ data: null, error: 'forbidden' })
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  await db.collection('sf_custom_fields').deleteOne({ _id: fid } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// ============================================================================
+// SPRINT RETROSPECTIVES
+// ============================================================================
+
+const retroItemSchema = z.object({
+  type: z.enum(['went_well', 'to_improve', 'action_item']),
+  content: z.string().min(1).max(500),
+})
+
+// GET /api/stratflow/sprints/:sprintId/retro
+stratflowRouter.get('/sprints/:sprintId/retro', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const sid = objIdOrNull(String(req.params.sprintId || ''))
+  if (!sid) return res.status(400).json({ data: null, error: 'invalid_sprint_id' })
+
+  const sprint = await db.collection('sf_sprints').findOne({ _id: sid } as any)
+  if (!sprint) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, sprint.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const items = await db.collection('sf_retro_items').find({ sprintId: sid } as any).sort({ createdAt: 1 } as any).toArray()
+
+  // Load authors
+  const authorIds = [...new Set(items.map((i: any) => String(i.authorId)).filter(Boolean))]
+  const authors = authorIds.length ? await loadUsersByIds(db, authorIds) : []
+  const authorMap = new Map(authors.map((a) => [a.id, a]))
+
+  res.json({
+    data: {
+      sprintId: String(sid),
+      sprintName: sprint.name,
+      items: items.map((i: any) => ({
+        _id: String(i._id),
+        type: i.type,
+        content: i.content,
+        authorId: i.authorId,
+        authorName: authorMap.get(i.authorId)?.name || authorMap.get(i.authorId)?.email || i.authorId,
+        votes: (i.votes || []).length,
+        votedByMe: (i.votes || []).includes(auth.userId),
+        resolved: Boolean(i.resolved),
+        createdAt: toIsoOrNull(i.createdAt),
+      })),
+    },
+    error: null,
+  })
+})
+
+// POST /api/stratflow/sprints/:sprintId/retro
+stratflowRouter.post('/sprints/:sprintId/retro', async (req: any, res) => {
+  const parsed = retroItemSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_payload', details: parsed.error.flatten() })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const sid = objIdOrNull(String(req.params.sprintId || ''))
+  if (!sid) return res.status(400).json({ data: null, error: 'invalid_sprint_id' })
+
+  const sprint = await db.collection('sf_sprints').findOne({ _id: sid } as any)
+  if (!sprint) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, sprint.projectId as any, auth.userId)
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const now = new Date()
+  const doc: RetroItemDoc = {
+    _id: new ObjectId(),
+    projectId: sprint.projectId as ObjectId,
+    sprintId: sid,
+    type: parsed.data.type as RetroItemType,
+    content: parsed.data.content.trim(),
+    authorId: auth.userId,
+    votes: [],
+    resolved: false,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  await db.collection('sf_retro_items').insertOne(doc as any)
+  res.status(201).json({ data: { _id: String(doc._id) }, error: null })
+})
+
+// POST /api/stratflow/retro/:itemId/vote
+stratflowRouter.post('/retro/:itemId/vote', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const iid = objIdOrNull(String(req.params.itemId || ''))
+  if (!iid) return res.status(400).json({ data: null, error: 'invalid_item_id' })
+
+  const item = await db.collection('sf_retro_items').findOne({ _id: iid } as any)
+  if (!item) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, item.projectId as any, auth.userId)
+  if (project === 'forbidden' || !project) return res.status(403).json({ data: null, error: 'forbidden' })
+
+  const votes = item.votes || []
+  if (votes.includes(auth.userId)) {
+    // Un-vote
+    await db.collection('sf_retro_items').updateOne({ _id: iid } as any, { $pull: { votes: auth.userId }, $set: { updatedAt: new Date() } } as any)
+  } else {
+    // Vote
+    await db.collection('sf_retro_items').updateOne({ _id: iid } as any, { $addToSet: { votes: auth.userId }, $set: { updatedAt: new Date() } } as any)
+  }
+  res.json({ data: { ok: true }, error: null })
+})
+
+// POST /api/stratflow/retro/:itemId/resolve
+stratflowRouter.post('/retro/:itemId/resolve', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const iid = objIdOrNull(String(req.params.itemId || ''))
+  if (!iid) return res.status(400).json({ data: null, error: 'invalid_item_id' })
+
+  const item = await db.collection('sf_retro_items').findOne({ _id: iid } as any)
+  if (!item) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, item.projectId as any, auth.userId)
+  if (project === 'forbidden' || !project) return res.status(403).json({ data: null, error: 'forbidden' })
+
+  await db.collection('sf_retro_items').updateOne({ _id: iid } as any, { $set: { resolved: !item.resolved, updatedAt: new Date() } } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// DELETE /api/stratflow/retro/:itemId
+stratflowRouter.delete('/retro/:itemId', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const iid = objIdOrNull(String(req.params.itemId || ''))
+  if (!iid) return res.status(400).json({ data: null, error: 'invalid_item_id' })
+
+  const item = await db.collection('sf_retro_items').findOne({ _id: iid } as any)
+  if (!item) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const project = await loadProjectForUser(db, item.projectId as any, auth.userId)
+  if (project === 'forbidden' || !project) return res.status(403).json({ data: null, error: 'forbidden' })
+  // Only author or owner can delete
+  if (String(item.authorId) !== auth.userId && String(project.ownerId) !== auth.userId) {
+    return res.status(403).json({ data: null, error: 'forbidden' })
+  }
+
+  await db.collection('sf_retro_items').deleteOne({ _id: iid } as any)
+  res.json({ data: { ok: true }, error: null })
+})
+
+// ============================================================================
+// AUDIT LOG
+// ============================================================================
+
+// Helper to log audit events
+async function logAudit(
+  db: any,
+  projectId: ObjectId,
+  actorId: string,
+  action: AuditAction,
+  targetType: 'project' | 'issue' | 'sprint' | 'member' | 'settings',
+  targetId?: string | null,
+  changes?: any,
+  ipAddress?: string | null,
+  userAgent?: string | null,
+) {
+  const doc: AuditLogDoc = {
+    _id: new ObjectId(),
+    projectId,
+    actorId,
+    action,
+    targetType,
+    targetId: targetId || null,
+    changes: changes || null,
+    ipAddress: ipAddress || null,
+    userAgent: userAgent || null,
+    createdAt: new Date(),
+  }
+  await db.collection('sf_audit_log').insertOne(doc as any)
+}
+
+// GET /api/stratflow/projects/:projectId/audit-log
+stratflowRouter.get('/projects/:projectId/audit-log', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+  // Only owner can view audit log
+  if (String(project.ownerId) !== auth.userId) return res.status(403).json({ data: null, error: 'owner_only' })
+
+  const limit = Math.min(Number(req.query.limit) || 100, 500)
+  const items = await db
+    .collection('sf_audit_log')
+    .find({ projectId: pid } as any)
+    .sort({ createdAt: -1 } as any)
+    .limit(limit)
+    .toArray()
+
+  // Load actors
+  const actorIds = [...new Set(items.map((i: any) => String(i.actorId)).filter(Boolean))]
+  const actors = actorIds.length ? await loadUsersByIds(db, actorIds) : []
+  const actorMap = new Map(actors.map((a) => [a.id, a]))
+
+  res.json({
+    data: {
+      items: items.map((i: any) => ({
+        _id: String(i._id),
+        action: i.action,
+        targetType: i.targetType,
+        targetId: i.targetId || null,
+        actorId: i.actorId,
+        actorName: actorMap.get(i.actorId)?.name || actorMap.get(i.actorId)?.email || i.actorId,
+        changes: i.changes || null,
+        createdAt: toIsoOrNull(i.createdAt),
+      })),
+    },
+    error: null,
+  })
+})
+
+// ============================================================================
+// FINANCIAL ANALYTICS - Billable hours integration
+// ============================================================================
+
+// GET /api/stratflow/projects/:projectId/financial-summary
+stratflowRouter.get('/projects/:projectId/financial-summary', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  await ensureStratflowIndexes(db)
+  const auth = req.auth as { userId: string; email: string }
+  const pid = objIdOrNull(String(req.params.projectId || ''))
+  if (!pid) return res.status(400).json({ data: null, error: 'invalid_project_id' })
+
+  const project = await loadProjectForUser(db, pid, auth.userId)
+  if (!project) return res.status(404).json({ data: null, error: 'not_found' })
+  if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
+
+  // Get date range from query params (default: last 30 days)
+  const endDate = new Date()
+  const startDate = req.query.startDate ? new Date(req.query.startDate) : new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+  // Aggregate time entries
+  const timeAgg = await db
+    .collection('sf_time_entries')
+    .aggregate([
+      { $match: { projectId: pid, workDate: { $gte: startDate, $lte: endDate } } },
+      {
+        $group: {
+          _id: null,
+          totalMinutes: { $sum: '$minutes' },
+          billableMinutes: { $sum: { $cond: ['$billable', '$minutes', 0] } },
+          nonBillableMinutes: { $sum: { $cond: ['$billable', 0, '$minutes'] } },
+          entryCount: { $sum: 1 },
+        },
+      },
+    ])
+    .toArray()
+
+  const totals = timeAgg[0] || { totalMinutes: 0, billableMinutes: 0, nonBillableMinutes: 0, entryCount: 0 }
+
+  // Get time by user
+  const byUserAgg = await db
+    .collection('sf_time_entries')
+    .aggregate([
+      { $match: { projectId: pid, workDate: { $gte: startDate, $lte: endDate } } },
+      {
+        $group: {
+          _id: '$userId',
+          totalMinutes: { $sum: '$minutes' },
+          billableMinutes: { $sum: { $cond: ['$billable', '$minutes', 0] } },
+        },
+      },
+      { $sort: { totalMinutes: -1 } },
+      { $limit: 20 },
+    ])
+    .toArray()
+
+  const userIds = byUserAgg.map((u: any) => u._id).filter(Boolean)
+  const users = userIds.length ? await loadUsersByIds(db, userIds) : []
+  const userMap = new Map(users.map((u) => [u.id, u]))
+
+  // Get time by week for trend
+  const byWeekAgg = await db
+    .collection('sf_time_entries')
+    .aggregate([
+      { $match: { projectId: pid, workDate: { $gte: startDate, $lte: endDate } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%U', date: '$workDate' } },
+          totalMinutes: { $sum: '$minutes' },
+          billableMinutes: { $sum: { $cond: ['$billable', '$minutes', 0] } },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ])
+    .toArray()
+
+  // Calculate billable percentage
+  const billablePercentage = totals.totalMinutes > 0 ? Math.round((totals.billableMinutes / totals.totalMinutes) * 100) : 0
+
+  // Estimate cost/revenue (placeholder rates - would be configurable)
+  const defaultHourlyRate = 150 // USD
+  const billableHours = totals.billableMinutes / 60
+  const estimatedRevenue = Math.round(billableHours * defaultHourlyRate * 100) / 100
+
+  res.json({
+    data: {
+      projectId: String(pid),
+      projectName: project.name,
+      dateRange: { startDate: startDate.toISOString(), endDate: endDate.toISOString() },
+      summary: {
+        totalHours: Math.round((totals.totalMinutes / 60) * 10) / 10,
+        billableHours: Math.round((totals.billableMinutes / 60) * 10) / 10,
+        nonBillableHours: Math.round((totals.nonBillableMinutes / 60) * 10) / 10,
+        billablePercentage,
+        entryCount: totals.entryCount,
+        estimatedRevenue,
+        hourlyRate: defaultHourlyRate,
+      },
+      byUser: byUserAgg.map((u: any) => ({
+        userId: u._id,
+        userName: userMap.get(u._id)?.name || userMap.get(u._id)?.email || u._id,
+        totalHours: Math.round((u.totalMinutes / 60) * 10) / 10,
+        billableHours: Math.round((u.billableMinutes / 60) * 10) / 10,
+      })),
+      weeklyTrend: byWeekAgg.map((w: any) => ({
+        week: w._id,
+        totalHours: Math.round((w.totalMinutes / 60) * 10) / 10,
+        billableHours: Math.round((w.billableMinutes / 60) * 10) / 10,
+      })),
+    },
+    error: null,
+  })
 })
 
