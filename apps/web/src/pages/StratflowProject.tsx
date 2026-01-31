@@ -763,7 +763,31 @@ export default function StratflowProject() {
 
   // ============ Releases State & Mutations ============
   const [releaseModalOpen, setReleaseModalOpen] = React.useState(false)
-  const [releaseForm, setReleaseForm] = React.useState({ name: '', version: '', description: '', targetDate: '' })
+  const [editingReleaseId, setEditingReleaseId] = React.useState<string | null>(null)
+  const [releaseForm, setReleaseForm] = React.useState({ name: '', version: '', description: '', targetDate: '', state: 'planned' as 'planned' | 'in_progress' | 'released' })
+
+  const openReleaseModal = (release?: Release) => {
+    if (release) {
+      setEditingReleaseId(release._id)
+      setReleaseForm({
+        name: release.name,
+        version: release.version,
+        description: release.description || '',
+        targetDate: release.targetDate ? release.targetDate.slice(0, 10) : '',
+        state: release.state as 'planned' | 'in_progress' | 'released',
+      })
+    } else {
+      setEditingReleaseId(null)
+      setReleaseForm({ name: '', version: '', description: '', targetDate: '', state: 'planned' })
+    }
+    setReleaseModalOpen(true)
+  }
+
+  const closeReleaseModal = () => {
+    setReleaseModalOpen(false)
+    setEditingReleaseId(null)
+    setReleaseForm({ name: '', version: '', description: '', targetDate: '', state: 'planned' })
+  }
 
   const createRelease = useMutation({
     mutationFn: async () => {
@@ -773,16 +797,34 @@ export default function StratflowProject() {
         version: releaseForm.version.trim(),
         description: releaseForm.description.trim() || null,
         targetDate: releaseForm.targetDate || null,
-        state: 'planned',
+        state: releaseForm.state,
       })).data
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['stratflow', 'releases', projectId] })
-      setReleaseModalOpen(false)
-      setReleaseForm({ name: '', version: '', description: '', targetDate: '' })
+      closeReleaseModal()
       toast.showToast('Release created.', 'success')
     },
     onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to create release.', 'error'),
+  })
+
+  const updateRelease = useMutation({
+    mutationFn: async () => {
+      if (!editingReleaseId) throw new Error('No release selected.')
+      return (await http.patch(`/api/stratflow/releases/${editingReleaseId}`, {
+        name: releaseForm.name.trim(),
+        version: releaseForm.version.trim(),
+        description: releaseForm.description.trim() || null,
+        targetDate: releaseForm.targetDate || null,
+        state: releaseForm.state,
+      })).data
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['stratflow', 'releases', projectId] })
+      closeReleaseModal()
+      toast.showToast('Release updated.', 'success')
+    },
+    onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to update release.', 'error'),
   })
 
   const deleteRelease = useMutation({
@@ -3348,7 +3390,7 @@ export default function StratflowProject() {
                 <button
                   type="button"
                   disabled={!isOwner}
-                  onClick={() => setReleaseModalOpen(true)}
+                  onClick={() => openReleaseModal()}
                   className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
                 >
                   New Release
@@ -3361,7 +3403,7 @@ export default function StratflowProject() {
               ) : (
                 <div className="space-y-3">
                   {(releasesQ.data?.data.items ?? []).map((r) => (
-                    <div key={r._id} className="rounded-lg border border-[color:var(--color-border)] p-3">
+                    <div key={r._id} className="rounded-lg border border-[color:var(--color-border)] p-3 hover:bg-[color:var(--color-muted)] cursor-pointer transition-colors" onClick={() => isOwner && openReleaseModal(r)}>
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium">{r.name} <span className="text-xs text-[color:var(--color-text-muted)]">v{r.version}</span></div>
@@ -3372,14 +3414,23 @@ export default function StratflowProject() {
                             {r.state.replace('_', ' ')}
                           </span>
                           {isOwner && (
-                            <button
-                              type="button"
-                              onClick={() => deleteRelease.mutate(r._id)}
-                              disabled={deleteRelease.isPending}
-                              className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                            >
-                              Delete
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); openReleaseModal(r) }}
+                                className="text-xs text-[color:var(--color-primary-600)] hover:underline"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); deleteRelease.mutate(r._id) }}
+                                disabled={deleteRelease.isPending}
+                                className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -3747,20 +3798,20 @@ export default function StratflowProject() {
         <StratflowIssueDrawer issueId={focusedIssueId} projectId={String(projectId || '')} onClose={closeIssueFocus} />
       ) : null}
 
-      {/* New Release Modal - using portal for proper positioning */}
+      {/* Release Modal - using portal for proper positioning */}
       {releaseModalOpen && createPortal(
         <div 
           className="fixed inset-0 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           style={{ zIndex: 2147483647 }}
           onClick={(e) => {
-            if (e.target === e.currentTarget) setReleaseModalOpen(false)
+            if (e.target === e.currentTarget) closeReleaseModal()
           }}
         >
           <div 
             className="bg-[color:var(--color-panel)] rounded-2xl shadow-2xl border border-[color:var(--color-border)] w-[min(90vw,28rem)] p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-lg font-semibold mb-4">New Release</div>
+            <div className="text-lg font-semibold mb-4">{editingReleaseId ? 'Edit Release' : 'New Release'}</div>
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Name *</label>
@@ -3779,6 +3830,18 @@ export default function StratflowProject() {
                   className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
                   placeholder="e.g., 1.0.0"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Status</label>
+                <select
+                  value={releaseForm.state}
+                  onChange={(e) => setReleaseForm((p) => ({ ...p, state: e.target.value as 'planned' | 'in_progress' | 'released' }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                >
+                  <option value="planned">Planned</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="released">Released</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Description</label>
@@ -3803,18 +3866,21 @@ export default function StratflowProject() {
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setReleaseModalOpen(false)}
+                onClick={closeReleaseModal}
                 className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={createRelease.isPending || !releaseForm.name.trim() || !releaseForm.version.trim()}
-                onClick={() => createRelease.mutate()}
+                disabled={(editingReleaseId ? updateRelease.isPending : createRelease.isPending) || !releaseForm.name.trim() || !releaseForm.version.trim()}
+                onClick={() => editingReleaseId ? updateRelease.mutate() : createRelease.mutate()}
                 className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
               >
-                {createRelease.isPending ? 'Creating...' : 'Create Release'}
+                {editingReleaseId 
+                  ? (updateRelease.isPending ? 'Saving...' : 'Save Changes')
+                  : (createRelease.isPending ? 'Creating...' : 'Create Release')
+                }
               </button>
             </div>
           </div>
