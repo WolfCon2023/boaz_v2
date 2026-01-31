@@ -2,6 +2,7 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -3494,137 +3495,212 @@ export default function StratflowProject() {
                 )
               })()}
 
-              {/* Sprint Burndown Chart */}
+              {/* Sprint Burndown Chart - Recharts Line Chart */}
               {activeSprint && burndownQ.data?.data && (
-                <div className="rounded-xl border border-[color:var(--color-border)] p-4">
-                  <div className="text-sm font-semibold">Sprint Burndown: {burndownQ.data.data.sprintName}</div>
-                  <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-                    {burndownQ.data.data.totalPoints} total points · {burndownQ.data.data.completedPoints} completed
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Sprint Burndown</div>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                        {burndownQ.data.data.sprintName} · {burndownQ.data.data.totalPoints} total points · {burndownQ.data.data.completedPoints} completed
+                      </div>
+                    </div>
+                    <div className="text-xs text-[color:var(--color-text-muted)]">
+                      {Math.round((burndownQ.data.data.completedPoints / (burndownQ.data.data.totalPoints || 1)) * 100)}% done
+                    </div>
                   </div>
-                  <div className="mt-4 h-48 flex items-end gap-1">
-                    {burndownQ.data.data.days.slice(-14).map((d, i) => {
-                      const maxPts = burndownQ.data?.data.totalPoints || 1
-                      const remainPct = Math.round((d.remaining / maxPts) * 100)
-                      const idealPct = Math.round((d.ideal / maxPts) * 100)
-                      return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                          <div className="relative w-full flex-1 flex flex-col justify-end gap-1">
-                            <div
-                              className="w-full bg-[color:var(--color-primary-600)] rounded-t"
-                              style={{ height: `${remainPct}%` }}
-                              title={`Remaining: ${d.remaining} pts`}
-                            />
-                            <div
-                              className="absolute bottom-0 left-0 w-full border-t-2 border-dashed border-amber-500"
-                              style={{ bottom: `${idealPct}%` }}
-                              title={`Ideal: ${d.ideal} pts`}
-                            />
-                          </div>
-                          <div className="text-[8px] text-[color:var(--color-text-muted)] truncate w-full text-center">
-                            {d.date.slice(5)}
-                          </div>
-                        </div>
-                      )
-                    })}
+                  <div className="mt-4" style={{ height: 280 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={burndownQ.data.data.days.slice(-14).map((d) => ({
+                        date: d.date.slice(5),
+                        remaining: d.remaining,
+                        ideal: Math.round(d.ideal * 10) / 10,
+                        completed: d.completed,
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                        <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                        <RechartsTooltip 
+                          contentStyle={{ backgroundColor: 'rgba(15,23,42,0.95)', border: '1px solid rgba(148,163,184,0.3)', borderRadius: '8px', fontSize: '12px' }}
+                          labelStyle={{ color: '#94a3b8' }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px' }} />
+                        <Line type="monotone" dataKey="remaining" name="Remaining" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 3 }} />
+                        <Line type="monotone" dataKey="ideal" name="Ideal" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Sprint Velocity Chart - Recharts Bar Chart */}
+              {velocityQ.data?.data && velocityQ.data.data.sprints.length > 0 && (
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Sprint Velocity</div>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                        Average: {velocityQ.data.data.averageVelocity} pts/sprint · {velocityQ.data.data.sprintCount} closed sprints
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4" style={{ height: 240 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={velocityQ.data.data.sprints.slice(-10).map((s) => ({
+                        name: s.sprintName.length > 12 ? s.sprintName.slice(0, 10) + '…' : s.sprintName,
+                        fullName: s.sprintName,
+                        points: s.completedPoints,
+                        avg: velocityQ.data?.data.averageVelocity || 0,
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                        <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                        <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                        <RechartsTooltip 
+                          contentStyle={{ backgroundColor: 'rgba(15,23,42,0.95)', border: '1px solid rgba(148,163,184,0.3)', borderRadius: '8px', fontSize: '12px' }}
+                          labelStyle={{ color: '#94a3b8' }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px' }} />
+                        <Bar dataKey="points" name="Completed Points" radius={[4, 4, 0, 0]}>
+                          {velocityQ.data.data.sprints.slice(-10).map((s, index) => {
+                            const avg = velocityQ.data?.data.averageVelocity || 0
+                            return <Cell key={index} fill={s.completedPoints >= avg ? '#10b981' : '#f59e0b'} />
+                          })}
+                        </Bar>
+                        <Line type="monotone" dataKey="avg" name="Average" stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                   <div className="mt-2 flex items-center gap-4 text-[10px] text-[color:var(--color-text-muted)]">
-                    <span className="flex items-center gap-1"><span className="w-3 h-2 bg-[color:var(--color-primary-600)] rounded" /> Remaining</span>
-                    <span className="flex items-center gap-1"><span className="w-3 border-t-2 border-dashed border-amber-500" /> Ideal</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-500 rounded" /> Above average</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-amber-500 rounded" /> Below average</span>
                   </div>
                 </div>
               )}
 
-              {/* Sprint Velocity Chart */}
-              {velocityQ.data?.data && velocityQ.data.data.sprints.length > 0 && (
-                <div className="rounded-xl border border-[color:var(--color-border)] p-4">
-                  <div className="text-sm font-semibold">Sprint Velocity</div>
-                  <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-                    Average velocity: {velocityQ.data.data.averageVelocity} pts/sprint ({velocityQ.data.data.sprintCount} sprints)
-                  </div>
-                  <div className="mt-4 h-32 flex items-end gap-2">
-                    {velocityQ.data.data.sprints.slice(-10).map((s, i) => {
-                      const maxPts = Math.max(...velocityQ.data!.data.sprints.map((x) => x.completedPoints), 1)
-                      const pct = Math.round((s.completedPoints / maxPts) * 100)
-                      return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                          <div
-                            className="w-full bg-emerald-600 rounded-t"
-                            style={{ height: `${pct}%`, minHeight: s.completedPoints > 0 ? '4px' : '0' }}
-                            title={`${s.sprintName}: ${s.completedPoints} pts`}
-                          />
-                          <div className="text-[8px] text-[color:var(--color-text-muted)] truncate w-full text-center" title={s.sprintName}>
-                            {s.sprintName.slice(0, 8)}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Team Workload */}
+              {/* Team Workload - Recharts Horizontal Bar Chart */}
               {workloadQ.data?.data && workloadQ.data.data.workload.length > 0 && (
-                <div className="rounded-xl border border-[color:var(--color-border)] p-4">
-                  <div className="text-sm font-semibold">Team Workload</div>
-                  <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-                    {workloadQ.data.data.totalOpenIssues} open issues · {workloadQ.data.data.totalOpenPoints} story points
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Team Workload Distribution</div>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                        {workloadQ.data.data.totalOpenIssues} open issues · {workloadQ.data.data.totalOpenPoints} total story points
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-4 space-y-2">
-                    {workloadQ.data.data.workload.slice(0, 10).map((w) => {
-                      const maxPts = Math.max(...workloadQ.data!.data.workload.map((x) => x.totalPoints), 1)
-                      const pct = Math.round((w.totalPoints / maxPts) * 100)
-                      return (
-                        <div key={w.assigneeId} className="flex items-center gap-3">
-                          <div className="w-32 truncate text-xs">{w.assigneeName}</div>
-                          <div className="flex-1 h-4 bg-[color:var(--color-muted)] rounded overflow-hidden">
-                            <div className="h-full bg-sky-600 rounded" style={{ width: `${pct}%` }} />
-                          </div>
-                          <div className="w-16 text-right text-xs tabular-nums">{w.totalPoints} pts</div>
-                        </div>
-                      )
-                    })}
+                  <div className="mt-4" style={{ height: Math.max(200, workloadQ.data.data.workload.slice(0, 10).length * 40) }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart 
+                        layout="vertical" 
+                        data={workloadQ.data.data.workload.slice(0, 10).map((w) => ({
+                          name: w.assigneeName.length > 20 ? w.assigneeName.slice(0, 18) + '…' : w.assigneeName,
+                          fullName: w.assigneeName,
+                          points: w.totalPoints,
+                          sprintPts: w.sprintPoints,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                        <XAxis type="number" tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                        <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} stroke="#94a3b8" width={100} />
+                        <RechartsTooltip 
+                          contentStyle={{ backgroundColor: 'rgba(15,23,42,0.95)', border: '1px solid rgba(148,163,184,0.3)', borderRadius: '8px', fontSize: '12px' }}
+                          labelStyle={{ color: '#94a3b8' }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px' }} />
+                        <Bar dataKey="points" name="Total Points" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="sprintPts" name="In Sprint" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               )}
 
-              {/* Financial Summary */}
+              {/* Financial Summary - Enhanced */}
               {financialQ.data?.data && (
-                <div className="rounded-xl border border-[color:var(--color-border)] p-4">
-                  <div className="text-sm font-semibold">Financial Summary</div>
-                  <div className="mt-2 text-xs text-[color:var(--color-text-muted)]">
-                    {financialQ.data.data.dateRange.startDate.slice(0, 10)} – {financialQ.data.data.dateRange.endDate.slice(0, 10)}
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">Financial Summary</div>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                        {financialQ.data.data.dateRange.startDate.slice(0, 10)} – {financialQ.data.data.dateRange.endDate.slice(0, 10)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-emerald-500">${financialQ.data.data.summary.estimatedRevenue.toLocaleString()}</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Estimated Revenue</div>
+                    </div>
                   </div>
+                  
                   <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div>
-                      <div className="text-2xl font-bold tabular-nums">{financialQ.data.data.summary.billableHours}h</div>
-                      <div className="text-xs text-[color:var(--color-text-muted)]">Billable Hours</div>
+                    <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
+                      <div className="text-xl font-bold tabular-nums">{financialQ.data.data.summary.totalHours}h</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Total Hours</div>
                     </div>
-                    <div>
-                      <div className="text-2xl font-bold tabular-nums">{financialQ.data.data.summary.billablePercentage}%</div>
-                      <div className="text-xs text-[color:var(--color-text-muted)]">Billable Rate</div>
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+                      <div className="text-xl font-bold tabular-nums text-emerald-400">{financialQ.data.data.summary.billableHours}h</div>
+                      <div className="text-xs text-emerald-400/80">Billable Hours</div>
                     </div>
-                    <div>
-                      <div className="text-2xl font-bold tabular-nums text-emerald-600">${financialQ.data.data.summary.estimatedRevenue.toLocaleString()}</div>
-                      <div className="text-xs text-[color:var(--color-text-muted)]">Est. Revenue</div>
+                    <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
+                      <div className="text-xl font-bold tabular-nums">{financialQ.data.data.summary.billablePercentage}%</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Utilization Rate</div>
                     </div>
-                    <div>
-                      <div className="text-2xl font-bold tabular-nums">${financialQ.data.data.summary.hourlyRate}/hr</div>
-                      <div className="text-xs text-[color:var(--color-text-muted)]">Rate</div>
+                    <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-3">
+                      <div className="text-xl font-bold tabular-nums">${financialQ.data.data.summary.hourlyRate}/hr</div>
+                      <div className="text-xs text-[color:var(--color-text-muted)]">Billing Rate</div>
                     </div>
                   </div>
+
                   {financialQ.data.data.byUser.length > 0 && (
-                    <div className="mt-4">
-                      <div className="text-xs font-medium mb-2">By Team Member</div>
-                      <div className="space-y-1">
-                        {financialQ.data.data.byUser.slice(0, 5).map((u) => (
-                          <div key={u.userId} className="flex items-center justify-between text-xs">
-                            <span className="truncate">{u.userName}</span>
-                            <span className="tabular-nums">{u.billableHours}h billable</span>
-                          </div>
-                        ))}
+                    <div className="mt-6">
+                      <div className="text-xs font-semibold mb-3">Revenue by Team Member</div>
+                      <div style={{ height: Math.max(160, financialQ.data.data.byUser.slice(0, 6).length * 36) }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart 
+                            layout="vertical" 
+                            data={financialQ.data.data.byUser.slice(0, 6).map((u) => ({
+                              name: u.userName.length > 15 ? u.userName.slice(0, 13) + '…' : u.userName,
+                              fullName: u.userName,
+                              billable: u.billableHours,
+                              nonBillable: u.totalHours - u.billableHours,
+                              revenue: Math.round(u.billableHours * financialQ.data!.data.summary.hourlyRate),
+                            }))}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
+                            <XAxis type="number" tick={{ fontSize: 10 }} stroke="#94a3b8" />
+                            <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} stroke="#94a3b8" width={90} />
+                            <RechartsTooltip 
+                              contentStyle={{ backgroundColor: 'rgba(15,23,42,0.95)', border: '1px solid rgba(148,163,184,0.3)', borderRadius: '8px', fontSize: '12px' }}
+                              labelStyle={{ color: '#94a3b8' }}
+                            />
+                            <Legend wrapperStyle={{ fontSize: '11px' }} />
+                            <Bar dataKey="billable" name="Billable" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="nonBillable" name="Non-billable" stackId="a" fill="#64748b" radius={[0, 4, 4, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-4 pt-4 border-t border-[color:var(--color-border)]">
+                    <div className="text-xs text-[color:var(--color-text-muted)]">
+                      Note: Revenue Intelligence integration coming soon for AI-driven forecasting and cross-project analytics.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Legacy Financial by User list fallback */}
+              {financialQ.data?.data && financialQ.data.data.byUser.length > 6 && (
+                <div className="rounded-xl border border-[color:var(--color-border)] p-4">
+                  <div className="text-xs font-medium mb-2">Additional Team Members</div>
+                  <div className="space-y-1">
+                    {financialQ.data.data.byUser.slice(6, 12).map((u) => (
+                      <div key={u.userId} className="flex items-center justify-between text-xs">
+                        <span className="truncate">{u.userName}</span>
+                        <span className="tabular-nums">{u.billableHours}h billable</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </section>
