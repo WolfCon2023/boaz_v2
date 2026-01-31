@@ -1179,6 +1179,15 @@ export default function StratflowProject() {
   })
 
   const [roadmapZoom, setRoadmapZoom] = React.useState<'month' | 'quarter'>('month')
+  const [timelineMode, setTimelineMode] = React.useState<'roadmap' | 'gantt'>('roadmap')
+
+  // Query for all project issues (for Gantt chart)
+  const allIssuesQ = useQuery<{ data: { items: Issue[] } }>({
+    queryKey: ['stratflow', 'allIssues', projectId],
+    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/issues`)).data,
+    retry: false,
+    enabled: Boolean(projectId) && view === 'timeline' && timelineMode === 'gantt',
+  })
 
   const backlogIssuesQ = useQuery<{ data: { items: Issue[] } }>({
     queryKey: ['stratflow', 'projectIssues', projectId, 'backlog'],
@@ -2581,37 +2590,68 @@ export default function StratflowProject() {
                   <div>
                     <div className="text-base font-semibold">Timeline</div>
                     <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                      Epic Roadmap · Sprint Timeline · Milestones (when available)
+                      {timelineMode === 'roadmap' ? 'Epic Roadmap · Sprint Timeline · Milestones' : 'Gantt Chart · All issues with dates'}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-xs text-[color:var(--color-text-muted)]">Roadmap zoom</div>
+                  <div className="flex items-center gap-4">
+                    {/* Mode Toggle */}
                     <div className="inline-flex rounded-xl border border-[color:var(--color-border)] overflow-hidden">
                       <button
                         type="button"
-                        onClick={() => setRoadmapZoom('month')}
+                        onClick={() => setTimelineMode('roadmap')}
                         className={[
                           'px-3 py-2 text-xs',
-                          roadmapZoom === 'month' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]',
+                          timelineMode === 'roadmap' ? 'bg-[color:var(--color-primary-600)] text-white' : 'hover:bg-[color:var(--color-muted)]',
                         ].join(' ')}
                       >
-                        Month
+                        Roadmap
                       </button>
                       <button
                         type="button"
-                        onClick={() => setRoadmapZoom('quarter')}
+                        onClick={() => setTimelineMode('gantt')}
                         className={[
                           'px-3 py-2 text-xs border-l border-[color:var(--color-border)]',
-                          roadmapZoom === 'quarter' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]',
+                          timelineMode === 'gantt' ? 'bg-[color:var(--color-primary-600)] text-white' : 'hover:bg-[color:var(--color-muted)]',
                         ].join(' ')}
                       >
-                        Quarter
+                        Gantt
                       </button>
                     </div>
+                    {/* Zoom Toggle (only for roadmap) */}
+                    {timelineMode === 'roadmap' && (
+                      <div className="flex items-center gap-2">
+                        <div className="text-xs text-[color:var(--color-text-muted)]">Zoom</div>
+                        <div className="inline-flex rounded-xl border border-[color:var(--color-border)] overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setRoadmapZoom('month')}
+                            className={[
+                              'px-3 py-2 text-xs',
+                              roadmapZoom === 'month' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]',
+                            ].join(' ')}
+                          >
+                            Month
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRoadmapZoom('quarter')}
+                            className={[
+                              'px-3 py-2 text-xs border-l border-[color:var(--color-border)]',
+                              roadmapZoom === 'quarter' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]',
+                            ].join(' ')}
+                          >
+                            Quarter
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
+              {/* Roadmap View */}
+              {timelineMode === 'roadmap' && (
+                <>
               {(() => {
                 const epics = (epicsForRoadmapQ.data?.data.items ?? []).filter((e) => e.type === 'Epic')
                 const rollups = epicRollupsQ.data?.data.items ?? []
@@ -2870,6 +2910,217 @@ export default function StratflowProject() {
                   No dated sprints or milestone board found yet. Add sprint dates (start/end) or use a Traditional template to get Milestones.
                 </div>
               ) : null}
+                </>
+              )}
+
+              {/* Gantt Chart View */}
+              {timelineMode === 'gantt' && (
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
+                  <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-3">
+                    <div>
+                      <div className="text-sm font-semibold">Gantt Chart</div>
+                      <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                        All issues with target dates · Dependencies shown as connecting lines
+                      </div>
+                    </div>
+                    <div className="text-xs text-[color:var(--color-text-muted)]">
+                      {allIssuesQ.isFetching ? 'Loading…' : `${(allIssuesQ.data?.data.items ?? []).filter(i => i.targetStartDate || i.targetEndDate).length} items with dates`}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const allIssues = allIssuesQ.data?.data.items ?? []
+                    const withDates = allIssues
+                      .map((i) => {
+                        const start = parseIsoDate(i.targetStartDate) ?? parseIsoDate(i.targetEndDate)
+                        const end = parseIsoDate(i.targetEndDate) ?? parseIsoDate(i.targetStartDate)
+                        return { i, start, end }
+                      })
+                      .filter((x) => x.start && x.end) as Array<{ i: Issue; start: Date; end: Date }>
+
+                    if (allIssuesQ.isLoading) {
+                      return <div className="p-6 text-sm text-[color:var(--color-text-muted)]">Loading issues...</div>
+                    }
+
+                    if (!withDates.length) {
+                      return (
+                        <div className="p-6 text-sm text-[color:var(--color-text-muted)]">
+                          No issues with target dates found. Set Target Start Date and Target End Date on issues to see them in the Gantt chart.
+                        </div>
+                      )
+                    }
+
+                    // Sort by start date
+                    withDates.sort((a, b) => a.start.getTime() - b.start.getTime())
+
+                    const minStart = withDates.reduce((m, x) => (x.start.getTime() < m.getTime() ? x.start : m), withDates[0].start)
+                    const maxEnd = withDates.reduce((m, x) => (x.end.getTime() > m.getTime() ? x.end : m), withDates[0].end)
+                    const spanDays = Math.max(1, daysBetween(minStart, maxEnd))
+
+                    // Generate month segments for the header
+                    const segs: Array<{ label: string; start: Date }> = []
+                    const d0 = new Date(minStart.getFullYear(), minStart.getMonth(), 1)
+                    const d1 = new Date(maxEnd.getFullYear(), maxEnd.getMonth(), 1)
+                    const cur = new Date(d0)
+                    while (cur.getTime() <= d1.getTime()) {
+                      segs.push({ label: cur.toLocaleString(undefined, { month: 'short', year: 'numeric' }), start: new Date(cur) })
+                      cur.setMonth(cur.getMonth() + 1)
+                    }
+                    const segW = 100
+                    const totalW = Math.max(600, segs.length * segW)
+
+                    // Group by type
+                    const byType: Record<string, Array<{ i: Issue; start: Date; end: Date }>> = {}
+                    for (const x of withDates) {
+                      const key = x.i.type || 'Other'
+                      if (!byType[key]) byType[key] = []
+                      byType[key].push(x)
+                    }
+                    const typeOrder = ['Epic', 'Story', 'Task', 'Defect', 'Spike', 'Other']
+                    const typeKeys = Object.keys(byType).sort((a, b) => {
+                      const ai = typeOrder.indexOf(a)
+                      const bi = typeOrder.indexOf(b)
+                      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+                    })
+
+                    // Build a map of issue IDs for dependency lookup
+                    const issueById = new Map<string, Issue>()
+                    allIssues.forEach((i) => issueById.set(i._id, i))
+
+                    // Color map for issue types
+                    const typeColors: Record<string, string> = {
+                      Epic: 'bg-purple-600',
+                      Story: 'bg-blue-600',
+                      Task: 'bg-green-600',
+                      Defect: 'bg-red-600',
+                      Spike: 'bg-amber-600',
+                      Other: 'bg-gray-600',
+                    }
+
+                    return (
+                      <div className="overflow-x-auto">
+                        <div className="min-w-max p-4" style={{ minWidth: totalW + 280 }}>
+                          {/* Header Row */}
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-64 text-xs font-medium text-[color:var(--color-text-muted)]">Issue</div>
+                            <div className="flex" style={{ width: totalW }}>
+                              {segs.map((s, idx) => (
+                                <div
+                                  key={idx}
+                                  className="border-l border-[color:var(--color-border)] px-2 text-[10px] text-[color:var(--color-text-muted)]"
+                                  style={{ width: segW }}
+                                >
+                                  {s.label}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Issues grouped by type */}
+                          {typeKeys.map((type) => (
+                            <div key={type} className="mb-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className={`w-3 h-3 rounded ${typeColors[type] || 'bg-gray-600'}`} />
+                                <div className="text-xs font-semibold">{type}s</div>
+                                <div className="text-[10px] text-[color:var(--color-text-muted)]">({byType[type].length})</div>
+                              </div>
+                              <div className="space-y-1">
+                                {byType[type].map(({ i, start, end }) => {
+                                  const left = (daysBetween(minStart, start) / spanDays) * totalW
+                                  const width = Math.max(20, (daysBetween(start, end) / spanDays) * totalW)
+                                  const hasBlockers = (i.links || []).some((l) => l.type === 'blocked_by')
+                                  const blocksOthers = (i.links || []).some((l) => l.type === 'blocks')
+                                  const isBlockedStatus = isBlocked(i)
+                                  const isDone = i.statusKey === 'done'
+
+                                  return (
+                                    <div key={i._id} className="flex items-center gap-3 group">
+                                      <button
+                                        type="button"
+                                        onClick={() => openIssueFocus(i._id)}
+                                        className="w-64 text-left hover:bg-[color:var(--color-muted)] rounded px-2 py-1 transition-colors"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <div className={`w-2 h-2 rounded-full ${typeColors[i.type] || 'bg-gray-600'} ${isDone ? 'opacity-50' : ''}`} />
+                                          <div className={`text-xs font-medium truncate ${isDone ? 'line-through opacity-60' : ''}`} style={{ maxWidth: 200 }}>
+                                            {i.title}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-0.5 pl-4">
+                                          <span className="text-[9px] text-[color:var(--color-text-muted)]">
+                                            {start.toLocaleDateString()} → {end.toLocaleDateString()}
+                                          </span>
+                                          {i.storyPoints ? <span className="text-[9px] text-[color:var(--color-text-muted)]">· {i.storyPoints} pts</span> : null}
+                                          {isBlockedStatus && <span className="text-[9px] text-amber-600 font-medium">BLOCKED</span>}
+                                        </div>
+                                      </button>
+                                      <div 
+                                        className="relative h-6 rounded border border-[color:var(--color-border)] bg-[color:var(--color-muted)] overflow-visible" 
+                                        style={{ width: totalW }}
+                                      >
+                                        {/* The bar */}
+                                        <div
+                                          className={[
+                                            'absolute top-1/2 h-4 -translate-y-1/2 rounded cursor-pointer transition-all',
+                                            isDone ? 'opacity-50' : 'hover:brightness-110',
+                                            isBlockedStatus ? 'bg-amber-500' : typeColors[i.type] || 'bg-gray-600',
+                                          ].join(' ')}
+                                          style={{ left, width }}
+                                          onClick={() => openIssueFocus(i._id)}
+                                          title={`${i.title}\n${start.toLocaleDateString()} → ${end.toLocaleDateString()}${i.storyPoints ? `\n${i.storyPoints} story points` : ''}`}
+                                        >
+                                          {/* Progress indicator for Epics */}
+                                          {i.type === 'Epic' && (() => {
+                                            const rollup = epicRollupsQ.data?.data.items?.find((r) => r.epicId === i._id)
+                                            const pct = rollup && rollup.totalPoints > 0 ? Math.round((rollup.donePoints / rollup.totalPoints) * 100) : 0
+                                            if (!pct) return null
+                                            return (
+                                              <div
+                                                className="absolute inset-y-0 left-0 bg-white/30 rounded-l"
+                                                style={{ width: `${pct}%` }}
+                                              />
+                                            )
+                                          })()}
+                                          {/* Blocker indicator */}
+                                          {hasBlockers && (
+                                            <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-amber-400 rounded-full border border-white" title="Has blockers" />
+                                          )}
+                                          {blocksOthers && (
+                                            <div className="absolute -right-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-400 rounded-full border border-white" title="Blocks other issues" />
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Legend */}
+                          <div className="flex items-center gap-4 mt-6 pt-4 border-t border-[color:var(--color-border)]">
+                            <div className="text-[10px] text-[color:var(--color-text-muted)]">Legend:</div>
+                            {typeOrder.slice(0, 5).map((type) => (
+                              <div key={type} className="flex items-center gap-1">
+                                <div className={`w-3 h-3 rounded ${typeColors[type]}`} />
+                                <span className="text-[10px]">{type}</span>
+                              </div>
+                            ))}
+                            <div className="flex items-center gap-1 ml-4">
+                              <div className="w-2 h-2 bg-amber-400 rounded-full" />
+                              <span className="text-[10px]">Has blockers</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-red-400 rounded-full" />
+                              <span className="text-[10px]">Blocks others</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
             </section>
           )}
 
