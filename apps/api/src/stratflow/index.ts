@@ -355,8 +355,13 @@ async function applyAutomationForIssue(
   let applied = 0
   for (const r of rules as any[]) {
     const t = r.trigger || {}
-    if (t.toStatusKey != null && t.toStatusKey !== (trigger.toStatusKey ?? null)) continue
-    if (t.linkType != null && t.linkType !== (trigger.linkType ?? null)) continue
+    // Use string comparison to avoid type mismatches
+    const ruleStatusKey = t.toStatusKey != null ? String(t.toStatusKey).toLowerCase() : null
+    const triggerStatusKey = trigger.toStatusKey != null ? String(trigger.toStatusKey).toLowerCase() : null
+    if (ruleStatusKey != null && ruleStatusKey !== triggerStatusKey) continue
+    const ruleLinkType = t.linkType != null ? String(t.linkType).toLowerCase() : null
+    const triggerLinkType = trigger.linkType != null ? String(trigger.linkType).toLowerCase() : null
+    if (ruleLinkType != null && ruleLinkType !== triggerLinkType) continue
 
     const c = r.conditions || {}
     if (c.issueType != null && normIssueType(issue.type) !== c.issueType) continue
@@ -404,22 +409,89 @@ async function applyAutomationForSprintClose(db: any, project: any, authUserId: 
     .toArray()
   if (!rules.length) return { applied: 0 }
 
+  // Find issues in this sprint that are NOT done
+  const openIssues = await db
+    .collection('sf_issues')
+    .find({ projectId: project._id, sprintId, statusKey: { $ne: 'done' } } as any)
+    .toArray()
+
+  if (!openIssues.length) {
+    // No open issues to move
+    let applied = 0
+    for (const r of rules as any[]) {
+      if (!(r.actions || {}).moveOpenIssuesToBacklog) continue
+      applied++
+      await logActivity(db, {
+        projectId: project._id,
+        actorId: authUserId,
+        kind: 'automation_applied',
+        sprintId,
+        meta: { ruleId: String(r._id), ruleName: String(r.name || ''), trigger: { kind: 'sprint_closed' }, modified: 0 },
+        createdAt: new Date(),
+      })
+    }
+    return { applied }
+  }
+
+  // Group issues by boardId, so we can move them to the first column of their respective board
+  const issuesByBoard = new Map<string, Array<{ _id: ObjectId }>>()
+  for (const issue of openIssues) {
+    const boardIdStr = String(issue.boardId || '')
+    if (!issuesByBoard.has(boardIdStr)) issuesByBoard.set(boardIdStr, [])
+    issuesByBoard.get(boardIdStr)!.push(issue)
+  }
+
+  // For each board, find the first column (typically "To Do" or "Backlog") to move issues to
+  const boardFirstColumn = new Map<string, { columnId: ObjectId; statusKey: IssueStatusKey }>()
+  for (const boardIdStr of issuesByBoard.keys()) {
+    const bid = objIdOrNull(boardIdStr)
+    if (!bid) continue
+    const firstCol = await db.collection('sf_columns').findOne({ boardId: bid } as any, { sort: { order: 1 } as any })
+    if (firstCol) {
+      const colName = String(firstCol.name || '')
+      boardFirstColumn.set(boardIdStr, {
+        columnId: firstCol._id as ObjectId,
+        statusKey: statusKeyFromColumnName(colName),
+      })
+    }
+  }
+
   let applied = 0
+  const now = new Date()
   for (const r of rules as any[]) {
     const acts = r.actions || {}
     if (!acts.moveOpenIssuesToBacklog) continue
 
-    const now = new Date()
-    const result = await db
-      .collection('sf_issues')
-      .updateMany({ projectId: project._id, sprintId, statusKey: { $ne: 'done' } } as any, { $set: { sprintId: null, updatedAt: now } } as any)
+    let totalModified = 0
+
+    // Update issues per board - move to first column of that board and clear sprintId
+    for (const [boardIdStr, issues] of issuesByBoard) {
+      const firstCol = boardFirstColumn.get(boardIdStr)
+      const updateFields: any = { sprintId: null, updatedAt: now }
+      if (firstCol) {
+        updateFields.columnId = firstCol.columnId
+        updateFields.statusKey = firstCol.statusKey
+      }
+
+      const issueIds = issues.map((i) => i._id)
+      const result = await db
+        .collection('sf_issues')
+        .updateMany({ _id: { $in: issueIds } } as any, { $set: updateFields } as any)
+      totalModified += result.modifiedCount || 0
+    }
+
     applied++
     await logActivity(db, {
       projectId: project._id,
       actorId: authUserId,
       kind: 'automation_applied',
       sprintId,
-      meta: { ruleId: String(r._id), ruleName: String(r.name || ''), trigger: { kind: 'sprint_closed' }, modified: result.modifiedCount },
+      meta: {
+        ruleId: String(r._id),
+        ruleName: String(r.name || ''),
+        trigger: { kind: 'sprint_closed' },
+        modified: totalModified,
+      },
       createdAt: now,
     })
   }
