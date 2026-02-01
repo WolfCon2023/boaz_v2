@@ -763,7 +763,6 @@ export const APPLICATION_CATALOG = [
     { key: 'scheduler', name: 'Scheduler', description: 'Calendar and bookings' },
     { key: 'calendar', name: 'Calendar', description: 'Calendar views, team availability, and meetings' },
     { key: 'helpdesk', name: 'Helpdesk', description: 'Tickets and SLAs' },
-    { key: 'billing', name: 'Billing', description: 'Invoices and payments' },
     { key: 'analytics', name: 'Analytics', description: 'Dashboards and reports' },
     { key: 'stratflow', name: 'StratFlow', description: 'Projects and tasks' },
     { key: 'marketplace', name: 'Marketplace', description: 'Product and service marketplace' },

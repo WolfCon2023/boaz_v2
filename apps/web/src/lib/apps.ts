@@ -11,7 +11,6 @@ export const catalog: AppCatalogItem[] = [
   { key: 'scheduler', name: 'Scheduler', description: 'Calendar and bookings', href: '/apps/scheduler' },
   { key: 'calendar', name: 'Calendar', description: 'Calendar views and meetings', href: '/apps/calendar' },
   { key: 'helpdesk', name: 'Helpdesk', description: 'Tickets and SLAs', href: '/apps/helpdesk' },
-  { key: 'billing', name: 'Billing', description: 'Invoices and payments' },
   { key: 'analytics', name: 'Analytics', description: 'Dashboards and reports' },
   { key: 'stratflow', name: 'StratFlow', description: 'Projects and tasks', href: '/apps/stratflow' },
 ]
