@@ -4273,7 +4273,7 @@ adminSeedDataRouter.post('/financial-intelligence-kb', async (_req, res) => {
       title: 'Financial Intelligence: Complete Guide to GAAP-Compliant Accounting',
       category: 'Financial Management',
       slug: 'financial-intelligence-guide',
-      tags: ['crm', 'crm:financial', 'financial', 'accounting', 'gaap', 'journal-entries', 'financial-statements', 'kpi', 'expenses', 'chart-of-accounts'],
+      tags: ['finhub', 'finhub:financial-intelligence', 'crm', 'crm:financial', 'financial', 'accounting', 'gaap', 'journal-entries', 'financial-statements', 'kpi', 'expenses', 'chart-of-accounts'],
       body: `# Financial Intelligence – GAAP-Compliant Accounting & Financial Statements
 
 ## Overview
@@ -4742,6 +4742,468 @@ When a renewal is created:
     })
   } catch (err: any) {
     console.error('Seed financial intelligence KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
+// POST /api/admin/seed/finhub-overview-kb - Add FinHub Overview KB article
+adminSeedDataRouter.post('/finhub-overview-kb', async (_req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const ARTICLE = {
+      title: 'FinHub Overview: Your Financial Command Center',
+      category: 'FinHub',
+      slug: 'finhub-overview',
+      tags: ['finhub', 'finhub:overview', 'financial', 'revenue'],
+      body: `# FinHub – Your Financial Command Center
+
+## Overview
+**FinHub** is the central hub for all financial operations and intelligence in BOAZ-OS. It combines GAAP-compliant accounting with AI-powered revenue analytics to give you complete visibility into your organization's financial health.
+
+## Applications in FinHub
+
+### Financial Intelligence
+A comprehensive double-entry accounting system with:
+- Chart of Accounts management
+- Journal entries with full audit trail
+- Financial statements (Balance Sheet, Income Statement, Cash Flow)
+- KPI dashboards and variance analysis
+- Accounting period management
+- Automatic posting from CRM transactions
+
+### Revenue Intelligence
+AI-powered sales analytics including:
+- Deal scoring and probability analysis
+- Revenue forecasting with confidence intervals
+- Rep performance tracking
+- Pipeline health monitoring
+- At-risk deal identification
+
+## Getting Started
+1. Request access to **FinHub** from your system administrator
+2. Navigate to **Marketplace → FinHub** to access the app
+3. Start with **Financial Intelligence** to set up your Chart of Accounts
+4. Use **Revenue Intelligence** to analyze your sales pipeline
+
+## Access Control
+FinHub access is controlled by system administrators through the Admin Portal:
+- Users must be granted FinHub app access
+- Financial data is sensitive and access-controlled
+- Both modules share the same access grant
+
+## Integration with CRM
+FinHub automatically integrates with CRM modules:
+- **Invoices** → Revenue recognition journal entries
+- **Payments** → Cash receipt journal entries
+- **Expenses** → Expense journal entries when paid
+- **Deals** → Pipeline forecasting and analytics
+- **Time Entries** → Labor cost analysis
+
+## Best Practices
+- **Seed your Chart of Accounts first** before entering transactions
+- **Create accounting periods** to enable journal entry posting
+- **Review Revenue Intelligence weekly** to catch at-risk deals early
+- **Close accounting periods monthly** for accurate financial statements
+- **Use the KPI dashboard** to track key financial metrics`,
+    }
+
+    const existing = await db.collection('kb_articles').findOne({ title: ARTICLE.title })
+    if (existing) {
+      await db.collection('kb_articles').updateOne(
+        { _id: existing._id },
+        { $set: { ...ARTICLE, updatedAt: new Date() } }
+      )
+    } else {
+      await db.collection('kb_articles').insertOne({
+        ...ARTICLE,
+        status: 'published',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+    }
+
+    res.json({
+      data: {
+        title: ARTICLE.title,
+        action: existing ? 'updated' : 'created',
+        url: `/apps/crm/support/kb/${ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed finhub overview KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
+// POST /api/admin/seed/revenue-intelligence-kb - Add Revenue Intelligence KB article
+adminSeedDataRouter.post('/revenue-intelligence-kb', async (_req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const ARTICLE = {
+      title: 'Revenue Intelligence: AI-Powered Deal Analytics and Forecasting',
+      category: 'FinHub',
+      slug: 'revenue-intelligence-guide',
+      tags: ['finhub', 'finhub:revenue-intelligence', 'crm:revenue-intelligence', 'revenue', 'forecasting', 'ai', 'analytics', 'deals', 'pipeline'],
+      body: `# Revenue Intelligence – AI-Powered Deal Analytics & Forecasting
+
+## Overview
+**Revenue Intelligence** uses AI to score deals, forecast revenue with confidence intervals, and predict rep performance. It helps sales leaders make data-driven decisions and identify risks and opportunities in the pipeline.
+
+## Key Features
+- **AI Deal Scoring**: 0-100 score predicting deal likelihood
+- **Revenue Forecasting**: Pessimistic, Likely, and Optimistic projections
+- **Pipeline Analytics**: Visual breakdown by stage, rep, and probability
+- **At-Risk Detection**: Automatic identification of deals needing attention
+- **Rep Performance**: Individual and team performance metrics
+- **Configurable Scoring**: Customize AI weights for your sales process
+
+---
+
+## Getting Started
+
+### Accessing Revenue Intelligence
+1. Navigate to **FinHub → Revenue Intelligence**
+2. Requires FinHub app access (granted by system administrator)
+3. Dashboard shows current period forecast by default
+
+### Understanding the Interface
+- **Forecast Summary**: Pipeline value with pessimistic/likely/optimistic ranges
+- **Pipeline Breakdown**: Deals by stage with visual bars
+- **Rep Leaderboard**: Performance ranking by rep
+- **At-Risk Deals**: Flagged deals requiring attention
+- **Scoring Settings**: AI configuration (admin only)
+
+---
+
+## AI Deal Scoring
+
+### How It Works
+The AI analyzes multiple factors to generate a 0-100 deal score:
+
+| Factor | Weight | Description |
+|--------|--------|-------------|
+| **Stage** | 30% | Further stages = higher score |
+| **Days in Stage** | 20% | Stuck deals penalized |
+| **Activity** | 20% | Recent engagement boosts score |
+| **Deal Size** | 10% | Larger deals may have lower probability |
+| **Rep History** | 10% | Past performance influences scoring |
+| **Data Quality** | 10% | Complete data improves score |
+
+### Score Ranges
+| Score | Confidence | Interpretation |
+|-------|------------|----------------|
+| 80-100 | High | Very likely to close |
+| 60-79 | Medium-High | Good probability |
+| 40-59 | Medium | Needs attention |
+| 20-39 | Medium-Low | At risk |
+| 0-19 | Low | Unlikely to close |
+
+---
+
+## Revenue Forecasting
+
+### Forecast Ranges
+| Range | Description | Use Case |
+|-------|-------------|----------|
+| **Pessimistic** | Conservative estimate | Budget planning |
+| **Likely** | Expected outcome | Target setting |
+| **Optimistic** | Best case scenario | Stretch goals |
+
+### Period Selection
+- **This Month**: Current month forecast
+- **This Quarter**: Current quarter forecast
+- **Next Month/Quarter**: Future period projections
+- **This Year/Next Year**: Annual forecasts
+- **Custom Range**: Specific date range
+
+---
+
+## At-Risk Deal Detection
+
+### Risk Indicators
+Deals are flagged as at-risk when:
+- **No Activity**: No engagement for 14+ days
+- **Stuck in Stage**: Same stage for 30+ days
+- **Stale Close Date**: Pushed back multiple times
+- **Missing Data**: Key fields incomplete
+- **Low Score**: AI score below threshold
+
+### Managing At-Risk Deals
+1. Review flagged deals in the **At-Risk** section
+2. Click on a deal to see detailed risk factors
+3. Take action: update, engage, or remove from forecast
+4. Track recovery over time
+
+---
+
+## Rep Performance
+
+### Performance Metrics
+| Metric | Description |
+|--------|-------------|
+| **Closed Won** | Total value closed this period |
+| **Win Rate** | Won deals / Total deals |
+| **Avg Deal Size** | Average closed deal value |
+| **Sales Velocity** | Revenue per day |
+| **Pipeline Value** | Current open pipeline |
+| **Forecast Accuracy** | Actual vs predicted |
+
+---
+
+## Scoring Settings (Admin)
+
+### Accessing Settings
+1. Click **"Scoring Settings"** in the page header
+2. Only visible to users with admin permissions
+
+### Simple Editor
+Adjust common settings without JSON:
+- **Stage Weights**: Positive/negative by stage
+- **Activity Threshold**: Days for "no activity" flag
+- **At-Risk Threshold**: Days for "stuck in stage" flag
+- **Score Weights**: Factor importance percentages
+
+---
+
+## Best Practices
+
+### For Sales Managers
+- **Review weekly**: Check forecasts and at-risk deals
+- **Focus on pipeline health**: Maintain 3-4x coverage
+- **Coach based on data**: Use metrics to guide reps
+- **Validate forecasts**: Compare AI predictions to reality
+
+### For Sales Reps
+- **Keep data current**: Update deal stages and close dates
+- **Log activities**: Engagement improves scores
+- **Review your scores**: Understand what drives probability
+- **Address at-risk early**: Don't let deals go stale`,
+    }
+
+    const existing = await db.collection('kb_articles').findOne({ title: ARTICLE.title })
+    if (existing) {
+      await db.collection('kb_articles').updateOne(
+        { _id: existing._id },
+        { $set: { ...ARTICLE, updatedAt: new Date() } }
+      )
+    } else {
+      await db.collection('kb_articles').insertOne({
+        ...ARTICLE,
+        status: 'published',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+    }
+
+    res.json({
+      data: {
+        title: ARTICLE.title,
+        action: existing ? 'updated' : 'created',
+        url: `/apps/crm/support/kb/${ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed revenue intelligence KB error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
+  }
+})
+
+// POST /api/admin/seed/expenses-kb - Add CRM Expenses KB article
+adminSeedDataRouter.post('/expenses-kb', async (_req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const ARTICLE = {
+      title: 'CRM Expenses: Expense Management with Financial Intelligence Integration',
+      category: 'CRM',
+      slug: 'crm-expenses-guide',
+      tags: ['crm', 'crm:expenses', 'finhub', 'finhub:financial-intelligence', 'expenses', 'auto-posting', 'journal-entries', 'approval-workflow'],
+      body: `# CRM Expenses – Expense Management with Auto-Posting
+
+## Overview
+The **CRM Expenses** module provides complete expense management with approval workflow and automatic integration with Financial Intelligence. When expenses are paid, they automatically post to the General Ledger.
+
+## Key Features
+- **Expense Tracking**: Record business expenses with detailed line items
+- **Approval Workflow**: Submit → Approve/Reject → Pay workflow
+- **Vendor Integration**: Link expenses to CRM vendors
+- **Category Mapping**: Expense categories map to Chart of Accounts
+- **Auto-Posting**: Paid expenses create journal entries automatically
+- **Audit Trail**: Complete history of all expense actions
+
+---
+
+## Expense Workflow
+
+### Status Flow
+\`\`\`
+Draft → Pending Approval → Approved → Paid
+                        ↘ Rejected → (Edit & Resubmit)
+\`\`\`
+
+### Status Definitions
+| Status | Description | Actions Available |
+|--------|-------------|-------------------|
+| **Draft** | Being created | Edit, Submit, Delete |
+| **Pending Approval** | Awaiting manager review | Approve, Reject |
+| **Approved** | Ready for payment | Mark Paid |
+| **Rejected** | Needs revision | Edit, Resubmit |
+| **Paid** | Completed and posted | View Only |
+| **Void** | Canceled | View Only |
+
+---
+
+## Creating Expenses
+
+### In CRM Expenses
+1. Go to **CRM Hub → Expenses**
+2. Click **"New Expense"**
+3. Fill in details:
+   - **Date**: When expense occurred
+   - **Vendor**: Select from vendor list (optional)
+   - **Payee**: If not a vendor
+   - **Description**: Brief summary
+   - **Line Items**: Category, amount, notes
+   - **Payment Method**: ACH, Check, Credit Card, etc.
+   - **Reference Number**: Check number, transaction ID
+   - **Notes**: Additional details
+4. Click **Create** (saves as Draft)
+
+### Expense Categories
+Each category maps to a Chart of Accounts expense account:
+
+| Category | Account # | Description |
+|----------|-----------|-------------|
+| Cost of Services | 5000 | Direct service costs |
+| Contractor Costs | 5200 | Subcontractors |
+| Hosting & Infrastructure | 5300 | Cloud services |
+| Salaries & Wages | 6000 | Employee compensation |
+| Rent | 6200 | Office space |
+| Software Subscriptions | 6300 | SaaS tools |
+| Marketing & Advertising | 6400 | Promotion |
+| Professional Services | 6500 | Legal, accounting |
+| Travel & Entertainment | 6600 | Business travel |
+| Office Supplies | 6800 | Supplies |
+| Other Expense | 6900 | Miscellaneous |
+
+---
+
+## Approval Workflow
+
+### Submitting for Approval
+1. Open a Draft expense
+2. Review all details for accuracy
+3. Click **"Submit for Approval"**
+4. Status changes to Pending Approval
+
+### Approving/Rejecting (Admin Only)
+1. Navigate to **CRM Hub → Expenses**
+2. Filter by **"Pending Approval"** status
+3. Review expense details
+4. Click **"Approve"** or **"Reject"**
+5. If rejecting, provide a reason
+
+---
+
+## Auto-Posting to Financial Intelligence
+
+### When Expenses Are Paid
+When an expense is marked as paid, the system automatically:
+1. Creates a journal entry
+2. Debits the appropriate expense account(s)
+3. Credits the Cash account
+4. Links the journal entry to the expense
+
+### Example Journal Entry
+\`\`\`
+Expense: Office Supplies - $500
+
+Journal Entry:
+  DR: Office Supplies (6800)     $500
+  CR: Cash (1010)                $500
+  Memo: Expense #1001 - Office supplies purchase
+\`\`\`
+
+### Multi-Line Expenses
+\`\`\`
+Expense: Monthly Services - $1,500
+  Line 1: Hosting ($800)
+  Line 2: Software ($700)
+
+Journal Entry:
+  DR: Hosting & Infrastructure (5300)  $800
+  DR: Software Subscriptions (6300)    $700
+  CR: Cash (1010)                      $1,500
+\`\`\`
+
+---
+
+## Requirements for Auto-Posting
+
+### Open Accounting Period
+- Journal entries require an open accounting period
+- Period date must include the expense date
+- Create periods in Financial Intelligence first
+
+### Chart of Accounts
+- Expense category accounts must exist (5000-6999)
+- Cash account (1010) must exist
+- Run "Seed Default Chart of Accounts" if missing
+
+---
+
+## Best Practices
+
+### For Submitters
+- Include detailed descriptions
+- Select correct expense category
+- Enter accurate payment information
+- Submit promptly for approval
+
+### For Approvers
+- Verify expense legitimacy
+- Check budget availability
+- Review category accuracy
+- Provide clear rejection reasons
+
+### For Finance
+- Mark expenses paid promptly
+- Reconcile with bank statements
+- Review auto-posted entries monthly`,
+    }
+
+    const existing = await db.collection('kb_articles').findOne({ title: ARTICLE.title })
+    if (existing) {
+      await db.collection('kb_articles').updateOne(
+        { _id: existing._id },
+        { $set: { ...ARTICLE, updatedAt: new Date() } }
+      )
+    } else {
+      await db.collection('kb_articles').insertOne({
+        ...ARTICLE,
+        status: 'published',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+    }
+
+    res.json({
+      data: {
+        title: ARTICLE.title,
+        action: existing ? 'updated' : 'created',
+        url: `/apps/crm/support/kb/${ARTICLE.slug}`,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed expenses KB error:', err)
     res.status(500).json({ data: null, error: err.message || 'failed_to_seed_kb' })
   }
 })
