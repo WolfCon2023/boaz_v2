@@ -1212,13 +1212,13 @@ export default function FinancialIntelligence() {
                             const type = e.target.value as AccountType
                             setNewAccount({ ...newAccount, type, subType: subTypeOptions[type][0] })
                           }}
-                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-gray-900"
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-gray-900"
                         >
-                          <option value="Asset" className="text-gray-900">Asset</option>
-                          <option value="Liability" className="text-gray-900">Liability</option>
-                          <option value="Equity" className="text-gray-900">Equity</option>
-                          <option value="Revenue" className="text-gray-900">Revenue</option>
-                          <option value="Expense" className="text-gray-900">Expense</option>
+                          <option value="Asset" className="bg-white text-gray-900">Asset</option>
+                          <option value="Liability" className="bg-white text-gray-900">Liability</option>
+                          <option value="Equity" className="bg-white text-gray-900">Equity</option>
+                          <option value="Revenue" className="bg-white text-gray-900">Revenue</option>
+                          <option value="Expense" className="bg-white text-gray-900">Expense</option>
                         </select>
                       </div>
                     </div>
@@ -1237,10 +1237,10 @@ export default function FinancialIntelligence() {
                       <select
                         value={newAccount.subType}
                         onChange={(e) => setNewAccount({ ...newAccount, subType: e.target.value })}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-gray-900"
+                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-gray-900"
                       >
                         {subTypeOptions[newAccount.type].map((st) => (
-                          <option key={st} value={st} className="text-gray-900">{st}</option>
+                          <option key={st} value={st} className="bg-white text-gray-900">{st}</option>
                         ))}
                       </select>
                     </div>
@@ -1363,10 +1363,10 @@ export default function FinancialIntelligence() {
                     <select
                       value={newPeriodYear}
                       onChange={(e) => setNewPeriodYear(Number(e.target.value))}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-gray-900"
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-gray-900"
                     >
                       {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((year) => (
-                        <option key={year} value={year} className="text-gray-900">{year}</option>
+                        <option key={year} value={year} className="bg-white text-gray-900">{year}</option>
                       ))}
                     </select>
                   </div>
@@ -1515,11 +1515,11 @@ export default function FinancialIntelligence() {
                                 lines[idx] = { ...lines[idx], accountId: e.target.value }
                                 setNewEntry({ ...newEntry, lines })
                               }}
-                              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-sm text-gray-900"
+                              className="rounded-lg border border-[color:var(--color-border)] bg-white px-2 py-1.5 text-sm text-gray-900"
                             >
-                              <option value="" className="text-gray-900">Select account...</option>
+                              <option value="" className="bg-white text-gray-900">Select account...</option>
                               {accounts.filter(a => a.isActive).map((a) => (
-                                <option key={a.id} value={a.id} className="text-gray-900">
+                                <option key={a.id} value={a.id} className="bg-white text-gray-900">
                                   {a.accountNumber} - {a.name}
                                 </option>
                               ))}
@@ -1767,10 +1767,10 @@ export default function FinancialIntelligence() {
                         <select
                           value={newExpense.category}
                           onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
-                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-gray-900"
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-gray-900"
                         >
                           {(expenseCategories.length > 0 ? expenseCategories : ['Office Expenses']).map((cat) => (
-                            <option key={cat} value={cat} className="text-gray-900">{cat}</option>
+                            <option key={cat} value={cat} className="bg-white text-gray-900">{cat}</option>
                           ))}
                         </select>
                       </div>
@@ -1779,12 +1779,12 @@ export default function FinancialIntelligence() {
                         <select
                           value={newExpense.paymentMethod}
                           onChange={(e) => setNewExpense({ ...newExpense, paymentMethod: e.target.value })}
-                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm text-gray-900"
+                          className="w-full rounded-lg border border-[color:var(--color-border)] bg-white px-3 py-2 text-sm text-gray-900"
                         >
-                          <option value="Check" className="text-gray-900">Check</option>
-                          <option value="Credit Card" className="text-gray-900">Credit Card</option>
-                          <option value="ACH" className="text-gray-900">ACH Transfer</option>
-                          <option value="Cash" className="text-gray-900">Cash</option>
+                          <option value="Check" className="bg-white text-gray-900">Check</option>
+                          <option value="Credit Card" className="bg-white text-gray-900">Credit Card</option>
+                          <option value="ACH" className="bg-white text-gray-900">ACH Transfer</option>
+                          <option value="Cash" className="bg-white text-gray-900">Cash</option>
                           <option value="Wire" className="text-gray-900">Wire Transfer</option>
                         </select>
                       </div>
@@ -1802,11 +1802,11 @@ export default function FinancialIntelligence() {
                                 lines[idx] = { ...lines[idx], accountId: e.target.value }
                                 setNewExpense({ ...newExpense, lines })
                               }}
-                              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-sm text-gray-900"
+                              className="rounded-lg border border-[color:var(--color-border)] bg-white px-2 py-1.5 text-sm text-gray-900"
                             >
-                              <option value="" className="text-gray-900">Select expense account...</option>
+                              <option value="" className="bg-white text-gray-900">Select expense account...</option>
                               {accounts.filter(a => a.isActive && a.type === 'Expense').map((a) => (
-                                <option key={a.id} value={a.id} className="text-gray-900">
+                                <option key={a.id} value={a.id} className="bg-white text-gray-900">
                                   {a.accountNumber} - {a.name}
                                 </option>
                               ))}
