@@ -91,7 +91,7 @@ export default function CRMExpenses() {
   // Filters
   const [q, setQ] = React.useState('')
   const [statusFilter, setStatusFilter] = React.useState<ExpenseStatus | 'all'>('all')
-  const [dateRange, setDateRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' })
+  const [dateRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' })
 
   // Edit modal state
   const [editing, setEditing] = React.useState<Expense | null>(null)
