@@ -547,8 +547,9 @@ export default function CRMExpenses() {
 
       {/* Create/Edit Modal */}
       {isCreating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={closeModal} />
+          <div className="relative z-10 max-h-[90vh] w-[min(90vw,40rem)] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
             <h2 className="mb-4 text-lg font-semibold">
               {editing?._id ? `Edit Expense #${editing.expenseNumber}` : 'New Expense'}
             </h2>
