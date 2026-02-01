@@ -711,16 +711,17 @@ export default function FinancialIntelligence() {
       <div className="min-h-screen bg-[color:var(--color-bg)]">
         <CRMNav />
         <div className="mx-auto max-w-7xl p-4 md:p-6">
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8 text-center">
-            <div className="text-4xl mb-4">🔒</div>
-            <h1 className="text-2xl font-bold text-red-400">Access Restricted</h1>
-            <p className="mt-2 text-sm text-[color:var(--color-text-muted)] max-w-md mx-auto">
-              Financial Intelligence contains sensitive financial data including employee labor costs, billing rates, and financial statements.
-              Only administrators and managers have access to this module.
-            </p>
-            <p className="mt-4 text-xs text-[color:var(--color-text-muted)]">
-              If you believe you should have access, please contact your system administrator.
-            </p>
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8">
+            <div className="flex flex-col items-center text-center">
+              <div className="text-4xl mb-4">🔒</div>
+              <h1 className="text-2xl font-bold text-red-400">Access Restricted</h1>
+              <p className="mt-4 text-sm text-[color:var(--color-text-muted)]" style={{ maxWidth: '480px' }}>
+                Financial Intelligence contains sensitive financial data including employee labor costs, billing rates, and financial statements. Only administrators and managers have access to this module.
+              </p>
+              <p className="mt-4 text-xs text-[color:var(--color-text-muted)]">
+                If you believe you should have access, please contact your system administrator.
+              </p>
+            </div>
           </div>
         </div>
       </div>
