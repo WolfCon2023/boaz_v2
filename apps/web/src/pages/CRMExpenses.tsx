@@ -625,10 +625,10 @@ export default function CRMExpenses() {
                       <select
                         value={line.category}
                         onChange={(e) => updateLine(idx, 'category', e.target.value)}
-                        className="flex-1 rounded border border-[color:var(--color-border)] bg-transparent px-2 py-1 text-xs"
+                        className="flex-1 rounded border border-[color:var(--color-border)] bg-[#1a1a2e] px-2 py-1 text-xs text-white"
                       >
                         {categories.map((c) => (
-                          <option key={c.category} value={c.category}>
+                          <option key={c.category} value={c.category} className="bg-[#1a1a2e] text-white">
                             {c.category}
                           </option>
                         ))}
