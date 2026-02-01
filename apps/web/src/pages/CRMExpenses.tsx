@@ -53,7 +53,7 @@ type ExpenseCategory = {
 }
 
 type Vendor = {
-  _id: string
+  id: string
   name: string
 }
 
@@ -181,7 +181,7 @@ export default function CRMExpenses() {
       const payload = {
         date: formDate,
         vendorId: formVendorId || undefined,
-        vendorName: formVendorId ? vendors.find((v) => v._id === formVendorId)?.name : undefined,
+        vendorName: formVendorId ? vendors.find((v) => v.id === formVendorId)?.name : undefined,
         payee: formPayee || undefined,
         description: formDescription,
         lines: cleanedLines,
@@ -596,7 +596,7 @@ export default function CRMExpenses() {
                   >
                     <option value="">— Select vendor or enter payee —</option>
                     {vendors.map((v) => (
-                      <option key={v._id} value={v._id}>
+                      <option key={v.id} value={v.id}>
                         {v.name}
                       </option>
                     ))}
