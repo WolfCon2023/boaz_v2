@@ -41,6 +41,7 @@ import CRMAssets from '@/pages/CRMAssets'
 import CRMAssetsReport from '@/pages/CRMAssetsReport'
 import CRMAssetsProductsReport from '@/pages/CRMAssetsProductsReport'
 import CRMRevenueIntelligence from '@/pages/CRMRevenueIntelligence'
+import FinancialIntelligence from '@/pages/FinancialIntelligence'
 import CRMReporting from '@/pages/CRMReporting'
 import CRMReportingPrint from '@/pages/CRMReportingPrint'
 import CRMInvoicePrint from '@/pages/CRMInvoicePrint'
@@ -122,6 +123,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/slas', element: <RequireAuth><RequireApplication appKey="crm"><CRMSLAs /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/renewals', element: <RequireAuth><RequireApplication appKey="crm"><CRMRenewals /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/revenue-intelligence', element: <RequireAuth><RequireApplication appKey="crm"><CRMRevenueIntelligence /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/financial-intelligence', element: <RequireAuth><RequireApplication appKey="crm"><FinancialIntelligence /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/reporting', element: <RequireAuth><RequireApplication appKey="crm"><CRMReporting /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/reporting/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMReportingPrint /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/integrations', element: <RequireAuth><RequireApplication appKey="crm"><RequireAdmin><CRMIntegrations /></RequireAdmin></RequireApplication></RequireAuth> },
