@@ -6,6 +6,7 @@ import { requireAuth } from '../auth/rbac.js';
 import { sendAuthEmail } from '../auth/email.js';
 import { env } from '../env.js';
 import { vendorsRouter } from './vendors.js';
+import { expensesRouter } from './expenses.js';
 import { revenueIntelligenceRouter } from './revenue_intelligence.js';
 import { reportingRouter } from './reporting.js';
 import { createStandardEmailTemplate, createStandardTextEmail, createContentBox, createField } from '../lib/email-templates.js';
@@ -395,5 +396,6 @@ crmRouter.get('/contacts/:id/history', async (req, res) => {
 });
 // Mount sub-routers that use /api/crm prefix
 crmRouter.use('/vendors', vendorsRouter);
+crmRouter.use('/expenses', expensesRouter);
 crmRouter.use('/revenue-intelligence', revenueIntelligenceRouter);
 crmRouter.use('/reporting', reportingRouter);

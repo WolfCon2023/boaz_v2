@@ -53,6 +53,11 @@ export default function CRMHub() {
     { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
     { label: 'Documents', desc: 'File attachments, version control, and permissions', href: '/apps/crm/documents' },
     {
+      label: 'Expenses',
+      desc: 'Track business expenses with approval workflow, auto-posts to Financial Intelligence',
+      href: '/apps/crm/expenses',
+    },
+    {
       label: 'Contracts & SLAs',
       desc: 'Customer contracts, entitlements, and SLA targets',
       href: '/apps/crm/slas',

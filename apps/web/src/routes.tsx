@@ -37,6 +37,7 @@ import PaymentPortal from '@/pages/PaymentPortal'
 import SecurePaymentCheckout from '@/pages/SecurePaymentCheckout'
 import CRMProducts from '@/pages/CRMProducts'
 import CRMVendors from '@/pages/CRMVendors'
+import CRMExpenses from '@/pages/CRMExpenses'
 import CRMAssets from '@/pages/CRMAssets'
 import CRMAssetsReport from '@/pages/CRMAssetsReport'
 import CRMAssetsProductsReport from '@/pages/CRMAssetsProductsReport'
@@ -132,6 +133,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/integrations', element: <RequireAuth><RequireApplication appKey="crm"><RequireAdmin><CRMIntegrations /></RequireAdmin></RequireApplication></RequireAuth> },
       { path: 'apps/crm/products', element: <RequireAuth><RequireApplication appKey="crm"><CRMProducts /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/vendors', element: <RequireAuth><RequireApplication appKey="crm"><CRMVendors /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/expenses', element: <RequireAuth><RequireApplication appKey="crm"><CRMExpenses /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/assets', element: <RequireAuth><RequireApplication appKey="crm"><CRMAssets /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/assets/report', element: <RequireAuth><RequireApplication appKey="crm"><CRMAssetsReport /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/assets/products-report', element: <RequireAuth><RequireApplication appKey="crm"><CRMAssetsProductsReport /></RequireApplication></RequireAuth> },
