@@ -9,6 +9,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMNav } from '@/components/CRMNav'
+import { useAccessToken } from '@/components/Auth'
 import { Activity, BarChart3, Bell, CalendarDays, ListChecks, Plus, Presentation, Star, Trello, Zap } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
 import { StratflowIssueDrawer, type StratflowIssueType, type StratflowPriority } from '@/components/StratflowIssueDrawer'
@@ -544,7 +545,35 @@ export default function StratflowProject() {
   const [sp, setSp] = useSearchParams()
   const qc = useQueryClient()
   const toast = useToast()
+  const token = useAccessToken()
   const view = normView(sp.get('view'))
+
+  // Check user roles for financial data access
+  const rolesQ = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
+    queryKey: ['user', 'roles'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/me/roles')
+      return res.data
+    },
+    enabled: !!token,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+
+  // Only admins and managers can see financial data (employee labor costs, rates, etc.)
+  const canViewFinancialData = React.useMemo(() => {
+    if (!rolesQ.data) return false
+    if (rolesQ.data.isAdmin) return true
+    const roles = rolesQ.data.roles || []
+    return roles.some((r) => 
+      r.name === 'admin' || 
+      r.name.includes('manager') || 
+      r.name === 'finance' ||
+      r.name === 'accounting' ||
+      r.permissions?.some((p) => p.startsWith('financial.') || p === '*')
+    )
+  }, [rolesQ.data])
   const focusedIssueId = sp.get('issue') || null
   const [exportingTime, setExportingTime] = React.useState(false)
   const [assignedToMeOnly, setAssignedToMeOnly] = React.useState(false)
@@ -3649,8 +3678,8 @@ export default function StratflowProject() {
                 ) : null}
               </div>
 
-              {/* Financial Summary - Enhanced */}
-              {financialQ.data?.data && (
+              {/* Financial Summary - Enhanced (Admin/Manager Only) */}
+              {canViewFinancialData && financialQ.data?.data && (
                 <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -3723,8 +3752,8 @@ export default function StratflowProject() {
                 </div>
               )}
 
-              {/* Legacy Financial by User list fallback */}
-              {financialQ.data?.data && financialQ.data.data.byUser.length > 6 && (
+              {/* Legacy Financial by User list fallback (Admin/Manager Only) */}
+              {canViewFinancialData && financialQ.data?.data && financialQ.data.data.byUser.length > 6 && (
                 <div className="rounded-xl border border-[color:var(--color-border)] p-4">
                   <div className="text-xs font-medium mb-2">Additional Team Members</div>
                   <div className="space-y-1">
