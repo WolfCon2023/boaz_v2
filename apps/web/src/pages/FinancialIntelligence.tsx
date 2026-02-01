@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
+import { CRMHelpButton } from '@/components/CRMHelpButton'
 
 // Types
 type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense'
@@ -658,9 +659,12 @@ export default function FinancialIntelligence() {
 
       <div className="mx-auto max-w-7xl p-4 md:p-6">
         <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Financial Intelligence</h1>
-            <p className="text-sm text-[color:var(--color-text-muted)]">GAAP-compliant accounting with full audit trail</p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h1 className="text-2xl font-bold">Financial Intelligence</h1>
+              <p className="text-sm text-[color:var(--color-text-muted)]">GAAP-compliant accounting with full audit trail</p>
+            </div>
+            <CRMHelpButton tag="crm:financial" />
           </div>
         </div>
 

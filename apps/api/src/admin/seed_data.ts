@@ -4273,7 +4273,7 @@ adminSeedDataRouter.post('/financial-intelligence-kb', async (_req, res) => {
       title: 'Financial Intelligence: Complete Guide to GAAP-Compliant Accounting',
       category: 'Financial Management',
       slug: 'financial-intelligence-guide',
-      tags: ['crm', 'financial', 'accounting', 'gaap', 'journal-entries', 'financial-statements', 'kpi', 'expenses', 'chart-of-accounts'],
+      tags: ['crm', 'crm:financial', 'financial', 'accounting', 'gaap', 'journal-entries', 'financial-statements', 'kpi', 'expenses', 'chart-of-accounts'],
       body: `# Financial Intelligence – GAAP-Compliant Accounting & Financial Statements
 
 ## Overview
