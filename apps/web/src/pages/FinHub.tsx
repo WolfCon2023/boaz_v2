@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { FinNav } from '@/components/FinNav'
+import { FinHubHelpButton } from '@/components/FinHubHelpButton'
 
 export default function FinHub() {
   const items: { label: string; desc: string; href: string }[] = [
@@ -20,11 +21,14 @@ export default function FinHub() {
       <FinNav />
 
       <div className="mx-auto max-w-7xl p-4 md:p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">FinHub</h1>
-          <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
-            Financial operations center – accounting, forecasting, and revenue analytics
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">FinHub</h1>
+            <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">
+              Financial operations center – accounting, forecasting, and revenue analytics
+            </p>
+          </div>
+          <FinHubHelpButton tag="finhub:overview" />
         </div>
 
         {/* Quick Stats */}

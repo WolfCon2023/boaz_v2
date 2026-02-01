@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { FinNav } from '@/components/FinNav'
-import { CRMHelpButton } from '@/components/CRMHelpButton'
+import { FinHubHelpButton } from '@/components/FinHubHelpButton'
 import { http } from '@/lib/http'
 import { formatDateOnly } from '@/lib/dateFormat'
 import { useAccessToken } from '@/components/Auth'
@@ -834,7 +834,7 @@ export default function CRMRevenueIntelligence() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <CRMHelpButton tag="crm:revenue-intelligence" />
+          <FinHubHelpButton tag="finhub:revenue-intelligence" />
           {isAdmin && (
             <button
               type="button"

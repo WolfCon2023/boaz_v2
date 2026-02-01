@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { FinNav } from '@/components/FinNav'
-import { KBHelpButton } from '@/components/KBHelpButton'
+import { FinHubHelpButton } from '@/components/FinHubHelpButton'
 
 // Types
 type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense'
@@ -665,7 +665,7 @@ export default function FinancialIntelligence() {
               <h1 className="text-2xl font-bold">Financial Intelligence</h1>
               <p className="text-sm text-[color:var(--color-text-muted)]">GAAP-compliant accounting with full audit trail</p>
             </div>
-            <KBHelpButton href="/apps/crm/support/kb?tag=crm:financial" />
+            <FinHubHelpButton tag="finhub:financial-intelligence" />
           </div>
         </div>
 
