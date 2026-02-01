@@ -759,6 +759,7 @@ export async function rejectRegistrationRequest(requestId, reviewedByUserId) {
 // Application catalog (should match frontend)
 export const APPLICATION_CATALOG = [
     { key: 'crm', name: 'CRM', description: 'Contacts, deals, pipelines' },
+    { key: 'finhub', name: 'FinHub', description: 'Financial Intelligence, Revenue Intelligence, and financial operations' },
     { key: 'scheduler', name: 'Scheduler', description: 'Calendar and bookings' },
     { key: 'calendar', name: 'Calendar', description: 'Calendar views, team availability, and meetings' },
     { key: 'helpdesk', name: 'Helpdesk', description: 'Tickets and SLAs' },
