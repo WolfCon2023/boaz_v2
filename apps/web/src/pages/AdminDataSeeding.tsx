@@ -401,9 +401,6 @@ Related:
   const [seedingSchedulerCalendarKB, setSeedingSchedulerCalendarKB] = useState(false)
   const [seedingStratflowKB, setSeedingStratflowKB] = useState(false)
   const [seedingFinancialIntelligenceKB, setSeedingFinancialIntelligenceKB] = useState(false)
-  const [seedingFinHubOverviewKB, setSeedingFinHubOverviewKB] = useState(false)
-  const [seedingRevenueIntelligenceKB, setSeedingRevenueIntelligenceKB] = useState(false)
-  const [seedingExpensesKB, setSeedingExpensesKB] = useState(false)
   const [seedingAll, setSeedingAll] = useState(false)
   
   const [rolesResult, setRolesResult] = useState<any>(null)
@@ -426,9 +423,6 @@ Related:
   const [schedulerCalendarKBResult, setSchedulerCalendarKBResult] = useState<any>(null)
   const [stratflowKBResult, setStratflowKBResult] = useState<any>(null)
   const [financialIntelligenceKBResult, setFinancialIntelligenceKBResult] = useState<any>(null)
-  const [finHubOverviewKBResult, setFinHubOverviewKBResult] = useState<any>(null)
-  const [revenueIntelligenceKBResult, setRevenueIntelligenceKBResult] = useState<any>(null)
-  const [expensesKBResult, setExpensesKBResult] = useState<any>(null)
   const [seedAllResult, setSeedAllResult] = useState<any>(null)
   const [seedAllProgress, setSeedAllProgress] = useState<string>('')
 
@@ -848,56 +842,35 @@ Related:
   }
 
   async function seedFinHubOverviewKB() {
-    setSeedingFinHubOverviewKB(true)
-    setFinHubOverviewKBResult(null)
     try {
       const res = await seedPost('/api/admin/seed/finhub-overview-kb')
       if (res.data.error) {
-        showToast(res.data.error, 'error')
-      } else {
-        setFinHubOverviewKBResult(res.data.data)
-        showToast('FinHub Overview KB article seeded successfully', 'success')
+        throw new Error(res.data.error)
       }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to seed FinHub Overview KB', 'error')
-    } finally {
-      setSeedingFinHubOverviewKB(false)
+      throw new Error(err.response?.data?.error || 'Failed to seed FinHub Overview KB')
     }
   }
 
   async function seedRevenueIntelligenceKB() {
-    setSeedingRevenueIntelligenceKB(true)
-    setRevenueIntelligenceKBResult(null)
     try {
       const res = await seedPost('/api/admin/seed/revenue-intelligence-kb')
       if (res.data.error) {
-        showToast(res.data.error, 'error')
-      } else {
-        setRevenueIntelligenceKBResult(res.data.data)
-        showToast('Revenue Intelligence KB article seeded successfully', 'success')
+        throw new Error(res.data.error)
       }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to seed Revenue Intelligence KB', 'error')
-    } finally {
-      setSeedingRevenueIntelligenceKB(false)
+      throw new Error(err.response?.data?.error || 'Failed to seed Revenue Intelligence KB')
     }
   }
 
   async function seedExpensesKB() {
-    setSeedingExpensesKB(true)
-    setExpensesKBResult(null)
     try {
       const res = await seedPost('/api/admin/seed/expenses-kb')
       if (res.data.error) {
-        showToast(res.data.error, 'error')
-      } else {
-        setExpensesKBResult(res.data.data)
-        showToast('Expenses KB article seeded successfully', 'success')
+        throw new Error(res.data.error)
       }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to seed Expenses KB', 'error')
-    } finally {
-      setSeedingExpensesKB(false)
+      throw new Error(err.response?.data?.error || 'Failed to seed Expenses KB')
     }
   }
 
