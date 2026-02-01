@@ -88,7 +88,7 @@ const EXPENSE_CATEGORIES = [
 const expenseLineSchema = z.object({
   category: z.string().trim().min(1),
   accountNumber: z.string().trim().optional(),
-  amount: z.number().positive(),
+  amount: z.coerce.number().nonnegative(), // coerce handles string inputs, nonnegative allows 0
   description: z.string().trim().optional(),
   projectId: z.string().trim().optional(),
 })
@@ -306,55 +306,75 @@ expensesRouter.get('/:id', async (req, res) => {
 
 // POST /api/crm/expenses - Create expense
 expensesRouter.post('/', async (req: any, res) => {
-  const db = await getDb()
-  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
-  const auth = req.auth
-  const parsed = createExpenseSchema.safeParse(req.body)
-  if (!parsed.success) {
-    return res.status(400).json({ data: null, error: parsed.error.flatten() })
-  }
-
-  const { date, vendorId, vendorName, payee, description, lines, paymentMethod, referenceNumber, notes } = parsed.data
-
-  // Enrich lines with account numbers from categories
-  const enrichedLines: ExpenseLine[] = lines.map((line) => {
-    const categoryMatch = EXPENSE_CATEGORIES.find((c) => c.category === line.category)
-    return {
-      ...line,
-      accountNumber: line.accountNumber || categoryMatch?.accountNumber || '6900',
+    const auth = req.auth
+    if (!auth?.userId) {
+      return res.status(401).json({ data: null, error: 'unauthorized' })
     }
-  })
 
-  const total = enrichedLines.reduce((sum, line) => sum + line.amount, 0)
-  const expenseNumber = await getNextExpenseNumber(db)
-  const now = new Date()
+    const parsed = createExpenseSchema.safeParse(req.body)
+    if (!parsed.success) {
+      console.error('[expenses] Validation error:', JSON.stringify(parsed.error.flatten()))
+      return res.status(400).json({ data: null, error: parsed.error.flatten() })
+    }
 
-  const doc: ExpenseDoc = {
-    _id: new ObjectId(),
-    expenseNumber,
-    date: new Date(date),
-    vendorId: vendorId ? new ObjectId(vendorId) : undefined,
-    vendorName: vendorName || undefined,
-    payee: payee || undefined,
-    description,
-    lines: enrichedLines,
-    total: Math.round(total * 100) / 100,
-    paymentMethod: paymentMethod || undefined,
-    referenceNumber: referenceNumber || undefined,
-    status: 'draft',
-    notes: notes || undefined,
-    createdBy: auth.userId,
-    createdAt: now,
-    updatedAt: now,
+    const { date, vendorId, vendorName, payee, description, lines, paymentMethod, referenceNumber, notes } = parsed.data
+
+    // Validate vendorId if provided
+    let parsedVendorId: ObjectId | undefined
+    if (vendorId) {
+      try {
+        parsedVendorId = new ObjectId(vendorId)
+      } catch {
+        return res.status(400).json({ data: null, error: 'invalid_vendor_id' })
+      }
+    }
+
+    // Enrich lines with account numbers from categories
+    const enrichedLines: ExpenseLine[] = lines.map((line) => {
+      const categoryMatch = EXPENSE_CATEGORIES.find((c) => c.category === line.category)
+      return {
+        ...line,
+        accountNumber: line.accountNumber || categoryMatch?.accountNumber || '6900',
+      }
+    })
+
+    const total = enrichedLines.reduce((sum, line) => sum + line.amount, 0)
+    const expenseNumber = await getNextExpenseNumber(db)
+    const now = new Date()
+
+    const doc: ExpenseDoc = {
+      _id: new ObjectId(),
+      expenseNumber,
+      date: new Date(date),
+      vendorId: parsedVendorId,
+      vendorName: vendorName || undefined,
+      payee: payee || undefined,
+      description,
+      lines: enrichedLines,
+      total: Math.round(total * 100) / 100,
+      paymentMethod: paymentMethod || undefined,
+      referenceNumber: referenceNumber || undefined,
+      status: 'draft',
+      notes: notes || undefined,
+      createdBy: auth.userId,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    await db.collection('crm_expenses').insertOne(doc as any)
+
+    res.status(201).json({
+      data: serializeExpense(doc),
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('[expenses] POST error:', err)
+    res.status(500).json({ data: null, error: err.message || 'create_expense_failed' })
   }
-
-  await db.collection('crm_expenses').insertOne(doc as any)
-
-  res.status(201).json({
-    data: serializeExpense(doc),
-    error: null,
-  })
 })
 
 // PATCH /api/crm/expenses/:id - Update expense
