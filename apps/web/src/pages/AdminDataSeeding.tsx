@@ -400,6 +400,7 @@ Related:
   const [seedingSchedulerAppointmentsKB, setSeedingSchedulerAppointmentsKB] = useState(false)
   const [seedingSchedulerCalendarKB, setSeedingSchedulerCalendarKB] = useState(false)
   const [seedingStratflowKB, setSeedingStratflowKB] = useState(false)
+  const [seedingFinancialIntelligenceKB, setSeedingFinancialIntelligenceKB] = useState(false)
   const [seedingAll, setSeedingAll] = useState(false)
   
   const [rolesResult, setRolesResult] = useState<any>(null)
@@ -421,6 +422,7 @@ Related:
   const [schedulerAppointmentsKBResult, setSchedulerAppointmentsKBResult] = useState<any>(null)
   const [schedulerCalendarKBResult, setSchedulerCalendarKBResult] = useState<any>(null)
   const [stratflowKBResult, setStratflowKBResult] = useState<any>(null)
+  const [financialIntelligenceKBResult, setFinancialIntelligenceKBResult] = useState<any>(null)
   const [seedAllResult, setSeedAllResult] = useState<any>(null)
   const [seedAllProgress, setSeedAllProgress] = useState<string>('')
 
@@ -821,6 +823,24 @@ Related:
     }
   }
 
+  async function seedFinancialIntelligenceKB() {
+    setSeedingFinancialIntelligenceKB(true)
+    setFinancialIntelligenceKBResult(null)
+    try {
+      const res = await seedPost('/api/admin/seed/financial-intelligence-kb')
+      if (res.data.error) {
+        showToast(res.data.error, 'error')
+      } else {
+        setFinancialIntelligenceKBResult(res.data.data)
+        showToast('Financial Intelligence KB article seeded successfully', 'success')
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to seed Financial Intelligence KB', 'error')
+    } finally {
+      setSeedingFinancialIntelligenceKB(false)
+    }
+  }
+
   async function seedAllKB() {
     setSeedingAll(true)
     setSeedAllResult(null)
@@ -846,6 +866,7 @@ Related:
       { name: 'Scheduler Appointments KB', fn: seedSchedulerAppointmentsKB },
       { name: 'Scheduler Calendar KB', fn: seedSchedulerCalendarKB },
       { name: 'StratFlow KB (all modules)', fn: seedStratflowKB },
+      { name: 'Financial Intelligence KB', fn: seedFinancialIntelligenceKB },
     ]
 
     let successCount = 0
@@ -901,7 +922,7 @@ Related:
               <h3 className="text-xl font-bold text-[color:var(--color-text)]">🚀 Seed All KB Articles</h3>
             </div>
             <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
-              Seed all 17 knowledge base articles at once. This will create or update: Roles & Permissions, Support Tickets, Approval Queue, Acceptance Queue, Deal Approval, Customer Success, Payment Portal, Outreach Sequences, Outreach Templates, Reporting, Integrations, Marketing Segments, Scheduler, and the four Scheduler sub-guides (Appointment Types, Availability, Appointments, Calendar).
+              Seed all 19 knowledge base articles at once. This will create or update: Roles & Permissions, Support Tickets, Approval Queue, Acceptance Queue, Deal Approval, Customer Success, Payment Portal, Outreach Sequences, Outreach Templates, Reporting, Integrations, Marketing Segments, Scheduler, the four Scheduler sub-guides (Appointment Types, Availability, Appointments, Calendar), StratFlow, and Financial Intelligence.
             </p>
             <button
               onClick={seedAllKB}
@@ -1998,6 +2019,63 @@ Related:
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Seed Financial Intelligence KB Article */}
+      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Database className="h-5 w-5 text-[color:var(--color-primary-600)]" />
+              <h3 className="text-lg font-semibold text-[color:var(--color-text)]">Financial Intelligence KB Article</h3>
+            </div>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
+              Create comprehensive knowledge base article for Financial Intelligence (GAAP accounting, journal entries, financial statements, KPIs). Updates if already exists.
+            </p>
+            <button
+              onClick={seedFinancialIntelligenceKB}
+              disabled={seedingFinancialIntelligenceKB}
+              className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {seedingFinancialIntelligenceKB ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Seeding...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  <span>Seed Financial Intelligence KB</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {financialIntelligenceKBResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900">{financialIntelligenceKBResult.message}</p>
+                {financialIntelligenceKBResult.slug && (
+                  <p className="text-xs text-green-800 mt-1">
+                    <span className="font-medium">Slug:</span> {financialIntelligenceKBResult.slug}
+                    {' | '}
+                    <a
+                      href={financialIntelligenceKBResult.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700"
+                    >
+                      View Article
+                    </a>
+                  </p>
+                )}
               </div>
             </div>
           </div>
