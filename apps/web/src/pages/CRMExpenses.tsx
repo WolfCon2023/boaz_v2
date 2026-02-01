@@ -172,17 +172,24 @@ export default function CRMExpenses() {
   // Mutations
   const saveExpense = useMutation({
     mutationFn: async () => {
+      // Ensure lines have proper number amounts
+      const cleanedLines = formLines.map((line) => ({
+        category: line.category,
+        amount: Number(line.amount) || 0,
+        description: line.description || undefined,
+      }))
       const payload = {
         date: formDate,
         vendorId: formVendorId || undefined,
         vendorName: formVendorId ? vendors.find((v) => v._id === formVendorId)?.name : undefined,
         payee: formPayee || undefined,
         description: formDescription,
-        lines: formLines,
+        lines: cleanedLines,
         paymentMethod: formPaymentMethod || undefined,
         referenceNumber: formReferenceNumber || undefined,
         notes: formNotes || undefined,
       }
+      console.log('[expenses] Submitting payload:', JSON.stringify(payload, null, 2))
       if (editing?._id) {
         return http.patch(`/api/crm/expenses/${editing._id}`, payload)
       }
@@ -195,7 +202,21 @@ export default function CRMExpenses() {
       toast.showToast(editing?._id ? 'Expense updated.' : 'Expense created.', 'success')
     },
     onError: (err: any) => {
-      toast.showToast(err?.response?.data?.error || 'Failed to save expense.', 'error')
+      console.error('[expenses] Save error:', err?.response?.data)
+      const errorData = err?.response?.data?.error
+      let errorMsg = 'Failed to save expense.'
+      if (typeof errorData === 'string') {
+        errorMsg = errorData
+      } else if (errorData?.fieldErrors) {
+        // Zod flatten() format
+        const fields = Object.entries(errorData.fieldErrors)
+          .map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`)
+          .join('; ')
+        errorMsg = fields || errorMsg
+      } else if (errorData?.formErrors?.length) {
+        errorMsg = errorData.formErrors.join(', ')
+      }
+      toast.showToast(errorMsg, 'error')
     },
   })
 
