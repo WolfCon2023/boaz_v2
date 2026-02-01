@@ -1,9 +1,8 @@
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
-import { CRMNav } from '@/components/CRMNav'
-import { CRMHelpButton } from '@/components/CRMHelpButton'
-import { useAccessToken } from '@/components/Auth'
+import { FinNav } from '@/components/FinNav'
+import { KBHelpButton } from '@/components/KBHelpButton'
 
 // Types
 type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense'
@@ -266,39 +265,6 @@ type FinancialKPIs = {
 
 export default function FinancialIntelligence() {
   const queryClient = useQueryClient()
-  const token = useAccessToken()
-
-  // Check user roles for access control
-  const rolesQ = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
-    queryKey: ['user', 'roles'],
-    queryFn: async () => {
-      const res = await http.get('/api/auth/me/roles')
-      return res.data
-    },
-    enabled: !!token,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    retry: false,
-  })
-
-  // Only admins, managers (it_manager, sales_manager, etc.), and users with financial permissions can access
-  const hasFinancialAccess = React.useMemo(() => {
-    if (!rolesQ.data) return false
-    if (rolesQ.data.isAdmin) return true
-    const roles = rolesQ.data.roles || []
-    // Check for admin or manager roles
-    const hasManagerRole = roles.some((r) => 
-      r.name === 'admin' || 
-      r.name.includes('manager') || 
-      r.name === 'finance' ||
-      r.name === 'accounting'
-    )
-    // Check for financial permissions
-    const hasFinancialPermission = roles.some((r) =>
-      r.permissions?.some((p) => p.startsWith('financial.') || p === '*')
-    )
-    return hasManagerRole || hasFinancialPermission
-  }, [rolesQ.data])
 
   const [view, setView] = React.useState<'dashboard' | 'coa' | 'periods' | 'journal' | 'statements' | 'expenses'>('dashboard')
   const [showNewAccount, setShowNewAccount] = React.useState(false)
@@ -688,49 +654,9 @@ export default function FinancialIntelligence() {
   const entryTotalCredits = newEntry.lines.reduce((sum, l) => sum + (Number(l.credit) || 0), 0)
   const entryIsBalanced = Math.abs(entryTotalDebits - entryTotalCredits) < 0.01
 
-  // Show loading state while checking permissions
-  if (rolesQ.isLoading) {
-    return (
-      <div className="min-h-screen bg-[color:var(--color-bg)]">
-        <CRMNav />
-        <div className="mx-auto max-w-7xl p-4 md:p-6">
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[color:var(--color-primary-600)] mx-auto"></div>
-              <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">Checking access permissions...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Show access denied if user doesn't have permission
-  if (!hasFinancialAccess) {
-    return (
-      <div className="min-h-screen bg-[color:var(--color-bg)]">
-        <CRMNav />
-        <div className="mx-auto max-w-7xl p-4 md:p-6">
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8">
-            <div className="flex flex-col items-center text-center">
-              <div className="text-4xl mb-4">🔒</div>
-              <h1 className="text-2xl font-bold text-red-400">Access Restricted</h1>
-              <p className="mt-4 text-sm text-[color:var(--color-text-muted)]" style={{ maxWidth: '480px' }}>
-                Financial Intelligence contains sensitive financial data including employee labor costs, billing rates, and financial statements. Only administrators and managers have access to this module.
-              </p>
-              <p className="mt-4 text-xs text-[color:var(--color-text-muted)]">
-                If you believe you should have access, please contact your system administrator.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-[color:var(--color-bg)]">
-      <CRMNav />
+      <FinNav />
 
       <div className="mx-auto max-w-7xl p-4 md:p-6">
         <div className="mb-6 flex items-center justify-between">
@@ -739,7 +665,7 @@ export default function FinancialIntelligence() {
               <h1 className="text-2xl font-bold">Financial Intelligence</h1>
               <p className="text-sm text-[color:var(--color-text-muted)]">GAAP-compliant accounting with full audit trail</p>
             </div>
-            <CRMHelpButton tag="crm:financial" />
+            <KBHelpButton href="/apps/crm/support/kb?tag=crm:financial" />
           </div>
         </div>
 

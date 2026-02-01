@@ -42,6 +42,7 @@ import CRMAssetsReport from '@/pages/CRMAssetsReport'
 import CRMAssetsProductsReport from '@/pages/CRMAssetsProductsReport'
 import CRMRevenueIntelligence from '@/pages/CRMRevenueIntelligence'
 import FinancialIntelligence from '@/pages/FinancialIntelligence'
+import FinHub from '@/pages/FinHub'
 import CRMReporting from '@/pages/CRMReporting'
 import CRMReportingPrint from '@/pages/CRMReportingPrint'
 import CRMInvoicePrint from '@/pages/CRMInvoicePrint'
@@ -122,9 +123,11 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/success', element: <RequireAuth><RequireApplication appKey="crm"><CRMSuccess /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/slas', element: <RequireAuth><RequireApplication appKey="crm"><CRMSLAs /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/renewals', element: <RequireAuth><RequireApplication appKey="crm"><CRMRenewals /></RequireApplication></RequireAuth> },
-      { path: 'apps/crm/revenue-intelligence', element: <RequireAuth><RequireApplication appKey="crm"><CRMRevenueIntelligence /></RequireApplication></RequireAuth> },
-      { path: 'apps/crm/financial-intelligence', element: <RequireAuth><RequireApplication appKey="crm"><FinancialIntelligence /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/reporting', element: <RequireAuth><RequireApplication appKey="crm"><CRMReporting /></RequireApplication></RequireAuth> },
+      // FinHub - Financial Operations Hub
+      { path: 'apps/finhub', element: <RequireAuth><RequireApplication appKey="finhub"><FinHub /></RequireApplication></RequireAuth> },
+      { path: 'apps/finhub/financial-intelligence', element: <RequireAuth><RequireApplication appKey="finhub"><FinancialIntelligence /></RequireApplication></RequireAuth> },
+      { path: 'apps/finhub/revenue-intelligence', element: <RequireAuth><RequireApplication appKey="finhub"><CRMRevenueIntelligence /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/reporting/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMReportingPrint /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/integrations', element: <RequireAuth><RequireApplication appKey="crm"><RequireAdmin><CRMIntegrations /></RequireAdmin></RequireApplication></RequireAuth> },
       { path: 'apps/crm/products', element: <RequireAuth><RequireApplication appKey="crm"><CRMProducts /></RequireApplication></RequireAuth> },

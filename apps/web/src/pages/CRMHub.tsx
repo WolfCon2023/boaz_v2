@@ -53,11 +53,6 @@ export default function CRMHub() {
     { label: 'Deals', desc: 'Pipeline and opportunities', href: '/apps/crm/deals' },
     { label: 'Documents', desc: 'File attachments, version control, and permissions', href: '/apps/crm/documents' },
     {
-      label: 'Financial Intelligence',
-      desc: 'GAAP-compliant accounting, journal entries, financial statements, and KPIs',
-      href: '/apps/crm/financial-intelligence',
-    },
-    {
       label: 'Contracts & SLAs',
       desc: 'Customer contracts, entitlements, and SLA targets',
       href: '/apps/crm/slas',
@@ -83,11 +78,6 @@ export default function CRMHub() {
       label: 'Renewals & Subscriptions',
       desc: 'Renewal pipeline, health, churn risk, upsell, MRR/ARR',
       href: '/apps/crm/renewals',
-    },
-    {
-      label: 'Revenue Intelligence',
-      desc: 'AI-powered deal scoring, pipeline forecasting, and rep performance analytics',
-      href: '/apps/crm/revenue-intelligence',
     },
     {
       label: 'Reporting',

@@ -826,6 +826,454 @@ Click any customer to open their success dashboard:
 - **Escalation paths**: Clear process for urgent issues
 - **Continuous improvement**: Learn from churned customers to prevent future churn`,
     },
+    {
+        title: 'Financial Intelligence: Complete Guide to GAAP-Compliant Accounting in BOAZ-OS',
+        tags: ['crm', 'financial', 'accounting', 'gaap', 'journal-entries', 'financial-statements', 'kpi', 'expenses', 'chart-of-accounts'],
+        category: 'Financial Management',
+        body: `# Financial Intelligence – GAAP-Compliant Accounting & Financial Statements
+
+## Overview
+The **Financial Intelligence** module provides a comprehensive, GAAP-compliant double-entry accounting system integrated directly into BOAZ-OS. It automates financial record-keeping from your CRM transactions and delivers real-time financial statements, KPIs, and AI-powered insights.
+
+## Key Features
+- **Chart of Accounts (COA)**: Full asset, liability, equity, revenue, and expense account structure
+- **Double-Entry Journal Entries**: Immutable audit trail with automatic balancing validation
+- **Accounting Periods**: Fiscal year management with period open/close/lock workflow
+- **Auto-Posting**: Automatic journal entry creation from invoices, payments, time entries, and renewals
+- **Financial Statements**: Trial Balance, Income Statement (P&L), Balance Sheet, and Cash Flow Statement
+- **Expense Tracking**: Full accounts payable workflow with approval and payment processing
+- **Financial KPIs**: Real-time profitability ratios, liquidity metrics, and efficiency indicators
+- **AI Insights**: Automated analysis with trend detection and forecasting
+
+---
+
+## Getting Started
+
+### Step 1: Seed the Chart of Accounts
+1. Navigate to **CRM Hub → Financial Intelligence**
+2. On the Dashboard, click **"Seed Default Chart of Accounts"**
+3. This creates 50+ standard accounts organized by type:
+   - **Assets** (1000-1999): Cash, AR, Inventory, Fixed Assets
+   - **Liabilities** (2000-2999): AP, Accrued Expenses, Loans
+   - **Equity** (3000-3999): Retained Earnings, Owner's Equity
+   - **Revenue** (4000-4999): Services Revenue, Product Sales
+   - **Expenses** (5000-6999): COGS, Operating Expenses
+
+### Step 2: Generate Accounting Periods
+1. Go to the **Periods** tab
+2. Click **"+ Generate Fiscal Year"**
+3. Select the fiscal year (current year recommended)
+4. Click **"Generate"** to create 12 monthly periods
+5. All periods start as **Open** status
+
+### Step 3: Auto-Post Existing Transactions
+1. Return to the **Dashboard** tab
+2. In the **Auto-Post Transactions** panel, click each button:
+   - **Post Invoices**: Creates AR/Revenue journal entries
+   - **Post Payments**: Creates Cash/AR journal entries
+   - **Post Time Entries**: Creates Labor Cost journal entries
+   - **Post Renewals**: Creates AR/Deferred Revenue entries
+3. Review the **Recent Journal Entries** section to verify postings
+
+---
+
+## Chart of Accounts (COA)
+
+### Account Types
+| Type | Normal Balance | Number Range | Description |
+|------|---------------|--------------|-------------|
+| Asset | Debit | 1000-1999 | Resources owned by the business |
+| Liability | Credit | 2000-2999 | Amounts owed to others |
+| Equity | Credit | 3000-3999 | Owner's stake in the business |
+| Revenue | Credit | 4000-4999 | Income from business operations |
+| Expense | Debit | 5000-6999 | Costs of business operations |
+
+### Account Sub-Types
+**Assets:**
+- Current Asset (Cash, AR, Prepaid)
+- Fixed Asset (Equipment, Vehicles)
+- Other Asset (Deposits, Intangibles)
+
+**Liabilities:**
+- Current Liability (AP, Accrued Expenses)
+- Long-term Liability (Loans, Notes Payable)
+
+**Equity:**
+- Owner's Equity
+- Retained Earnings
+
+**Revenue:**
+- Operating Revenue (Services, Products)
+- Other Income (Interest, Gains)
+
+**Expenses:**
+- COGS (Cost of Goods Sold)
+- Operating Expense (Rent, Salaries, Marketing)
+- Other Expense (Interest, Depreciation)
+
+### Managing Accounts
+**Creating a new account:**
+1. Go to **Chart of Accounts** tab
+2. Click **"+ New Account"**
+3. Enter:
+   - **Account Number**: Must be unique (e.g., 1150)
+   - **Name**: Descriptive name (e.g., "Petty Cash")
+   - **Type**: Asset, Liability, Equity, Revenue, or Expense
+   - **Sub-Type**: Category within the type
+   - **Description**: Optional details
+   - **Tax Code**: Optional tax reporting code
+4. Click **"Create Account"**
+
+**Deactivating accounts:**
+- Click the **status toggle** on any account row
+- Inactive accounts won't appear in selection dropdowns
+- Existing entries using the account remain valid
+
+---
+
+## Journal Entries
+
+### Understanding Double-Entry Accounting
+Every transaction affects at least two accounts:
+- **Debits** increase asset and expense accounts
+- **Credits** increase liability, equity, and revenue accounts
+- **Total Debits must equal Total Credits** (balanced entry)
+
+### Creating a Manual Journal Entry
+1. Go to **Journal Entries** tab
+2. Click **"+ New Entry"**
+3. Enter:
+   - **Date**: Transaction date
+   - **Description**: What this entry represents
+4. Add journal lines:
+   - Select **Account** from dropdown
+   - Enter **Debit** or **Credit** amount (not both)
+   - Add optional **Line Description**
+5. The **Balance Indicator** shows:
+   - 🟢 Green "Balanced" = Ready to post
+   - 🔴 Red "Unbalanced" = Fix before posting
+6. Click **"Post Entry"**
+
+### Common Entry Examples
+**Recording a sale (Invoice):**
+| Account | Debit | Credit |
+|---------|-------|--------|
+| 1100 Accounts Receivable | $1,000 | |
+| 4000 Services Revenue | | $1,000 |
+
+**Recording a payment received:**
+| Account | Debit | Credit |
+|---------|-------|--------|
+| 1000 Cash | $1,000 | |
+| 1100 Accounts Receivable | | $1,000 |
+
+**Recording an expense:**
+| Account | Debit | Credit |
+|---------|-------|--------|
+| 6100 Office Supplies | $200 | |
+| 2000 Accounts Payable | | $200 |
+
+### Reversing Entries
+If you need to correct a posted entry:
+1. Find the entry in the Journal Entries list
+2. Click **"Reverse"** in the Actions column
+3. A new entry is created with debits and credits swapped
+4. Both entries reference each other for audit trail
+
+---
+
+## Accounting Periods
+
+### Period States
+| Status | Description | Actions Allowed |
+|--------|-------------|-----------------|
+| **Open** | Active period | Post entries, create transactions |
+| **Closed** | Soft close | View only, can be reopened |
+| **Locked** | Hard close | Permanent, cannot be changed |
+
+### Managing Periods
+**Closing a period:**
+1. Go to **Periods** tab
+2. Find the period to close
+3. Click **"Close Period"**
+4. All entries in this period become read-only
+5. Trial Balance should be balanced before closing
+
+**Reopening a period:**
+1. Find the closed period
+2. Click **"Reopen Period"**
+3. Period returns to Open status
+4. Only available for Closed (not Locked) periods
+
+### Period Close Checklist
+Before closing a period:
+- ✅ All transactions entered and posted
+- ✅ Trial Balance is balanced (Debits = Credits)
+- ✅ Bank reconciliation complete
+- ✅ All expenses recorded
+- ✅ Revenue properly recognized
+- ✅ Management review complete
+
+---
+
+## Financial Statements
+
+### Trial Balance
+The Trial Balance shows all account balances at a point in time.
+
+**How to read it:**
+- **Debit Column**: Sum of all debit-normal accounts
+- **Credit Column**: Sum of all credit-normal accounts
+- **Balanced**: Debits = Credits (shown in green)
+- **Unbalanced**: Difference shown in red (indicates error)
+
+**Drill-down feature:**
+- Click any **account name** to see all journal entries affecting that account
+- View transaction history with running balance
+- Identify specific entries causing issues
+
+### Income Statement (P&L)
+Shows profitability over a period.
+
+**Sections:**
+1. **Revenue**: All income from operations
+2. **Cost of Goods Sold (COGS)**: Direct costs
+3. **Gross Profit**: Revenue - COGS
+4. **Operating Expenses**: Indirect costs
+5. **Net Income**: Bottom-line profit/loss
+
+**Key metrics:**
+- **Gross Margin %**: (Gross Profit / Revenue) × 100
+- **Net Margin %**: (Net Income / Revenue) × 100
+
+### Balance Sheet
+Shows financial position at a point in time.
+
+**Equation:** Assets = Liabilities + Equity
+
+**Sections:**
+1. **Assets**
+   - Current Assets (Cash, AR, Inventory)
+   - Fixed Assets (Equipment, less Depreciation)
+   - Other Assets (Intangibles, Deposits)
+2. **Liabilities**
+   - Current Liabilities (AP, Accrued)
+   - Long-term Liabilities (Loans)
+3. **Equity**
+   - Owner's Equity
+   - Retained Earnings
+   - Current Period Net Income
+
+### Cash Flow Statement
+Shows cash movements over a period (Indirect Method).
+
+**Sections:**
+1. **Operating Activities**
+   - Start with Net Income
+   - Add back non-cash expenses (Depreciation)
+   - Adjust for working capital changes (AR, AP, Inventory)
+2. **Investing Activities**
+   - Purchase/sale of fixed assets
+   - Long-term investments
+3. **Financing Activities**
+   - Loan proceeds/payments
+   - Owner contributions/distributions
+
+**Net Change in Cash** = Operating + Investing + Financing
+
+---
+
+## Expense Management
+
+### Expense Workflow
+1. **Draft**: Initial entry, not yet submitted
+2. **Pending Approval**: Submitted for review
+3. **Approved**: Manager approved, ready to pay
+4. **Paid**: Payment processed, JE created
+5. **Void**: Canceled (creates reversing entry if paid)
+
+### Creating an Expense
+1. Go to **Expenses** tab
+2. Click **"+ New Expense"**
+3. Enter:
+   - **Vendor Name**: Who you're paying
+   - **Date**: Expense date
+   - **Due Date**: Payment due date
+   - **Category**: Type of expense
+   - **Payment Method**: Check, CC, ACH, Cash
+4. Add expense lines:
+   - Select **Expense Account**
+   - Enter **Amount**
+   - Add optional **Description**
+5. Review **Subtotal** and **Total**
+6. Click **"Create Expense"**
+
+### Processing Expenses
+**Approving:**
+- Find pending expense
+- Review details and amounts
+- Click **"Approve"**
+
+**Marking as Paid:**
+- Find approved expense
+- Click **"Mark Paid"**
+- Journal entry automatically created:
+  - DR: Expense Account(s)
+  - CR: Cash/Bank Account
+
+**Voiding:**
+- Click **"Void"** on any expense
+- If already paid, a reversing JE is created
+- Expense status becomes "Void"
+
+---
+
+## Financial KPIs & Analytics
+
+### Profitability Metrics
+| KPI | Formula | Good Target |
+|-----|---------|-------------|
+| **Gross Margin** | (Revenue - COGS) / Revenue | > 50% |
+| **Operating Margin** | (Gross Profit - OpEx) / Revenue | > 20% |
+| **Net Margin** | Net Income / Revenue | > 15% |
+
+### Liquidity Ratios
+| KPI | Formula | Good Target |
+|-----|---------|-------------|
+| **Current Ratio** | Current Assets / Current Liabilities | > 2.0 |
+| **Quick Ratio** | (Current Assets - Inventory) / Current Liabilities | > 1.5 |
+
+### Efficiency Metrics
+| KPI | Formula | Good Target |
+|-----|---------|-------------|
+| **DSO** | Accounts Receivable / (Revenue / 365) | < 30 days |
+| **Debt-to-Equity** | Total Liabilities / Total Equity | < 1.0 |
+
+### AI Insights
+The system automatically generates insights including:
+- **Margin Analysis**: Alerts when margins fall below thresholds
+- **Liquidity Warnings**: Flags potential cash flow issues
+- **Collection Efficiency**: Identifies slow-paying patterns
+- **Trend Detection**: Highlights revenue/expense trends
+- **Revenue Forecasting**: Predicts future revenue based on historical patterns
+
+---
+
+## Auto-Posting Rules
+
+### Invoice Auto-Posting
+When an invoice is created:
+| Account | Debit | Credit |
+|---------|-------|--------|
+| 1100 Accounts Receivable | Invoice Total | |
+| 4000 Services Revenue | | Invoice Total |
+
+### Payment Auto-Posting
+When a payment is received:
+| Account | Debit | Credit |
+|---------|-------|--------|
+| 1000 Cash/Bank | Payment Amount | |
+| 1100 Accounts Receivable | | Payment Amount |
+
+### Time Entry Auto-Posting
+When time is logged:
+| Account | Debit | Credit |
+|---------|-------|--------|
+| 5000 Labor - COGS (or 6000 Labor - OpEx) | Hours × Rate | |
+| 2300 Accrued Wages | | Hours × Rate |
+
+### Renewal Auto-Posting
+When a renewal is created:
+| Account | Debit | Credit |
+|---------|-------|--------|
+| 1100 Accounts Receivable | Renewal Amount | |
+| 2400 Deferred Revenue | | Renewal Amount |
+
+---
+
+## Best Practices
+
+### Daily Tasks
+- ✅ Review Dashboard KPIs
+- ✅ Check for pending expense approvals
+- ✅ Verify auto-posted transactions
+- ✅ Address any AI insights/warnings
+
+### Weekly Tasks
+- ✅ Review Trial Balance for accuracy
+- ✅ Process pending expenses
+- ✅ Reconcile cash accounts
+- ✅ Review aged receivables
+
+### Monthly Tasks
+- ✅ Complete all transaction entry
+- ✅ Run and review financial statements
+- ✅ Analyze KPI trends
+- ✅ Close the accounting period
+
+### Year-End Tasks
+- ✅ Complete all monthly closes
+- ✅ Generate annual financial statements
+- ✅ Lock prior year periods
+- ✅ Generate new fiscal year periods
+- ✅ Review and adjust Chart of Accounts
+
+---
+
+## Troubleshooting
+
+### Trial Balance Not Balanced
+1. Check for recent manual entries with errors
+2. Use drill-down to find discrepancies
+3. Look for entries posted to wrong period
+4. Verify all auto-posted transactions completed
+
+### Missing Journal Entries
+1. Verify source transaction exists (invoice, payment, etc.)
+2. Check if auto-posting has been run
+3. Confirm accounting period is Open
+4. Review entry filters (may be hidden by status filter)
+
+### Incorrect Account Balances
+1. Use drill-down to see all entries
+2. Check for reversed or voided entries
+3. Verify entries posted to correct accounts
+4. Look for duplicate postings
+
+### Period Won't Close
+1. Ensure Trial Balance is balanced
+2. Check for draft journal entries
+3. Verify all pending expenses are processed
+4. Review for any locked sub-periods
+
+---
+
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| **Chart of Accounts** | Master list of all accounts used in the general ledger |
+| **Double-Entry** | Accounting method where every transaction affects two or more accounts |
+| **Debit** | Left side of an entry; increases assets and expenses |
+| **Credit** | Right side of an entry; increases liabilities, equity, and revenue |
+| **Journal Entry** | Record of a single transaction with balanced debits and credits |
+| **General Ledger** | Collection of all journal entries organized by account |
+| **Trial Balance** | List of all account balances to verify debits equal credits |
+| **GAAP** | Generally Accepted Accounting Principles |
+| **Fiscal Year** | 12-month accounting period (may differ from calendar year) |
+| **Period Close** | Process of finalizing an accounting period |
+| **Accrual Basis** | Recording revenue when earned and expenses when incurred |
+| **Reconciliation** | Process of verifying account balances against external records |
+| **Audit Trail** | Chronological record of all transactions and changes |
+
+---
+
+## Related Articles
+- Revenue Intelligence: AI-Powered Deal Analytics
+- Invoices: Billing and Payment Processing
+- Projects & Delivery: Time Tracking and Labor Costs
+- Renewals & Subscriptions: Recurring Revenue Management`,
+    },
 ];
 async function main() {
     const db = await getDb();

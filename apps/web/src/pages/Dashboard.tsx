@@ -280,7 +280,7 @@ export default function Dashboard() {
           </Link>
 
           {/* Revenue Intelligence */}
-          <Link to="/apps/crm/revenue-intelligence" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
+          <Link to="/apps/finhub/revenue-intelligence" className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 hover:bg-[color:var(--color-muted)] transition-colors">
             <div className="flex items-center gap-3 text-[color:var(--color-text-muted)]">
               <TrendingUp className="h-5 w-5" /> 
               Revenue Intel

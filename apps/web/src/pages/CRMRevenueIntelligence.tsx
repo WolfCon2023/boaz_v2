@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { CRMNav } from '@/components/CRMNav'
+import { FinNav } from '@/components/FinNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { formatDateOnly } from '@/lib/dateFormat'
@@ -407,6 +407,7 @@ export default function CRMRevenueIntelligence() {
     },
   })
 
+  // Check if user is admin for certain admin-only features
   const rolesQ = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
     queryKey: ['user', 'roles'],
     queryFn: async () => {
@@ -420,26 +421,8 @@ export default function CRMRevenueIntelligence() {
   })
 
   const isAdmin = !!rolesQ.data?.isAdmin || (rolesQ.data?.roles ?? []).some((r) => (r.permissions ?? []).includes('*'))
-
-  // Only admins, managers, and users with financial/revenue permissions can access
-  const hasRevenueAccess = React.useMemo(() => {
-    if (!rolesQ.data) return false
-    if (rolesQ.data.isAdmin) return true
-    const roles = rolesQ.data.roles || []
-    // Check for admin or manager roles
-    const hasManagerRole = roles.some((r) => 
-      r.name === 'admin' || 
-      r.name.includes('manager') || 
-      r.name === 'finance' ||
-      r.name === 'accounting' ||
-      r.name === 'sales'
-    )
-    // Check for revenue/financial permissions
-    const hasRevenuePermission = roles.some((r) =>
-      r.permissions?.some((p) => p.startsWith('financial.') || p.startsWith('revenue.') || p === '*')
-    )
-    return hasManagerRole || hasRevenuePermission
-  }, [rolesQ.data])
+  // Note: Access to FinHub (including this page) is controlled by RequireApplication appKey="finhub" in routes.tsx
+  // isAdmin is only used for specific admin-only features like backfill and settings buttons
 
   const backfillMutation = useMutation({
     mutationFn: async () => {
@@ -839,47 +822,9 @@ export default function CRMRevenueIntelligence() {
     return 'text-gray-400 bg-gray-500/10 border-gray-500/50'
   }
 
-  // Show loading state while checking permissions
-  if (rolesQ.isLoading) {
-    return (
-      <div className="space-y-6">
-        <CRMNav />
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[color:var(--color-primary-600)] mx-auto"></div>
-            <p className="mt-4 text-sm text-[color:var(--color-text-muted)]">Checking access permissions...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Show access denied if user doesn't have permission
-  if (!hasRevenueAccess) {
-    return (
-      <div className="space-y-6">
-        <CRMNav />
-        <div className="mx-auto max-w-7xl p-4 md:p-6">
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8">
-            <div className="flex flex-col items-center text-center">
-              <div className="text-4xl mb-4">🔒</div>
-              <h1 className="text-2xl font-bold text-red-400">Access Restricted</h1>
-              <p className="mt-4 text-sm text-[color:var(--color-text-muted)]" style={{ maxWidth: '480px' }}>
-                Revenue Intelligence contains sensitive financial data including deal values, pipeline forecasts, and rep performance metrics. Only administrators and managers have access to this module.
-              </p>
-              <p className="mt-4 text-xs text-[color:var(--color-text-muted)]">
-                If you believe you should have access, please contact your system administrator.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
-      <CRMNav />
+      <FinNav />
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-1">
         <div>

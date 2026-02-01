@@ -7,6 +7,7 @@ export type AppCatalogItem = {
 
 export const catalog: AppCatalogItem[] = [
   { key: 'crm', name: 'CRM', description: 'Contacts, deals, pipelines', href: '/apps/crm' },
+  { key: 'finhub', name: 'FinHub', description: 'Financial Intelligence, Revenue Intelligence, and financial operations', href: '/apps/finhub' },
   { key: 'scheduler', name: 'Scheduler', description: 'Calendar and bookings', href: '/apps/scheduler' },
   { key: 'calendar', name: 'Calendar', description: 'Calendar views and meetings', href: '/apps/calendar' },
   { key: 'helpdesk', name: 'Helpdesk', description: 'Tickets and SLAs', href: '/apps/helpdesk' },
