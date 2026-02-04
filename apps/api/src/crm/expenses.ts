@@ -584,6 +584,10 @@ expensesRouter.post('/', async (req: any, res) => {
     const expenseNumber = await getNextExpenseNumber(db)
     const now = new Date()
 
+    // Get creator details
+    const creator = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    const creatorData = creator as any
+
     const doc: ExpenseDoc = {
       _id: new ObjectId(),
       expenseNumber,
@@ -599,6 +603,8 @@ expensesRouter.post('/', async (req: any, res) => {
       status: 'draft',
       notes: notes || undefined,
       createdBy: auth.userId,
+      createdByEmail: creatorData?.email,
+      createdByName: creatorData?.name,
       createdAt: now,
       updatedAt: now,
     }

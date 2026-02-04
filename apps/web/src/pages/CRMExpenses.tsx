@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
@@ -500,6 +501,20 @@ export default function CRMExpenses() {
             <option value="paid">Paid</option>
             <option value="void">Void</option>
           </select>
+          {isAdmin && (
+            <Link
+              to="/apps/crm/expenses/approval-queue"
+              className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20"
+            >
+              Approval Queue
+            </Link>
+          )}
+          <Link
+            to="/apps/crm/expenses/audit"
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-[11px] font-medium hover:bg-[color:var(--color-muted)]"
+          >
+            Expense Audit
+          </Link>
           <button
             type="button"
             className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)]"

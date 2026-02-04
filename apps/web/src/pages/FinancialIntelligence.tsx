@@ -840,33 +840,65 @@ export default function FinancialIntelligence() {
                         </div>
                       )}
                     </div>
-                    <div className="h-40 flex items-end gap-2">
+                    {/* Summary totals */}
+                    <div className="mb-4 grid grid-cols-3 gap-4 text-center">
+                      <div className="rounded-lg bg-emerald-500/10 p-2">
+                        <div className="text-[10px] text-emerald-400">Total Revenue</div>
+                        <div className="text-sm font-semibold text-emerald-400">
+                          {formatCurrency(kpis.trend.reduce((sum, t) => sum + t.revenue, 0))}
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-red-500/10 p-2">
+                        <div className="text-[10px] text-red-400">Total Expenses</div>
+                        <div className="text-sm font-semibold text-red-400">
+                          {formatCurrency(kpis.trend.reduce((sum, t) => sum + t.expenses, 0))}
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-blue-500/10 p-2">
+                        <div className="text-[10px] text-blue-400">Net Income</div>
+                        <div className="text-sm font-semibold text-blue-400">
+                          {formatCurrency(kpis.trend.reduce((sum, t) => sum + t.revenue - t.expenses, 0))}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Bar chart with values */}
+                    <div className="space-y-1">
                       {kpis.trend.map((t, idx) => {
                         const maxVal = Math.max(...kpis.trend.map(d => Math.max(d.revenue, d.expenses)), 1)
-                        const revPct = Math.round((t.revenue / maxVal) * 100)
-                        const expPct = Math.round((t.expenses / maxVal) * 100)
+                        const revPct = Math.max(Math.round((t.revenue / maxVal) * 100), t.revenue > 0 ? 5 : 0)
+                        const expPct = Math.max(Math.round((t.expenses / maxVal) * 100), t.expenses > 0 ? 5 : 0)
                         return (
-                          <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-                            <div className="w-full flex gap-1 h-32">
-                              <div
-                                className="flex-1 bg-emerald-600 rounded-t transition-all"
-                                style={{ height: `${revPct}%` }}
-                                title={`Revenue: ${formatCurrency(t.revenue)}`}
-                              />
-                              <div
-                                className="flex-1 bg-red-600 rounded-t transition-all"
-                                style={{ height: `${expPct}%` }}
-                                title={`Expenses: ${formatCurrency(t.expenses)}`}
-                              />
+                          <div key={idx} className="grid grid-cols-[60px_1fr_80px] gap-2 items-center text-xs">
+                            <div className="text-[color:var(--color-text-muted)] text-right">{t.period.slice(-5)}</div>
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="h-4 bg-emerald-600 rounded transition-all flex items-center justify-end pr-1"
+                                  style={{ width: `${revPct}%`, minWidth: t.revenue > 0 ? '20px' : '0' }}
+                                >
+                                  {t.revenue > 0 && <span className="text-[9px] text-white font-medium">{formatCurrency(t.revenue)}</span>}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="h-4 bg-red-600 rounded transition-all flex items-center justify-end pr-1"
+                                  style={{ width: `${expPct}%`, minWidth: t.expenses > 0 ? '20px' : '0' }}
+                                >
+                                  {t.expenses > 0 && <span className="text-[9px] text-white font-medium">{formatCurrency(t.expenses)}</span>}
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-[8px] text-[color:var(--color-text-muted)]">{t.period.slice(-5)}</div>
+                            <div className={`text-right font-mono ${t.revenue - t.expenses >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {formatCurrency(t.revenue - t.expenses)}
+                            </div>
                           </div>
                         )
                       })}
                     </div>
-                    <div className="mt-2 flex gap-4 justify-center text-[10px]">
+                    <div className="mt-3 flex gap-4 justify-center text-[10px] border-t border-[color:var(--color-border)] pt-3">
                       <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-600"></span> Revenue</span>
                       <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-600"></span> Expenses</span>
+                      <span className="flex items-center gap-1 text-[color:var(--color-text-muted)]">Net = Revenue - Expenses</span>
                     </div>
                   </div>
                 )}
