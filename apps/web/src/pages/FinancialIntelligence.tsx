@@ -478,16 +478,6 @@ export default function FinancialIntelligence() {
     setExpensePage(1)
   }, [expenseStatusFilter])
 
-  // Legacy FI expenses query (kept for backwards compatibility)
-  const expensesQ = useQuery<{ data: { items: Expense[]; total: number } }>({
-    queryKey: ['fi-expenses'],
-    queryFn: async () => {
-      const res = await http.get('/api/financial/expenses', { params: { limit: 100 } })
-      return res.data
-    },
-    enabled: false, // Disabled - using CRM expenses now
-  })
-
   const expenseCategoriesQ = useQuery<{ data: { categories: string[] } }>({
     queryKey: ['fi-expense-categories'],
     queryFn: async () => {
