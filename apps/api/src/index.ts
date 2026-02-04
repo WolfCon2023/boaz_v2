@@ -4,6 +4,7 @@ import { env } from './env.js'
 // Local health response to avoid depending on workspace packages during deployment
 const createHealthResponse = (service: string = 'api') => ({ ok: true, service, timestamp: Date.now() })
 import { authRouter } from './auth/routes.js'
+import { ensureDefaultRoles } from './auth/rbac.js'
 import { crmRouter } from './crm/routes.js'
 import { accountsRouter } from './crm/accounts.js'
 import { dealsRouter } from './crm/deals.js'
@@ -200,9 +201,13 @@ app.get('/api/metrics/summary', requireAuth, async (req, res) => {
   }
 })
 
-app.listen(env.PORT, () => {
+app.listen(env.PORT, async () => {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${env.PORT}`)
+  
+  // Ensure default roles exist (including any new roles added)
+  await ensureDefaultRoles()
+  
   startReportingSnapshotsJob()
   startRevenueIntelligenceSnapshotsJob()
   startSchedulerRemindersJob()
