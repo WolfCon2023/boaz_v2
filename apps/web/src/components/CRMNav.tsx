@@ -23,6 +23,9 @@ export function CRMNav() {
 
   const isAdmin = rolesData?.roles?.some(r => r.name === 'admin') || rolesData?.isAdmin || false
   const isManager = rolesData?.roles?.some(r => r.name === 'manager') || isAdmin || false
+  const isSeniorManager = rolesData?.roles?.some(r => r.name === 'senior_manager') || isAdmin || false
+  const isFinanceManager = rolesData?.roles?.some(r => r.name === 'finance_manager') || isAdmin || false
+  const canApproveExpenses = isManager || isSeniorManager || isFinanceManager
 
   return (
     <div className="flex flex-wrap items-center gap-2 p-4">
@@ -60,9 +63,11 @@ export function CRMNav() {
         <>
           <NavLink to="/apps/crm/quotes/approval-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Approval Queue</NavLink>
           <NavLink to="/apps/crm/deals/approval-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Deal Approval Queue</NavLink>
-          <NavLink to="/apps/crm/expenses/approval-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Expense Approval Queue</NavLink>
           <NavLink to="/apps/crm/quotes/acceptance-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Acceptance Queue</NavLink>
         </>
+      )}
+      {canApproveExpenses && (
+        <NavLink to="/apps/crm/expenses/approval-queue" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Expense Approval Queue</NavLink>
       )}
       <NavLink to="/apps/crm/support/tickets" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Tickets</NavLink>
     </div>
