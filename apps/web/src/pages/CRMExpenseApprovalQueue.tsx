@@ -4,7 +4,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
-import { CheckCircle, XCircle, Clock, FileText, DollarSign } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, DollarSign } from 'lucide-react'
 
 type ExpenseApprovalItem = {
   _id: string
