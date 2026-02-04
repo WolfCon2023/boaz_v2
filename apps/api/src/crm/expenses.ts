@@ -538,24 +538,24 @@ expensesRouter.get('/', async (req: any, res) => {
   })
 
   // Build visibility filter based on role
-  // Finance Managers, IT Managers, Admins, and users with admin permissions can see all expenses
-  // Managers/Senior Managers can see: own expenses + expenses they approve + expenses from direct reports + legacy expenses (no createdBy)
+  // Finance Managers and Admins can see all expenses
+  // Managers/Senior Managers/IT Managers can see: own expenses + expenses they approve + expenses from direct reports + legacy expenses
   // Staff (everyone else) can only see their own expenses
   const filter: Record<string, unknown> = {}
 
-  // Admins, Finance Managers, IT Managers, and users with admin permissions see all expenses
-  const canSeeAll = hasAdminPermission || isFinanceManager || isITManager
+  // Admins and Finance Managers see all expenses
+  const canSeeAll = hasAdminPermission || isFinanceManager
   
   if (!canSeeAll && userId) {
-    if (isManager || isSeniorManager) {
-      // Get users who report to this manager
+    if (isManager || isSeniorManager || isITManager) {
+      // Get users who report to this manager/IT manager
       const directReports = await db.collection('users')
         .find({ reportsTo: userId })
         .project({ _id: 1 })
         .toArray()
       const directReportIds = directReports.map((u: any) => u._id.toString())
 
-      // Manager/Senior Manager visibility: own expenses, expenses they approve, direct reports' expenses, legacy expenses
+      // Manager/Senior Manager/IT Manager visibility: own expenses, expenses they approve, direct reports' expenses, legacy expenses
       const orConditions: any[] = [
         { createdBy: userId }, // Their own expenses
         { createdBy: { $exists: false } }, // Legacy expenses without createdBy
@@ -984,18 +984,18 @@ expensesRouter.get('/summary', async (req: any, res) => {
 
   // Build visibility filter based on role (same logic as expense list)
   const visibilityFilter: Record<string, unknown> = {}
-  const canSeeAll = hasAdminPermission || isFinanceManager || isITManager
+  const canSeeAll = hasAdminPermission || isFinanceManager
   
   if (!canSeeAll && userId) {
-    if (isManager || isSeniorManager) {
-      // Get users who report to this manager
+    if (isManager || isSeniorManager || isITManager) {
+      // Get users who report to this manager/IT manager
       const directReports = await db.collection('users')
         .find({ reportsTo: userId })
         .project({ _id: 1 })
         .toArray()
       const directReportIds = directReports.map((u: any) => u._id.toString())
 
-      // Manager/Senior Manager visibility
+      // Manager/Senior Manager/IT Manager visibility
       const orConditions: any[] = [
         { createdBy: userId },
         { createdBy: { $exists: false } },
