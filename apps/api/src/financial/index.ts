@@ -1630,9 +1630,9 @@ financialRouter.post('/auto-post/invoices', requirePermission('financial.auto_po
 
   const auth = req.auth as { userId: string; email: string }
   
-  // Get all invoices
+  // Get all invoices (statuses: draft, open, paid, void, uncollectible)
   const invoices = await db.collection('invoices').find({
-    status: { $in: ['draft', 'sent', 'paid', 'partial'] },
+    status: { $in: ['draft', 'open', 'sent', 'paid', 'partial'] },
     total: { $gt: 0 },
   }).toArray()
 
