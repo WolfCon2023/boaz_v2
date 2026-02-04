@@ -26,6 +26,18 @@ type ExpenseLine = {
   projectId?: string
 }
 
+type ApprovalHistoryEntry = {
+  action: string
+  userId: string
+  userEmail?: string
+  userName?: string
+  timestamp: string
+  notes?: string
+  changedFields?: string[]
+  previousStatus?: string
+  roleName?: string
+}
+
 type ExpenseAttachment = {
   id: string
   fileName: string
@@ -71,6 +83,7 @@ type Expense = {
   voidReason?: string
   journalEntryId?: string
   attachments?: ExpenseAttachment[]
+  approvalHistory?: ApprovalHistoryEntry[]
   notes?: string
   createdAt: string
   updatedAt: string
@@ -1432,6 +1445,66 @@ export default function CRMExpenses() {
                 <h3 className="mb-2 text-sm font-medium">Notes</h3>
                 <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-sm">
                   {viewingExpense.notes}
+                </div>
+              </div>
+            )}
+
+            {/* Audit History / Activity Log */}
+            {viewingExpense.approvalHistory && viewingExpense.approvalHistory.length > 0 && (
+              <div className="mb-6">
+                <h3 className="mb-2 text-sm font-medium">Audit History</h3>
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] overflow-hidden">
+                  <div className="max-h-[300px] overflow-y-auto">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-[color:var(--color-muted)] sticky top-0">
+                        <tr className="text-[10px] uppercase text-[color:var(--color-text-muted)]">
+                          <th className="px-3 py-2 text-left">Date/Time</th>
+                          <th className="px-3 py-2 text-left">Action</th>
+                          <th className="px-3 py-2 text-left">By</th>
+                          <th className="px-3 py-2 text-left">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...viewingExpense.approvalHistory].reverse().map((entry, idx) => {
+                          const getActionDisplay = (action: string) => {
+                            switch (action) {
+                              case 'created': return { label: 'Created', color: 'text-blue-400' }
+                              case 'edited': return { label: 'Edited', color: 'text-amber-400' }
+                              case 'submitted': return { label: 'Submitted', color: 'text-purple-400' }
+                              case 'resubmitted': return { label: 'Resubmitted', color: 'text-purple-400' }
+                              case 'level_approved': return { label: 'Approved', color: 'text-emerald-400' }
+                              case 'approved': return { label: 'Final Approved', color: 'text-emerald-400' }
+                              case 'rejected': return { label: 'Rejected', color: 'text-red-400' }
+                              case 'paid': return { label: 'Paid', color: 'text-green-400' }
+                              case 'voided': return { label: 'Voided', color: 'text-gray-400' }
+                              case 'attachment_added': return { label: 'Attachment Added', color: 'text-cyan-400' }
+                              case 'attachment_removed': return { label: 'Attachment Removed', color: 'text-orange-400' }
+                              case 'withdrawn': return { label: 'Withdrawn', color: 'text-gray-400' }
+                              default: return { label: action, color: 'text-[color:var(--color-text)]' }
+                            }
+                          }
+                          const actionInfo = getActionDisplay(entry.action)
+                          return (
+                            <tr key={idx} className="border-t border-[color:var(--color-border)]">
+                              <td className="px-3 py-2 text-[color:var(--color-text-muted)] whitespace-nowrap">
+                                {new Date(entry.timestamp).toLocaleString()}
+                              </td>
+                              <td className={`px-3 py-2 font-medium ${actionInfo.color}`}>
+                                {actionInfo.label}
+                                {entry.roleName && <span className="ml-1 text-[color:var(--color-text-muted)]">({entry.roleName})</span>}
+                              </td>
+                              <td className="px-3 py-2">
+                                {entry.userName || entry.userEmail || 'System'}
+                              </td>
+                              <td className="px-3 py-2 text-[color:var(--color-text-muted)] max-w-[200px] truncate" title={entry.notes || entry.changedFields?.join(', ') || ''}>
+                                {entry.notes || (entry.changedFields && entry.changedFields.length > 0 ? `Changed: ${entry.changedFields.join(', ')}` : '—')}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}

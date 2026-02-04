@@ -1914,6 +1914,23 @@ expensesRouter.post('/:id/pay', requirePermission('*'), async (req: any, res) =>
     }
   }
 
+  // Get payer info for history
+  let payerData: any = null
+  try {
+    const payer = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    payerData = payer
+  } catch {}
+
+  // Create history entry for audit trail
+  const historyEntry: ApprovalHistoryEntry = {
+    action: 'paid',
+    userId: auth.userId,
+    userEmail: payerData?.email || auth.email,
+    userName: payerData?.name,
+    timestamp: now,
+    notes: journalEntryId ? `Posted to GL as journal entry ${journalEntryId}` : 'Marked as paid (no GL posting)',
+  }
+
   // Update expense as paid
   await db.collection('crm_expenses').updateOne(
     { _id: id },
@@ -1925,6 +1942,9 @@ expensesRouter.post('/:id/pay', requirePermission('*'), async (req: any, res) =>
         journalEntryId,
         updatedAt: now,
       },
+      $push: {
+        approvalHistory: historyEntry,
+      } as any,
     }
   )
 
@@ -1960,6 +1980,24 @@ expensesRouter.post('/:id/void', requirePermission('*'), async (req: any, res) =
   }
 
   const now = new Date()
+
+  // Get voider info for history
+  let voiderData: any = null
+  try {
+    const voider = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    voiderData = voider
+  } catch {}
+
+  // Create history entry for audit trail
+  const historyEntry: ApprovalHistoryEntry = {
+    action: 'voided',
+    userId: auth.userId,
+    userEmail: voiderData?.email || auth.email,
+    userName: voiderData?.name,
+    timestamp: now,
+    notes: reason || 'No reason provided',
+  }
+
   await db.collection('crm_expenses').updateOne(
     { _id: id },
     {
@@ -1970,6 +2008,9 @@ expensesRouter.post('/:id/void', requirePermission('*'), async (req: any, res) =
         voidReason: reason || null,
         updatedAt: now,
       },
+      $push: {
+        approvalHistory: historyEntry,
+      } as any,
     }
   )
 
