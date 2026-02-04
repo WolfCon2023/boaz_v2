@@ -232,8 +232,6 @@ export default function CRMExpenses() {
   const [selectedSeniorManagerApproverId, setSelectedSeniorManagerApproverId] = React.useState<string>('')
   const [selectedFinanceManagerApproverId, setSelectedFinanceManagerApproverId] = React.useState<string>('')
   
-  // Legacy compatibility
-  const [selectedApproverId, setSelectedApproverId] = React.useState<string>('')
 
   // Mutations
   const saveExpense = useMutation({
@@ -311,7 +309,6 @@ export default function CRMExpenses() {
       setSelectedManagerApproverId('')
       setSelectedSeniorManagerApproverId('')
       setSelectedFinanceManagerApproverId('')
-      setSelectedApproverId('')
       toast.showToast('Expense submitted for approval.', 'success')
     },
     onError: (err: any) => {
@@ -335,7 +332,6 @@ export default function CRMExpenses() {
     setSelectedManagerApproverId(managers.length > 0 ? managers[0].id : '')
     setSelectedSeniorManagerApproverId(seniorManagers.length > 0 ? seniorManagers[0].id : '')
     setSelectedFinanceManagerApproverId(financeManagers.length > 0 ? financeManagers[0].id : '')
-    setSelectedApproverId('')
     setSubmitDialogOpen(true)
   }
 
@@ -1066,7 +1062,6 @@ export default function CRMExpenses() {
                   setSelectedManagerApproverId('')
                   setSelectedSeniorManagerApproverId('')
                   setSelectedFinanceManagerApproverId('')
-                  setSelectedApproverId('')
                 }}
                 className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
               >

@@ -91,22 +91,6 @@ function isPendingStatus(status: ExpenseStatus): boolean {
   ].includes(status)
 }
 
-// Get human-readable label for status
-function getStatusLabel(status: ExpenseStatus): string {
-  const labels: Record<ExpenseStatus, string> = {
-    draft: 'Draft',
-    pending_manager_approval: 'Manager Review',
-    pending_senior_approval: 'Sr. Manager Review',
-    pending_finance_approval: 'Finance Review',
-    pending_approval: 'Pending Approval',
-    approved: 'Approved',
-    rejected: 'Rejected',
-    paid: 'Paid',
-    void: 'Void',
-  }
-  return labels[status] || status
-}
-
 export default function CRMExpenseApprovalQueue() {
   const qc = useQueryClient()
   const toast = useToast()
