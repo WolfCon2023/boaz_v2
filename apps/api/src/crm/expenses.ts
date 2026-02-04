@@ -403,28 +403,53 @@ expensesRouter.get('/', async (req: any, res) => {
   const userId = req.user?.id
   const isAdmin = req.user?.isAdmin === true
 
-  // Determine user roles
+  // Determine user roles - check both user_roles collection and any role permissions
   let userRoleNames: string[] = []
+  let hasAdminPermission = isAdmin
+  
   if (userId) {
     const [userRoles, allRoles] = await Promise.all([
       db.collection('user_roles').find({ userId }).toArray(),
       db.collection('roles').find({}).toArray(),
     ])
     const roleIdToName = new Map(allRoles.map((r: any) => [r._id.toString(), r.name]))
-    userRoleNames = userRoles.map((ur: any) => roleIdToName.get(ur.roleId.toString())).filter(Boolean) as string[]
+    const roleIdToPermissions = new Map(allRoles.map((r: any) => [r._id.toString(), r.permissions || []]))
+    
+    for (const ur of userRoles) {
+      const roleName = roleIdToName.get(ur.roleId.toString())
+      if (roleName) userRoleNames.push(roleName)
+      
+      // Check if this role has admin permissions
+      const perms = roleIdToPermissions.get(ur.roleId.toString()) || []
+      if (perms.includes('*')) hasAdminPermission = true
+    }
   }
 
   const isFinanceManager = userRoleNames.includes('finance_manager')
   const isSeniorManager = userRoleNames.includes('senior_manager')
   const isManager = userRoleNames.includes('manager')
+  
+  // Log for debugging (can be removed later)
+  console.log('[Expenses] User visibility check:', { 
+    userId, 
+    isAdmin, 
+    hasAdminPermission, 
+    userRoleNames, 
+    isFinanceManager, 
+    isSeniorManager, 
+    isManager 
+  })
 
   // Build visibility filter based on role
-  // Finance Managers and Admins can see all expenses
+  // Finance Managers, Admins, and users with admin permissions can see all expenses
   // Managers/Senior Managers can see: own expenses + expenses they approve + expenses from direct reports + legacy expenses (no createdBy)
   // Staff (everyone else) can only see their own expenses
   const filter: Record<string, unknown> = {}
 
-  if (!isAdmin && !isFinanceManager) {
+  // Admins, Finance Managers, and users with admin permissions see all expenses
+  const canSeeAll = hasAdminPermission || isFinanceManager
+  
+  if (!canSeeAll && userId) {
     if (isManager || isSeniorManager) {
       // Get users who report to this manager
       const directReports = await db.collection('users')
@@ -438,6 +463,7 @@ expensesRouter.get('/', async (req: any, res) => {
         { createdBy: userId }, // Their own expenses
         { createdBy: { $exists: false } }, // Legacy expenses without createdBy
         { createdBy: null }, // Legacy expenses with null createdBy
+        { createdBy: '' }, // Legacy expenses with empty createdBy
         { managerApproverId: userId }, // Expenses where they are manager approver
         { seniorManagerApproverId: userId }, // Expenses where they are senior manager approver
         { submittedBy: userId }, // Expenses submitted by them (legacy field)
@@ -448,17 +474,19 @@ expensesRouter.get('/', async (req: any, res) => {
       }
 
       filter.$or = orConditions
-    } else {
+    } else if (userId) {
       // Staff: only their own expenses OR legacy expenses they submitted
+      // Also include legacy expenses without createdBy field for backwards compatibility
       filter.$or = [
         { createdBy: userId },
         { submittedBy: userId }, // Legacy field
-        // For staff, also show expenses without createdBy if they're a small organization
-        // This ensures historical data is not hidden
+        { createdBy: { $exists: false } }, // Legacy expenses
+        { createdBy: null },
+        { createdBy: '' },
       ]
     }
   }
-  // Finance Managers and Admins: no visibility filter (see all)
+  // If canSeeAll is true OR userId is not set, no visibility filter is applied (see all expenses)
   
   if (q) {
     const searchOr = [
