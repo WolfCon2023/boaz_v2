@@ -163,6 +163,13 @@ export function requirePermission(permission: string) {
     if (!auth) return res.status(401).json({ error: 'Unauthorized' })
     const db = await getDb()
     if (!db) return res.status(500).json({ error: 'db_unavailable' })
+    
+    // Check if user has isAdmin flag (legacy admin check)
+    const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    if ((user as any)?.isAdmin === true) {
+      return next() // isAdmin users have all permissions
+    }
+    
     // load user's roles
     const joins = await db.collection<UserRoleDoc>('user_roles').find({ userId: auth.userId } as any).toArray()
     const roleIds = joins.map((j) => j.roleId)
