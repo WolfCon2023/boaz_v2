@@ -582,41 +582,6 @@ export default function FinancialIntelligence() {
     },
   })
 
-  // Legacy FI expense mutations - kept for backwards compatibility but not used in CRM expenses view
-  const _approveExpenseMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await http.post(`/api/financial/expenses/${id}/approve`)
-      return res.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fi-expenses'] })
-    },
-  })
-
-  const _payExpenseMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await http.post(`/api/financial/expenses/${id}/pay`)
-      return res.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fi-expenses'] })
-      queryClient.invalidateQueries({ queryKey: ['fi-journal'] })
-      queryClient.invalidateQueries({ queryKey: ['fi-trial-balance'] })
-      queryClient.invalidateQueries({ queryKey: ['fi-income-statement'] })
-      queryClient.invalidateQueries({ queryKey: ['fi-balance-sheet'] })
-    },
-  })
-
-  const _voidExpenseMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await http.post(`/api/financial/expenses/${id}/void`)
-      return res.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['fi-expenses'] })
-    },
-  })
-
   const createAccountMutation = useMutation({
     mutationFn: async (data: typeof newAccount) => {
       const res = await http.post('/api/financial/chart-of-accounts', data)
@@ -719,7 +684,6 @@ export default function FinancialIntelligence() {
   const cashFlow = cashFlowQ.data?.data
   const drillDown = drillDownQ.data?.data
   const kpis = kpisQ.data?.data
-  const _expenses = expensesQ.data?.data?.items || [] // Legacy FI expenses - not used, using CRM expenses now
   const expenseCategories = expenseCategoriesQ.data?.data?.categories || []
   
   // CRM Expenses data for FI view
