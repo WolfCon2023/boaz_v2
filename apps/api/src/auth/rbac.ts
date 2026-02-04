@@ -119,32 +119,31 @@ export async function ensureDefaultRoles() {
         console.log('[rbac] Added missing roles:', missingRoles.map(r => r.name).join(', '), '- Insert result:', result.insertedCount, 'inserted')
       }
     }
+    // Ensure indexes for user_roles collection (for performance)
+    try {
+      await db.collection<UserRoleDoc>('user_roles').createIndex({ userId: 1 }).catch(() => {
+        // Index might already exist
+      })
+      await db.collection<UserRoleDoc>('user_roles').createIndex({ roleId: 1 }).catch(() => {
+        // Index might already exist
+      })
+      await db.collection<UserRoleDoc>('user_roles').createIndex({ userId: 1, roleId: 1 }, { unique: true }).catch(() => {
+        // Index might already exist - ensures one role assignment per user
+      })
+    } catch (err) {
+      console.warn('Warning: Could not ensure user_roles indexes:', err)
+    }
+    
+    // Ensure index for roles collection
+    try {
+      await db.collection<RoleDoc>('roles').createIndex({ name: 1 }, { unique: true }).catch(() => {
+        // Index might already exist
+      })
+    } catch (err) {
+      console.warn('Warning: Could not ensure roles index:', err)
+    }
   } catch (err) {
     console.error('[rbac] ensureDefaultRoles ERROR:', err)
-  }
-  
-  // Ensure indexes for user_roles collection (for performance)
-  try {
-    await db.collection<UserRoleDoc>('user_roles').createIndex({ userId: 1 }).catch(() => {
-      // Index might already exist
-    })
-    await db.collection<UserRoleDoc>('user_roles').createIndex({ roleId: 1 }).catch(() => {
-      // Index might already exist
-    })
-    await db.collection<UserRoleDoc>('user_roles').createIndex({ userId: 1, roleId: 1 }, { unique: true }).catch(() => {
-      // Index might already exist - ensures one role assignment per user
-    })
-  } catch (err) {
-    console.warn('Warning: Could not ensure user_roles indexes:', err)
-  }
-  
-  // Ensure index for roles collection
-  try {
-    await db.collection<RoleDoc>('roles').createIndex({ name: 1 }, { unique: true }).catch(() => {
-      // Index might already exist
-    })
-  } catch (err) {
-    console.warn('Warning: Could not ensure roles index:', err)
   }
 }
 
