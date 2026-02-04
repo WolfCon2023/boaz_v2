@@ -128,6 +128,10 @@ export default function CRMExpenses() {
   const [statusFilter, setStatusFilter] = React.useState<ExpenseStatus | 'all'>('all')
   const [dateRange] = React.useState<{ start: string; end: string }>({ start: '', end: '' })
 
+  // Pagination
+  const [page, setPage] = React.useState(1)
+  const pageSize = 25
+
   // Edit modal state
   const [editing, setEditing] = React.useState<Expense | null>(null)
   const [isCreating, setIsCreating] = React.useState(false)
@@ -154,11 +158,14 @@ export default function CRMExpenses() {
   })
   const isAdmin = !!rolesQ.data?.isAdmin || (rolesQ.data?.roles ?? []).some((r) => (r.permissions ?? []).includes('*'))
 
-  // Fetch expenses
+  // Fetch expenses with pagination
   const expensesQ = useQuery({
-    queryKey: ['crm-expenses', q, statusFilter, dateRange],
+    queryKey: ['crm-expenses', q, statusFilter, dateRange, page],
     queryFn: async () => {
-      const params: any = { limit: 200 }
+      const params: any = { 
+        limit: pageSize,
+        skip: (page - 1) * pageSize,
+      }
       if (q.trim()) params.q = q.trim()
       if (statusFilter !== 'all') params.status = statusFilter
       if (dateRange.start) params.startDate = dateRange.start
@@ -168,6 +175,13 @@ export default function CRMExpenses() {
     },
   })
   const expenses = expensesQ.data?.data.items ?? []
+  const totalExpenses = expensesQ.data?.data.total ?? 0
+  const totalPages = Math.ceil(totalExpenses / pageSize)
+
+  // Reset to page 1 when filters change
+  React.useEffect(() => {
+    setPage(1)
+  }, [q, statusFilter, dateRange])
 
   // Fetch categories
   const categoriesQ = useQuery({
@@ -691,7 +705,12 @@ export default function CRMExpenses() {
       {/* Expenses Table */}
       <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
         <div className="mb-3 flex items-center justify-between gap-2 text-xs text-[color:var(--color-text-muted)]">
-          <span>{expenses.length} expenses</span>
+          <span>
+            {totalExpenses > pageSize 
+              ? `Showing ${expenses.length} of ${totalExpenses} expenses`
+              : `${totalExpenses} expenses`
+            }
+          </span>
           {expensesQ.isFetching && <span>Loading…</span>}
         </div>
 
@@ -822,6 +841,46 @@ export default function CRMExpenses() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-4 flex items-center justify-between border-t border-[color:var(--color-border)] pt-3">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Page {page} of {totalPages} ({totalExpenses} total)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(1)}
+                disabled={page === 1}
+                className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+              >
+                First
+              </button>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <span className="px-2 text-xs">{page}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+              >
+                Next
+              </button>
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={page === totalPages}
+                className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+              >
+                Last
+              </button>
+            </div>
           </div>
         )}
       </section>
