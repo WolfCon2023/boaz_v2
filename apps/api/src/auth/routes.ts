@@ -40,7 +40,7 @@ import {
 } from './store.js'
 import { hasEmailNotificationsEnabled } from './preferences-helper.js'
 import { signToken, verifyToken, signAccessToken, signRefreshToken, verifyAny } from './jwt.js'
-import { requireAuth, requirePermission } from './rbac.js'
+import { requireAuth, requirePermission, ensureDefaultRoles } from './rbac.js'
 import { randomUUID } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import bcrypt from 'bcryptjs'
@@ -893,6 +893,9 @@ authRouter.get('/admin/roles', requireAuth, requirePermission('*'), async (req, 
   try {
     const db = await getDb()
     if (!db) return res.status(500).json({ error: 'Database unavailable' })
+    
+    // Ensure all default roles exist (adds any missing roles like senior_manager, finance_manager)
+    await ensureDefaultRoles()
     
     const roles = await db.collection('roles').find({}).sort({ name: 1 }).toArray()
     res.json({ roles: roles.map(r => ({ id: r._id.toString(), name: r.name, permissions: r.permissions || [] })) })
