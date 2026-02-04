@@ -35,12 +35,27 @@ const uploadDir = env.UPLOAD_DIR
   ? path.join(env.UPLOAD_DIR, 'expense_receipts') 
   : path.join(process.cwd(), 'uploads', 'expense_receipts')
 
+// Log the upload directory configuration
+console.log('[expenses] Upload directory config:', {
+  UPLOAD_DIR: env.UPLOAD_DIR || '(not set - using default)',
+  resolvedPath: uploadDir,
+  usingPersistentStorage: !!env.UPLOAD_DIR,
+})
+
 try {
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true })
+    console.log('[expenses] Created upload directory:', uploadDir)
+  } else {
+    console.log('[expenses] Upload directory exists:', uploadDir)
+    // List existing files for debugging
+    try {
+      const files = fs.readdirSync(uploadDir)
+      console.log('[expenses] Existing files in upload directory:', files.length, 'files')
+    } catch {}
   }
 } catch (err) {
-  console.error('Failed to create expense receipts upload directory:', err)
+  console.error('[expenses] Failed to create expense receipts upload directory:', err)
 }
 
 // Configure multer for expense attachments
