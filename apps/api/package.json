@@ -12,6 +12,7 @@
     "fix:invoice-quote-numbers": "tsx scripts/fix-duplicate-invoice-quote-numbers.ts",
     "seed": "tsx scripts/seed.ts",
     "seed:roles": "tsx src/scripts/add_it_roles.ts",
+    "seed:expense-approval-roles": "tsx src/scripts/add_expense_approval_roles.ts",
     "seed:roles-kb": "tsx src/scripts/seed_roles_kb.ts",
     "kb:reporting": "tsx src/scripts/update_kb_reporting.ts",
     "assign-admin": "tsx src/scripts/assign-admin-role.ts",

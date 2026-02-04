@@ -42,6 +42,30 @@ export async function getDb(): Promise<Db | null> {
     
     db = client.db(dbName)
     console.log('Database instance created for:', db.databaseName)
+    
+    // Auto-seed missing expense approval roles on first connection
+    try {
+      const rolesCollection = db.collection('roles')
+      const seniorManagerExists = await rolesCollection.findOne({ name: 'senior_manager' })
+      if (!seniorManagerExists) {
+        await rolesCollection.insertOne({
+          name: 'senior_manager',
+          permissions: ['users.read', 'users.write', 'roles.read', 'expenses.approve_level1', 'expenses.approve_level2'],
+        } as any)
+        console.log('[db] Auto-seeded senior_manager role')
+      }
+      const financeManagerExists = await rolesCollection.findOne({ name: 'finance_manager' })
+      if (!financeManagerExists) {
+        await rolesCollection.insertOne({
+          name: 'finance_manager',
+          permissions: ['users.read', 'users.write', 'roles.read', 'expenses.approve_level1', 'expenses.approve_level2', 'expenses.approve_level3', 'expenses.final_approve'],
+        } as any)
+        console.log('[db] Auto-seeded finance_manager role')
+      }
+    } catch (seedErr) {
+      console.warn('[db] Warning: Could not auto-seed roles:', seedErr)
+    }
+    
     return db
   } catch (e: any) {
     console.error('MongoDB connection error:', e)
