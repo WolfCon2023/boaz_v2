@@ -1031,101 +1031,104 @@ export default function CRMDeals() {
             Add deal
           </button>
         </form>
-        <table className="w-full text-sm">
-          <thead className="text-left text-[color:var(--color-text-muted)]">
-            <tr>
-              <th className="px-4 py-2">
-                <input type="checkbox" checked={allPageSelected} onChange={(e) => {
-                  const next = new Set(selectedIds)
-                  if (e.target.checked) items.forEach((d) => next.add(d._id))
-                  else items.forEach((d) => next.delete(d._id))
-                  setSelectedIds(next)
-                }} />
-              </th>
-              {cols.filter((c) => c.visible).map((col) => (
-                <th
-                  key={col.key}
-                  draggable
-                  onDragStart={() => handleDragStart(col.key)}
-                  onDragOver={handleDragOver}
-                  onDrop={() => handleDrop(col.key)}
-                  className={`px-4 py-2 cursor-move ${draggedCol === col.key ? 'opacity-50' : ''}`}
-                  title="Drag to reorder"
-                >{col.label}</th>
-              ))}
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageItems.map((d) => (
-              <tr key={d._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
-                <td className="px-4 py-2">
-                  <input type="checkbox" checked={selectedIds.has(d._id)} onChange={(e) => {
+        {/* Horizontal scroll wrapper to prevent Actions column overflow */}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1000px] text-sm">
+            <thead className="text-left text-[color:var(--color-text-muted)]">
+              <tr>
+                <th className="px-4 py-2">
+                  <input type="checkbox" checked={allPageSelected} onChange={(e) => {
                     const next = new Set(selectedIds)
-                    if (e.target.checked) next.add(d._id); else next.delete(d._id)
+                    if (e.target.checked) items.forEach((d) => next.add(d._id))
+                    else items.forEach((d) => next.delete(d._id))
                     setSelectedIds(next)
                   }} />
-                </td>
+                </th>
                 {cols.filter((c) => c.visible).map((col) => (
-                  <td key={col.key} className="px-4 py-2">
-                    {inlineEditId === d._id ? (
-                      col.key === 'title' ? (
-                        <input value={inlineTitle} onChange={(e) => setInlineTitle(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'amount' ? (
-                        <input type="number" value={inlineAmount} onChange={(e) => setInlineAmount(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
-                      ) : col.key === 'stage' ? (
-                        <select value={inlineStage} onChange={(e) => setInlineStage(e.target.value)} className="w-full rounded border bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)]">
-                          <option>Draft / Deal Created</option>
-                          <option>Submitted for Review</option>
-                          <option>Initial Validation</option>
-                          <option>Manager Approval</option>
-                          <option>Finance Approval</option>
-                          <option>Legal Review</option>
-                          <option>Executive Approval</option>
-                          <option>Approved / Ready for Signature</option>
-                          <option>Contract Signed / Closed Won</option>
-                          <option>Rejected / Returned for Revision</option>
-                        </select>
-                      ) : col.key === 'closeDate' ? (
-                        <input type="date" value={inlineCloseDate} onChange={(e) => setInlineCloseDate(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                  <th
+                    key={col.key}
+                    draggable
+                    onDragStart={() => handleDragStart(col.key)}
+                    onDragOver={handleDragOver}
+                    onDrop={() => handleDrop(col.key)}
+                    className={`px-4 py-2 cursor-move ${draggedCol === col.key ? 'opacity-50' : ''}`}
+                    title="Drag to reorder"
+                  >{col.label}</th>
+                ))}
+                <th className="px-4 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.map((d) => (
+                <tr key={d._id} className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]">
+                  <td className="px-4 py-2">
+                    <input type="checkbox" checked={selectedIds.has(d._id)} onChange={(e) => {
+                      const next = new Set(selectedIds)
+                      if (e.target.checked) next.add(d._id); else next.delete(d._id)
+                      setSelectedIds(next)
+                    }} />
+                  </td>
+                  {cols.filter((c) => c.visible).map((col) => (
+                    <td key={col.key} className="px-4 py-2">
+                      {inlineEditId === d._id ? (
+                        col.key === 'title' ? (
+                          <input value={inlineTitle} onChange={(e) => setInlineTitle(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                        ) : col.key === 'amount' ? (
+                          <input type="number" value={inlineAmount} onChange={(e) => setInlineAmount(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                        ) : col.key === 'stage' ? (
+                          <select value={inlineStage} onChange={(e) => setInlineStage(e.target.value)} className="w-full rounded border bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)]">
+                            <option>Draft / Deal Created</option>
+                            <option>Submitted for Review</option>
+                            <option>Initial Validation</option>
+                            <option>Manager Approval</option>
+                            <option>Finance Approval</option>
+                            <option>Legal Review</option>
+                            <option>Executive Approval</option>
+                            <option>Approved / Ready for Signature</option>
+                            <option>Contract Signed / Closed Won</option>
+                            <option>Rejected / Returned for Revision</option>
+                          </select>
+                        ) : col.key === 'closeDate' ? (
+                          <input type="date" value={inlineCloseDate} onChange={(e) => setInlineCloseDate(e.target.value)} className="w-full rounded border bg-transparent px-2 py-1 text-sm" />
+                        ) : (
+                          getColValue(d, col.key)
+                        )
                       ) : (
                         getColValue(d, col.key)
-                      )
+                      )}
+                    </td>
+                  ))}
+                  <td className="px-4 py-2 whitespace-nowrap">
+                    {inlineEditId === d._id ? (
+                      <div className="flex items-center gap-2">
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
+                      </div>
                     ) : (
-                      getColValue(d, col.key)
+                      <div className="flex items-center gap-2">
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(d)}>Edit</button>
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => {
+                          // Validate deal ID before opening
+                          const dealId = d._id
+                          if (!dealId || typeof dealId !== 'string') {
+                            toast.showToast('Invalid deal: missing ID', 'error')
+                            return
+                          }
+                          // Ensure ID is exactly 24 hex characters (valid MongoDB ObjectId)
+                          if (!/^[0-9a-fA-F]{24}$/.test(dealId)) {
+                            toast.showToast(`Invalid deal ID format: "${dealId}" (${dealId.length} chars, expected 24). This deal may be corrupted.`, 'error')
+                            return
+                          }
+                          setEditing(d)
+                        }}>Open</button>
+                      </div>
                     )}
                   </td>
-                ))}
-                <td className="px-4 py-2 whitespace-nowrap">
-                  {inlineEditId === d._id ? (
-                    <div className="flex items-center gap-2">
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(d)}>Edit</button>
-                      <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => {
-                        // Validate deal ID before opening
-                        const dealId = d._id
-                        if (!dealId || typeof dealId !== 'string') {
-                          toast.showToast('Invalid deal: missing ID', 'error')
-                          return
-                        }
-                        // Ensure ID is exactly 24 hex characters (valid MongoDB ObjectId)
-                        if (!/^[0-9a-fA-F]{24}$/.test(dealId)) {
-                          toast.showToast(`Invalid deal ID format: "${dealId}" (${dealId.length} chars, expected 24). This deal may be corrupted.`, 'error')
-                          return
-                        }
-                        setEditing(d)
-                      }}>Open</button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="flex items-center justify-between p-4 text-sm">
           <div className="flex items-center gap-2">
             <span>Rows: {total}</span>
