@@ -12,6 +12,7 @@ import {
   type PaymentMethod 
 } from '../lib/payment-providers.js'
 import { dispatchCrmEvent } from './integrations_core.js'
+import { postInvoiceCreated, postPaymentReceived } from '../financial/auto_posting.js'
 
 type Payment = { amount: number; method: string; paidAt: Date }
 type Refund = { amount: number; reason: string; refundedAt: Date }
@@ -395,6 +396,31 @@ invoicesRouter.post('/', async (req, res) => {
     )
   }
   
+  // Auto-post invoice to Financial Intelligence
+  try {
+    let customerName = 'Unknown Customer'
+    if (doc.accountId) {
+      const account = await db.collection('crm_accounts').findOne({ _id: doc.accountId })
+      if (account) customerName = (account as any).name || customerName
+    }
+    
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    await postInvoiceCreated(
+      db,
+      String(result.insertedId),
+      doc.invoiceNumber || 'N/A',
+      total,
+      issuedAt,
+      customerName,
+      auth?.userId,
+      auth?.email
+    )
+    console.log(`[invoices] Auto-posted invoice ${result.insertedId}`)
+  } catch (autoPostErr) {
+    console.warn('[invoices] Auto-post invoice failed:', autoPostErr)
+    // Don't fail the invoice creation if auto-posting fails
+  }
+  
   res.status(201).json({ data: { _id: result.insertedId, ...doc }, error: null })
 })
 
@@ -633,6 +659,35 @@ invoicesRouter.post('/:id/payments', async (req, res) => {
       newBalance,
       { amount, method, paidAt }
     )
+    
+    // Auto-post payment to Financial Intelligence
+    try {
+      // Get invoice details for customer name
+      const fullInv = await db.collection('invoices').findOne({ _id })
+      let customerName = 'Unknown Customer'
+      if (fullInv && (fullInv as any).accountId) {
+        const account = await db.collection('crm_accounts').findOne({ _id: (fullInv as any).accountId })
+        if (account) customerName = (account as any).name || customerName
+      }
+      
+      const paymentId = `${_id}_pay_${paidAt.getTime()}`
+      await postPaymentReceived(
+        db,
+        paymentId,
+        String(_id),
+        (fullInv as any)?.invoiceNumber || 'N/A',
+        amount,
+        paidAt,
+        customerName,
+        method,
+        auth?.userId,
+        auth?.email
+      )
+      console.log(`[invoices] Auto-posted payment for invoice ${_id}`)
+    } catch (autoPostErr) {
+      console.warn('[invoices] Auto-post payment failed:', autoPostErr)
+      // Don't fail the payment if auto-posting fails
+    }
     
     res.json({ data: { ok: true }, error: null })
   } catch {
