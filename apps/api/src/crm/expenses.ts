@@ -1051,11 +1051,26 @@ expensesRouter.get('/summary', async (req: any, res) => {
     void: { count: 0, total: 0 },
   }
 
+  // Map multi-level approval statuses to the summary "pending_approval" bucket
+  const pendingStatuses = [
+    'pending_approval',           // Legacy
+    'pending_manager_approval',   // Level 1
+    'pending_senior_approval',    // Level 2
+    'pending_finance_approval',   // Level 3
+  ]
+
   for (const r of results) {
-    if (summary[r._id]) {
+    // Consolidate all pending statuses into pending_approval for summary display
+    if (pendingStatuses.includes(r._id)) {
+      summary.pending_approval.count += r.count
+      summary.pending_approval.total += r.total
+    } else if (summary[r._id]) {
       summary[r._id] = { count: r.count, total: Math.round(r.total * 100) / 100 }
     }
   }
+  
+  // Round the pending total
+  summary.pending_approval.total = Math.round(summary.pending_approval.total * 100) / 100
 
   // Category breakdown for paid expenses (also filtered by visibility)
   const categoryPipeline = [
