@@ -917,26 +917,39 @@ expensesRouter.get('/summary', async (req: any, res) => {
 // GET /api/crm/expenses/attachments/:filename - Serve attachment file
 // NOTE: This must be defined BEFORE /:id routes to prevent "attachments" matching as :id
 expensesRouter.get('/attachments/:filename', async (req, res) => {
-  const filename = req.params.filename
+  try {
+    const filename = req.params.filename
 
-  // Security: only allow alphanumeric, dash, underscore, and extension
-  if (!/^[\w-]+\.\w+$/.test(filename)) {
-    return res.status(400).json({ data: null, error: 'invalid_filename' })
+    // Security: only allow alphanumeric, dash, underscore, and extension
+    if (!/^[\w-]+\.\w+$/.test(filename)) {
+      return res.status(400).json({ data: null, error: 'invalid_filename' })
+    }
+
+    const filePath = path.resolve(uploadDir, filename)
+
+    // Security: ensure resolved path is within upload directory
+    const resolvedUploadDir = path.resolve(uploadDir)
+    if (!filePath.startsWith(resolvedUploadDir)) {
+      return res.status(403).json({ data: null, error: 'access_denied' })
+    }
+
+    // Log for debugging
+    console.log('[expenses] Serving attachment:', { filename, filePath, uploadDir, exists: fs.existsSync(filePath) })
+
+    if (!fs.existsSync(filePath)) {
+      // File not found - likely due to ephemeral storage on cloud platforms
+      return res.status(404).json({ 
+        data: null, 
+        error: 'file_not_found',
+        message: 'Attachment file not found. Files may be lost after server restart on cloud platforms with ephemeral storage.'
+      })
+    }
+
+    res.sendFile(filePath)
+  } catch (err: any) {
+    console.error('[expenses] Error serving attachment:', err)
+    res.status(500).json({ data: null, error: err.message || 'Failed to serve attachment' })
   }
-
-  const filePath = path.resolve(uploadDir, filename)
-
-  // Security: ensure resolved path is within upload directory
-  const resolvedUploadDir = path.resolve(uploadDir)
-  if (!filePath.startsWith(resolvedUploadDir)) {
-    return res.status(403).json({ data: null, error: 'access_denied' })
-  }
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ data: null, error: 'file_not_found' })
-  }
-
-  res.sendFile(filePath)
 })
 
 // GET /api/crm/expenses/:id - Get single expense
