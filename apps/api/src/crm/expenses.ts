@@ -106,7 +106,7 @@ type ExpenseLine = {
 
 // Approval history entry for audit trail
 type ApprovalHistoryEntry = {
-  action: 'submitted' | 'approved' | 'rejected' | 'withdrawn' | 'resubmitted' | 'level_approved'
+  action: 'submitted' | 'approved' | 'rejected' | 'withdrawn' | 'resubmitted' | 'level_approved' | 'edited' | 'attachment_added' | 'attachment_removed' | 'created' | 'paid' | 'voided'
   userId: string
   userEmail?: string
   userName?: string
@@ -115,6 +115,8 @@ type ApprovalHistoryEntry = {
   approverUserId?: string
   approvalLevel?: number  // 1=manager, 2=senior_manager, 3=finance_manager
   roleName?: string       // Role name of approver
+  changedFields?: string[] // Fields that were changed (for edits)
+  previousStatus?: string  // Status before the change
 }
 
 // Attachment metadata
@@ -1001,6 +1003,16 @@ expensesRouter.post('/', async (req: any, res) => {
     const creator = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
     const creatorData = creator as any
 
+    // Create initial history entry for audit trail
+    const createdHistoryEntry: ApprovalHistoryEntry = {
+      action: 'created',
+      userId: auth.userId,
+      userEmail: creatorData?.email,
+      userName: creatorData?.name,
+      timestamp: now,
+      notes: `Created expense #${expenseNumber} for $${(Math.round(total * 100) / 100).toFixed(2)}`,
+    }
+
     const doc: ExpenseDoc = {
       _id: new ObjectId(),
       expenseNumber,
@@ -1020,6 +1032,7 @@ expensesRouter.post('/', async (req: any, res) => {
       createdByName: creatorData?.name,
       createdAt: now,
       updatedAt: now,
+      approvalHistory: [createdHistoryEntry],
     }
 
     await db.collection('crm_expenses').insertOne(doc as any)
@@ -1035,10 +1048,13 @@ expensesRouter.post('/', async (req: any, res) => {
 })
 
 // PATCH /api/crm/expenses/:id - Update expense
+// All expenses can be edited - changes are tracked in audit history
 expensesRouter.patch('/:id', async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
+  const auth = req.auth
+  
   let id: ObjectId
   try {
     id = new ObjectId(req.params.id)
@@ -1049,28 +1065,54 @@ expensesRouter.patch('/:id', async (req: any, res) => {
   const expense = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
   if (!expense) return res.status(404).json({ data: null, error: 'not_found' })
 
-  // Can only edit draft or rejected expenses
-  if (!['draft', 'rejected'].includes(expense.status)) {
-    return res.status(400).json({ data: null, error: 'cannot_edit_submitted_expense' })
-  }
-
   const parsed = updateExpenseSchema.safeParse(req.body)
   if (!parsed.success) {
     return res.status(400).json({ data: null, error: parsed.error.flatten() })
   }
 
-  const updates: Record<string, unknown> = { updatedAt: new Date() }
+  const now = new Date()
+  const updates: Record<string, unknown> = { updatedAt: now }
+  const changedFields: string[] = []
 
-  if (parsed.data.date) updates.date = new Date(parsed.data.date)
-  if (parsed.data.vendorId !== undefined) {
-    updates.vendorId = parsed.data.vendorId ? new ObjectId(parsed.data.vendorId) : null
+  // Track what fields are changing for audit history
+  if (parsed.data.date) {
+    const newDate = new Date(parsed.data.date)
+    if (expense.date?.toISOString() !== newDate.toISOString()) {
+      updates.date = newDate
+      changedFields.push('date')
+    }
   }
-  if (parsed.data.vendorName !== undefined) updates.vendorName = parsed.data.vendorName || null
-  if (parsed.data.payee !== undefined) updates.payee = parsed.data.payee || null
-  if (parsed.data.description) updates.description = parsed.data.description
-  if (parsed.data.paymentMethod !== undefined) updates.paymentMethod = parsed.data.paymentMethod || null
-  if (parsed.data.referenceNumber !== undefined) updates.referenceNumber = parsed.data.referenceNumber || null
-  if (parsed.data.notes !== undefined) updates.notes = parsed.data.notes || null
+  if (parsed.data.vendorId !== undefined) {
+    const newVendorId = parsed.data.vendorId ? new ObjectId(parsed.data.vendorId) : null
+    if (expense.vendorId?.toString() !== newVendorId?.toString()) {
+      updates.vendorId = newVendorId
+      changedFields.push('vendorId')
+    }
+  }
+  if (parsed.data.vendorName !== undefined && expense.vendorName !== (parsed.data.vendorName || null)) {
+    updates.vendorName = parsed.data.vendorName || null
+    changedFields.push('vendorName')
+  }
+  if (parsed.data.payee !== undefined && expense.payee !== (parsed.data.payee || null)) {
+    updates.payee = parsed.data.payee || null
+    changedFields.push('payee')
+  }
+  if (parsed.data.description && expense.description !== parsed.data.description) {
+    updates.description = parsed.data.description
+    changedFields.push('description')
+  }
+  if (parsed.data.paymentMethod !== undefined && expense.paymentMethod !== (parsed.data.paymentMethod || null)) {
+    updates.paymentMethod = parsed.data.paymentMethod || null
+    changedFields.push('paymentMethod')
+  }
+  if (parsed.data.referenceNumber !== undefined && expense.referenceNumber !== (parsed.data.referenceNumber || null)) {
+    updates.referenceNumber = parsed.data.referenceNumber || null
+    changedFields.push('referenceNumber')
+  }
+  if (parsed.data.notes !== undefined && expense.notes !== (parsed.data.notes || null)) {
+    updates.notes = parsed.data.notes || null
+    changedFields.push('notes')
+  }
 
   if (parsed.data.lines) {
     const enrichedLines: ExpenseLine[] = parsed.data.lines.map((line) => {
@@ -1081,18 +1123,56 @@ expensesRouter.patch('/:id', async (req: any, res) => {
       }
     })
     updates.lines = enrichedLines
-    updates.total = Math.round(enrichedLines.reduce((sum, line) => sum + line.amount, 0) * 100) / 100
+    const newTotal = Math.round(enrichedLines.reduce((sum, line) => sum + line.amount, 0) * 100) / 100
+    if (expense.total !== newTotal) {
+      updates.total = newTotal
+      changedFields.push('total')
+    }
+    changedFields.push('lines')
   }
 
-  // If editing a rejected expense, reset to draft
-  if (expense.status === 'rejected') {
+  // If editing a rejected expense, optionally reset to draft
+  const previousStatus = expense.status
+  if (expense.status === 'rejected' && changedFields.length > 0) {
     updates.status = 'draft'
     updates.rejectedBy = null
     updates.rejectedAt = null
     updates.rejectionReason = null
+    changedFields.push('status (reset from rejected to draft)')
   }
 
-  await db.collection('crm_expenses').updateOne({ _id: id }, { $set: updates })
+  // Get editor info
+  let editorData: any = null
+  if (auth?.userId) {
+    try {
+      editorData = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+    } catch {}
+  }
+
+  // Create audit history entry if there were actual changes
+  if (changedFields.length > 0) {
+    const historyEntry: ApprovalHistoryEntry = {
+      action: 'edited',
+      userId: auth?.userId || 'unknown',
+      userEmail: editorData?.email || auth?.email,
+      userName: editorData?.name,
+      timestamp: now,
+      notes: `Modified fields: ${changedFields.join(', ')}`,
+      changedFields,
+      previousStatus,
+    }
+
+    await db.collection('crm_expenses').updateOne(
+      { _id: id },
+      {
+        $set: updates,
+        $push: { approvalHistory: historyEntry } as any,
+      }
+    )
+  } else {
+    // No actual changes, just update timestamp
+    await db.collection('crm_expenses').updateOne({ _id: id }, { $set: updates })
+  }
 
   const updated = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
   res.json({ data: updated ? serializeExpense(updated) : null, error: null })
