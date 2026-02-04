@@ -1157,14 +1157,21 @@ authRouter.get('/admin/potential-managers', requireAuth, requirePermission('*'),
     
     const managerUserIds = [...new Set(userRoles.map((ur: any) => ur.userId))]
 
-    // Get user details
-    const managers = managerUserIds.length > 0
+    // Get user details - convert string IDs to ObjectIds
+    const managerObjectIds: ObjectId[] = []
+    for (const id of managerUserIds) {
+      try {
+        managerObjectIds.push(new ObjectId(id))
+      } catch {
+        // Skip invalid IDs
+      }
+    }
+
+    const managers = managerObjectIds.length > 0
       ? await db.collection('users')
           .find({ 
             $or: [
-              { _id: { $in: managerUserIds.map((id: string) => {
-                try { return new ObjectId(id) } catch { return null }
-              }).filter(Boolean) } },
+              { _id: { $in: managerObjectIds } },
               // Also include users with isAdmin flag for legacy admin users
               { isAdmin: true }
             ],
