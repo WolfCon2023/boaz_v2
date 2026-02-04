@@ -249,34 +249,6 @@ type CRMExpense = {
   createdAt: string
 }
 
-// Legacy FI Expense types (for internal FI expenses if used)
-type ExpenseStatus = 'draft' | 'pending_approval' | 'approved' | 'paid' | 'void'
-
-type Expense = {
-  id: string
-  expenseNumber: number
-  vendorId: string | null
-  vendorName: string | null
-  date: string
-  dueDate: string | null
-  description: string
-  category: string
-  lines: Array<{
-    accountId: string
-    accountNumber?: string
-    accountName?: string
-    amount: number
-    description?: string
-  }>
-  subtotal: number
-  tax: number
-  total: number
-  status: ExpenseStatus
-  paymentMethod: string | null
-  journalEntryId: string | null
-  createdAt: string
-}
-
 type FinancialKPIs = {
   period: { startDate: string; endDate: string }
   profitability: {
