@@ -1,10 +1,17 @@
 /**
  * CRM Expenses Module
  * 
- * Manages business expenses with approval workflow and automatic posting
+ * Manages business expenses with multi-level approval workflow and automatic posting
  * to Financial Intelligence when expenses are paid.
  * 
- * Workflow: Draft -> Pending Approval -> Approved -> Paid
+ * Approval Workflow:
+ *   Draft -> Pending Manager Approval -> Pending Senior Manager Approval -> 
+ *   Pending Finance Approval -> Approved -> Paid
+ * 
+ * Approval Levels:
+ *   Level 1: Manager (first approver)
+ *   Level 2: Senior Manager (second approver)
+ *   Level 3: Finance Manager (final approver)
  * 
  * When paid, creates journal entry:
  *   DR: Expense Account(s)
@@ -63,7 +70,31 @@ const uploadExpenseAttachment = multer({
 
 expensesRouter.use(requireAuth)
 
-type ExpenseStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'paid' | 'void'
+// Approval level constants
+const APPROVAL_LEVELS = {
+  MANAGER: 1,
+  SENIOR_MANAGER: 2,
+  FINANCE_MANAGER: 3,
+} as const
+
+// Map role names to approval levels
+const ROLE_TO_APPROVAL_LEVEL: Record<string, number> = {
+  'manager': APPROVAL_LEVELS.MANAGER,
+  'senior_manager': APPROVAL_LEVELS.SENIOR_MANAGER,
+  'finance_manager': APPROVAL_LEVELS.FINANCE_MANAGER,
+}
+
+// Status values for multi-level approval workflow
+type ExpenseStatus = 
+  | 'draft' 
+  | 'pending_manager_approval'      // Level 1: Awaiting manager approval
+  | 'pending_senior_approval'       // Level 2: Awaiting senior manager approval
+  | 'pending_finance_approval'      // Level 3: Awaiting finance manager approval
+  | 'pending_approval'              // Legacy: kept for backward compatibility
+  | 'approved'                      // Fully approved by all levels
+  | 'rejected' 
+  | 'paid' 
+  | 'void'
 
 type ExpenseLine = {
   category: string
@@ -75,13 +106,15 @@ type ExpenseLine = {
 
 // Approval history entry for audit trail
 type ApprovalHistoryEntry = {
-  action: 'submitted' | 'approved' | 'rejected' | 'withdrawn' | 'resubmitted'
+  action: 'submitted' | 'approved' | 'rejected' | 'withdrawn' | 'resubmitted' | 'level_approved'
   userId: string
   userEmail?: string
   userName?: string
   timestamp: Date
   notes?: string
   approverUserId?: string
+  approvalLevel?: number  // 1=manager, 2=senior_manager, 3=finance_manager
+  roleName?: string       // Role name of approver
 }
 
 // Attachment metadata
@@ -109,28 +142,68 @@ type ExpenseDoc = {
   paymentMethod?: string // Cash, Check, Credit Card, ACH, etc.
   referenceNumber?: string // Check number, transaction ID, etc.
   status: ExpenseStatus
+  
+  // Current approval level tracking
+  currentApprovalLevel?: number // 1=manager, 2=senior_manager, 3=finance_manager
+  
+  // Submission info
   submittedBy?: string
   submittedByEmail?: string
   submittedByName?: string
   submittedAt?: Date
-  approverUserId?: string // Selected manager to approve
+  
+  // Level 1: Manager approval
+  managerApproverUserId?: string
+  managerApproverEmail?: string
+  managerApproverName?: string
+  managerApprovedBy?: string
+  managerApprovedByEmail?: string
+  managerApprovedByName?: string
+  managerApprovedAt?: Date
+  
+  // Level 2: Senior Manager approval
+  seniorManagerApproverUserId?: string
+  seniorManagerApproverEmail?: string
+  seniorManagerApproverName?: string
+  seniorManagerApprovedBy?: string
+  seniorManagerApprovedByEmail?: string
+  seniorManagerApprovedByName?: string
+  seniorManagerApprovedAt?: Date
+  
+  // Level 3: Finance Manager approval (final)
+  financeManagerApproverUserId?: string
+  financeManagerApproverEmail?: string
+  financeManagerApproverName?: string
+  financeManagerApprovedBy?: string
+  financeManagerApprovedByEmail?: string
+  financeManagerApprovedByName?: string
+  financeManagerApprovedAt?: Date
+  
+  // Legacy fields (kept for backward compatibility)
+  approverUserId?: string // Selected manager to approve (legacy)
   approverEmail?: string
   approverName?: string
   approvedBy?: string
   approvedByEmail?: string
   approvedByName?: string
-  approvedAt?: Date
+  approvedAt?: Date // Final approval timestamp
+  
+  // Rejection info
   rejectedBy?: string
   rejectedByEmail?: string
   rejectedByName?: string
   rejectedAt?: Date
   rejectionReason?: string
+  rejectedAtLevel?: number // Which approval level rejected
+  
+  // Payment info
   paidBy?: string
   paidAt?: Date
   voidedBy?: string
   voidedAt?: Date
   voidReason?: string
   journalEntryId?: string // Link to Financial Intelligence
+  
   attachments?: AttachmentDoc[]
   approvalHistory?: ApprovalHistoryEntry[]
   notes?: string
@@ -237,10 +310,42 @@ function serializeExpense(doc: ExpenseDoc) {
     paymentMethod: doc.paymentMethod,
     referenceNumber: doc.referenceNumber,
     status: doc.status,
+    currentApprovalLevel: doc.currentApprovalLevel,
+    
+    // Submission info
     submittedBy: doc.submittedBy,
     submittedByEmail: doc.submittedByEmail,
     submittedByName: doc.submittedByName,
     submittedAt: doc.submittedAt?.toISOString(),
+    
+    // Level 1: Manager approval
+    managerApproverUserId: doc.managerApproverUserId,
+    managerApproverEmail: doc.managerApproverEmail,
+    managerApproverName: doc.managerApproverName,
+    managerApprovedBy: doc.managerApprovedBy,
+    managerApprovedByEmail: doc.managerApprovedByEmail,
+    managerApprovedByName: doc.managerApprovedByName,
+    managerApprovedAt: doc.managerApprovedAt?.toISOString(),
+    
+    // Level 2: Senior Manager approval
+    seniorManagerApproverUserId: doc.seniorManagerApproverUserId,
+    seniorManagerApproverEmail: doc.seniorManagerApproverEmail,
+    seniorManagerApproverName: doc.seniorManagerApproverName,
+    seniorManagerApprovedBy: doc.seniorManagerApprovedBy,
+    seniorManagerApprovedByEmail: doc.seniorManagerApprovedByEmail,
+    seniorManagerApprovedByName: doc.seniorManagerApprovedByName,
+    seniorManagerApprovedAt: doc.seniorManagerApprovedAt?.toISOString(),
+    
+    // Level 3: Finance Manager approval (final)
+    financeManagerApproverUserId: doc.financeManagerApproverUserId,
+    financeManagerApproverEmail: doc.financeManagerApproverEmail,
+    financeManagerApproverName: doc.financeManagerApproverName,
+    financeManagerApprovedBy: doc.financeManagerApprovedBy,
+    financeManagerApprovedByEmail: doc.financeManagerApprovedByEmail,
+    financeManagerApprovedByName: doc.financeManagerApprovedByName,
+    financeManagerApprovedAt: doc.financeManagerApprovedAt?.toISOString(),
+    
+    // Legacy fields (for backward compatibility)
     approverUserId: doc.approverUserId,
     approverEmail: doc.approverEmail,
     approverName: doc.approverName,
@@ -248,17 +353,23 @@ function serializeExpense(doc: ExpenseDoc) {
     approvedByEmail: doc.approvedByEmail,
     approvedByName: doc.approvedByName,
     approvedAt: doc.approvedAt?.toISOString(),
+    
+    // Rejection info
     rejectedBy: doc.rejectedBy,
     rejectedByEmail: doc.rejectedByEmail,
     rejectedByName: doc.rejectedByName,
     rejectedAt: doc.rejectedAt?.toISOString(),
     rejectionReason: doc.rejectionReason,
+    rejectedAtLevel: doc.rejectedAtLevel,
+    
+    // Payment info
     paidBy: doc.paidBy,
     paidAt: doc.paidAt?.toISOString(),
     voidedBy: doc.voidedBy,
     voidedAt: doc.voidedAt?.toISOString(),
     voidReason: doc.voidReason,
     journalEntryId: doc.journalEntryId,
+    
     attachments: doc.attachments,
     approvalHistory: doc.approvalHistory?.map((h) => ({
       ...h,
@@ -334,53 +445,111 @@ expensesRouter.get('/categories', async (_req, res) => {
   res.json({ data: { categories: EXPENSE_CATEGORIES }, error: null })
 })
 
-// GET /api/crm/expenses/approvers - Get eligible expense approvers (managers)
+// GET /api/crm/expenses/approvers - Get eligible expense approvers by level
+// Returns users grouped by approval level: managers, senior_managers, finance_managers
 expensesRouter.get('/approvers', async (req: any, res) => {
   const db = await getDb()
-  if (!db) return res.json({ data: { approvers: [] }, error: null })
+  if (!db) return res.json({ data: { managers: [], seniorManagers: [], financeManagers: [], approvers: [] }, error: null })
 
   try {
-    // Find users with manager role
-    const managerRole = await db.collection('roles').findOne({ name: 'manager' })
-    if (!managerRole) {
-      return res.json({ data: { approvers: [] }, error: null })
+    // Find all approval roles
+    const [managerRole, seniorManagerRole, financeManagerRole] = await Promise.all([
+      db.collection('roles').findOne({ name: 'manager' }),
+      db.collection('roles').findOne({ name: 'senior_manager' }),
+      db.collection('roles').findOne({ name: 'finance_manager' }),
+    ])
+
+    // Get user IDs for each role
+    const roleIds = [managerRole?._id, seniorManagerRole?._id, financeManagerRole?._id].filter(Boolean)
+    const allUserRoles = await db.collection('user_roles')
+      .find({ roleId: { $in: roleIds } })
+      .toArray()
+
+    // Group user IDs by role
+    const managerUserIds = new Set<string>()
+    const seniorManagerUserIds = new Set<string>()
+    const financeManagerUserIds = new Set<string>()
+
+    for (const ur of allUserRoles) {
+      const roleIdStr = ur.roleId.toString()
+      if (managerRole && roleIdStr === managerRole._id.toString()) {
+        managerUserIds.add(ur.userId)
+      }
+      if (seniorManagerRole && roleIdStr === seniorManagerRole._id.toString()) {
+        seniorManagerUserIds.add(ur.userId)
+      }
+      if (financeManagerRole && roleIdStr === financeManagerRole._id.toString()) {
+        financeManagerUserIds.add(ur.userId)
+      }
     }
 
-    // Get user IDs with manager role
-    const userRoles = await db.collection('user_roles')
-      .find({ roleId: managerRole._id })
-      .toArray()
+    // Get all unique user IDs
+    const allUserIds = new Set([...managerUserIds, ...seniorManagerUserIds, ...financeManagerUserIds])
     
-    const managerUserIds = userRoles.map((ur: any) => ur.userId)
+    // Get user details
+    const userObjectIds = [...allUserIds].map((id: string) => {
+      try { return new ObjectId(id) } catch { return null }
+    }).filter(Boolean) as ObjectId[]
 
-    // Get manager user details
-    const managers = await db.collection('users')
+    // Also get admins (they can approve at any level)
+    const users = await db.collection('users')
       .find({
         $or: [
-          { _id: { $in: managerUserIds.map((id: string) => {
-            try { return new ObjectId(id) } catch { return null }
-          }).filter(Boolean) } },
-          // Also include admins
+          { _id: { $in: userObjectIds } },
           { isAdmin: true },
         ],
       })
-      .project({ _id: 1, name: 1, email: 1 })
+      .project({ _id: 1, name: 1, email: 1, isAdmin: 1 })
       .toArray()
 
-    const approvers = managers.map((m: any) => ({
-      id: m._id.toHexString(),
-      name: m.name || m.email,
-      email: m.email,
-    }))
+    // Build user map for quick lookup
+    const userMap = new Map(users.map((u: any) => [u._id.toHexString(), u]))
 
-    res.json({ data: { approvers }, error: null })
+    // Format approver response
+    const formatApprover = (u: any) => ({
+      id: u._id.toHexString(),
+      name: u.name || u.email,
+      email: u.email,
+    })
+
+    // Build lists by level (admins appear in all levels)
+    const admins = users.filter((u: any) => u.isAdmin)
+    
+    const managers = [
+      ...Array.from(managerUserIds).map(id => userMap.get(id)).filter(Boolean),
+      ...admins.filter((a: any) => !managerUserIds.has(a._id.toHexString())),
+    ].map(formatApprover)
+
+    const seniorManagers = [
+      ...Array.from(seniorManagerUserIds).map(id => userMap.get(id)).filter(Boolean),
+      ...admins.filter((a: any) => !seniorManagerUserIds.has(a._id.toHexString())),
+    ].map(formatApprover)
+
+    const financeManagers = [
+      ...Array.from(financeManagerUserIds).map(id => userMap.get(id)).filter(Boolean),
+      ...admins.filter((a: any) => !financeManagerUserIds.has(a._id.toHexString())),
+    ].map(formatApprover)
+
+    // Legacy: flat list of all approvers (for backward compatibility)
+    const approvers = users.map(formatApprover)
+
+    res.json({ 
+      data: { 
+        managers,
+        seniorManagers,
+        financeManagers,
+        approvers, // Legacy flat list
+      }, 
+      error: null 
+    })
   } catch (err: any) {
     console.error('[expenses] GET /approvers error:', err)
-    res.json({ data: { approvers: [] }, error: null })
+    res.json({ data: { managers: [], seniorManagers: [], financeManagers: [], approvers: [] }, error: null })
   }
 })
 
 // GET /api/crm/expenses/approval-queue - Get expenses awaiting approval for current user
+// Supports multi-level approval: manager -> senior_manager -> finance_manager
 expensesRouter.get('/approval-queue', async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
@@ -390,37 +559,109 @@ expensesRouter.get('/approval-queue', async (req: any, res) => {
     return res.status(401).json({ data: null, error: 'unauthorized' })
   }
 
-  // Check if user is manager or admin
+  // Get user and their roles
   const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
   if (!user) {
     return res.status(404).json({ data: null, error: 'user_not_found' })
   }
 
-  const managerRole = await db.collection('roles').findOne({ name: 'manager' })
-  const hasManagerRole = managerRole && await db.collection('user_roles').findOne({
-    userId: auth.userId,
-    roleId: managerRole._id,
-  })
-
   const isAdmin = (user as any).isAdmin === true
-  if (!hasManagerRole && !isAdmin) {
-    return res.status(403).json({ data: null, error: 'manager_access_required' })
+
+  // Get all approval roles
+  const [managerRole, seniorManagerRole, financeManagerRole] = await Promise.all([
+    db.collection('roles').findOne({ name: 'manager' }),
+    db.collection('roles').findOne({ name: 'senior_manager' }),
+    db.collection('roles').findOne({ name: 'finance_manager' }),
+  ])
+
+  // Check which roles the user has
+  const userRoleAssignments = await db.collection('user_roles')
+    .find({ userId: auth.userId })
+    .toArray()
+  
+  const userRoleIds = new Set(userRoleAssignments.map((ur: any) => ur.roleId.toString()))
+
+  const hasManagerRole = managerRole && userRoleIds.has(managerRole._id.toString())
+  const hasSeniorManagerRole = seniorManagerRole && userRoleIds.has(seniorManagerRole._id.toString())
+  const hasFinanceManagerRole = financeManagerRole && userRoleIds.has(financeManagerRole._id.toString())
+
+  // Must have at least one approval role or be admin
+  if (!isAdmin && !hasManagerRole && !hasSeniorManagerRole && !hasFinanceManagerRole) {
+    return res.status(403).json({ data: null, error: 'approval_role_required' })
   }
 
   const statusFilter = req.query.status as string | undefined
 
-  // Build filter for approval queue
+  // Build filter for approval queue based on user's role level
+  // Each role level sees expenses at their approval stage that are assigned to them
   const filter: Record<string, unknown> = {}
   
+  const allPendingStatuses = ['pending_manager_approval', 'pending_senior_approval', 'pending_finance_approval', 'pending_approval']
+  const allStatuses = [...allPendingStatuses, 'approved', 'rejected']
+
   if (isAdmin) {
-    // Admins see all pending_approval expenses
-    filter.status = statusFilter === 'all' ? { $in: ['pending_approval', 'approved', 'rejected'] } : 
-                    statusFilter || 'pending_approval'
+    // Admins see all expenses awaiting approval at any level
+    if (statusFilter === 'all') {
+      filter.status = { $in: allStatuses }
+    } else if (statusFilter) {
+      filter.status = statusFilter
+    } else {
+      filter.status = { $in: allPendingStatuses }
+    }
   } else {
-    // Managers see only expenses assigned to them
-    filter.approverUserId = auth.userId
-    filter.status = statusFilter === 'all' ? { $in: ['pending_approval', 'approved', 'rejected'] } : 
-                    statusFilter || 'pending_approval'
+    // Build OR conditions for each role the user has
+    const orConditions: any[] = []
+
+    if (hasManagerRole) {
+      // Manager sees Level 1 approvals assigned to them
+      orConditions.push({
+        status: 'pending_manager_approval',
+        managerApproverUserId: auth.userId,
+      })
+      // Also check legacy field for backward compatibility
+      orConditions.push({
+        status: 'pending_approval',
+        approverUserId: auth.userId,
+      })
+    }
+
+    if (hasSeniorManagerRole) {
+      // Senior Manager sees Level 2 approvals assigned to them
+      orConditions.push({
+        status: 'pending_senior_approval',
+        seniorManagerApproverUserId: auth.userId,
+      })
+    }
+
+    if (hasFinanceManagerRole) {
+      // Finance Manager sees Level 3 approvals assigned to them
+      orConditions.push({
+        status: 'pending_finance_approval',
+        financeManagerApproverUserId: auth.userId,
+      })
+    }
+
+    if (orConditions.length === 0) {
+      // No matching conditions - return empty
+      return res.json({ data: { items: [], userRoles: [] }, error: null })
+    }
+
+    // If status filter is "all", also include approved/rejected that were assigned to this user
+    if (statusFilter === 'all') {
+      // Add approved/rejected expenses that this user was an approver for
+      orConditions.push({
+        status: { $in: ['approved', 'rejected'] },
+        $or: [
+          { managerApprovedBy: auth.userId },
+          { seniorManagerApprovedBy: auth.userId },
+          { financeManagerApprovedBy: auth.userId },
+          { approvedBy: auth.userId },
+          { rejectedBy: auth.userId },
+        ],
+      })
+    }
+
+    filter.$or = orConditions
   }
 
   const items = await db.collection<ExpenseDoc>('crm_expenses')
@@ -428,6 +669,13 @@ expensesRouter.get('/approval-queue', async (req: any, res) => {
     .sort({ submittedAt: -1 })
     .limit(200)
     .toArray()
+
+  // Return user's role info for frontend display
+  const userRoles = []
+  if (hasManagerRole) userRoles.push('manager')
+  if (hasSeniorManagerRole) userRoles.push('senior_manager')
+  if (hasFinanceManagerRole) userRoles.push('finance_manager')
+  if (isAdmin) userRoles.push('admin')
 
   res.json({
     data: {
@@ -439,20 +687,52 @@ expensesRouter.get('/approval-queue', async (req: any, res) => {
         total: doc.total,
         date: doc.date instanceof Date ? doc.date.toISOString() : doc.date,
         status: doc.status,
+        currentApprovalLevel: doc.currentApprovalLevel,
         vendorName: doc.vendorName,
         payee: doc.payee,
+        
+        // Submitter info
         requesterId: doc.submittedBy,
         requesterEmail: doc.submittedByEmail,
         requesterName: doc.submittedByName,
+        requestedAt: doc.submittedAt?.toISOString(),
+        
+        // Level 1: Manager approver
+        managerApproverUserId: doc.managerApproverUserId,
+        managerApproverEmail: doc.managerApproverEmail,
+        managerApproverName: doc.managerApproverName,
+        managerApprovedAt: doc.managerApprovedAt?.toISOString(),
+        
+        // Level 2: Senior Manager approver
+        seniorManagerApproverUserId: doc.seniorManagerApproverUserId,
+        seniorManagerApproverEmail: doc.seniorManagerApproverEmail,
+        seniorManagerApproverName: doc.seniorManagerApproverName,
+        seniorManagerApprovedAt: doc.seniorManagerApprovedAt?.toISOString(),
+        
+        // Level 3: Finance Manager approver
+        financeManagerApproverUserId: doc.financeManagerApproverUserId,
+        financeManagerApproverEmail: doc.financeManagerApproverEmail,
+        financeManagerApproverName: doc.financeManagerApproverName,
+        financeManagerApprovedAt: doc.financeManagerApprovedAt?.toISOString(),
+        
+        // Legacy fields
         approverUserId: doc.approverUserId,
         approverEmail: doc.approverEmail,
         approverName: doc.approverName,
-        requestedAt: doc.submittedAt?.toISOString(),
+        
+        // Final status
         reviewedAt: doc.approvedAt?.toISOString() || doc.rejectedAt?.toISOString(),
         reviewedBy: doc.approvedBy || doc.rejectedBy,
         reviewNotes: doc.rejectionReason,
+        rejectedAtLevel: doc.rejectedAtLevel,
+        
         lines: doc.lines,
+        approvalHistory: doc.approvalHistory?.map((h) => ({
+          ...h,
+          timestamp: h.timestamp instanceof Date ? h.timestamp.toISOString() : h.timestamp,
+        })),
       })),
+      userRoles,
     },
     error: null,
   })
@@ -710,16 +990,28 @@ expensesRouter.patch('/:id', async (req: any, res) => {
   res.json({ data: updated ? serializeExpense(updated) : null, error: null })
 })
 
-// POST /api/crm/expenses/:id/submit - Submit for approval
+// POST /api/crm/expenses/:id/submit - Submit for multi-level approval
+// Requires: managerApproverUserId, seniorManagerApproverUserId, financeManagerApproverUserId
 expensesRouter.post('/:id/submit', async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const auth = req.auth
-  const approverUserId = String(req.body.approverUserId || '').trim()
+  
+  // Get approvers for all three levels
+  const managerApproverUserId = String(req.body.managerApproverUserId || req.body.approverUserId || '').trim()
+  const seniorManagerApproverUserId = String(req.body.seniorManagerApproverUserId || '').trim()
+  const financeManagerApproverUserId = String(req.body.financeManagerApproverUserId || '').trim()
 
-  if (!approverUserId) {
-    return res.status(400).json({ data: null, error: 'approver_required' })
+  // All three approvers are required
+  if (!managerApproverUserId) {
+    return res.status(400).json({ data: null, error: 'manager_approver_required' })
+  }
+  if (!seniorManagerApproverUserId) {
+    return res.status(400).json({ data: null, error: 'senior_manager_approver_required' })
+  }
+  if (!financeManagerApproverUserId) {
+    return res.status(400).json({ data: null, error: 'finance_manager_approver_required' })
   }
 
   let id: ObjectId
@@ -732,62 +1024,127 @@ expensesRouter.post('/:id/submit', async (req: any, res) => {
   const expense = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
   if (!expense) return res.status(404).json({ data: null, error: 'not_found' })
 
-  if (expense.status !== 'draft') {
-    return res.status(400).json({ data: null, error: 'can_only_submit_draft' })
+  if (expense.status !== 'draft' && expense.status !== 'rejected') {
+    return res.status(400).json({ data: null, error: 'can_only_submit_draft_or_rejected' })
   }
 
   // Get submitter details
   const submitter = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
   const submitterData = submitter as any
 
-  // Validate and get approver details
-  let approver: any
-  try {
-    approver = await db.collection('users').findOne({ _id: new ObjectId(approverUserId) })
-  } catch {
-    return res.status(400).json({ data: null, error: 'invalid_approver_id' })
-  }
-  
-  if (!approver) {
-    return res.status(400).json({ data: null, error: 'approver_not_found' })
+  // Validate all three approvers exist and have correct roles
+  const [managerRole, seniorManagerRole, financeManagerRole] = await Promise.all([
+    db.collection('roles').findOne({ name: 'manager' }),
+    db.collection('roles').findOne({ name: 'senior_manager' }),
+    db.collection('roles').findOne({ name: 'finance_manager' }),
+  ])
+
+  // Helper to validate approver
+  const validateApprover = async (userId: string, roleName: string, role: any) => {
+    let user: any
+    try {
+      user = await db.collection('users').findOne({ _id: new ObjectId(userId) })
+    } catch {
+      return { valid: false, error: `invalid_${roleName}_approver_id` }
+    }
+    if (!user) {
+      return { valid: false, error: `${roleName}_approver_not_found` }
+    }
+    
+    // Check if admin (admins can approve at any level)
+    if (user.isAdmin === true) {
+      return { valid: true, user }
+    }
+    
+    // Check if has the correct role
+    if (role) {
+      const hasRole = await db.collection('user_roles').findOne({
+        userId,
+        roleId: role._id,
+      })
+      if (hasRole) {
+        return { valid: true, user }
+      }
+    }
+    
+    return { valid: false, error: `${roleName}_approver_not_authorized` }
   }
 
-  // Verify approver is a manager or admin
-  const managerRole = await db.collection('roles').findOne({ name: 'manager' })
-  const hasManagerRole = managerRole && await db.collection('user_roles').findOne({
-    userId: approverUserId,
-    roleId: managerRole._id,
-  })
-  const isApproverAdmin = approver.isAdmin === true
-
-  if (!hasManagerRole && !isApproverAdmin) {
-    return res.status(400).json({ data: null, error: 'approver_not_authorized' })
+  // Validate manager approver
+  const managerValidation = await validateApprover(managerApproverUserId, 'manager', managerRole)
+  if (!managerValidation.valid) {
+    return res.status(400).json({ data: null, error: managerValidation.error })
   }
+  const managerApprover = managerValidation.user
+
+  // Validate senior manager approver
+  const seniorValidation = await validateApprover(seniorManagerApproverUserId, 'senior_manager', seniorManagerRole)
+  if (!seniorValidation.valid) {
+    return res.status(400).json({ data: null, error: seniorValidation.error })
+  }
+  const seniorManagerApprover = seniorValidation.user
+
+  // Validate finance manager approver
+  const financeValidation = await validateApprover(financeManagerApproverUserId, 'finance_manager', financeManagerRole)
+  if (!financeValidation.valid) {
+    return res.status(400).json({ data: null, error: financeValidation.error })
+  }
+  const financeManagerApprover = financeValidation.user
 
   const now = new Date()
+  const isResubmit = expense.status === 'rejected'
   
   // Create approval history entry
   const historyEntry: ApprovalHistoryEntry = {
-    action: 'submitted',
+    action: isResubmit ? 'resubmitted' : 'submitted',
     userId: auth.userId,
     userEmail: submitterData?.email,
     userName: submitterData?.name,
     timestamp: now,
-    approverUserId,
+    notes: `Submitted for approval chain: ${managerApprover.name || managerApprover.email} → ${seniorManagerApprover.name || seniorManagerApprover.email} → ${financeManagerApprover.name || financeManagerApprover.email}`,
   }
 
   await db.collection('crm_expenses').updateOne(
     { _id: id },
     {
       $set: {
-        status: 'pending_approval',
+        status: 'pending_manager_approval',
+        currentApprovalLevel: APPROVAL_LEVELS.MANAGER,
         submittedBy: auth.userId,
         submittedByEmail: submitterData?.email,
         submittedByName: submitterData?.name,
         submittedAt: now,
-        approverUserId,
-        approverEmail: approver.email,
-        approverName: approver.name,
+        
+        // Level 1: Manager
+        managerApproverUserId,
+        managerApproverEmail: managerApprover.email,
+        managerApproverName: managerApprover.name,
+        
+        // Level 2: Senior Manager
+        seniorManagerApproverUserId,
+        seniorManagerApproverEmail: seniorManagerApprover.email,
+        seniorManagerApproverName: seniorManagerApprover.name,
+        
+        // Level 3: Finance Manager
+        financeManagerApproverUserId,
+        financeManagerApproverEmail: financeManagerApprover.email,
+        financeManagerApproverName: financeManagerApprover.name,
+        
+        // Legacy field (for backward compatibility)
+        approverUserId: managerApproverUserId,
+        approverEmail: managerApprover.email,
+        approverName: managerApprover.name,
+        
+        // Clear rejection info if resubmitting
+        ...(isResubmit ? {
+          rejectedBy: null,
+          rejectedByEmail: null,
+          rejectedByName: null,
+          rejectedAt: null,
+          rejectionReason: null,
+          rejectedAtLevel: null,
+        } : {}),
+        
         updatedAt: now,
       },
       $push: {
@@ -800,12 +1157,17 @@ expensesRouter.post('/:id/submit', async (req: any, res) => {
   res.json({ data: updated ? serializeExpense(updated) : null, error: null })
 })
 
-// POST /api/crm/expenses/:id/approve - Approve expense (requires manager/admin)
-expensesRouter.post('/:id/approve', requirePermission('*'), async (req: any, res) => {
+// POST /api/crm/expenses/:id/approve - Approve expense at current level
+// Multi-level approval: manager -> senior_manager -> finance_manager
+expensesRouter.post('/:id/approve', async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const auth = req.auth
+  if (!auth?.userId) {
+    return res.status(401).json({ data: null, error: 'unauthorized' })
+  }
+  
   const reviewNotes = String(req.body.reviewNotes || '').trim()
 
   let id: ObjectId
@@ -818,37 +1180,132 @@ expensesRouter.post('/:id/approve', requirePermission('*'), async (req: any, res
   const expense = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
   if (!expense) return res.status(404).json({ data: null, error: 'not_found' })
 
-  if (expense.status !== 'pending_approval') {
+  // Determine valid pending statuses
+  const validPendingStatuses = [
+    'pending_manager_approval',
+    'pending_senior_approval', 
+    'pending_finance_approval',
+    'pending_approval', // Legacy
+  ]
+
+  if (!validPendingStatuses.includes(expense.status)) {
     return res.status(400).json({ data: null, error: 'can_only_approve_pending' })
   }
 
   // Get approver details
   const approver = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+  if (!approver) {
+    return res.status(404).json({ data: null, error: 'user_not_found' })
+  }
   const approverData = approver as any
+  const isAdmin = approverData.isAdmin === true
+
+  // Determine current approval level and verify the user is the assigned approver
+  let currentLevel = expense.currentApprovalLevel || APPROVAL_LEVELS.MANAGER
+  let canApprove = false
+  let levelName = ''
+
+  // Map status to level for legacy expenses
+  if (expense.status === 'pending_approval') {
+    currentLevel = APPROVAL_LEVELS.MANAGER
+  } else if (expense.status === 'pending_manager_approval') {
+    currentLevel = APPROVAL_LEVELS.MANAGER
+  } else if (expense.status === 'pending_senior_approval') {
+    currentLevel = APPROVAL_LEVELS.SENIOR_MANAGER
+  } else if (expense.status === 'pending_finance_approval') {
+    currentLevel = APPROVAL_LEVELS.FINANCE_MANAGER
+  }
+
+  // Check if user is assigned approver for this level or is admin
+  if (isAdmin) {
+    canApprove = true
+    levelName = currentLevel === APPROVAL_LEVELS.MANAGER ? 'Manager' :
+                currentLevel === APPROVAL_LEVELS.SENIOR_MANAGER ? 'Senior Manager' :
+                'Finance Manager'
+  } else if (currentLevel === APPROVAL_LEVELS.MANAGER) {
+    canApprove = expense.managerApproverUserId === auth.userId || 
+                 expense.approverUserId === auth.userId // Legacy field
+    levelName = 'Manager'
+  } else if (currentLevel === APPROVAL_LEVELS.SENIOR_MANAGER) {
+    canApprove = expense.seniorManagerApproverUserId === auth.userId
+    levelName = 'Senior Manager'
+  } else if (currentLevel === APPROVAL_LEVELS.FINANCE_MANAGER) {
+    canApprove = expense.financeManagerApproverUserId === auth.userId
+    levelName = 'Finance Manager'
+  }
+
+  if (!canApprove) {
+    return res.status(403).json({ data: null, error: 'not_assigned_approver' })
+  }
 
   const now = new Date()
 
   // Create approval history entry
   const historyEntry: ApprovalHistoryEntry = {
-    action: 'approved',
+    action: 'level_approved',
     userId: auth.userId,
     userEmail: approverData?.email,
     userName: approverData?.name,
     timestamp: now,
     notes: reviewNotes || undefined,
+    approvalLevel: currentLevel,
+    roleName: levelName,
+  }
+
+  // Determine next status and level
+  let nextStatus: ExpenseStatus
+  let nextLevel: number | null = null
+  let finalApproval = false
+
+  if (currentLevel === APPROVAL_LEVELS.MANAGER) {
+    nextStatus = 'pending_senior_approval'
+    nextLevel = APPROVAL_LEVELS.SENIOR_MANAGER
+  } else if (currentLevel === APPROVAL_LEVELS.SENIOR_MANAGER) {
+    nextStatus = 'pending_finance_approval'
+    nextLevel = APPROVAL_LEVELS.FINANCE_MANAGER
+  } else {
+    // Finance Manager approval = final
+    nextStatus = 'approved'
+    finalApproval = true
+  }
+
+  // Build update object
+  const updateFields: Record<string, any> = {
+    status: nextStatus,
+    updatedAt: now,
+  }
+
+  if (nextLevel !== null) {
+    updateFields.currentApprovalLevel = nextLevel
+  }
+
+  // Set level-specific approval fields
+  if (currentLevel === APPROVAL_LEVELS.MANAGER) {
+    updateFields.managerApprovedBy = auth.userId
+    updateFields.managerApprovedByEmail = approverData?.email
+    updateFields.managerApprovedByName = approverData?.name
+    updateFields.managerApprovedAt = now
+  } else if (currentLevel === APPROVAL_LEVELS.SENIOR_MANAGER) {
+    updateFields.seniorManagerApprovedBy = auth.userId
+    updateFields.seniorManagerApprovedByEmail = approverData?.email
+    updateFields.seniorManagerApprovedByName = approverData?.name
+    updateFields.seniorManagerApprovedAt = now
+  } else if (currentLevel === APPROVAL_LEVELS.FINANCE_MANAGER) {
+    updateFields.financeManagerApprovedBy = auth.userId
+    updateFields.financeManagerApprovedByEmail = approverData?.email
+    updateFields.financeManagerApprovedByName = approverData?.name
+    updateFields.financeManagerApprovedAt = now
+    // Also set legacy final approval fields
+    updateFields.approvedBy = auth.userId
+    updateFields.approvedByEmail = approverData?.email
+    updateFields.approvedByName = approverData?.name
+    updateFields.approvedAt = now
   }
 
   await db.collection('crm_expenses').updateOne(
     { _id: id },
     {
-      $set: {
-        status: 'approved',
-        approvedBy: auth.userId,
-        approvedByEmail: approverData?.email,
-        approvedByName: approverData?.name,
-        approvedAt: now,
-        updatedAt: now,
-      },
+      $set: updateFields,
       $push: {
         approvalHistory: historyEntry,
       } as any,
@@ -856,15 +1313,24 @@ expensesRouter.post('/:id/approve', requirePermission('*'), async (req: any, res
   )
 
   const updated = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
-  res.json({ data: updated ? serializeExpense(updated) : null, error: null })
+  res.json({ 
+    data: updated ? serializeExpense(updated) : null, 
+    message: finalApproval ? 'Expense fully approved' : `${levelName} approval complete. Pending next level.`,
+    error: null 
+  })
 })
 
-// POST /api/crm/expenses/:id/reject - Reject expense (requires manager/admin)
-expensesRouter.post('/:id/reject', requirePermission('*'), async (req: any, res) => {
+// POST /api/crm/expenses/:id/reject - Reject expense at any approval level
+// Any assigned approver at their level can reject
+expensesRouter.post('/:id/reject', async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const auth = req.auth
+  if (!auth?.userId) {
+    return res.status(401).json({ data: null, error: 'unauthorized' })
+  }
+  
   const reason = String(req.body.reason || '').trim()
 
   let id: ObjectId
@@ -877,13 +1343,63 @@ expensesRouter.post('/:id/reject', requirePermission('*'), async (req: any, res)
   const expense = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
   if (!expense) return res.status(404).json({ data: null, error: 'not_found' })
 
-  if (expense.status !== 'pending_approval') {
+  // Determine valid pending statuses
+  const validPendingStatuses = [
+    'pending_manager_approval',
+    'pending_senior_approval', 
+    'pending_finance_approval',
+    'pending_approval', // Legacy
+  ]
+
+  if (!validPendingStatuses.includes(expense.status)) {
     return res.status(400).json({ data: null, error: 'can_only_reject_pending' })
   }
 
   // Get rejecter details
   const rejecter = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+  if (!rejecter) {
+    return res.status(404).json({ data: null, error: 'user_not_found' })
+  }
   const rejecterData = rejecter as any
+  const isAdmin = rejecterData.isAdmin === true
+
+  // Determine current approval level
+  let currentLevel = expense.currentApprovalLevel || APPROVAL_LEVELS.MANAGER
+  let canReject = false
+  let levelName = ''
+
+  // Map status to level for legacy expenses
+  if (expense.status === 'pending_approval') {
+    currentLevel = APPROVAL_LEVELS.MANAGER
+  } else if (expense.status === 'pending_manager_approval') {
+    currentLevel = APPROVAL_LEVELS.MANAGER
+  } else if (expense.status === 'pending_senior_approval') {
+    currentLevel = APPROVAL_LEVELS.SENIOR_MANAGER
+  } else if (expense.status === 'pending_finance_approval') {
+    currentLevel = APPROVAL_LEVELS.FINANCE_MANAGER
+  }
+
+  // Check if user is assigned approver for this level or is admin
+  if (isAdmin) {
+    canReject = true
+    levelName = currentLevel === APPROVAL_LEVELS.MANAGER ? 'Manager' :
+                currentLevel === APPROVAL_LEVELS.SENIOR_MANAGER ? 'Senior Manager' :
+                'Finance Manager'
+  } else if (currentLevel === APPROVAL_LEVELS.MANAGER) {
+    canReject = expense.managerApproverUserId === auth.userId || 
+                expense.approverUserId === auth.userId // Legacy field
+    levelName = 'Manager'
+  } else if (currentLevel === APPROVAL_LEVELS.SENIOR_MANAGER) {
+    canReject = expense.seniorManagerApproverUserId === auth.userId
+    levelName = 'Senior Manager'
+  } else if (currentLevel === APPROVAL_LEVELS.FINANCE_MANAGER) {
+    canReject = expense.financeManagerApproverUserId === auth.userId
+    levelName = 'Finance Manager'
+  }
+
+  if (!canReject) {
+    return res.status(403).json({ data: null, error: 'not_assigned_approver' })
+  }
 
   const now = new Date()
 
@@ -895,6 +1411,8 @@ expensesRouter.post('/:id/reject', requirePermission('*'), async (req: any, res)
     userName: rejecterData?.name,
     timestamp: now,
     notes: reason || undefined,
+    approvalLevel: currentLevel,
+    roleName: levelName,
   }
 
   await db.collection('crm_expenses').updateOne(
@@ -907,6 +1425,7 @@ expensesRouter.post('/:id/reject', requirePermission('*'), async (req: any, res)
         rejectedByName: rejecterData?.name,
         rejectedAt: now,
         rejectionReason: reason || null,
+        rejectedAtLevel: currentLevel,
         updatedAt: now,
       },
       $push: {
@@ -916,7 +1435,11 @@ expensesRouter.post('/:id/reject', requirePermission('*'), async (req: any, res)
   )
 
   const updated = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
-  res.json({ data: updated ? serializeExpense(updated) : null, error: null })
+  res.json({ 
+    data: updated ? serializeExpense(updated) : null, 
+    message: `Expense rejected at ${levelName} level`,
+    error: null 
+  })
 })
 
 // POST /api/crm/expenses/:id/pay - Mark as paid and create journal entry

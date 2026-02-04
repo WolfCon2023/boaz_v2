@@ -7,7 +7,16 @@ import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { useAccessToken } from '@/components/Auth'
 
-type ExpenseStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'paid' | 'void'
+type ExpenseStatus = 
+  | 'draft' 
+  | 'pending_manager_approval'
+  | 'pending_senior_approval'
+  | 'pending_finance_approval'
+  | 'pending_approval'  // Legacy
+  | 'approved' 
+  | 'rejected' 
+  | 'paid' 
+  | 'void'
 
 type ExpenseLine = {
   category: string
@@ -79,7 +88,10 @@ type Vendor = {
 
 const STATUS_COLORS: Record<ExpenseStatus, string> = {
   draft: 'bg-gray-500/10 text-gray-400 border-gray-500/50',
-  pending_approval: 'bg-amber-500/10 text-amber-400 border-amber-500/50',
+  pending_manager_approval: 'bg-amber-500/10 text-amber-400 border-amber-500/50',
+  pending_senior_approval: 'bg-orange-500/10 text-orange-400 border-orange-500/50',
+  pending_finance_approval: 'bg-purple-500/10 text-purple-400 border-purple-500/50',
+  pending_approval: 'bg-amber-500/10 text-amber-400 border-amber-500/50', // Legacy
   approved: 'bg-blue-500/10 text-blue-400 border-blue-500/50',
   rejected: 'bg-red-500/10 text-red-400 border-red-500/50',
   paid: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/50',
@@ -88,7 +100,10 @@ const STATUS_COLORS: Record<ExpenseStatus, string> = {
 
 const STATUS_LABELS: Record<ExpenseStatus, string> = {
   draft: 'Draft',
-  pending_approval: 'Pending Approval',
+  pending_manager_approval: 'Manager Review',
+  pending_senior_approval: 'Sr. Manager Review',
+  pending_finance_approval: 'Finance Review',
+  pending_approval: 'Pending Approval', // Legacy
   approved: 'Approved',
   rejected: 'Rejected',
   paid: 'Paid',
@@ -190,18 +205,34 @@ export default function CRMExpenses() {
   const summary = summaryQ.data?.data
 
   // Fetch approvers (managers who can approve expenses)
+  // Fetch approvers grouped by role level
+  type Approver = { id: string; name: string; email: string }
   const approversQ = useQuery({
     queryKey: ['expense-approvers'],
     queryFn: async () => {
       const res = await http.get('/api/crm/expenses/approvers')
-      return res.data as { data: { approvers: Array<{ id: string; name: string; email: string }> } }
+      return res.data as { 
+        data: { 
+          managers: Approver[]
+          seniorManagers: Approver[]
+          financeManagers: Approver[]
+          approvers: Approver[] // Legacy flat list
+        } 
+      }
     },
   })
-  const approvers = approversQ.data?.data.approvers ?? []
+  const managers = approversQ.data?.data.managers ?? []
+  const seniorManagers = approversQ.data?.data.seniorManagers ?? []
+  const financeManagers = approversQ.data?.data.financeManagers ?? []
 
-  // Submit dialog state
+  // Submit dialog state - multi-level approval
   const [submitDialogOpen, setSubmitDialogOpen] = React.useState(false)
   const [submitExpenseId, setSubmitExpenseId] = React.useState<string | null>(null)
+  const [selectedManagerApproverId, setSelectedManagerApproverId] = React.useState<string>('')
+  const [selectedSeniorManagerApproverId, setSelectedSeniorManagerApproverId] = React.useState<string>('')
+  const [selectedFinanceManagerApproverId, setSelectedFinanceManagerApproverId] = React.useState<string>('')
+  
+  // Legacy compatibility
   const [selectedApproverId, setSelectedApproverId] = React.useState<string>('')
 
   // Mutations
@@ -256,40 +287,82 @@ export default function CRMExpenses() {
   })
 
   const submitExpense = useMutation({
-    mutationFn: async ({ id, approverUserId }: { id: string; approverUserId: string }) => 
-      http.post(`/api/crm/expenses/${id}/submit`, { approverUserId }),
+    mutationFn: async ({ 
+      id, 
+      managerApproverUserId, 
+      seniorManagerApproverUserId, 
+      financeManagerApproverUserId 
+    }: { 
+      id: string
+      managerApproverUserId: string
+      seniorManagerApproverUserId: string
+      financeManagerApproverUserId: string
+    }) => 
+      http.post(`/api/crm/expenses/${id}/submit`, { 
+        managerApproverUserId, 
+        seniorManagerApproverUserId, 
+        financeManagerApproverUserId 
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['crm-expenses'] })
       qc.invalidateQueries({ queryKey: ['crm-expenses-summary'] })
       setSubmitDialogOpen(false)
       setSubmitExpenseId(null)
+      setSelectedManagerApproverId('')
+      setSelectedSeniorManagerApproverId('')
+      setSelectedFinanceManagerApproverId('')
       setSelectedApproverId('')
       toast.showToast('Expense submitted for approval.', 'success')
     },
     onError: (err: any) => {
       const errorMsg = err?.response?.data?.error
-      if (errorMsg === 'approver_required') {
-        toast.showToast('Please select an approver.', 'error')
-      } else {
-        toast.showToast(errorMsg || 'Failed to submit expense.', 'error')
+      const errorMessages: Record<string, string> = {
+        'manager_approver_required': 'Please select a Manager approver.',
+        'senior_manager_approver_required': 'Please select a Senior Manager approver.',
+        'finance_manager_approver_required': 'Please select a Finance Manager approver.',
+        'manager_approver_not_authorized': 'Selected manager is not authorized to approve.',
+        'senior_manager_approver_not_authorized': 'Selected senior manager is not authorized to approve.',
+        'finance_manager_approver_not_authorized': 'Selected finance manager is not authorized to approve.',
       }
+      toast.showToast(errorMessages[errorMsg] || errorMsg || 'Failed to submit expense.', 'error')
     },
   })
 
   // Open submit dialog
   function openSubmitDialog(expenseId: string) {
     setSubmitExpenseId(expenseId)
-    setSelectedApproverId(approvers.length > 0 ? approvers[0].id : '')
+    // Pre-select first available approver for each level
+    setSelectedManagerApproverId(managers.length > 0 ? managers[0].id : '')
+    setSelectedSeniorManagerApproverId(seniorManagers.length > 0 ? seniorManagers[0].id : '')
+    setSelectedFinanceManagerApproverId(financeManagers.length > 0 ? financeManagers[0].id : '')
+    setSelectedApproverId('')
     setSubmitDialogOpen(true)
   }
 
-  // Handle submit with approver
+  // Handle submit with all approvers
   function handleSubmitWithApprover() {
-    if (!submitExpenseId || !selectedApproverId) {
-      toast.showToast('Please select an approver.', 'error')
+    if (!submitExpenseId) {
+      toast.showToast('No expense selected.', 'error')
       return
     }
-    submitExpense.mutate({ id: submitExpenseId, approverUserId: selectedApproverId })
+    if (!selectedManagerApproverId) {
+      toast.showToast('Please select a Manager approver.', 'error')
+      return
+    }
+    if (!selectedSeniorManagerApproverId) {
+      toast.showToast('Please select a Senior Manager approver.', 'error')
+      return
+    }
+    if (!selectedFinanceManagerApproverId) {
+      toast.showToast('Please select a Finance Manager approver.', 'error')
+      return
+    }
+    submitExpense.mutate({ 
+      id: submitExpenseId, 
+      managerApproverUserId: selectedManagerApproverId,
+      seniorManagerApproverUserId: selectedSeniorManagerApproverId,
+      financeManagerApproverUserId: selectedFinanceManagerApproverId,
+    })
   }
 
   const approveExpense = useMutation({
@@ -890,33 +963,96 @@ export default function CRMExpenses() {
         </div>
       )}
 
-      {/* Submit for Approval Dialog */}
+      {/* Submit for Approval Dialog - Multi-Level Approval Chain */}
       {submitDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setSubmitDialogOpen(false)} />
-          <div className="relative z-10 w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
+          <div className="relative z-10 w-[min(90vw,32rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
             <h2 className="mb-4 text-lg font-semibold">Submit for Approval</h2>
             <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">
-              Select a manager to review and approve this expense.
+              Select approvers for each level. The expense will be routed through:
             </p>
             
+            {/* Approval Flow Visual */}
+            <div className="mb-4 flex items-center justify-center gap-2 rounded-lg bg-[color:var(--color-muted)] p-3 text-xs">
+              <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">1. Manager</span>
+              <span className="text-[color:var(--color-text-muted)]">→</span>
+              <span className="rounded bg-orange-500/20 px-2 py-1 text-orange-400">2. Sr. Manager</span>
+              <span className="text-[color:var(--color-text-muted)]">→</span>
+              <span className="rounded bg-purple-500/20 px-2 py-1 text-purple-400">3. Finance</span>
+            </div>
+            
+            {/* Level 1: Manager */}
             <div className="mb-4">
-              <label className="mb-1 block text-xs font-medium">Approver *</label>
+              <label className="mb-1 flex items-center gap-2 text-xs font-medium">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">1</span>
+                Manager Approver *
+              </label>
               <select
-                value={selectedApproverId}
-                onChange={(e) => setSelectedApproverId(e.target.value)}
+                value={selectedManagerApproverId}
+                onChange={(e) => setSelectedManagerApproverId(e.target.value)}
                 className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
               >
-                <option value="">— Select approver —</option>
-                {approvers.map((a) => (
+                <option value="">— Select manager —</option>
+                {managers.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name} ({a.email})
                   </option>
                 ))}
               </select>
-              {approvers.length === 0 && (
+              {managers.length === 0 && (
                 <p className="mt-1 text-xs text-amber-400">
-                  No approvers available. Contact your administrator.
+                  No managers available. Contact your administrator.
+                </p>
+              )}
+            </div>
+
+            {/* Level 2: Senior Manager */}
+            <div className="mb-4">
+              <label className="mb-1 flex items-center gap-2 text-xs font-medium">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500/20 text-orange-400">2</span>
+                Senior Manager Approver *
+              </label>
+              <select
+                value={selectedSeniorManagerApproverId}
+                onChange={(e) => setSelectedSeniorManagerApproverId(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+              >
+                <option value="">— Select senior manager —</option>
+                {seniorManagers.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.email})
+                  </option>
+                ))}
+              </select>
+              {seniorManagers.length === 0 && (
+                <p className="mt-1 text-xs text-orange-400">
+                  No senior managers available. Contact your administrator.
+                </p>
+              )}
+            </div>
+
+            {/* Level 3: Finance Manager */}
+            <div className="mb-4">
+              <label className="mb-1 flex items-center gap-2 text-xs font-medium">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-500/20 text-purple-400">3</span>
+                Finance Manager Approver *
+              </label>
+              <select
+                value={selectedFinanceManagerApproverId}
+                onChange={(e) => setSelectedFinanceManagerApproverId(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+              >
+                <option value="">— Select finance manager —</option>
+                {financeManagers.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.email})
+                  </option>
+                ))}
+              </select>
+              {financeManagers.length === 0 && (
+                <p className="mt-1 text-xs text-purple-400">
+                  No finance managers available. Contact your administrator.
                 </p>
               )}
             </div>
@@ -927,6 +1063,9 @@ export default function CRMExpenses() {
                 onClick={() => {
                   setSubmitDialogOpen(false)
                   setSubmitExpenseId(null)
+                  setSelectedManagerApproverId('')
+                  setSelectedSeniorManagerApproverId('')
+                  setSelectedFinanceManagerApproverId('')
                   setSelectedApproverId('')
                 }}
                 className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
@@ -936,7 +1075,7 @@ export default function CRMExpenses() {
               <button
                 type="button"
                 onClick={handleSubmitWithApprover}
-                disabled={!selectedApproverId || submitExpense.isPending}
+                disabled={!selectedManagerApproverId || !selectedSeniorManagerApproverId || !selectedFinanceManagerApproverId || submitExpense.isPending}
                 className="rounded-lg bg-amber-500 px-4 py-2 text-sm text-white hover:bg-amber-600 disabled:opacity-50"
               >
                 {submitExpense.isPending ? 'Submitting...' : 'Submit for Approval'}

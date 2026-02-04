@@ -12,7 +12,29 @@ export type UserRoleDoc = { _id: ObjectId; userId: string; roleId: ObjectId; cre
 // Initial matrix used if roles collection is empty
 export const DEFAULT_ROLES: Array<{ name: string; permissions: string[] }> = [
   { name: 'admin', permissions: ['*'] },
-  { name: 'manager', permissions: ['users.read', 'users.write', 'roles.read'] },
+  { name: 'manager', permissions: ['users.read', 'users.write', 'roles.read', 'expenses.approve_level1'] },
+  { 
+    name: 'senior_manager', 
+    permissions: [
+      'users.read', 
+      'users.write', 
+      'roles.read', 
+      'expenses.approve_level1',
+      'expenses.approve_level2',
+    ] 
+  },
+  { 
+    name: 'finance_manager', 
+    permissions: [
+      'users.read', 
+      'users.write', 
+      'roles.read', 
+      'expenses.approve_level1',
+      'expenses.approve_level2',
+      'expenses.approve_level3',
+      'expenses.final_approve',
+    ] 
+  },
   { name: 'staff', permissions: ['users.read'] },
   { name: 'customer', permissions: [] },
   { 

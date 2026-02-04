@@ -4,7 +4,29 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
-import { CheckCircle, XCircle, Clock, DollarSign } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, DollarSign, ArrowRight } from 'lucide-react'
+
+type ExpenseStatus = 
+  | 'draft'
+  | 'pending_manager_approval'
+  | 'pending_senior_approval'
+  | 'pending_finance_approval'
+  | 'pending_approval'  // Legacy
+  | 'approved'
+  | 'rejected'
+  | 'paid'
+  | 'void'
+
+type ApprovalHistoryEntry = {
+  action: string
+  userId: string
+  userEmail?: string
+  userName?: string
+  timestamp: string
+  notes?: string
+  approvalLevel?: number
+  roleName?: string
+}
 
 type ExpenseApprovalItem = {
   _id: string
@@ -13,30 +35,82 @@ type ExpenseApprovalItem = {
   description: string
   total: number
   date: string
-  status: 'pending_approval' | 'approved' | 'rejected'
+  status: ExpenseStatus
+  currentApprovalLevel?: number
   vendorName?: string
   payee?: string
+  
+  // Submitter
   requesterId: string
   requesterEmail?: string
   requesterName?: string
+  requestedAt?: string
+  
+  // Level 1: Manager
+  managerApproverUserId?: string
+  managerApproverEmail?: string
+  managerApproverName?: string
+  managerApprovedAt?: string
+  
+  // Level 2: Senior Manager
+  seniorManagerApproverUserId?: string
+  seniorManagerApproverEmail?: string
+  seniorManagerApproverName?: string
+  seniorManagerApprovedAt?: string
+  
+  // Level 3: Finance Manager
+  financeManagerApproverUserId?: string
+  financeManagerApproverEmail?: string
+  financeManagerApproverName?: string
+  financeManagerApprovedAt?: string
+  
+  // Legacy
   approverUserId?: string
   approverEmail?: string
   approverName?: string
-  requestedAt?: string
+  
   reviewedAt?: string
   reviewedBy?: string
   reviewNotes?: string
+  rejectedAtLevel?: number
   lines?: Array<{ category: string; amount: number; description?: string }>
+  approvalHistory?: ApprovalHistoryEntry[]
 }
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
 }
 
+// Check if a status is pending any approval
+function isPendingStatus(status: ExpenseStatus): boolean {
+  return [
+    'pending_manager_approval',
+    'pending_senior_approval',
+    'pending_finance_approval',
+    'pending_approval',
+  ].includes(status)
+}
+
+// Get human-readable label for status
+function getStatusLabel(status: ExpenseStatus): string {
+  const labels: Record<ExpenseStatus, string> = {
+    draft: 'Draft',
+    pending_manager_approval: 'Manager Review',
+    pending_senior_approval: 'Sr. Manager Review',
+    pending_finance_approval: 'Finance Review',
+    pending_approval: 'Pending Approval',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    paid: 'Paid',
+    void: 'Void',
+  }
+  return labels[status] || status
+}
+
 export default function CRMExpenseApprovalQueue() {
   const qc = useQueryClient()
   const toast = useToast()
-  const [statusFilter, setStatusFilter] = React.useState<'all' | 'pending_approval' | 'approved' | 'rejected'>('pending_approval')
+  const [statusFilter, setStatusFilter] = React.useState<'all' | 'pending' | 'approved' | 'rejected'>('pending')
   const [selectedExpense, setSelectedExpense] = React.useState<ExpenseApprovalItem | null>(null)
   const [reviewNotes, setReviewNotes] = React.useState('')
 
@@ -44,14 +118,15 @@ export default function CRMExpenseApprovalQueue() {
     queryKey: ['expense-approval-queue', statusFilter],
     queryFn: async () => {
       const res = await http.get('/api/crm/expenses/approval-queue', {
-        params: { status: statusFilter === 'pending_approval' ? undefined : statusFilter },
+        params: { status: statusFilter === 'pending' ? undefined : statusFilter },
       })
-      return res.data as { data: { items: ExpenseApprovalItem[] } }
+      return res.data as { data: { items: ExpenseApprovalItem[]; userRoles?: string[] } }
     },
     retry: false,
   })
 
   const items = data?.data.items ?? []
+  const userRoles = data?.data.userRoles ?? []
 
   const approveExpense = useMutation({
     mutationFn: async ({ expenseId, notes }: { expenseId: string; notes?: string }) => {
@@ -91,8 +166,29 @@ export default function CRMExpenseApprovalQueue() {
     },
   })
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: ExpenseStatus) => {
     switch (status) {
+      case 'pending_manager_approval':
+        return (
+          <span className="flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/50 px-2 py-1 text-xs font-medium text-amber-400">
+            <Clock className="h-3 w-3" />
+            Manager Review
+          </span>
+        )
+      case 'pending_senior_approval':
+        return (
+          <span className="flex items-center gap-1 rounded-full bg-orange-500/10 border border-orange-500/50 px-2 py-1 text-xs font-medium text-orange-400">
+            <Clock className="h-3 w-3" />
+            Sr. Manager Review
+          </span>
+        )
+      case 'pending_finance_approval':
+        return (
+          <span className="flex items-center gap-1 rounded-full bg-purple-500/10 border border-purple-500/50 px-2 py-1 text-xs font-medium text-purple-400">
+            <Clock className="h-3 w-3" />
+            Finance Review
+          </span>
+        )
       case 'pending_approval':
         return (
           <span className="flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/50 px-2 py-1 text-xs font-medium text-amber-400">
@@ -114,6 +210,13 @@ export default function CRMExpenseApprovalQueue() {
             Rejected
           </span>
         )
+      case 'paid':
+        return (
+          <span className="flex items-center gap-1 rounded-full bg-blue-500/10 border border-blue-500/50 px-2 py-1 text-xs font-medium text-blue-400">
+            <DollarSign className="h-3 w-3" />
+            Paid
+          </span>
+        )
       default:
         return <span className="rounded-full bg-gray-500/10 px-2 py-1 text-xs text-gray-400">{status}</span>
     }
@@ -121,7 +224,7 @@ export default function CRMExpenseApprovalQueue() {
 
   if (error) {
     const errorMsg = (error as any)?.response?.data?.error
-    if (errorMsg === 'manager_access_required') {
+    if (errorMsg === 'manager_access_required' || errorMsg === 'approval_role_required') {
       return (
         <div className="space-y-4">
           <CRMNav />
@@ -129,7 +232,7 @@ export default function CRMExpenseApprovalQueue() {
             <div className="w-[min(90vw,28rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-center">
               <h1 className="mb-3 text-xl font-semibold">Access Denied</h1>
               <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">
-                You must have the manager role to access the expense approval queue.
+                You must have an approval role (Manager, Senior Manager, or Finance Manager) to access the expense approval queue.
               </p>
             </div>
           </div>
@@ -142,19 +245,38 @@ export default function CRMExpenseApprovalQueue() {
     <div className="space-y-4">
       <CRMNav />
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Expense Approval Queue</h1>
+        <div>
+          <h1 className="text-xl font-semibold">Expense Approval Queue</h1>
+          {userRoles.length > 0 && (
+            <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+              Your roles: {userRoles.map(r => r.replace('_', ' ')).join(', ')}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as any)}
             className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
           >
-            <option value="pending_approval">Pending Approval</option>
+            <option value="pending">Pending My Approval</option>
             <option value="all">All Requests</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
           </select>
         </div>
+      </div>
+      
+      {/* Approval Flow Legend */}
+      <div className="flex items-center gap-2 rounded-lg bg-[color:var(--color-muted)] p-3 text-xs">
+        <span className="text-[color:var(--color-text-muted)]">Approval Flow:</span>
+        <span className="rounded bg-amber-500/20 px-2 py-1 text-amber-400">1. Manager</span>
+        <ArrowRight className="h-3 w-3 text-[color:var(--color-text-muted)]" />
+        <span className="rounded bg-orange-500/20 px-2 py-1 text-orange-400">2. Sr. Manager</span>
+        <ArrowRight className="h-3 w-3 text-[color:var(--color-text-muted)]" />
+        <span className="rounded bg-purple-500/20 px-2 py-1 text-purple-400">3. Finance</span>
+        <ArrowRight className="h-3 w-3 text-[color:var(--color-text-muted)]" />
+        <span className="rounded bg-emerald-500/20 px-2 py-1 text-emerald-400">Approved</span>
       </div>
 
       {isLoading ? (
@@ -168,8 +290,8 @@ export default function CRMExpenseApprovalQueue() {
         <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-8 text-center">
           <DollarSign className="mx-auto mb-4 h-12 w-12 text-[color:var(--color-text-muted)]" />
           <p className="text-sm text-[color:var(--color-text-muted)]">
-            {statusFilter === 'pending_approval'
-              ? 'No expenses pending approval.'
+            {statusFilter === 'pending'
+              ? 'No expenses pending your approval.'
               : statusFilter === 'all'
               ? 'No expense approval requests found.'
               : `No ${statusFilter} expenses found.`}
@@ -223,7 +345,7 @@ export default function CRMExpenseApprovalQueue() {
                     </td>
                     <td className="px-4 py-3">{getStatusBadge(item.status)}</td>
                     <td className="px-4 py-3">
-                      {item.status === 'pending_approval' && (
+                      {isPendingStatus(item.status) && (
                         <div className="flex gap-2">
                           <button
                             onClick={(e) => {
@@ -236,7 +358,7 @@ export default function CRMExpenseApprovalQueue() {
                           </button>
                         </div>
                       )}
-                      {item.status !== 'pending_approval' && item.reviewNotes && (
+                      {!isPendingStatus(item.status) && item.reviewNotes && (
                         <div
                           className="max-w-xs truncate text-xs text-[color:var(--color-text-muted)]"
                           title={item.reviewNotes}
@@ -254,11 +376,73 @@ export default function CRMExpenseApprovalQueue() {
       )}
 
       {/* Review Modal */}
-      {selectedExpense && selectedExpense.status === 'pending_approval' && (
+      {selectedExpense && isPendingStatus(selectedExpense.status) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setSelectedExpense(null)} />
           <div className="relative z-10 w-[min(90vw,40rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
             <h2 className="mb-4 text-lg font-semibold">Review Expense Approval Request</h2>
+
+            {/* Current Status */}
+            <div className="mb-4 flex items-center gap-2">
+              {getStatusBadge(selectedExpense.status)}
+            </div>
+
+            {/* Approval Progress */}
+            <div className="mb-4 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+              <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-2">Approval Progress</div>
+              <div className="flex items-center gap-2 text-xs">
+                {/* Manager */}
+                <div className={`flex items-center gap-1 rounded px-2 py-1 ${
+                  selectedExpense.managerApprovedAt 
+                    ? 'bg-emerald-500/20 text-emerald-400' 
+                    : selectedExpense.status === 'pending_manager_approval' || selectedExpense.status === 'pending_approval'
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'bg-gray-500/20 text-gray-400'
+                }`}>
+                  {selectedExpense.managerApprovedAt ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                  Manager
+                </div>
+                <ArrowRight className="h-3 w-3 text-[color:var(--color-text-muted)]" />
+                
+                {/* Senior Manager */}
+                <div className={`flex items-center gap-1 rounded px-2 py-1 ${
+                  selectedExpense.seniorManagerApprovedAt 
+                    ? 'bg-emerald-500/20 text-emerald-400' 
+                    : selectedExpense.status === 'pending_senior_approval'
+                    ? 'bg-orange-500/20 text-orange-400'
+                    : 'bg-gray-500/20 text-gray-400'
+                }`}>
+                  {selectedExpense.seniorManagerApprovedAt ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                  Sr. Manager
+                </div>
+                <ArrowRight className="h-3 w-3 text-[color:var(--color-text-muted)]" />
+                
+                {/* Finance Manager */}
+                <div className={`flex items-center gap-1 rounded px-2 py-1 ${
+                  selectedExpense.financeManagerApprovedAt 
+                    ? 'bg-emerald-500/20 text-emerald-400' 
+                    : selectedExpense.status === 'pending_finance_approval'
+                    ? 'bg-purple-500/20 text-purple-400'
+                    : 'bg-gray-500/20 text-gray-400'
+                }`}>
+                  {selectedExpense.financeManagerApprovedAt ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                  Finance
+                </div>
+              </div>
+              
+              {/* Show assigned approvers */}
+              <div className="mt-2 space-y-1 text-xs text-[color:var(--color-text-muted)]">
+                {selectedExpense.managerApproverName && (
+                  <div>Manager: {selectedExpense.managerApproverName} {selectedExpense.managerApprovedAt && `(approved ${formatDateTime(selectedExpense.managerApprovedAt)})`}</div>
+                )}
+                {selectedExpense.seniorManagerApproverName && (
+                  <div>Sr. Manager: {selectedExpense.seniorManagerApproverName} {selectedExpense.seniorManagerApprovedAt && `(approved ${formatDateTime(selectedExpense.seniorManagerApprovedAt)})`}</div>
+                )}
+                {selectedExpense.financeManagerApproverName && (
+                  <div>Finance: {selectedExpense.financeManagerApproverName} {selectedExpense.financeManagerApprovedAt && `(approved ${formatDateTime(selectedExpense.financeManagerApprovedAt)})`}</div>
+                )}
+              </div>
+            </div>
 
             <div className="mb-4 space-y-3 text-sm">
               <div className="flex items-center gap-2">
@@ -347,7 +531,7 @@ export default function CRMExpenseApprovalQueue() {
                 className="inline-flex items-center gap-1 rounded-lg border border-emerald-500 bg-emerald-500 px-3 py-2 text-sm text-white hover:bg-emerald-600 disabled:opacity-50"
               >
                 <CheckCircle className="h-4 w-4" />
-                Approve
+                Approve Level
               </button>
             </div>
           </div>
@@ -355,7 +539,7 @@ export default function CRMExpenseApprovalQueue() {
       )}
 
       {/* View Details Modal (for approved/rejected) */}
-      {selectedExpense && selectedExpense.status !== 'pending_approval' && (
+      {selectedExpense && !isPendingStatus(selectedExpense.status) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setSelectedExpense(null)} />
           <div className="relative z-10 w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
