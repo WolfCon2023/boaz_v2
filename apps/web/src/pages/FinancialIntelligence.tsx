@@ -966,7 +966,12 @@ export default function FinancialIntelligence() {
             {/* Auto-Posting Panel */}
             {accounts.length > 0 && (
               <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
-                <h2 className="mb-3 text-sm font-semibold">Auto-Post Transactions</h2>
+                <div className="mb-3 flex items-center gap-2">
+                  <h2 className="text-sm font-semibold">Auto-Post Transactions</h2>
+                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                    Requires Admin, Senior Manager, or Finance Manager role
+                  </span>
+                </div>
                 <p className="mb-4 text-xs text-[color:var(--color-text-muted)]">
                   Automatically create journal entries from existing invoices, payments, time entries, and renewals.
                   Only unposted transactions will be processed.
