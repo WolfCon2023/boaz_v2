@@ -447,19 +447,38 @@ export default function CRMExpenses() {
   const [uploadingAttachment, setUploadingAttachment] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
+  // Helper to refresh editing state with latest expense data
+  const refreshEditingExpense = async (expenseId: string) => {
+    try {
+      const res = await http.get(`/api/crm/expenses/${expenseId}`)
+      if (res.data?.data && editing?._id === expenseId) {
+        setEditing(res.data.data)
+      }
+      // Also update viewingExpense if it's the same expense
+      if (res.data?.data && viewingExpense?._id === expenseId) {
+        setViewingExpense(res.data.data)
+      }
+    } catch (err) {
+      console.error('Failed to refresh expense:', err)
+    }
+  }
+
   // Upload attachment mutation
   const uploadAttachment = useMutation({
     mutationFn: async ({ expenseId, file }: { expenseId: string; file: File }) => {
       const formData = new FormData()
       formData.append('file', file)
-      return http.post(`/api/crm/expenses/${expenseId}/attachments`, formData, {
+      const res = await http.post(`/api/crm/expenses/${expenseId}/attachments`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
+      return { ...res, expenseId }
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['crm-expenses'] })
       toast.showToast('Attachment uploaded.', 'success')
       setUploadingAttachment(false)
+      // Refresh the editing/viewing expense to show new attachment
+      refreshEditingExpense(res.expenseId)
     },
     onError: (err: any) => {
       toast.showToast(err?.response?.data?.error || 'Failed to upload attachment.', 'error')
@@ -469,11 +488,15 @@ export default function CRMExpenses() {
 
   // Delete attachment mutation
   const deleteAttachment = useMutation({
-    mutationFn: async ({ expenseId, attachmentId }: { expenseId: string; attachmentId: string }) =>
-      http.delete(`/api/crm/expenses/${expenseId}/attachments/${attachmentId}`),
-    onSuccess: () => {
+    mutationFn: async ({ expenseId, attachmentId }: { expenseId: string; attachmentId: string }) => {
+      await http.delete(`/api/crm/expenses/${expenseId}/attachments/${attachmentId}`)
+      return { expenseId }
+    },
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['crm-expenses'] })
       toast.showToast('Attachment deleted.', 'success')
+      // Refresh the editing/viewing expense to remove attachment from list
+      refreshEditingExpense(res.expenseId)
     },
     onError: (err: any) => {
       toast.showToast(err?.response?.data?.error || 'Failed to delete attachment.', 'error')
@@ -951,10 +974,83 @@ export default function CRMExpenses() {
                 />
               </div>
 
-              {/* Attachment note for new expenses */}
-              {!editing?._id && (
+              {/* Attachments Section */}
+              {editing?._id ? (
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-xs font-medium">Receipts & Attachments</label>
+                    <label className="cursor-pointer rounded-lg bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)]">
+                      {uploadingAttachment ? 'Uploading...' : '+ Upload'}
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file && editing?._id) {
+                            setUploadingAttachment(true)
+                            uploadAttachment.mutate(
+                              { expenseId: editing._id, file },
+                              {
+                                onSettled: () => {
+                                  setUploadingAttachment(false)
+                                  e.target.value = ''
+                                },
+                              }
+                            )
+                          }
+                        }}
+                        disabled={uploadingAttachment}
+                      />
+                    </label>
+                  </div>
+                  
+                  {(!editing.attachments || editing.attachments.length === 0) ? (
+                    <div className="rounded-lg border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-center text-xs text-[color:var(--color-text-muted)]">
+                      No attachments. Upload receipts or documents.
+                    </div>
+                  ) : (
+                    <div className="max-h-32 space-y-1 overflow-y-auto rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-2">
+                      {editing.attachments.map((att) => (
+                        <div
+                          key={att.id}
+                          className="flex items-center justify-between rounded bg-[color:var(--color-muted)] px-2 py-1.5 text-xs"
+                        >
+                          <span className="truncate max-w-[200px]" title={att.fileName}>
+                            {att.fileName}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:underline"
+                            >
+                              View
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm('Delete this attachment?')) {
+                                  deleteAttachment.mutate({
+                                    expenseId: editing._id,
+                                    attachmentId: att.id,
+                                  })
+                                }
+                              }}
+                              className="text-red-400 hover:text-red-300"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <div className="rounded-lg border border-dashed border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-300">
-                  <span className="font-medium">Receipts & Attachments:</span> After creating this expense, you can upload receipts and supporting documents from the expense detail view.
+                  <span className="font-medium">Receipts & Attachments:</span> After creating this expense, you can upload receipts and supporting documents.
                 </div>
               )}
             </div>
