@@ -524,6 +524,31 @@ expensesRouter.get('/summary', async (req: any, res) => {
   })
 })
 
+// GET /api/crm/expenses/attachments/:filename - Serve attachment file
+// NOTE: This must be defined BEFORE /:id routes to prevent "attachments" matching as :id
+expensesRouter.get('/attachments/:filename', async (req, res) => {
+  const filename = req.params.filename
+
+  // Security: only allow alphanumeric, dash, underscore, and extension
+  if (!/^[\w-]+\.\w+$/.test(filename)) {
+    return res.status(400).json({ data: null, error: 'invalid_filename' })
+  }
+
+  const filePath = path.resolve(uploadDir, filename)
+
+  // Security: ensure resolved path is within upload directory
+  const resolvedUploadDir = path.resolve(uploadDir)
+  if (!filePath.startsWith(resolvedUploadDir)) {
+    return res.status(403).json({ data: null, error: 'access_denied' })
+  }
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ data: null, error: 'file_not_found' })
+  }
+
+  res.sendFile(filePath)
+})
+
 // GET /api/crm/expenses/:id - Get single expense
 expensesRouter.get('/:id', async (req, res) => {
   const db = await getDb()
@@ -1196,30 +1221,6 @@ expensesRouter.get('/:id/attachments', async (req: any, res) => {
   }))
 
   res.json({ data: { attachments }, error: null })
-})
-
-// GET /api/crm/expenses/attachments/:filename - Serve attachment file
-expensesRouter.get('/attachments/:filename', async (req, res) => {
-  const filename = req.params.filename
-
-  // Security: only allow alphanumeric, dash, underscore, and extension
-  if (!/^[\w-]+\.\w+$/.test(filename)) {
-    return res.status(400).json({ data: null, error: 'invalid_filename' })
-  }
-
-  const filePath = path.resolve(uploadDir, filename)
-
-  // Security: ensure resolved path is within upload directory
-  const resolvedUploadDir = path.resolve(uploadDir)
-  if (!filePath.startsWith(resolvedUploadDir)) {
-    return res.status(403).json({ data: null, error: 'access_denied' })
-  }
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ data: null, error: 'file_not_found' })
-  }
-
-  res.sendFile(filePath)
 })
 
 // DELETE /api/crm/expenses/:id/attachments/:attachmentId - Delete attachment
