@@ -444,7 +444,6 @@ expensesRouter.get('/', async (req: any, res) => {
   // Log for debugging (can be removed later)
   console.log('[Expenses] User visibility check:', { 
     userId, 
-    isAdmin, 
     hasAdminPermission, 
     userRoleNames, 
     isFinanceManager, 
