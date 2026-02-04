@@ -41,7 +41,7 @@ interface CreateJournalEntryParams {
   db: Db
   date: Date
   description: string
-  sourceType: 'invoice' | 'payment' | 'expense' | 'payroll' | 'time_entry' | 'manual' | 'adjustment' | 'renewal'
+  sourceType: 'invoice' | 'invoice_adjustment' | 'payment' | 'expense' | 'payroll' | 'time_entry' | 'manual' | 'adjustment' | 'renewal'
   sourceId: string
   lines: Array<{
     accountNumber: string
