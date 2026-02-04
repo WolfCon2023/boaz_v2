@@ -940,8 +940,97 @@ expensesRouter.get('/summary', async (req: any, res) => {
   const startDate = req.query.startDate ? new Date(req.query.startDate as string) : new Date(new Date().getFullYear(), 0, 1)
   const endDate = req.query.endDate ? new Date(req.query.endDate as string) : new Date()
 
+  // Apply same visibility filtering as expense list
+  const userId = req.auth?.userId
+  
+  // Determine user roles and admin status
+  let userRoleNames: string[] = []
+  let hasAdminPermission = false
+  
+  if (userId) {
+    // Fetch user document to check isAdmin flag
+    let userIsAdmin = false
+    try {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(userId) })
+      userIsAdmin = (user as any)?.isAdmin === true
+    } catch {
+      // Invalid userId format
+    }
+    
+    const [userRoles, allRoles] = await Promise.all([
+      db.collection('user_roles').find({ userId }).toArray(),
+      db.collection('roles').find({}).toArray(),
+    ])
+    const roleIdToName = new Map(allRoles.map((r: any) => [r._id.toString(), r.name]))
+    const roleIdToPermissions = new Map(allRoles.map((r: any) => [r._id.toString(), r.permissions || []]))
+    
+    for (const ur of userRoles) {
+      const roleName = roleIdToName.get(ur.roleId.toString())
+      if (roleName) userRoleNames.push(roleName)
+      
+      // Check if this role has admin permissions
+      const perms = roleIdToPermissions.get(ur.roleId.toString()) || []
+      if (perms.includes('*')) hasAdminPermission = true
+    }
+    
+    // Also consider isAdmin flag from user document
+    if (userIsAdmin) hasAdminPermission = true
+  }
+
+  const isFinanceManager = userRoleNames.includes('finance_manager')
+  const isSeniorManager = userRoleNames.includes('senior_manager')
+  const isManager = userRoleNames.includes('manager')
+  const isITManager = userRoleNames.includes('it_manager')
+
+  // Build visibility filter based on role (same logic as expense list)
+  const visibilityFilter: Record<string, unknown> = {}
+  const canSeeAll = hasAdminPermission || isFinanceManager || isITManager
+  
+  if (!canSeeAll && userId) {
+    if (isManager || isSeniorManager) {
+      // Get users who report to this manager
+      const directReports = await db.collection('users')
+        .find({ reportsTo: userId })
+        .project({ _id: 1 })
+        .toArray()
+      const directReportIds = directReports.map((u: any) => u._id.toString())
+
+      // Manager/Senior Manager visibility
+      const orConditions: any[] = [
+        { createdBy: userId },
+        { createdBy: { $exists: false } },
+        { createdBy: null },
+        { createdBy: '' },
+        { managerApproverId: userId },
+        { seniorManagerApproverId: userId },
+        { submittedBy: userId },
+      ]
+      
+      if (directReportIds.length > 0) {
+        orConditions.push({ createdBy: { $in: directReportIds } })
+      }
+
+      visibilityFilter.$or = orConditions
+    } else if (userId) {
+      // Staff: only their own expenses
+      visibilityFilter.$or = [
+        { createdBy: userId },
+        { submittedBy: userId },
+        { createdBy: { $exists: false } },
+        { createdBy: null },
+        { createdBy: '' },
+      ]
+    }
+  }
+
+  // Combine date filter with visibility filter
+  const matchFilter: Record<string, unknown> = { 
+    date: { $gte: startDate, $lte: endDate },
+    ...visibilityFilter,
+  }
+
   const pipeline = [
-    { $match: { date: { $gte: startDate, $lte: endDate } } },
+    { $match: matchFilter },
     {
       $group: {
         _id: '$status',
@@ -968,9 +1057,9 @@ expensesRouter.get('/summary', async (req: any, res) => {
     }
   }
 
-  // Category breakdown for paid expenses
+  // Category breakdown for paid expenses (also filtered by visibility)
   const categoryPipeline = [
-    { $match: { date: { $gte: startDate, $lte: endDate }, status: 'paid' } },
+    { $match: { ...matchFilter, status: 'paid' } },
     { $unwind: '$lines' },
     {
       $group: {
