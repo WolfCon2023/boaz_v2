@@ -16,6 +16,17 @@ type ExpenseLine = {
   projectId?: string
 }
 
+type ExpenseAttachment = {
+  id: string
+  fileName: string
+  fileType: string
+  fileSize: number
+  uploadedByUserId: string
+  uploadedByEmail?: string
+  uploadedAt: string
+  url: string
+}
+
 type Expense = {
   _id: string
   expenseNumber: number
@@ -30,10 +41,17 @@ type Expense = {
   referenceNumber?: string
   status: ExpenseStatus
   submittedBy?: string
+  submittedByName?: string
+  submittedByEmail?: string
   submittedAt?: string
+  approverUserId?: string
+  approverName?: string
+  approverEmail?: string
   approvedBy?: string
+  approvedByName?: string
   approvedAt?: string
   rejectedBy?: string
+  rejectedByName?: string
   rejectedAt?: string
   rejectionReason?: string
   paidBy?: string
@@ -42,6 +60,7 @@ type Expense = {
   voidedAt?: string
   voidReason?: string
   journalEntryId?: string
+  attachments?: ExpenseAttachment[]
   notes?: string
   createdAt: string
   updatedAt: string
@@ -169,6 +188,21 @@ export default function CRMExpenses() {
   })
   const summary = summaryQ.data?.data
 
+  // Fetch approvers (managers who can approve expenses)
+  const approversQ = useQuery({
+    queryKey: ['expense-approvers'],
+    queryFn: async () => {
+      const res = await http.get('/api/crm/expenses/approvers')
+      return res.data as { data: { approvers: Array<{ id: string; name: string; email: string }> } }
+    },
+  })
+  const approvers = approversQ.data?.data.approvers ?? []
+
+  // Submit dialog state
+  const [submitDialogOpen, setSubmitDialogOpen] = React.useState(false)
+  const [submitExpenseId, setSubmitExpenseId] = React.useState<string | null>(null)
+  const [selectedApproverId, setSelectedApproverId] = React.useState<string>('')
+
   // Mutations
   const saveExpense = useMutation({
     mutationFn: async () => {
@@ -221,16 +255,41 @@ export default function CRMExpenses() {
   })
 
   const submitExpense = useMutation({
-    mutationFn: async (id: string) => http.post(`/api/crm/expenses/${id}/submit`),
+    mutationFn: async ({ id, approverUserId }: { id: string; approverUserId: string }) => 
+      http.post(`/api/crm/expenses/${id}/submit`, { approverUserId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['crm-expenses'] })
       qc.invalidateQueries({ queryKey: ['crm-expenses-summary'] })
+      setSubmitDialogOpen(false)
+      setSubmitExpenseId(null)
+      setSelectedApproverId('')
       toast.showToast('Expense submitted for approval.', 'success')
     },
     onError: (err: any) => {
-      toast.showToast(err?.response?.data?.error || 'Failed to submit expense.', 'error')
+      const errorMsg = err?.response?.data?.error
+      if (errorMsg === 'approver_required') {
+        toast.showToast('Please select an approver.', 'error')
+      } else {
+        toast.showToast(errorMsg || 'Failed to submit expense.', 'error')
+      }
     },
   })
+
+  // Open submit dialog
+  function openSubmitDialog(expenseId: string) {
+    setSubmitExpenseId(expenseId)
+    setSelectedApproverId(approvers.length > 0 ? approvers[0].id : '')
+    setSubmitDialogOpen(true)
+  }
+
+  // Handle submit with approver
+  function handleSubmitWithApprover() {
+    if (!submitExpenseId || !selectedApproverId) {
+      toast.showToast('Please select an approver.', 'error')
+      return
+    }
+    submitExpense.mutate({ id: submitExpenseId, approverUserId: selectedApproverId })
+  }
 
   const approveExpense = useMutation({
     mutationFn: async (id: string) => http.post(`/api/crm/expenses/${id}/approve`),
@@ -298,6 +357,64 @@ export default function CRMExpenses() {
       toast.showToast(err?.response?.data?.error || 'Failed to delete expense.', 'error')
     },
   })
+
+  // Attachment state
+  const [viewingExpense, setViewingExpense] = React.useState<Expense | null>(null)
+  const [uploadingAttachment, setUploadingAttachment] = React.useState(false)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+  // Upload attachment mutation
+  const uploadAttachment = useMutation({
+    mutationFn: async ({ expenseId, file }: { expenseId: string; file: File }) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return http.post(`/api/crm/expenses/${expenseId}/attachments`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['crm-expenses'] })
+      toast.showToast('Attachment uploaded.', 'success')
+      setUploadingAttachment(false)
+    },
+    onError: (err: any) => {
+      toast.showToast(err?.response?.data?.error || 'Failed to upload attachment.', 'error')
+      setUploadingAttachment(false)
+    },
+  })
+
+  // Delete attachment mutation
+  const deleteAttachment = useMutation({
+    mutationFn: async ({ expenseId, attachmentId }: { expenseId: string; attachmentId: string }) =>
+      http.delete(`/api/crm/expenses/${expenseId}/attachments/${attachmentId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['crm-expenses'] })
+      toast.showToast('Attachment deleted.', 'success')
+    },
+    onError: (err: any) => {
+      toast.showToast(err?.response?.data?.error || 'Failed to delete attachment.', 'error')
+    },
+  })
+
+  // Handle file upload
+  function handleFileUpload(expenseId: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) {
+      setUploadingAttachment(true)
+      uploadAttachment.mutate({ expenseId, file })
+    }
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  // Format file size
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
 
   function openCreateModal() {
     setIsCreating(true)
@@ -491,7 +608,7 @@ export default function CRMExpenses() {
                               Edit
                             </button>
                             <button
-                              onClick={() => submitExpense.mutate(exp._id)}
+                              onClick={() => openSubmitDialog(exp._id)}
                               className="rounded bg-amber-500/20 px-2 py-1 text-amber-400 hover:bg-amber-500/30"
                             >
                               Submit
@@ -544,6 +661,13 @@ export default function CRMExpenses() {
                         {exp.status === 'paid' && exp.journalEntryId && (
                           <span className="text-[10px] text-emerald-400">Posted to GL</span>
                         )}
+                        <button
+                          onClick={() => setViewingExpense(exp)}
+                          className="rounded px-2 py-1 text-blue-400 hover:bg-blue-500/20"
+                          title="View details and attachments"
+                        >
+                          View
+                        </button>
                         {!['paid', 'void'].includes(exp.status) && isAdmin && (
                           <button
                             onClick={() => {
@@ -745,6 +869,240 @@ export default function CRMExpenses() {
                 className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
               >
                 {saveExpense.isPending ? 'Saving...' : editing?._id ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submit for Approval Dialog */}
+      {submitDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setSubmitDialogOpen(false)} />
+          <div className="relative z-10 w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold">Submit for Approval</h2>
+            <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">
+              Select a manager to review and approve this expense.
+            </p>
+            
+            <div className="mb-4">
+              <label className="mb-1 block text-xs font-medium">Approver *</label>
+              <select
+                value={selectedApproverId}
+                onChange={(e) => setSelectedApproverId(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+              >
+                <option value="">— Select approver —</option>
+                {approvers.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.email})
+                  </option>
+                ))}
+              </select>
+              {approvers.length === 0 && (
+                <p className="mt-1 text-xs text-amber-400">
+                  No approvers available. Contact your administrator.
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmitDialogOpen(false)
+                  setSubmitExpenseId(null)
+                  setSelectedApproverId('')
+                }}
+                className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitWithApprover}
+                disabled={!selectedApproverId || submitExpense.isPending}
+                className="rounded-lg bg-amber-500 px-4 py-2 text-sm text-white hover:bg-amber-600 disabled:opacity-50"
+              >
+                {submitExpense.isPending ? 'Submitting...' : 'Submit for Approval'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expense Detail Modal with Attachments */}
+      {viewingExpense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setViewingExpense(null)} />
+          <div className="relative z-10 max-h-[90vh] w-[min(90vw,48rem)] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                Expense #{viewingExpense.expenseNumber}
+              </h2>
+              <span
+                className={`inline-block rounded-full border px-2 py-0.5 text-xs ${STATUS_COLORS[viewingExpense.status]}`}
+              >
+                {STATUS_LABELS[viewingExpense.status]}
+              </span>
+            </div>
+
+            {/* Expense Details */}
+            <div className="mb-6 grid gap-4 text-sm sm:grid-cols-2">
+              <div>
+                <span className="text-[color:var(--color-text-muted)]">Date:</span>{' '}
+                <span>{formatDate(viewingExpense.date)}</span>
+              </div>
+              <div>
+                <span className="text-[color:var(--color-text-muted)]">Amount:</span>{' '}
+                <span className="font-semibold">{formatCurrency(viewingExpense.total)}</span>
+              </div>
+              <div>
+                <span className="text-[color:var(--color-text-muted)]">Payee:</span>{' '}
+                <span>{viewingExpense.vendorName || viewingExpense.payee || '—'}</span>
+              </div>
+              <div>
+                <span className="text-[color:var(--color-text-muted)]">Payment Method:</span>{' '}
+                <span>{viewingExpense.paymentMethod || '—'}</span>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="text-[color:var(--color-text-muted)]">Description:</span>{' '}
+                <span>{viewingExpense.description}</span>
+              </div>
+              {viewingExpense.approverName && (
+                <div>
+                  <span className="text-[color:var(--color-text-muted)]">Approver:</span>{' '}
+                  <span>{viewingExpense.approverName}</span>
+                </div>
+              )}
+              {viewingExpense.submittedByName && (
+                <div>
+                  <span className="text-[color:var(--color-text-muted)]">Submitted By:</span>{' '}
+                  <span>{viewingExpense.submittedByName}</span>
+                </div>
+              )}
+              {viewingExpense.rejectionReason && (
+                <div className="sm:col-span-2">
+                  <span className="text-red-400">Rejection Reason:</span>{' '}
+                  <span>{viewingExpense.rejectionReason}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Line Items */}
+            {viewingExpense.lines.length > 0 && (
+              <div className="mb-6">
+                <h3 className="mb-2 text-sm font-medium">Line Items</h3>
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                  <div className="space-y-2 text-xs">
+                    {viewingExpense.lines.map((line, idx) => (
+                      <div key={idx} className="flex items-center justify-between">
+                        <span>
+                          {line.category}
+                          {line.description ? ` - ${line.description}` : ''}
+                        </span>
+                        <span className="font-mono">{formatCurrency(line.amount)}</span>
+                      </div>
+                    ))}
+                    <div className="border-t border-[color:var(--color-border)] pt-2 mt-2 flex items-center justify-between font-semibold">
+                      <span>Total</span>
+                      <span className="font-mono">{formatCurrency(viewingExpense.total)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Attachments Section */}
+            <div className="mb-6">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-medium">Receipts & Attachments</h3>
+                {/* Upload button - only for draft, rejected, or if admin */}
+                {(viewingExpense.status === 'draft' || viewingExpense.status === 'rejected' || isAdmin) && (
+                  <label className="cursor-pointer rounded-lg bg-[color:var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[color:var(--color-primary-700)]">
+                    {uploadingAttachment ? 'Uploading...' : 'Upload Receipt'}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
+                      onChange={(e) => handleFileUpload(viewingExpense._id, e)}
+                      disabled={uploadingAttachment}
+                    />
+                  </label>
+                )}
+              </div>
+
+              {(!viewingExpense.attachments || viewingExpense.attachments.length === 0) ? (
+                <div className="rounded-lg border border-dashed border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4 text-center text-xs text-[color:var(--color-text-muted)]">
+                  No attachments yet. Upload receipts or supporting documents.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {viewingExpense.attachments.map((att) => (
+                    <div
+                      key={att.id}
+                      className="flex items-center justify-between rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded bg-[color:var(--color-muted)] text-xs">
+                          {att.fileType.includes('pdf') ? '📄' : '🖼️'}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium">{att.fileName}</div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">
+                            {formatFileSize(att.fileSize)} • Uploaded {formatDate(att.uploadedAt)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={att.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded px-2 py-1 text-xs text-blue-400 hover:bg-blue-500/20"
+                        >
+                          Download
+                        </a>
+                        {(viewingExpense.status !== 'paid' || isAdmin) && (
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this attachment?')) {
+                                deleteAttachment.mutate({
+                                  expenseId: viewingExpense._id,
+                                  attachmentId: att.id,
+                                })
+                              }
+                            }}
+                            className="rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/20"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            {viewingExpense.notes && (
+              <div className="mb-6">
+                <h3 className="mb-2 text-sm font-medium">Notes</h3>
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-sm">
+                  {viewingExpense.notes}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewingExpense(null)}
+                className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+              >
+                Close
               </button>
             </div>
           </div>

@@ -14,10 +14,52 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { ObjectId } from 'mongodb'
+import multer, { FileFilterCallback } from 'multer'
+import path from 'path'
+import fs from 'fs'
 import { getDb } from '../db.js'
 import { requireAuth, requirePermission } from '../auth/rbac.js'
+import { env } from '../env.js'
 
 export const expensesRouter = Router()
+
+// Setup upload directory for expense receipts
+const uploadDir = env.UPLOAD_DIR 
+  ? path.join(env.UPLOAD_DIR, 'expense_receipts') 
+  : path.join(process.cwd(), 'uploads', 'expense_receipts')
+
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true })
+  }
+} catch (err) {
+  console.error('Failed to create expense receipts upload directory:', err)
+}
+
+// Configure multer for expense attachments
+const expenseStorage = multer.diskStorage({
+  destination: (_req: any, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => cb(null, uploadDir),
+  filename: (_req: any, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9)
+    cb(null, `expense-${uniqueSuffix}${path.extname(file.originalname)}`)
+  },
+})
+
+const expenseFileFilter = (_req: any, file: Express.Multer.File, cb: FileFilterCallback) => {
+  // Allow common receipt types: PDF, images
+  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true)
+  } else {
+    cb(new Error('Invalid file type. Only PDF, JPG, PNG, GIF, and WEBP are allowed.'))
+  }
+}
+
+const uploadExpenseAttachment = multer({
+  storage: expenseStorage,
+  fileFilter: expenseFileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+})
 
 expensesRouter.use(requireAuth)
 
@@ -29,6 +71,29 @@ type ExpenseLine = {
   amount: number
   description?: string
   projectId?: string
+}
+
+// Approval history entry for audit trail
+type ApprovalHistoryEntry = {
+  action: 'submitted' | 'approved' | 'rejected' | 'withdrawn' | 'resubmitted'
+  userId: string
+  userEmail?: string
+  userName?: string
+  timestamp: Date
+  notes?: string
+  approverUserId?: string
+}
+
+// Attachment metadata
+type AttachmentDoc = {
+  id: string
+  fileName: string
+  fileType: string
+  fileSize: number
+  uploadedByUserId: string
+  uploadedByEmail?: string
+  uploadedAt: Date
+  url: string
 }
 
 type ExpenseDoc = {
@@ -45,10 +110,19 @@ type ExpenseDoc = {
   referenceNumber?: string // Check number, transaction ID, etc.
   status: ExpenseStatus
   submittedBy?: string
+  submittedByEmail?: string
+  submittedByName?: string
   submittedAt?: Date
+  approverUserId?: string // Selected manager to approve
+  approverEmail?: string
+  approverName?: string
   approvedBy?: string
+  approvedByEmail?: string
+  approvedByName?: string
   approvedAt?: Date
   rejectedBy?: string
+  rejectedByEmail?: string
+  rejectedByName?: string
   rejectedAt?: Date
   rejectionReason?: string
   paidBy?: string
@@ -57,9 +131,34 @@ type ExpenseDoc = {
   voidedAt?: Date
   voidReason?: string
   journalEntryId?: string // Link to Financial Intelligence
-  attachments?: Array<{ name: string; url: string; uploadedAt: Date }>
+  attachments?: AttachmentDoc[]
+  approvalHistory?: ApprovalHistoryEntry[]
   notes?: string
   createdBy: string
+  createdByEmail?: string
+  createdByName?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Expense approval request (for queue)
+type ExpenseApprovalRequestDoc = {
+  _id: ObjectId
+  expenseId: ObjectId
+  expenseNumber: number
+  expenseDescription: string
+  expenseTotal: number
+  requesterId: string
+  requesterEmail: string
+  requesterName?: string
+  approverUserId: string
+  approverEmail: string
+  approverName?: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedAt: Date
+  reviewedAt?: Date
+  reviewedBy?: string
+  reviewNotes?: string
   createdAt: Date
   updatedAt: Date
 }
@@ -139,10 +238,19 @@ function serializeExpense(doc: ExpenseDoc) {
     referenceNumber: doc.referenceNumber,
     status: doc.status,
     submittedBy: doc.submittedBy,
+    submittedByEmail: doc.submittedByEmail,
+    submittedByName: doc.submittedByName,
     submittedAt: doc.submittedAt?.toISOString(),
+    approverUserId: doc.approverUserId,
+    approverEmail: doc.approverEmail,
+    approverName: doc.approverName,
     approvedBy: doc.approvedBy,
+    approvedByEmail: doc.approvedByEmail,
+    approvedByName: doc.approvedByName,
     approvedAt: doc.approvedAt?.toISOString(),
     rejectedBy: doc.rejectedBy,
+    rejectedByEmail: doc.rejectedByEmail,
+    rejectedByName: doc.rejectedByName,
     rejectedAt: doc.rejectedAt?.toISOString(),
     rejectionReason: doc.rejectionReason,
     paidBy: doc.paidBy,
@@ -152,8 +260,14 @@ function serializeExpense(doc: ExpenseDoc) {
     voidReason: doc.voidReason,
     journalEntryId: doc.journalEntryId,
     attachments: doc.attachments,
+    approvalHistory: doc.approvalHistory?.map((h) => ({
+      ...h,
+      timestamp: h.timestamp instanceof Date ? h.timestamp.toISOString() : h.timestamp,
+    })),
     notes: doc.notes,
     createdBy: doc.createdBy,
+    createdByEmail: doc.createdByEmail,
+    createdByName: doc.createdByName,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   }
@@ -218,6 +332,130 @@ expensesRouter.get('/', async (req: any, res) => {
 // GET /api/crm/expenses/categories - Get expense categories
 expensesRouter.get('/categories', async (_req, res) => {
   res.json({ data: { categories: EXPENSE_CATEGORIES }, error: null })
+})
+
+// GET /api/crm/expenses/approvers - Get eligible expense approvers (managers)
+expensesRouter.get('/approvers', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.json({ data: { approvers: [] }, error: null })
+
+  try {
+    // Find users with manager role
+    const managerRole = await db.collection('roles').findOne({ name: 'manager' })
+    if (!managerRole) {
+      return res.json({ data: { approvers: [] }, error: null })
+    }
+
+    // Get user IDs with manager role
+    const userRoles = await db.collection('user_roles')
+      .find({ roleId: managerRole._id })
+      .toArray()
+    
+    const managerUserIds = userRoles.map((ur: any) => ur.userId)
+
+    // Get manager user details
+    const managers = await db.collection('users')
+      .find({
+        $or: [
+          { _id: { $in: managerUserIds.map((id: string) => {
+            try { return new ObjectId(id) } catch { return null }
+          }).filter(Boolean) } },
+          // Also include admins
+          { isAdmin: true },
+        ],
+      })
+      .project({ _id: 1, name: 1, email: 1 })
+      .toArray()
+
+    const approvers = managers.map((m: any) => ({
+      id: m._id.toHexString(),
+      name: m.name || m.email,
+      email: m.email,
+    }))
+
+    res.json({ data: { approvers }, error: null })
+  } catch (err: any) {
+    console.error('[expenses] GET /approvers error:', err)
+    res.json({ data: { approvers: [] }, error: null })
+  }
+})
+
+// GET /api/crm/expenses/approval-queue - Get expenses awaiting approval for current user
+expensesRouter.get('/approval-queue', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const auth = req.auth
+  if (!auth?.userId) {
+    return res.status(401).json({ data: null, error: 'unauthorized' })
+  }
+
+  // Check if user is manager or admin
+  const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+  if (!user) {
+    return res.status(404).json({ data: null, error: 'user_not_found' })
+  }
+
+  const managerRole = await db.collection('roles').findOne({ name: 'manager' })
+  const hasManagerRole = managerRole && await db.collection('user_roles').findOne({
+    userId: auth.userId,
+    roleId: managerRole._id,
+  })
+
+  const isAdmin = (user as any).isAdmin === true
+  if (!hasManagerRole && !isAdmin) {
+    return res.status(403).json({ data: null, error: 'manager_access_required' })
+  }
+
+  const statusFilter = req.query.status as string | undefined
+
+  // Build filter for approval queue
+  const filter: Record<string, unknown> = {}
+  
+  if (isAdmin) {
+    // Admins see all pending_approval expenses
+    filter.status = statusFilter === 'all' ? { $in: ['pending_approval', 'approved', 'rejected'] } : 
+                    statusFilter || 'pending_approval'
+  } else {
+    // Managers see only expenses assigned to them
+    filter.approverUserId = auth.userId
+    filter.status = statusFilter === 'all' ? { $in: ['pending_approval', 'approved', 'rejected'] } : 
+                    statusFilter || 'pending_approval'
+  }
+
+  const items = await db.collection<ExpenseDoc>('crm_expenses')
+    .find(filter)
+    .sort({ submittedAt: -1 })
+    .limit(200)
+    .toArray()
+
+  res.json({
+    data: {
+      items: items.map((doc) => ({
+        _id: doc._id.toHexString(),
+        expenseId: doc._id.toHexString(),
+        expenseNumber: doc.expenseNumber,
+        description: doc.description,
+        total: doc.total,
+        date: doc.date instanceof Date ? doc.date.toISOString() : doc.date,
+        status: doc.status,
+        vendorName: doc.vendorName,
+        payee: doc.payee,
+        requesterId: doc.submittedBy,
+        requesterEmail: doc.submittedByEmail,
+        requesterName: doc.submittedByName,
+        approverUserId: doc.approverUserId,
+        approverEmail: doc.approverEmail,
+        approverName: doc.approverName,
+        requestedAt: doc.submittedAt?.toISOString(),
+        reviewedAt: doc.approvedAt?.toISOString() || doc.rejectedAt?.toISOString(),
+        reviewedBy: doc.approvedBy || doc.rejectedBy,
+        reviewNotes: doc.rejectionReason,
+        lines: doc.lines,
+      })),
+    },
+    error: null,
+  })
 })
 
 // GET /api/crm/expenses/summary - Get expense summary stats
@@ -447,6 +685,12 @@ expensesRouter.post('/:id/submit', async (req: any, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const auth = req.auth
+  const approverUserId = String(req.body.approverUserId || '').trim()
+
+  if (!approverUserId) {
+    return res.status(400).json({ data: null, error: 'approver_required' })
+  }
+
   let id: ObjectId
   try {
     id = new ObjectId(req.params.id)
@@ -461,16 +705,63 @@ expensesRouter.post('/:id/submit', async (req: any, res) => {
     return res.status(400).json({ data: null, error: 'can_only_submit_draft' })
   }
 
+  // Get submitter details
+  const submitter = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+  const submitterData = submitter as any
+
+  // Validate and get approver details
+  let approver: any
+  try {
+    approver = await db.collection('users').findOne({ _id: new ObjectId(approverUserId) })
+  } catch {
+    return res.status(400).json({ data: null, error: 'invalid_approver_id' })
+  }
+  
+  if (!approver) {
+    return res.status(400).json({ data: null, error: 'approver_not_found' })
+  }
+
+  // Verify approver is a manager or admin
+  const managerRole = await db.collection('roles').findOne({ name: 'manager' })
+  const hasManagerRole = managerRole && await db.collection('user_roles').findOne({
+    userId: approverUserId,
+    roleId: managerRole._id,
+  })
+  const isApproverAdmin = approver.isAdmin === true
+
+  if (!hasManagerRole && !isApproverAdmin) {
+    return res.status(400).json({ data: null, error: 'approver_not_authorized' })
+  }
+
   const now = new Date()
+  
+  // Create approval history entry
+  const historyEntry: ApprovalHistoryEntry = {
+    action: 'submitted',
+    userId: auth.userId,
+    userEmail: submitterData?.email,
+    userName: submitterData?.name,
+    timestamp: now,
+    approverUserId,
+  }
+
   await db.collection('crm_expenses').updateOne(
     { _id: id },
     {
       $set: {
         status: 'pending_approval',
         submittedBy: auth.userId,
+        submittedByEmail: submitterData?.email,
+        submittedByName: submitterData?.name,
         submittedAt: now,
+        approverUserId,
+        approverEmail: approver.email,
+        approverName: approver.name,
         updatedAt: now,
       },
+      $push: {
+        approvalHistory: historyEntry,
+      } as any,
     }
   )
 
@@ -484,6 +775,8 @@ expensesRouter.post('/:id/approve', requirePermission('*'), async (req: any, res
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const auth = req.auth
+  const reviewNotes = String(req.body.reviewNotes || '').trim()
+
   let id: ObjectId
   try {
     id = new ObjectId(req.params.id)
@@ -498,16 +791,36 @@ expensesRouter.post('/:id/approve', requirePermission('*'), async (req: any, res
     return res.status(400).json({ data: null, error: 'can_only_approve_pending' })
   }
 
+  // Get approver details
+  const approver = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+  const approverData = approver as any
+
   const now = new Date()
+
+  // Create approval history entry
+  const historyEntry: ApprovalHistoryEntry = {
+    action: 'approved',
+    userId: auth.userId,
+    userEmail: approverData?.email,
+    userName: approverData?.name,
+    timestamp: now,
+    notes: reviewNotes || undefined,
+  }
+
   await db.collection('crm_expenses').updateOne(
     { _id: id },
     {
       $set: {
         status: 'approved',
         approvedBy: auth.userId,
+        approvedByEmail: approverData?.email,
+        approvedByName: approverData?.name,
         approvedAt: now,
         updatedAt: now,
       },
+      $push: {
+        approvalHistory: historyEntry,
+      } as any,
     }
   )
 
@@ -537,17 +850,37 @@ expensesRouter.post('/:id/reject', requirePermission('*'), async (req: any, res)
     return res.status(400).json({ data: null, error: 'can_only_reject_pending' })
   }
 
+  // Get rejecter details
+  const rejecter = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+  const rejecterData = rejecter as any
+
   const now = new Date()
+
+  // Create approval history entry
+  const historyEntry: ApprovalHistoryEntry = {
+    action: 'rejected',
+    userId: auth.userId,
+    userEmail: rejecterData?.email,
+    userName: rejecterData?.name,
+    timestamp: now,
+    notes: reason || undefined,
+  }
+
   await db.collection('crm_expenses').updateOne(
     { _id: id },
     {
       $set: {
         status: 'rejected',
         rejectedBy: auth.userId,
+        rejectedByEmail: rejecterData?.email,
+        rejectedByName: rejecterData?.name,
         rejectedAt: now,
         rejectionReason: reason || null,
         updatedAt: now,
       },
+      $push: {
+        approvalHistory: historyEntry,
+      } as any,
     }
   )
 
@@ -755,5 +1088,199 @@ expensesRouter.delete('/:id', async (req: any, res) => {
   }
 
   await db.collection('crm_expenses').deleteOne({ _id: id })
+  res.json({ data: { deleted: true }, error: null })
+})
+
+// ============================================================================
+// EXPENSE ATTACHMENTS (Receipts and Documents)
+// ============================================================================
+
+// POST /api/crm/expenses/:id/attachments - Upload attachment to expense
+expensesRouter.post('/:id/attachments', uploadExpenseAttachment.single('file'), async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const auth = req.auth
+  if (!auth?.userId) {
+    return res.status(401).json({ data: null, error: 'unauthorized' })
+  }
+
+  let id: ObjectId
+  try {
+    id = new ObjectId(req.params.id)
+  } catch {
+    return res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+
+  const expense = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
+  if (!expense) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Check if user can upload (owner or admin)
+  const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+  const isAdmin = (user as any)?.isAdmin === true
+  const isOwner = expense.createdBy === auth.userId || expense.submittedBy === auth.userId
+
+  if (!isAdmin && !isOwner) {
+    return res.status(403).json({ data: null, error: 'not_authorized' })
+  }
+
+  const file = req.file
+  if (!file) {
+    return res.status(400).json({ data: null, error: 'no_file_provided' })
+  }
+
+  try {
+    const now = new Date()
+    const attachment: AttachmentDoc = {
+      id: new ObjectId().toHexString(),
+      fileName: file.originalname,
+      fileType: file.mimetype,
+      fileSize: file.size,
+      uploadedByUserId: auth.userId,
+      uploadedByEmail: auth.email,
+      uploadedAt: now,
+      url: `/api/crm/expenses/attachments/${file.filename}`,
+    }
+
+    await db.collection('crm_expenses').updateOne(
+      { _id: id },
+      {
+        $push: { attachments: attachment } as any,
+        $set: { updatedAt: now },
+      }
+    )
+
+    res.json({
+      data: {
+        attachment: {
+          ...attachment,
+          uploadedAt: attachment.uploadedAt.toISOString(),
+        },
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('[expenses] Attachment upload error:', err)
+    // Try to clean up uploaded file
+    try {
+      if (file.path) fs.unlinkSync(file.path)
+    } catch {}
+    res.status(500).json({ data: null, error: err.message || 'upload_failed' })
+  }
+})
+
+// GET /api/crm/expenses/:id/attachments - List attachments for expense
+expensesRouter.get('/:id/attachments', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  let id: ObjectId
+  try {
+    id = new ObjectId(req.params.id)
+  } catch {
+    return res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+
+  const expense = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
+  if (!expense) return res.status(404).json({ data: null, error: 'not_found' })
+
+  const attachments = (expense.attachments || []).map((a) => ({
+    ...a,
+    uploadedAt: a.uploadedAt instanceof Date ? a.uploadedAt.toISOString() : a.uploadedAt,
+  }))
+
+  res.json({ data: { attachments }, error: null })
+})
+
+// GET /api/crm/expenses/attachments/:filename - Serve attachment file
+expensesRouter.get('/attachments/:filename', async (req, res) => {
+  const filename = req.params.filename
+
+  // Security: only allow alphanumeric, dash, underscore, and extension
+  if (!/^[\w-]+\.\w+$/.test(filename)) {
+    return res.status(400).json({ data: null, error: 'invalid_filename' })
+  }
+
+  const filePath = path.resolve(uploadDir, filename)
+
+  // Security: ensure resolved path is within upload directory
+  const resolvedUploadDir = path.resolve(uploadDir)
+  if (!filePath.startsWith(resolvedUploadDir)) {
+    return res.status(403).json({ data: null, error: 'access_denied' })
+  }
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ data: null, error: 'file_not_found' })
+  }
+
+  res.sendFile(filePath)
+})
+
+// DELETE /api/crm/expenses/:id/attachments/:attachmentId - Delete attachment
+expensesRouter.delete('/:id/attachments/:attachmentId', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const auth = req.auth
+  if (!auth?.userId) {
+    return res.status(401).json({ data: null, error: 'unauthorized' })
+  }
+
+  let id: ObjectId
+  try {
+    id = new ObjectId(req.params.id)
+  } catch {
+    return res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+
+  const attachmentId = req.params.attachmentId
+
+  const expense = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
+  if (!expense) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Check if user can delete (owner, uploader, or admin)
+  const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+  const isAdmin = (user as any)?.isAdmin === true
+  const isOwner = expense.createdBy === auth.userId
+  const attachment = expense.attachments?.find((a) => a.id === attachmentId)
+
+  if (!attachment) {
+    return res.status(404).json({ data: null, error: 'attachment_not_found' })
+  }
+
+  const isUploader = attachment.uploadedByUserId === auth.userId
+
+  if (!isAdmin && !isOwner && !isUploader) {
+    return res.status(403).json({ data: null, error: 'not_authorized' })
+  }
+
+  // For paid expenses, only admin can delete attachments
+  if (expense.status === 'paid' && !isAdmin) {
+    return res.status(403).json({ data: null, error: 'cannot_modify_paid_expense' })
+  }
+
+  // Try to delete the physical file
+  try {
+    const filename = attachment.url.split('/').pop()
+    if (filename) {
+      const filePath = path.resolve(uploadDir, filename)
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath)
+      }
+    }
+  } catch (err) {
+    console.error('[expenses] Failed to delete attachment file:', err)
+    // Continue anyway - we'll remove from DB
+  }
+
+  const now = new Date()
+  await db.collection('crm_expenses').updateOne(
+    { _id: id },
+    {
+      $pull: { attachments: { id: attachmentId } } as any,
+      $set: { updatedAt: now },
+    }
+  )
+
   res.json({ data: { deleted: true }, error: null })
 })

@@ -32,6 +32,7 @@ import CRMRenewals from '@/pages/CRMRenewals'
 import CRMQuotes from '@/pages/CRMQuotes'
 import CRMApprovalQueue from '@/pages/CRMApprovalQueue'
 import CRMDealApprovalQueue from '@/pages/CRMDealApprovalQueue'
+import CRMExpenseApprovalQueue from '@/pages/CRMExpenseApprovalQueue'
 import CRMInvoices from '@/pages/CRMInvoices'
 import PaymentPortal from '@/pages/PaymentPortal'
 import SecurePaymentCheckout from '@/pages/SecurePaymentCheckout'
@@ -113,6 +114,7 @@ export const router = createBrowserRouter([
       { path: 'apps/crm/quotes/approval-queue', element: <RequireAuth><RequireApplication appKey="crm"><CRMApprovalQueue /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/quotes/acceptance-queue', element: <RequireAuth><RequireApplication appKey="crm"><QuoteAcceptanceQueue /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/deals/approval-queue', element: <RequireAuth><RequireApplication appKey="crm"><CRMDealApprovalQueue /></RequireApplication></RequireAuth> },
+      { path: 'apps/crm/expenses/approval-queue', element: <RequireAuth><RequireApplication appKey="crm"><CRMExpenseApprovalQueue /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoices /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/invoices/:id/print', element: <RequireAuth><RequireApplication appKey="crm"><CRMInvoicePrint /></RequireApplication></RequireAuth> },
       { path: 'apps/crm/payments', element: <RequireAuth><RequireApplication appKey="crm"><PaymentPortal /></RequireApplication></RequireAuth> },
