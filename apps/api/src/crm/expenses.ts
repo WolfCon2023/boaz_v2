@@ -1048,7 +1048,7 @@ expensesRouter.post('/', async (req: any, res) => {
 })
 
 // PATCH /api/crm/expenses/:id - Update expense
-// All expenses can be edited - changes are tracked in audit history
+// Only draft or rejected expenses can be edited - changes are tracked in audit history
 expensesRouter.patch('/:id', async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
@@ -1064,6 +1064,11 @@ expensesRouter.patch('/:id', async (req: any, res) => {
 
   const expense = await db.collection<ExpenseDoc>('crm_expenses').findOne({ _id: id })
   if (!expense) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Can only edit draft or rejected expenses
+  if (!['draft', 'rejected'].includes(expense.status)) {
+    return res.status(400).json({ data: null, error: 'cannot_edit_submitted_expense' })
+  }
 
   const parsed = updateExpenseSchema.safeParse(req.body)
   if (!parsed.success) {
