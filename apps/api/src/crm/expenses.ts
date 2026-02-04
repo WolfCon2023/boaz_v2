@@ -457,6 +457,7 @@ expensesRouter.get('/', async (req: any, res) => {
   const isFinanceManager = userRoleNames.includes('finance_manager')
   const isSeniorManager = userRoleNames.includes('senior_manager')
   const isManager = userRoleNames.includes('manager')
+  const isITManager = userRoleNames.includes('it_manager')
   
   // Log for debugging (can be removed later)
   console.log('[Expenses] User visibility check:', { 
@@ -465,17 +466,18 @@ expensesRouter.get('/', async (req: any, res) => {
     userRoleNames, 
     isFinanceManager, 
     isSeniorManager, 
-    isManager 
+    isManager,
+    isITManager,
   })
 
   // Build visibility filter based on role
-  // Finance Managers, Admins, and users with admin permissions can see all expenses
+  // Finance Managers, IT Managers, Admins, and users with admin permissions can see all expenses
   // Managers/Senior Managers can see: own expenses + expenses they approve + expenses from direct reports + legacy expenses (no createdBy)
   // Staff (everyone else) can only see their own expenses
   const filter: Record<string, unknown> = {}
 
-  // Admins, Finance Managers, and users with admin permissions see all expenses
-  const canSeeAll = hasAdminPermission || isFinanceManager
+  // Admins, Finance Managers, IT Managers, and users with admin permissions see all expenses
+  const canSeeAll = hasAdminPermission || isFinanceManager || isITManager
   
   if (!canSeeAll && userId) {
     if (isManager || isSeniorManager) {
