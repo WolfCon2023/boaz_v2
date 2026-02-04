@@ -573,6 +573,36 @@ invoicesRouter.put('/:id', async (req, res) => {
           oldTotal,
           update.total
         )
+        
+        // Auto-post adjustment to Financial Intelligence
+        try {
+          const difference = update.total - oldTotal
+          if (difference !== 0) {
+            let customerName = 'Unknown Customer'
+            const accId = update.accountId || (currentInvoice as any).accountId
+            if (accId) {
+              const account = await db.collection('crm_accounts').findOne({ _id: accId })
+              if (account) customerName = (account as any).name || customerName
+            }
+            
+            // Import dynamically to avoid circular dependency issues
+            const { postInvoiceAdjustment } = await import('../financial/auto_posting.js')
+            await postInvoiceAdjustment(
+              db,
+              String(_id),
+              (currentInvoice as any).invoiceNumber || 'N/A',
+              difference,
+              new Date(),
+              customerName,
+              auth?.userId,
+              auth?.email
+            )
+            console.log(`[invoices] Auto-posted adjustment of $${difference.toFixed(2)} for invoice ${_id}`)
+          }
+        } catch (autoPostErr) {
+          console.warn('[invoices] Auto-post adjustment failed:', autoPostErr)
+          // Don't fail the update if auto-posting fails
+        }
       }
     }
     

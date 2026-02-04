@@ -206,6 +206,47 @@ export async function postInvoiceCreated(
 }
 
 /**
+ * Auto-post journal entry for invoice adjustment (increase or decrease)
+ * If amount > 0 (increase): DR Accounts Receivable, CR Revenue
+ * If amount < 0 (decrease): DR Revenue, CR Accounts Receivable
+ */
+export async function postInvoiceAdjustment(
+  db: Db,
+  invoiceId: string,
+  invoiceNumber: number | string,
+  adjustmentAmount: number,
+  date: Date,
+  customerName: string,
+  userId?: string,
+  userEmail?: string
+): Promise<string | null> {
+  if (adjustmentAmount === 0) return null
+
+  const absAmount = Math.abs(adjustmentAmount)
+  const isIncrease = adjustmentAmount > 0
+  const adjustmentType = isIncrease ? 'increase' : 'decrease'
+
+  return createJournalEntry({
+    db,
+    date,
+    description: `Invoice #${invoiceNumber} adjustment (${adjustmentType}) - ${customerName}`,
+    sourceType: 'invoice_adjustment',
+    sourceId: `${invoiceId}_adj_${date.getTime()}`,
+    lines: isIncrease
+      ? [
+          { accountNumber: ACCOUNTS.ACCOUNTS_RECEIVABLE, debit: absAmount, credit: 0, description: `Invoice #${invoiceNumber} adjustment` },
+          { accountNumber: ACCOUNTS.SERVICE_REVENUE, debit: 0, credit: absAmount, description: `Invoice #${invoiceNumber} adjustment` },
+        ]
+      : [
+          { accountNumber: ACCOUNTS.SERVICE_REVENUE, debit: absAmount, credit: 0, description: `Invoice #${invoiceNumber} adjustment` },
+          { accountNumber: ACCOUNTS.ACCOUNTS_RECEIVABLE, debit: 0, credit: absAmount, description: `Invoice #${invoiceNumber} adjustment` },
+        ],
+    userId,
+    userEmail,
+  })
+}
+
+/**
  * Auto-post journal entry for payment received
  * DR: Cash
  * CR: Accounts Receivable
