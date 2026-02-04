@@ -994,6 +994,7 @@ authRouter.get('/admin/users', requireAuth, requirePermission('*'), async (req, 
       passwordChangeRequired: u.passwordChangeRequired || false,
       createdAt: u.createdAt,
       roles: userRolesMap.get(u._id.toString()) || [],
+      reportsTo: u.reportsTo || null,
     }))
 
     res.json({ users: usersWithRoles, total: users.length })
@@ -1069,6 +1070,138 @@ authRouter.patch('/admin/users/:id/role', requireAuth, requirePermission('*'), a
   } catch (err: any) {
     console.error('Update user role error:', err)
     res.status(500).json({ error: err.message || 'Failed to update user role' })
+  }
+})
+
+// Admin: Update user reportsTo
+authRouter.patch('/admin/users/:id/reports-to', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    let userId: ObjectId
+    try {
+      userId = new ObjectId(req.params.id)
+    } catch {
+      return res.status(400).json({ error: 'Invalid user ID' })
+    }
+
+    const parsed = z.object({
+      reportsTo: z.string().nullable(), // null means no manager assigned
+    }).safeParse(req.body)
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid payload', details: parsed.error.errors })
+    }
+
+    // Verify user exists
+    const user = await db.collection('users').findOne({ _id: userId })
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    // Validate reportsTo user exists if provided
+    if (parsed.data.reportsTo) {
+      let managerId: ObjectId
+      try {
+        managerId = new ObjectId(parsed.data.reportsTo)
+      } catch {
+        return res.status(400).json({ error: 'Invalid manager ID' })
+      }
+
+      const manager = await db.collection('users').findOne({ _id: managerId })
+      if (!manager) {
+        return res.status(404).json({ error: 'Manager not found' })
+      }
+
+      // Prevent circular reporting (user cannot report to themselves)
+      if (userId.toString() === parsed.data.reportsTo) {
+        return res.status(400).json({ error: 'User cannot report to themselves' })
+      }
+    }
+
+    // Update user's reportsTo field
+    await db.collection('users').updateOne(
+      { _id: userId },
+      { $set: { reportsTo: parsed.data.reportsTo } }
+    )
+
+    res.json({
+      message: parsed.data.reportsTo ? 'Reports To updated successfully' : 'Reports To removed',
+      reportsTo: parsed.data.reportsTo,
+    })
+  } catch (err: any) {
+    console.error('Update user reportsTo error:', err)
+    res.status(500).json({ error: err.message || 'Failed to update reports to' })
+  }
+})
+
+// Admin: Get users who can be managers (for reports-to dropdown)
+// Returns users with manager, senior_manager, finance_manager, or admin roles
+authRouter.get('/admin/potential-managers', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(500).json({ error: 'Database unavailable' })
+
+    // Get roles that can be managers
+    const managerRoles = await db.collection('roles')
+      .find({ name: { $in: ['admin', 'manager', 'senior_manager', 'finance_manager'] } })
+      .toArray()
+    
+    const managerRoleIds = managerRoles.map((r: any) => r._id)
+
+    // Get users with these roles
+    const userRoles = await db.collection('user_roles')
+      .find({ roleId: { $in: managerRoleIds } } as any)
+      .toArray()
+    
+    const managerUserIds = [...new Set(userRoles.map((ur: any) => ur.userId))]
+
+    // Get user details
+    const managers = managerUserIds.length > 0
+      ? await db.collection('users')
+          .find({ 
+            $or: [
+              { _id: { $in: managerUserIds.map((id: string) => {
+                try { return new ObjectId(id) } catch { return null }
+              }).filter(Boolean) } },
+              // Also include users with isAdmin flag for legacy admin users
+              { isAdmin: true }
+            ],
+            status: { $ne: 'deleted' }
+          })
+          .project({ _id: 1, name: 1, email: 1 })
+          .sort({ name: 1 })
+          .toArray()
+      : await db.collection('users')
+          .find({ isAdmin: true, status: { $ne: 'deleted' } })
+          .project({ _id: 1, name: 1, email: 1 })
+          .sort({ name: 1 })
+          .toArray()
+
+    // Build role name lookup
+    const userIdToRoles = new Map<string, string[]>()
+    for (const ur of userRoles) {
+      const role = managerRoles.find((r: any) => r._id.toString() === ur.roleId.toString())
+      if (role) {
+        if (!userIdToRoles.has(ur.userId)) {
+          userIdToRoles.set(ur.userId, [])
+        }
+        userIdToRoles.get(ur.userId)!.push(role.name)
+      }
+    }
+
+    const managersWithRoles = managers.map((m: any) => ({
+      id: m._id.toString(),
+      name: m.name || m.email,
+      email: m.email,
+      roles: userIdToRoles.get(m._id.toString()) || (m.isAdmin ? ['admin'] : []),
+    }))
+
+    res.json({ managers: managersWithRoles })
+  } catch (err: any) {
+    console.error('Get potential managers error:', err)
+    res.status(500).json({ error: err.message || 'Failed to get potential managers' })
   }
 })
 

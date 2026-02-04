@@ -54,6 +54,7 @@ export default function AdminPortal() {
   const [userSearch, setUserSearch] = useState<string>('')
   const [editingUserRole, setEditingUserRole] = useState<{ userId: string; roleId: string } | null>(null)
   const [editingUserPassword, setEditingUserPassword] = useState<{ userId: string; newPassword: string; forceChangeRequired: boolean } | null>(null)
+  const [editingUserReportsTo, setEditingUserReportsTo] = useState<{ userId: string; reportsTo: string | null } | null>(null)
 
   // Fetch available roles for dropdown
   const { data: rolesData } = useQuery<{ roles: Array<{ id: string; name: string; permissions: string[] }> }>({
@@ -79,6 +80,7 @@ export default function AdminPortal() {
     passwordChangeRequired: boolean
     createdAt: number
     roles: Array<{ id: string; name: string; permissions: string[] }>
+    reportsTo: string | null
   }
   
   const { data: usersData } = useQuery<{ users: UserWithRoles[]; total: number }>({
@@ -91,6 +93,25 @@ export default function AdminPortal() {
     enabled: (activeTab === 'users' || activeTab === 'access-management') && isAdmin && !isLoadingRoles,
     staleTime: 30 * 1000, // Cache for 30 seconds
     retry: false, // Don't retry on 403
+  })
+
+  // Fetch potential managers for Reports To dropdown
+  type PotentialManager = {
+    id: string
+    name: string
+    email: string
+    roles: string[]
+  }
+  
+  const { data: managersData } = useQuery<{ managers: PotentialManager[] }>({
+    queryKey: ['admin', 'potential-managers'],
+    queryFn: async () => {
+      const res = await http.get('/api/auth/admin/potential-managers')
+      return res.data
+    },
+    enabled: activeTab === 'users' && isAdmin && !isLoadingRoles,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   })
 
   // Fetch all sessions (with optional user filter)
@@ -269,6 +290,30 @@ export default function AdminPortal() {
         setError(err.response?.data?.error || 'Failed to update password')
       }
       setMessage('')
+    },
+  })
+
+  // Update user reportsTo mutation
+  const updateUserReportsTo = useMutation({
+    mutationFn: async ({ userId, reportsTo }: { userId: string; reportsTo: string | null }) => {
+      const res = await http.patch(`/api/auth/admin/users/${userId}/reports-to`, { reportsTo })
+      return res.data
+    },
+    onSuccess: () => {
+      setMessage('Reports To updated successfully')
+      setError('')
+      setEditingUserReportsTo(null)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      setTimeout(() => setMessage(''), 5000)
+    },
+    onError: (err: any) => {
+      if (err.response?.status === 403) {
+        setError('Access denied: You do not have admin permissions')
+      } else {
+        setError(err.response?.data?.error || 'Failed to update reports to')
+      }
+      setMessage('')
+      setEditingUserReportsTo(null)
     },
   })
 
@@ -1148,6 +1193,76 @@ export default function AdminPortal() {
                                   title="Reset password"
                                 >
                                   <Key className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Reports To */}
+                          <div className="mt-3">
+                            <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                              Reports To
+                            </label>
+                            {editingUserReportsTo?.userId === user.id ? (
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={editingUserReportsTo.reportsTo || ''}
+                                  onChange={(e) =>
+                                    setEditingUserReportsTo({
+                                      userId: user.id,
+                                      reportsTo: e.target.value || null,
+                                    })
+                                  }
+                                  className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-sm focus:border-[color:var(--color-primary-600)] focus:outline-none"
+                                >
+                                  <option value="">No Manager</option>
+                                  {managersData?.managers
+                                    .filter((m) => m.id !== user.id) // Can't report to yourself
+                                    .map((manager) => (
+                                      <option key={manager.id} value={manager.id}>
+                                        {manager.name} ({manager.roles.join(', ')})
+                                      </option>
+                                    ))}
+                                </select>
+                                <button
+                                  onClick={() => {
+                                    updateUserReportsTo.mutate({
+                                      userId: user.id,
+                                      reportsTo: editingUserReportsTo.reportsTo,
+                                    })
+                                  }}
+                                  disabled={updateUserReportsTo.isPending}
+                                  className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-1.5 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => setEditingUserReportsTo(null)}
+                                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-sm hover:bg-[color:var(--color-muted)]"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-1.5 text-sm">
+                                  {user.reportsTo
+                                    ? managersData?.managers.find((m) => m.id === user.reportsTo)?.name ||
+                                      usersData?.users.find((u) => u.id === user.reportsTo)?.name ||
+                                      user.reportsTo
+                                    : 'No manager assigned'}
+                                </div>
+                                <button
+                                  onClick={() =>
+                                    setEditingUserReportsTo({
+                                      userId: user.id,
+                                      reportsTo: user.reportsTo,
+                                    })
+                                  }
+                                  className="rounded-lg border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)]"
+                                  title="Edit reports to"
+                                >
+                                  <Edit2 className="h-4 w-4" />
                                 </button>
                               </div>
                             )}

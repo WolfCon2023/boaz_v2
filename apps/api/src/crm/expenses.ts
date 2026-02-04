@@ -399,10 +399,73 @@ expensesRouter.get('/', async (req: any, res) => {
   const sort = (req.query.sort as string) || 'expenseNumber'
   const dir = req.query.dir === 'asc' ? 1 : -1
 
+  // Get current user ID and roles for visibility filtering
+  const userId = req.user?.id
+  const isAdmin = req.user?.isAdmin === true
+
+  // Determine user roles
+  let userRoleNames: string[] = []
+  if (userId) {
+    const [userRoles, allRoles] = await Promise.all([
+      db.collection('user_roles').find({ userId }).toArray(),
+      db.collection('roles').find({}).toArray(),
+    ])
+    const roleIdToName = new Map(allRoles.map((r: any) => [r._id.toString(), r.name]))
+    userRoleNames = userRoles.map((ur: any) => roleIdToName.get(ur.roleId.toString())).filter(Boolean) as string[]
+  }
+
+  const isFinanceManager = userRoleNames.includes('finance_manager')
+  const isSeniorManager = userRoleNames.includes('senior_manager')
+  const isManager = userRoleNames.includes('manager')
+
+  // Build visibility filter based on role
+  // Finance Managers and Admins can see all expenses
+  // Managers/Senior Managers can see: own expenses + expenses they approve + expenses from direct reports
+  // Staff (everyone else) can only see their own expenses
+  let visibilityFilter: any = null
+
+  if (!isAdmin && !isFinanceManager) {
+    if (isManager || isSeniorManager) {
+      // Get users who report to this manager
+      const directReports = await db.collection('users')
+        .find({ reportsTo: userId })
+        .project({ _id: 1 })
+        .toArray()
+      const directReportIds = directReports.map((u: any) => u._id.toString())
+
+      // Manager/Senior Manager visibility: own expenses, expenses they approve, direct reports' expenses
+      const orConditions: any[] = [
+        { createdBy: userId }, // Their own expenses
+        { managerApproverId: userId }, // Expenses where they are manager approver
+        { seniorManagerApproverId: userId }, // Expenses where they are senior manager approver
+      ]
+      
+      if (directReportIds.length > 0) {
+        orConditions.push({ createdBy: { $in: directReportIds } }) // Direct reports' expenses
+      }
+
+      visibilityFilter = { $or: orConditions }
+    } else {
+      // Staff: only their own expenses
+      visibilityFilter = { createdBy: userId }
+    }
+  }
+  // Finance Managers and Admins: no visibility filter (see all)
+
   const filter: Record<string, unknown> = {}
   
+  // Apply visibility filter
+  if (visibilityFilter) {
+    if (visibilityFilter.$or) {
+      filter.$and = filter.$and || []
+      ;(filter.$and as any[]).push(visibilityFilter)
+    } else {
+      Object.assign(filter, visibilityFilter)
+    }
+  }
+  
   if (q) {
-    filter.$or = [
+    const searchOr = [
       { description: { $regex: q, $options: 'i' } },
       { vendorName: { $regex: q, $options: 'i' } },
       { payee: { $regex: q, $options: 'i' } },
@@ -411,7 +474,18 @@ expensesRouter.get('/', async (req: any, res) => {
     // Also search by expense number if numeric
     const num = parseInt(q, 10)
     if (!isNaN(num)) {
-      (filter.$or as any[]).push({ expenseNumber: num })
+      searchOr.push({ expenseNumber: num } as any)
+    }
+    
+    // Combine with visibility filter using $and
+    if (filter.$and) {
+      ;(filter.$and as any[]).push({ $or: searchOr })
+    } else if (visibilityFilter) {
+      filter.$and = [visibilityFilter, { $or: searchOr }]
+      delete filter.$or
+      delete filter.createdBy
+    } else {
+      filter.$or = searchOr
     }
   }
 
