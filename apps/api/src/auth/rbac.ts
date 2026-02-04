@@ -21,6 +21,7 @@ export const DEFAULT_ROLES: Array<{ name: string; permissions: string[] }> = [
       'roles.read', 
       'expenses.approve_level1',
       'expenses.approve_level2',
+      'financial.auto_post',
     ] 
   },
   { 
@@ -33,6 +34,7 @@ export const DEFAULT_ROLES: Array<{ name: string; permissions: string[] }> = [
       'expenses.approve_level2',
       'expenses.approve_level3',
       'expenses.final_approve',
+      'financial.auto_post',
     ] 
   },
   { name: 'staff', permissions: ['users.read'] },

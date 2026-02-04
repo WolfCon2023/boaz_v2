@@ -46,21 +46,36 @@ export async function getDb(): Promise<Db | null> {
     // Auto-seed missing expense approval roles on first connection
     try {
       const rolesCollection = db.collection('roles')
-      const seniorManagerExists = await rolesCollection.findOne({ name: 'senior_manager' })
-      if (!seniorManagerExists) {
+      const seniorManagerRole = await rolesCollection.findOne({ name: 'senior_manager' })
+      if (!seniorManagerRole) {
         await rolesCollection.insertOne({
           name: 'senior_manager',
-          permissions: ['users.read', 'users.write', 'roles.read', 'expenses.approve_level1', 'expenses.approve_level2'],
+          permissions: ['users.read', 'users.write', 'roles.read', 'expenses.approve_level1', 'expenses.approve_level2', 'financial.auto_post'],
         } as any)
         console.log('[db] Auto-seeded senior_manager role')
+      } else if (!seniorManagerRole.permissions?.includes('financial.auto_post')) {
+        // Add missing permission to existing role
+        await rolesCollection.updateOne(
+          { name: 'senior_manager' },
+          { $addToSet: { permissions: 'financial.auto_post' } }
+        )
+        console.log('[db] Added financial.auto_post permission to senior_manager role')
       }
-      const financeManagerExists = await rolesCollection.findOne({ name: 'finance_manager' })
-      if (!financeManagerExists) {
+      
+      const financeManagerRole = await rolesCollection.findOne({ name: 'finance_manager' })
+      if (!financeManagerRole) {
         await rolesCollection.insertOne({
           name: 'finance_manager',
-          permissions: ['users.read', 'users.write', 'roles.read', 'expenses.approve_level1', 'expenses.approve_level2', 'expenses.approve_level3', 'expenses.final_approve'],
+          permissions: ['users.read', 'users.write', 'roles.read', 'expenses.approve_level1', 'expenses.approve_level2', 'expenses.approve_level3', 'expenses.final_approve', 'financial.auto_post'],
         } as any)
         console.log('[db] Auto-seeded finance_manager role')
+      } else if (!financeManagerRole.permissions?.includes('financial.auto_post')) {
+        // Add missing permission to existing role
+        await rolesCollection.updateOne(
+          { name: 'finance_manager' },
+          { $addToSet: { permissions: 'financial.auto_post' } }
+        )
+        console.log('[db] Added financial.auto_post permission to finance_manager role')
       }
     } catch (seedErr) {
       console.warn('[db] Warning: Could not auto-seed roles:', seedErr)

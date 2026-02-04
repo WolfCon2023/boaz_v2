@@ -1624,7 +1624,7 @@ import {
 } from './auto_posting.js'
 
 // POST /api/financial/auto-post/invoices - Retroactively post all unposted invoices
-financialRouter.post('/auto-post/invoices', requirePermission('*'), async (req: any, res) => {
+financialRouter.post('/auto-post/invoices', requirePermission('financial.auto_post'), async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
@@ -1680,7 +1680,7 @@ financialRouter.post('/auto-post/invoices', requirePermission('*'), async (req: 
 })
 
 // POST /api/financial/auto-post/payments - Retroactively post all unposted payments
-financialRouter.post('/auto-post/payments', requirePermission('*'), async (req: any, res) => {
+financialRouter.post('/auto-post/payments', requirePermission('financial.auto_post'), async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
@@ -1741,7 +1741,7 @@ financialRouter.post('/auto-post/payments', requirePermission('*'), async (req: 
 })
 
 // POST /api/financial/auto-post/time-entries - Retroactively post all unposted time entries
-financialRouter.post('/auto-post/time-entries', requirePermission('*'), async (req: any, res) => {
+financialRouter.post('/auto-post/time-entries', requirePermission('financial.auto_post'), async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
@@ -1823,7 +1823,7 @@ financialRouter.post('/auto-post/time-entries', requirePermission('*'), async (r
 })
 
 // POST /api/financial/auto-post/renewals - Retroactively post all unposted renewals
-financialRouter.post('/auto-post/renewals', requirePermission('*'), async (req: any, res) => {
+financialRouter.post('/auto-post/renewals', requirePermission('financial.auto_post'), async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
@@ -1886,7 +1886,7 @@ financialRouter.post('/auto-post/renewals', requirePermission('*'), async (req: 
 })
 
 // POST /api/financial/auto-post/all - Retroactively post all unposted transactions
-financialRouter.post('/auto-post/all', requirePermission('*'), async (req: any, res) => {
+financialRouter.post('/auto-post/all', requirePermission('financial.auto_post'), async (req: any, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
