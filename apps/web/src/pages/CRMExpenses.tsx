@@ -259,11 +259,25 @@ export default function CRMExpenses() {
       }
       return http.post('/api/crm/expenses', payload)
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
+      const isNew = !editing?._id
       qc.invalidateQueries({ queryKey: ['crm-expenses'] })
       qc.invalidateQueries({ queryKey: ['crm-expenses-summary'] })
       closeModal()
-      toast.showToast(editing?._id ? 'Expense updated.' : 'Expense created.', 'success')
+      
+      if (isNew && res?.data) {
+        // Auto-open the detail view for new expenses so user can add attachments
+        toast.showToast('Expense created. You can now add receipts and attachments.', 'success')
+        // Set viewing expense after a short delay to allow query to refresh
+        setTimeout(() => {
+          const newExpense = res.data
+          if (newExpense._id) {
+            setViewingExpense(newExpense as Expense)
+          }
+        }, 500)
+      } else {
+        toast.showToast('Expense updated.', 'success')
+      }
     },
     onError: (err: any) => {
       console.error('[expenses] Save error:', err?.response?.data)
@@ -936,6 +950,13 @@ export default function CRMExpenses() {
                   className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
                 />
               </div>
+
+              {/* Attachment note for new expenses */}
+              {!editing?._id && (
+                <div className="rounded-lg border border-dashed border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-300">
+                  <span className="font-medium">Receipts & Attachments:</span> After creating this expense, you can upload receipts and supporting documents from the expense detail view.
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-2">

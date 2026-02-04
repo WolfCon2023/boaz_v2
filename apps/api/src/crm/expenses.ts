@@ -1696,10 +1696,22 @@ expensesRouter.post('/:id/attachments', uploadExpenseAttachment.single('file'), 
       url: `/api/crm/expenses/attachments/${file.filename}`,
     }
 
+    // Add to history
+    const historyEntry: ApprovalHistoryEntry = {
+      action: 'attachment_added' as any,
+      userId: auth.userId,
+      userEmail: auth.email,
+      timestamp: now,
+      notes: `Added attachment: ${file.originalname}`,
+    }
+
     await db.collection('crm_expenses').updateOne(
       { _id: id },
       {
-        $push: { attachments: attachment } as any,
+        $push: { 
+          attachments: attachment,
+          approvalHistory: historyEntry,
+        } as any,
         $set: { updatedAt: now },
       }
     )
@@ -1804,10 +1816,21 @@ expensesRouter.delete('/:id/attachments/:attachmentId', async (req: any, res) =>
   }
 
   const now = new Date()
+  
+  // Add to history
+  const historyEntry: ApprovalHistoryEntry = {
+    action: 'attachment_removed' as any,
+    userId: auth.userId,
+    userEmail: auth.email,
+    timestamp: now,
+    notes: `Removed attachment: ${attachment.fileName}`,
+  }
+
   await db.collection('crm_expenses').updateOne(
     { _id: id },
     {
       $pull: { attachments: { id: attachmentId } } as any,
+      $push: { approvalHistory: historyEntry } as any,
       $set: { updatedAt: now },
     }
   )
