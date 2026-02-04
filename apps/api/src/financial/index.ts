@@ -1917,6 +1917,85 @@ financialRouter.post('/auto-post/all', requirePermission('financial.auto_post'),
 // EXPENSE MANAGEMENT
 // ============================================================================
 
+// GET /api/financial/crm-expenses - Get ALL CRM expenses for Financial Intelligence (no visibility filter)
+// This endpoint allows FI users to see all expenses historically
+financialRouter.get('/crm-expenses', async (req: any, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 500)
+  const skip = Math.max(Number(req.query.skip) || 0, 0)
+  const status = req.query.status as string | undefined
+  const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined
+  const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined
+
+  const filter: any = {}
+  if (status && status !== 'all') filter.status = status
+  if (startDate || endDate) {
+    filter.date = {}
+    if (startDate) filter.date.$gte = startDate
+    if (endDate) filter.date.$lte = endDate
+  }
+
+  const [expenses, total] = await Promise.all([
+    db.collection('crm_expenses')
+      .find(filter)
+      .sort({ expenseNumber: -1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray(),
+    db.collection('crm_expenses').countDocuments(filter),
+  ])
+
+  res.json({
+    data: {
+      items: expenses.map((e: any) => ({
+        _id: String(e._id),
+        expenseNumber: e.expenseNumber,
+        date: e.date instanceof Date ? e.date.toISOString() : e.date,
+        vendorId: e.vendorId ? String(e.vendorId) : null,
+        vendorName: e.vendorName,
+        payee: e.payee,
+        description: e.description,
+        lines: e.lines,
+        total: e.total,
+        status: e.status,
+        currentApprovalLevel: e.currentApprovalLevel,
+        // Submission info
+        submittedBy: e.submittedBy,
+        submittedByName: e.submittedByName,
+        submittedByEmail: e.submittedByEmail,
+        submittedAt: e.submittedAt?.toISOString?.() || e.submittedAt,
+        // Manager approval
+        managerApproverName: e.managerApproverName,
+        managerApprovedByName: e.managerApprovedByName,
+        managerApprovedAt: e.managerApprovedAt?.toISOString?.() || e.managerApprovedAt,
+        // Senior Manager approval
+        seniorManagerApproverName: e.seniorManagerApproverName,
+        seniorManagerApprovedByName: e.seniorManagerApprovedByName,
+        seniorManagerApprovedAt: e.seniorManagerApprovedAt?.toISOString?.() || e.seniorManagerApprovedAt,
+        // Finance Manager approval
+        financeManagerApproverName: e.financeManagerApproverName,
+        financeManagerApprovedByName: e.financeManagerApprovedByName,
+        financeManagerApprovedAt: e.financeManagerApprovedAt?.toISOString?.() || e.financeManagerApprovedAt,
+        // Payment/Void info
+        paidAt: e.paidAt?.toISOString?.() || e.paidAt,
+        paidBy: e.paidBy,
+        voidedAt: e.voidedAt?.toISOString?.() || e.voidedAt,
+        voidReason: e.voidReason,
+        journalEntryId: e.journalEntryId ? String(e.journalEntryId) : null,
+        // Creator info
+        createdBy: e.createdBy,
+        createdByName: e.createdByName,
+        createdByEmail: e.createdByEmail,
+        createdAt: e.createdAt?.toISOString?.() || e.createdAt,
+      })),
+      total,
+    },
+    error: null,
+  })
+})
+
 // GET /api/financial/expenses
 financialRouter.get('/expenses', async (req: any, res) => {
   const db = await getDb()

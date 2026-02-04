@@ -190,7 +190,66 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-// Expense types
+// CRM Expense types for Financial Intelligence view
+type CRMExpenseStatus = 
+  | 'draft' 
+  | 'pending_manager_approval'
+  | 'pending_senior_approval'
+  | 'pending_finance_approval'
+  | 'pending_approval'
+  | 'approved' 
+  | 'rejected'
+  | 'paid' 
+  | 'void'
+
+type CRMExpense = {
+  _id: string
+  expenseNumber: number
+  date: string
+  vendorId: string | null
+  vendorName: string | null
+  payee: string | null
+  description: string
+  lines: Array<{
+    category: string
+    accountNumber?: string
+    amount: number
+    description?: string
+  }>
+  total: number
+  status: CRMExpenseStatus
+  currentApprovalLevel?: number
+  // Submission info
+  submittedBy?: string
+  submittedByName?: string
+  submittedByEmail?: string
+  submittedAt?: string
+  // Manager approval
+  managerApproverName?: string
+  managerApprovedByName?: string
+  managerApprovedAt?: string
+  // Senior Manager approval
+  seniorManagerApproverName?: string
+  seniorManagerApprovedByName?: string
+  seniorManagerApprovedAt?: string
+  // Finance Manager approval
+  financeManagerApproverName?: string
+  financeManagerApprovedByName?: string
+  financeManagerApprovedAt?: string
+  // Payment/Void info
+  paidAt?: string
+  paidBy?: string
+  voidedAt?: string
+  voidReason?: string
+  journalEntryId: string | null
+  // Creator info
+  createdBy?: string
+  createdByName?: string
+  createdByEmail?: string
+  createdAt: string
+}
+
+// Legacy FI Expense types (for internal FI expenses if used)
 type ExpenseStatus = 'draft' | 'pending_approval' | 'approved' | 'paid' | 'void'
 
 type Expense = {
@@ -275,6 +334,11 @@ export default function FinancialIntelligence() {
   const [coaTypeFilter, setCoaTypeFilter] = React.useState<AccountType | ''>('')
   const [statementType, setStatementType] = React.useState<'income' | 'balance' | 'trial' | 'cashflow'>('trial')
   const [drillDownAccountId, setDrillDownAccountId] = React.useState<string | null>(null)
+
+  // Expenses pagination and filters
+  const [expensePage, setExpensePage] = React.useState(1)
+  const [expenseStatusFilter, setExpenseStatusFilter] = React.useState<string>('all')
+  const expensePageSize = 25
 
   // New account form state
   const [newAccount, setNewAccount] = React.useState({
@@ -394,13 +458,34 @@ export default function FinancialIntelligence() {
     enabled: view === 'dashboard',
   })
 
+  // Fetch ALL CRM expenses for Financial Intelligence (no visibility filter)
+  const crmExpensesQ = useQuery<{ data: { items: CRMExpense[]; total: number } }>({
+    queryKey: ['fi-crm-expenses', expensePage, expenseStatusFilter],
+    queryFn: async () => {
+      const params: Record<string, string | number> = {
+        limit: expensePageSize,
+        skip: (expensePage - 1) * expensePageSize,
+      }
+      if (expenseStatusFilter !== 'all') params.status = expenseStatusFilter
+      const res = await http.get('/api/financial/crm-expenses', { params })
+      return res.data
+    },
+    enabled: view === 'expenses',
+  })
+  
+  // Reset page when filter changes
+  React.useEffect(() => {
+    setExpensePage(1)
+  }, [expenseStatusFilter])
+
+  // Legacy FI expenses query (kept for backwards compatibility)
   const expensesQ = useQuery<{ data: { items: Expense[]; total: number } }>({
     queryKey: ['fi-expenses'],
     queryFn: async () => {
       const res = await http.get('/api/financial/expenses', { params: { limit: 100 } })
       return res.data
     },
-    enabled: view === 'expenses',
+    enabled: false, // Disabled - using CRM expenses now
   })
 
   const expenseCategoriesQ = useQuery<{ data: { categories: string[] } }>({
@@ -635,6 +720,11 @@ export default function FinancialIntelligence() {
   const kpis = kpisQ.data?.data
   const expenses = expensesQ.data?.data?.items || []
   const expenseCategories = expenseCategoriesQ.data?.data?.categories || []
+  
+  // CRM Expenses data for FI view
+  const crmExpenses = crmExpensesQ.data?.data?.items || []
+  const totalCrmExpenses = crmExpensesQ.data?.data?.total || 0
+  const totalExpensePages = Math.ceil(totalCrmExpenses / expensePageSize)
 
   // Expense form totals
   const expenseSubtotal = newExpense.lines.reduce((sum, l) => sum + (Number(l.amount) || 0), 0)
@@ -1666,102 +1756,134 @@ export default function FinancialIntelligence() {
           </div>
         )}
 
-        {/* Expenses View */}
+        {/* Expenses View - Shows ALL CRM Expenses */}
         {view === 'expenses' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowNewExpense(true)}
-                className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[color:var(--color-primary-700)]"
-              >
-                + New Expense
-              </button>
+            {/* Header with filter and info */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <select
+                  value={expenseStatusFilter}
+                  onChange={(e) => setExpenseStatusFilter(e.target.value)}
+                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="pending_manager_approval">Manager Review</option>
+                  <option value="pending_senior_approval">Senior Review</option>
+                  <option value="pending_finance_approval">Finance Review</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="paid">Paid</option>
+                  <option value="void">Void</option>
+                </select>
+                <span className="text-xs text-[color:var(--color-text-muted)]">
+                  {totalCrmExpenses} total expenses
+                </span>
+              </div>
             </div>
 
-            {/* Expenses Table */}
+            {/* CRM Expenses Table */}
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] overflow-hidden">
               <table className="min-w-full text-xs">
                 <thead className="bg-[color:var(--color-muted)]">
                   <tr className="text-[10px] uppercase text-[color:var(--color-text-muted)]">
                     <th className="px-3 py-3 text-left">Expense #</th>
                     <th className="px-3 py-3 text-left">Date</th>
-                    <th className="px-3 py-3 text-left">Vendor</th>
+                    <th className="px-3 py-3 text-left">Payee/Vendor</th>
                     <th className="px-3 py-3 text-left">Description</th>
-                    <th className="px-3 py-3 text-center">Category</th>
+                    <th className="px-3 py-3 text-left">Submitted By</th>
                     <th className="px-3 py-3 text-right">Amount</th>
                     <th className="px-3 py-3 text-center">Status</th>
-                    <th className="px-3 py-3 text-right">Actions</th>
+                    <th className="px-3 py-3 text-center">GL Posted</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {expenses.map((exp) => (
-                    <tr key={exp.id} className="border-t border-[color:var(--color-border)]">
-                      <td className="px-3 py-3 font-mono font-semibold">EXP-{exp.expenseNumber}</td>
-                      <td className="px-3 py-3">{formatDate(exp.date)}</td>
-                      <td className="px-3 py-3">{exp.vendorName || '-'}</td>
-                      <td className="px-3 py-3 max-w-[200px] truncate" title={exp.description}>{exp.description}</td>
-                      <td className="px-3 py-3 text-center">
-                        <span className="rounded-full border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-0.5 text-[10px]">
-                          {exp.category}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right font-mono">{formatCurrency(exp.total)}</td>
-                      <td className="px-3 py-3 text-center">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] ${
-                          exp.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' :
-                          exp.status === 'approved' ? 'bg-blue-500/20 text-blue-400' :
-                          exp.status === 'void' ? 'bg-gray-500/20 text-gray-400' :
-                          exp.status === 'pending_approval' ? 'bg-amber-500/20 text-amber-400' :
-                          'bg-purple-500/20 text-purple-400'
-                        }`}>
-                          {exp.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          {exp.status === 'draft' && (
-                            <button
-                              type="button"
-                              onClick={() => approveExpenseMutation.mutate(exp.id)}
-                              disabled={approveExpenseMutation.isPending}
-                              className="text-[10px] text-blue-400 hover:underline"
-                            >
-                              Approve
-                            </button>
+                  {crmExpenses.map((exp) => {
+                    const getStatusDisplay = (status: string) => {
+                      switch (status) {
+                        case 'pending_manager_approval': return { label: 'Manager Review', color: 'bg-amber-500/20 text-amber-400' }
+                        case 'pending_senior_approval': return { label: 'Senior Review', color: 'bg-orange-500/20 text-orange-400' }
+                        case 'pending_finance_approval': return { label: 'Finance Review', color: 'bg-yellow-500/20 text-yellow-400' }
+                        case 'pending_approval': return { label: 'Pending', color: 'bg-amber-500/20 text-amber-400' }
+                        case 'approved': return { label: 'Approved', color: 'bg-blue-500/20 text-blue-400' }
+                        case 'rejected': return { label: 'Rejected', color: 'bg-red-500/20 text-red-400' }
+                        case 'paid': return { label: 'Paid', color: 'bg-emerald-500/20 text-emerald-400' }
+                        case 'void': return { label: 'Void', color: 'bg-gray-500/20 text-gray-400' }
+                        default: return { label: 'Draft', color: 'bg-purple-500/20 text-purple-400' }
+                      }
+                    }
+                    const statusInfo = getStatusDisplay(exp.status)
+                    return (
+                      <tr key={exp._id} className="border-t border-[color:var(--color-border)]">
+                        <td className="px-3 py-3 font-mono font-semibold">EXP-{exp.expenseNumber}</td>
+                        <td className="px-3 py-3">{formatDate(exp.date)}</td>
+                        <td className="px-3 py-3">{exp.payee || exp.vendorName || '-'}</td>
+                        <td className="px-3 py-3 max-w-[200px] truncate" title={exp.description}>{exp.description}</td>
+                        <td className="px-3 py-3 text-[color:var(--color-text-muted)]">
+                          {exp.createdByName || exp.createdByEmail || '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono">{formatCurrency(exp.total)}</td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {exp.journalEntryId ? (
+                            <span className="text-emerald-400 text-[10px]">Yes</span>
+                          ) : (
+                            <span className="text-[color:var(--color-text-muted)] text-[10px]">-</span>
                           )}
-                          {exp.status === 'approved' && (
-                            <button
-                              type="button"
-                              onClick={() => payExpenseMutation.mutate(exp.id)}
-                              disabled={payExpenseMutation.isPending}
-                              className="text-[10px] text-emerald-400 hover:underline"
-                            >
-                              Pay
-                            </button>
-                          )}
-                          {exp.status !== 'paid' && exp.status !== 'void' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (window.confirm(`Void expense EXP-${exp.expenseNumber}?`)) {
-                                  voidExpenseMutation.mutate(exp.id)
-                                }
-                              }}
-                              className="text-[10px] text-red-400 hover:underline"
-                            >
-                              Void
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
-              {expenses.length === 0 && (
+              {crmExpenses.length === 0 && (
                 <div className="p-8 text-center text-sm text-[color:var(--color-text-muted)]">
-                  No expenses found. Create one to start tracking accounts payable.
+                  No expenses found matching the current filter.
+                </div>
+              )}
+              
+              {/* Pagination */}
+              {totalExpensePages > 1 && (
+                <div className="flex items-center justify-between border-t border-[color:var(--color-border)] px-4 py-3">
+                  <div className="text-xs text-[color:var(--color-text-muted)]">
+                    Page {expensePage} of {totalExpensePages} ({totalCrmExpenses} total)
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setExpensePage(1)}
+                      disabled={expensePage === 1}
+                      className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      First
+                    </button>
+                    <button
+                      onClick={() => setExpensePage(p => Math.max(1, p - 1))}
+                      disabled={expensePage === 1}
+                      className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      Prev
+                    </button>
+                    <span className="px-2 text-xs">{expensePage}</span>
+                    <button
+                      onClick={() => setExpensePage(p => Math.min(totalExpensePages, p + 1))}
+                      disabled={expensePage === totalExpensePages}
+                      className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                    <button
+                      onClick={() => setExpensePage(totalExpensePages)}
+                      disabled={expensePage === totalExpensePages}
+                      className="rounded border border-[color:var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      Last
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
