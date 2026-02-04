@@ -125,14 +125,14 @@ export default function CRMExpenseAudit() {
   const usersQ = useQuery({
     queryKey: ['audit-users'],
     queryFn: async () => {
-      const res = await http.get('/api/admin/users', { params: { limit: 500 } })
-      return res.data as { data: { items: Array<{ _id: string; name?: string; email: string }> } }
+      const res = await http.get('/api/auth/admin/users', { params: { limit: '500' } })
+      return res.data as { users: Array<{ id: string; name?: string; email: string }> }
     },
     enabled: !!token,
   })
 
-  const users: UserOption[] = (usersQ.data?.data.items ?? []).map((u) => ({
-    id: u._id,
+  const users: UserOption[] = (usersQ.data?.users ?? []).map((u) => ({
+    id: u.id,
     name: u.name || u.email,
     email: u.email,
   }))

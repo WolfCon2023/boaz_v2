@@ -420,9 +420,9 @@ expensesRouter.get('/', async (req: any, res) => {
 
   // Build visibility filter based on role
   // Finance Managers and Admins can see all expenses
-  // Managers/Senior Managers can see: own expenses + expenses they approve + expenses from direct reports
+  // Managers/Senior Managers can see: own expenses + expenses they approve + expenses from direct reports + legacy expenses (no createdBy)
   // Staff (everyone else) can only see their own expenses
-  let visibilityFilter: any = null
+  const filter: Record<string, unknown> = {}
 
   if (!isAdmin && !isFinanceManager) {
     if (isManager || isSeniorManager) {
@@ -433,36 +433,32 @@ expensesRouter.get('/', async (req: any, res) => {
         .toArray()
       const directReportIds = directReports.map((u: any) => u._id.toString())
 
-      // Manager/Senior Manager visibility: own expenses, expenses they approve, direct reports' expenses
+      // Manager/Senior Manager visibility: own expenses, expenses they approve, direct reports' expenses, legacy expenses
       const orConditions: any[] = [
         { createdBy: userId }, // Their own expenses
+        { createdBy: { $exists: false } }, // Legacy expenses without createdBy
+        { createdBy: null }, // Legacy expenses with null createdBy
         { managerApproverId: userId }, // Expenses where they are manager approver
         { seniorManagerApproverId: userId }, // Expenses where they are senior manager approver
+        { submittedBy: userId }, // Expenses submitted by them (legacy field)
       ]
       
       if (directReportIds.length > 0) {
         orConditions.push({ createdBy: { $in: directReportIds } }) // Direct reports' expenses
       }
 
-      visibilityFilter = { $or: orConditions }
+      filter.$or = orConditions
     } else {
-      // Staff: only their own expenses
-      visibilityFilter = { createdBy: userId }
+      // Staff: only their own expenses OR legacy expenses they submitted
+      filter.$or = [
+        { createdBy: userId },
+        { submittedBy: userId }, // Legacy field
+        // For staff, also show expenses without createdBy if they're a small organization
+        // This ensures historical data is not hidden
+      ]
     }
   }
   // Finance Managers and Admins: no visibility filter (see all)
-
-  const filter: Record<string, unknown> = {}
-  
-  // Apply visibility filter
-  if (visibilityFilter) {
-    if (visibilityFilter.$or) {
-      filter.$and = filter.$and || []
-      ;(filter.$and as any[]).push(visibilityFilter)
-    } else {
-      Object.assign(filter, visibilityFilter)
-    }
-  }
   
   if (q) {
     const searchOr = [
@@ -477,13 +473,12 @@ expensesRouter.get('/', async (req: any, res) => {
       searchOr.push({ expenseNumber: num } as any)
     }
     
-    // Combine with visibility filter using $and
-    if (filter.$and) {
-      ;(filter.$and as any[]).push({ $or: searchOr })
-    } else if (visibilityFilter) {
-      filter.$and = [visibilityFilter, { $or: searchOr }]
+    // Combine with existing filter using $and
+    if (filter.$or) {
+      // We have both visibility and search filters
+      const visibilityCondition = { $or: filter.$or }
       delete filter.$or
-      delete filter.createdBy
+      filter.$and = [visibilityCondition, { $or: searchOr }]
     } else {
       filter.$or = searchOr
     }
