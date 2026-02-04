@@ -582,7 +582,8 @@ export default function FinancialIntelligence() {
     },
   })
 
-  const approveExpenseMutation = useMutation({
+  // Legacy FI expense mutations - kept for backwards compatibility but not used in CRM expenses view
+  const _approveExpenseMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await http.post(`/api/financial/expenses/${id}/approve`)
       return res.data
@@ -592,7 +593,7 @@ export default function FinancialIntelligence() {
     },
   })
 
-  const payExpenseMutation = useMutation({
+  const _payExpenseMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await http.post(`/api/financial/expenses/${id}/pay`)
       return res.data
@@ -606,7 +607,7 @@ export default function FinancialIntelligence() {
     },
   })
 
-  const voidExpenseMutation = useMutation({
+  const _voidExpenseMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await http.post(`/api/financial/expenses/${id}/void`)
       return res.data
@@ -718,7 +719,7 @@ export default function FinancialIntelligence() {
   const cashFlow = cashFlowQ.data?.data
   const drillDown = drillDownQ.data?.data
   const kpis = kpisQ.data?.data
-  const expenses = expensesQ.data?.data?.items || []
+  const _expenses = expensesQ.data?.data?.items || [] // Legacy FI expenses - not used, using CRM expenses now
   const expenseCategories = expenseCategoriesQ.data?.data?.categories || []
   
   // CRM Expenses data for FI view
