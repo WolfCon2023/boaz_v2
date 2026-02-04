@@ -83,6 +83,73 @@ const uploadExpenseAttachment = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
 })
 
+// GET /api/crm/expenses/attachments/:filename - Serve attachment file (PUBLIC - no auth required)
+// NOTE: This must be defined BEFORE requireAuth middleware to allow direct file downloads
+expensesRouter.get('/attachments/:filename', async (req, res) => {
+  console.log('[expenses] Attachment request received:', req.params.filename)
+  
+  try {
+    const filename = req.params.filename
+
+    // Security: only allow alphanumeric, dash, underscore, and extension
+    if (!/^[\w-]+\.\w+$/.test(filename)) {
+      console.log('[expenses] Invalid filename format:', filename)
+      return res.status(400).json({ data: null, error: 'invalid_filename' })
+    }
+
+    const filePath = path.resolve(uploadDir, filename)
+    const resolvedUploadDir = path.resolve(uploadDir)
+
+    // Log detailed info
+    console.log('[expenses] Serving attachment:', { 
+      filename, 
+      uploadDir,
+      resolvedUploadDir,
+      filePath, 
+      uploadDirExists: fs.existsSync(resolvedUploadDir),
+      fileExists: fs.existsSync(filePath),
+    })
+
+    // List files in upload directory for debugging
+    if (fs.existsSync(resolvedUploadDir)) {
+      try {
+        const files = fs.readdirSync(resolvedUploadDir)
+        console.log('[expenses] Files in upload directory:', files.slice(0, 10), files.length > 10 ? `... and ${files.length - 10} more` : '')
+      } catch (e) {
+        console.log('[expenses] Could not list upload directory:', e)
+      }
+    } else {
+      console.log('[expenses] Upload directory does not exist!')
+    }
+
+    // Security: ensure resolved path is within upload directory
+    if (!filePath.startsWith(resolvedUploadDir)) {
+      console.log('[expenses] Path traversal attempt blocked')
+      return res.status(403).json({ data: null, error: 'access_denied' })
+    }
+
+    if (!fs.existsSync(filePath)) {
+      console.log('[expenses] File not found:', filePath)
+      return res.status(404).json({ 
+        data: null, 
+        error: 'file_not_found',
+        message: 'Attachment file not found. Files may be lost after server restart on cloud platforms with ephemeral storage.'
+      })
+    }
+
+    console.log('[expenses] Sending file:', filePath)
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error('[expenses] Error sending file:', err)
+      }
+    })
+  } catch (err: any) {
+    console.error('[expenses] Error serving attachment:', err)
+    res.status(500).json({ data: null, error: err.message || 'Failed to serve attachment' })
+  }
+})
+
+// All routes below this line require authentication
 expensesRouter.use(requireAuth)
 
 // Approval level constants
@@ -929,72 +996,6 @@ expensesRouter.get('/summary', async (req: any, res) => {
     },
     error: null,
   })
-})
-
-// GET /api/crm/expenses/attachments/:filename - Serve attachment file
-// NOTE: This must be defined BEFORE /:id routes to prevent "attachments" matching as :id
-expensesRouter.get('/attachments/:filename', async (req, res) => {
-  console.log('[expenses] Attachment request received:', req.params.filename)
-  
-  try {
-    const filename = req.params.filename
-
-    // Security: only allow alphanumeric, dash, underscore, and extension
-    if (!/^[\w-]+\.\w+$/.test(filename)) {
-      console.log('[expenses] Invalid filename format:', filename)
-      return res.status(400).json({ data: null, error: 'invalid_filename' })
-    }
-
-    const filePath = path.resolve(uploadDir, filename)
-    const resolvedUploadDir = path.resolve(uploadDir)
-
-    // Log detailed info
-    console.log('[expenses] Serving attachment:', { 
-      filename, 
-      uploadDir,
-      resolvedUploadDir,
-      filePath, 
-      uploadDirExists: fs.existsSync(resolvedUploadDir),
-      fileExists: fs.existsSync(filePath),
-    })
-
-    // List files in upload directory for debugging
-    if (fs.existsSync(resolvedUploadDir)) {
-      try {
-        const files = fs.readdirSync(resolvedUploadDir)
-        console.log('[expenses] Files in upload directory:', files.slice(0, 10), files.length > 10 ? `... and ${files.length - 10} more` : '')
-      } catch (e) {
-        console.log('[expenses] Could not list upload directory:', e)
-      }
-    } else {
-      console.log('[expenses] Upload directory does not exist!')
-    }
-
-    // Security: ensure resolved path is within upload directory
-    if (!filePath.startsWith(resolvedUploadDir)) {
-      console.log('[expenses] Path traversal attempt blocked')
-      return res.status(403).json({ data: null, error: 'access_denied' })
-    }
-
-    if (!fs.existsSync(filePath)) {
-      console.log('[expenses] File not found:', filePath)
-      return res.status(404).json({ 
-        data: null, 
-        error: 'file_not_found',
-        message: 'Attachment file not found. Files may be lost after server restart on cloud platforms with ephemeral storage.'
-      })
-    }
-
-    console.log('[expenses] Sending file:', filePath)
-    res.sendFile(filePath, (err) => {
-      if (err) {
-        console.error('[expenses] Error sending file:', err)
-      }
-    })
-  } catch (err: any) {
-    console.error('[expenses] Error serving attachment:', err)
-    res.status(500).json({ data: null, error: err.message || 'Failed to serve attachment' })
-  }
 })
 
 // GET /api/crm/expenses/:id - Get single expense
