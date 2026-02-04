@@ -86,9 +86,25 @@ export const DEFAULT_ROLES: Array<{ name: string; permissions: string[] }> = [
 export async function ensureDefaultRoles() {
   const db = await getDb()
   if (!db) return
+  
   const count = await db.collection<RoleDoc>('roles').countDocuments()
   if (count === 0) {
+    // No roles exist - seed all default roles
     await db.collection<RoleDoc>('roles').insertMany(DEFAULT_ROLES.map((r) => ({ _id: new ObjectId(), name: r.name, permissions: r.permissions } as any)))
+    console.log('[rbac] Seeded default roles:', DEFAULT_ROLES.map(r => r.name).join(', '))
+  } else {
+    // Roles exist - check for any missing default roles and add them
+    const existingRoles = await db.collection<RoleDoc>('roles').find({}).toArray()
+    const existingRoleNames = new Set(existingRoles.map(r => r.name))
+    
+    const missingRoles = DEFAULT_ROLES.filter(r => !existingRoleNames.has(r.name))
+    
+    if (missingRoles.length > 0) {
+      await db.collection<RoleDoc>('roles').insertMany(
+        missingRoles.map((r) => ({ _id: new ObjectId(), name: r.name, permissions: r.permissions } as any))
+      )
+      console.log('[rbac] Added missing roles:', missingRoles.map(r => r.name).join(', '))
+    }
   }
   
   // Ensure indexes for user_roles collection (for performance)
