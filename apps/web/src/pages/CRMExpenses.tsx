@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
-import { http } from '@/lib/http'
+import { http, apiBaseURL } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { useAccessToken } from '@/components/Auth'
 
@@ -554,6 +554,21 @@ export default function CRMExpenses() {
     setEditing(null)
   }
 
+  // Helper to get full attachment URL (prepend API base URL for production)
+  function getAttachmentUrl(relativeUrl: string): string {
+    if (!relativeUrl) return ''
+    // If already a full URL, return as-is
+    if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+      return relativeUrl
+    }
+    // In production, prepend the API base URL
+    if (apiBaseURL && apiBaseURL !== '/api') {
+      return `${apiBaseURL}${relativeUrl}`
+    }
+    // In development (using Vite proxy), return relative URL
+    return relativeUrl
+  }
+
   function addLine() {
     setFormLines([...formLines, { category: categories[0]?.category || 'Other Expense', amount: 0, description: '' }])
   }
@@ -1021,7 +1036,7 @@ export default function CRMExpenses() {
                           </span>
                           <div className="flex items-center gap-2">
                             <a
-                              href={att.url}
+                              href={getAttachmentUrl(att.url)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-400 hover:underline"
@@ -1323,7 +1338,7 @@ export default function CRMExpenses() {
                       </div>
                       <div className="flex items-center gap-2">
                         <a
-                          href={att.url}
+                          href={getAttachmentUrl(att.url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="rounded px-2 py-1 text-xs text-blue-400 hover:bg-blue-500/20"
