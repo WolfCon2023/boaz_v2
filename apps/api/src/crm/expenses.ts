@@ -400,14 +400,23 @@ expensesRouter.get('/', async (req: any, res) => {
   const dir = req.query.dir === 'asc' ? 1 : -1
 
   // Get current user ID and roles for visibility filtering
-  const userId = req.user?.id
-  const isAdmin = req.user?.isAdmin === true
-
-  // Determine user roles - check both user_roles collection and any role permissions
+  // Note: requireAuth middleware sets req.auth.userId, not req.user.id
+  const userId = req.auth?.userId
+  
+  // Determine user roles and admin status
   let userRoleNames: string[] = []
-  let hasAdminPermission = isAdmin
+  let hasAdminPermission = false
   
   if (userId) {
+    // Fetch user document to check isAdmin flag
+    let userIsAdmin = false
+    try {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(userId) })
+      userIsAdmin = (user as any)?.isAdmin === true
+    } catch {
+      // Invalid userId format
+    }
+    
     const [userRoles, allRoles] = await Promise.all([
       db.collection('user_roles').find({ userId }).toArray(),
       db.collection('roles').find({}).toArray(),
@@ -423,6 +432,9 @@ expensesRouter.get('/', async (req: any, res) => {
       const perms = roleIdToPermissions.get(ur.roleId.toString()) || []
       if (perms.includes('*')) hasAdminPermission = true
     }
+    
+    // Also consider isAdmin flag from user document
+    if (userIsAdmin) hasAdminPermission = true
   }
 
   const isFinanceManager = userRoleNames.includes('finance_manager')
