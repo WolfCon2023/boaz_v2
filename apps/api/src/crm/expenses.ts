@@ -1904,6 +1904,25 @@ expensesRouter.post('/:id/attachments', uploadExpenseAttachment.single('file'), 
     return res.status(400).json({ data: null, error: 'no_file_provided' })
   }
 
+  // Log upload details for debugging
+  console.log('[expenses] File uploaded:', {
+    originalName: file.originalname,
+    savedAs: file.filename,
+    destination: file.destination,
+    fullPath: file.path,
+    size: file.size,
+    uploadDir,
+  })
+
+  // Verify file was actually saved
+  const savedPath = path.join(uploadDir, file.filename)
+  const fileExists = fs.existsSync(savedPath)
+  console.log('[expenses] File verification:', { savedPath, exists: fileExists })
+
+  if (!fileExists) {
+    console.error('[expenses] WARNING: File was not saved to expected location!')
+  }
+
   try {
     const now = new Date()
     const attachment: AttachmentDoc = {
