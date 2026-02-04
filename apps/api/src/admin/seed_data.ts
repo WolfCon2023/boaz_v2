@@ -75,6 +75,63 @@ adminSeedDataRouter.post('/it-roles', async (req, res) => {
   }
 })
 
+// POST /api/admin/seed/expense-approval-roles - Add Senior Manager and Finance Manager roles
+adminSeedDataRouter.post('/expense-approval-roles', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  try {
+    const SENIOR_MANAGER_ROLE = {
+      name: 'senior_manager',
+      permissions: [
+        'users.read', 'users.write', 'roles.read',
+        'expenses.approve_level1', 'expenses.approve_level2',
+      ],
+    }
+
+    const FINANCE_MANAGER_ROLE = {
+      name: 'finance_manager',
+      permissions: [
+        'users.read', 'users.write', 'roles.read',
+        'expenses.approve_level1', 'expenses.approve_level2',
+        'expenses.approve_level3', 'expenses.final_approve',
+      ],
+    }
+
+    const results = { senior_manager: 'skipped', finance_manager: 'skipped' }
+
+    // Check if Senior Manager role exists
+    const seniorManagerExists = await db.collection('roles').findOne({ name: 'senior_manager' })
+    if (!seniorManagerExists) {
+      await db.collection('roles').insertOne(SENIOR_MANAGER_ROLE as any)
+      results.senior_manager = 'created'
+    }
+
+    // Check if Finance Manager role exists
+    const financeManagerExists = await db.collection('roles').findOne({ name: 'finance_manager' })
+    if (!financeManagerExists) {
+      await db.collection('roles').insertOne(FINANCE_MANAGER_ROLE as any)
+      results.finance_manager = 'created'
+    }
+
+    // Get all roles
+    const allRoles = await db.collection('roles').find({}).toArray()
+
+    res.json({
+      data: {
+        message: 'Expense approval roles seeded successfully',
+        results,
+        totalRoles: allRoles.length,
+        roles: allRoles.map((r: any) => ({ name: r.name, permissions: r.permissions?.length || 0 })),
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    console.error('Seed expense approval roles error:', err)
+    res.status(500).json({ data: null, error: err.message || 'failed_to_seed_roles' })
+  }
+})
+
 // POST /api/admin/seed/roles-kb - Add Roles & Permissions KB article
 adminSeedDataRouter.post('/roles-kb', async (req, res) => {
   const db = await getDb()

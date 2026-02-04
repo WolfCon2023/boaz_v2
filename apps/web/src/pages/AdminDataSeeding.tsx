@@ -382,6 +382,8 @@ Related:
   }
   
   const [seedingRoles, setSeedingRoles] = useState(false)
+  const [seedingExpenseApprovalRoles, setSeedingExpenseApprovalRoles] = useState(false)
+  const [expenseApprovalRolesResult, setExpenseApprovalRolesResult] = useState<any>(null)
   const [seedingKB, setSeedingKB] = useState(false)
   const [seedingTicketsKB, setSeedingTicketsKB] = useState(false)
   const [seedingApprovalKB, setSeedingApprovalKB] = useState(false)
@@ -441,6 +443,24 @@ Related:
       showToast(err.response?.data?.error || 'Failed to seed roles', 'error')
     } finally {
       setSeedingRoles(false)
+    }
+  }
+
+  async function seedExpenseApprovalRoles() {
+    setSeedingExpenseApprovalRoles(true)
+    setExpenseApprovalRolesResult(null)
+    try {
+      const res = await seedPost('/api/admin/seed/expense-approval-roles')
+      if (res.data.error) {
+        showToast(res.data.error, 'error')
+      } else {
+        setExpenseApprovalRolesResult(res.data.data)
+        showToast('Expense approval roles seeded successfully', 'success')
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to seed expense approval roles', 'error')
+    } finally {
+      setSeedingExpenseApprovalRoles(false)
     }
   }
 
@@ -1075,6 +1095,66 @@ Related:
                       <p className="font-medium">All Roles:</p>
                       <ul className="ml-4 mt-1">
                         {rolesResult.roles.map((r: any) => (
+                          <li key={r.name}>
+                            {r.name} ({r.permissions} permissions)
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Seed Expense Approval Roles */}
+      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <Database className="h-5 w-5 text-[color:var(--color-primary-600)]" />
+              <h3 className="text-lg font-semibold text-[color:var(--color-text)]">Expense Approval Roles</h3>
+            </div>
+            <p className="text-sm text-[color:var(--color-text-muted)] mb-4">
+              Add Senior Manager and Finance Manager roles for multi-level expense approval workflow. Safe to run multiple times.
+            </p>
+            <button
+              onClick={seedExpenseApprovalRoles}
+              disabled={seedingExpenseApprovalRoles}
+              className="flex items-center space-x-2 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {seedingExpenseApprovalRoles ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Seeding...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  <span>Seed Expense Approval Roles</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {expenseApprovalRolesResult && (
+          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900 mb-2">{expenseApprovalRolesResult.message}</p>
+                <div className="text-xs text-green-800">
+                  <p>Senior Manager Role: {expenseApprovalRolesResult.results.senior_manager}</p>
+                  <p>Finance Manager Role: {expenseApprovalRolesResult.results.finance_manager}</p>
+                  <p className="mt-2">Total Roles in System: {expenseApprovalRolesResult.totalRoles}</p>
+                  {expenseApprovalRolesResult.roles && (
+                    <div className="mt-2">
+                      <p className="font-medium">All Roles:</p>
+                      <ul className="ml-4 mt-1">
+                        {expenseApprovalRolesResult.roles.map((r: any) => (
                           <li key={r.name}>
                             {r.name} ({r.permissions} permissions)
                           </li>
