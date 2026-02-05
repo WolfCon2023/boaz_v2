@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
-import { Star } from 'lucide-react'
+import { Maximize2, Minimize2, PictureInPicture2, Pin, Star } from 'lucide-react'
 
 export type StratflowIssueType = 'Epic' | 'Story' | 'Task' | 'Defect' | 'Spike' | 'Bug'
 export type StratflowPriority = 'Highest' | 'High' | 'Medium' | 'Low' | 'Critical'
@@ -98,21 +98,78 @@ export function StratflowIssueDrawer({
 }) {
   const toast = useToast()
   const qc = useQueryClient()
-  const [fullScreen, setFullScreen] = React.useState<boolean>(() => {
+
+  type DrawerMode = 'drawer' | 'popout' | 'fullscreen'
+  const [drawerMode, setDrawerMode] = React.useState<DrawerMode>(() => {
     try {
-      return localStorage.getItem('sfIssueFocusFullScreen') === '1'
+      const saved = localStorage.getItem('sfIssueFocusMode')
+      if (saved === 'fullscreen' || saved === 'popout') return saved
+      return 'drawer'
     } catch {
-      return false
+      return 'drawer'
     }
   })
 
   React.useEffect(() => {
     try {
-      localStorage.setItem('sfIssueFocusFullScreen', fullScreen ? '1' : '0')
+      localStorage.setItem('sfIssueFocusMode', drawerMode)
     } catch {
       // ignore
     }
-  }, [fullScreen])
+  }, [drawerMode])
+
+  // Drag state for pop-out mode
+  const [dragPos, setDragPos] = React.useState<{ x: number; y: number } | null>(null)
+  const dragRef = React.useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null)
+  const drawerBoxRef = React.useRef<HTMLDivElement>(null)
+
+  // Reset drag position when leaving pop-out
+  React.useEffect(() => {
+    if (drawerMode !== 'popout') setDragPos(null)
+  }, [drawerMode])
+
+  // Initialise drag position on first pop-out render
+  React.useEffect(() => {
+    if (drawerMode === 'popout' && dragPos === null && drawerBoxRef.current) {
+      const rect = drawerBoxRef.current.getBoundingClientRect()
+      setDragPos({ x: rect.left, y: rect.top })
+    }
+  }, [drawerMode, dragPos])
+
+  const handleDragStart = React.useCallback(
+    (e: React.MouseEvent) => {
+      if (drawerMode !== 'popout') return
+      if (e.button !== 0) return
+      const target = e.target as HTMLElement
+      if (target.closest('button') || target.closest('input') || target.closest('select') || target.closest('a')) return
+
+      e.preventDefault()
+      const box = drawerBoxRef.current
+      if (!box) return
+
+      const rect = box.getBoundingClientRect()
+      const currentX = dragPos?.x ?? rect.left
+      const currentY = dragPos?.y ?? rect.top
+
+      dragRef.current = { startX: e.clientX, startY: e.clientY, originX: currentX, originY: currentY }
+
+      const handleMove = (ev: MouseEvent) => {
+        if (!dragRef.current) return
+        setDragPos({
+          x: dragRef.current.originX + (ev.clientX - dragRef.current.startX),
+          y: dragRef.current.originY + (ev.clientY - dragRef.current.startY),
+        })
+      }
+      const handleUp = () => {
+        dragRef.current = null
+        window.removeEventListener('mousemove', handleMove)
+        window.removeEventListener('mouseup', handleUp)
+      }
+      window.addEventListener('mousemove', handleMove)
+      window.addEventListener('mouseup', handleUp)
+    },
+    [drawerMode, dragPos],
+  )
 
   const meQ = useQuery<UserInfo>({
     queryKey: ['user', 'me'],
@@ -455,7 +512,7 @@ export function StratflowIssueDrawer({
       if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'f' || e.key === 'F')) {
         if (isTypingTarget(e.target)) return
         e.preventDefault()
-        setFullScreen((v) => !v)
+        setDrawerMode((m) => (m === 'fullscreen' ? 'drawer' : 'fullscreen'))
         return
       }
 
@@ -471,20 +528,49 @@ export function StratflowIssueDrawer({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose, save.isPending, title, setFullScreen])
+  }, [onClose, save.isPending, title, setDrawerMode])
+
+  const isPopout = drawerMode === 'popout'
+  const isFullscreen = drawerMode === 'fullscreen'
+
+  const popoutStyle: React.CSSProperties = isPopout
+    ? {
+        position: 'absolute',
+        left: dragPos?.x ?? '50%',
+        top: dragPos?.y ?? '5%',
+        transform: dragPos ? undefined : 'translateX(-50%)',
+        width: 'min(95vw, 48rem)',
+        height: '85vh',
+        minWidth: 360,
+        minHeight: 260,
+        maxWidth: 'calc(100vw - 1rem)',
+        maxHeight: 'calc(100vh - 1rem)',
+        resize: 'both' as const,
+      }
+    : {}
 
   return (
-    <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={onClose}>
+    <div
+      className={`fixed inset-0 z-[2147483647] ${isPopout ? 'bg-black/25' : 'bg-black/40'}`}
+      onClick={onClose}
+    >
       <div
+        ref={drawerBoxRef}
         className={[
-          'absolute flex flex-col border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl',
-          fullScreen
-            ? 'inset-0 w-full border-l-0'
-            : 'top-0 right-0 bottom-0 w-[min(95vw,34rem)] border-l',
+          'flex flex-col border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl overflow-hidden',
+          isFullscreen
+            ? 'absolute inset-0 w-full border-l-0'
+            : isPopout
+              ? 'absolute rounded-2xl border'
+              : 'absolute top-0 right-0 bottom-0 w-[min(95vw,34rem)] border-l',
         ].join(' ')}
+        style={popoutStyle}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex-shrink-0 flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] px-4 py-3">
+        <div
+          className={`flex-shrink-0 flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] px-4 py-3 ${isPopout ? 'cursor-move select-none' : ''}`}
+          onMouseDown={handleDragStart}
+        >
           <div className="min-w-0">
             <div className="text-sm font-semibold truncate">Issue Focus</div>
             <div className="mt-1 flex items-center gap-2">
@@ -526,14 +612,57 @@ export function StratflowIssueDrawer({
               <Star className="h-4 w-4" />
               {watchingIssue ? 'Watching' : 'Watch'}
             </button>
-            <button
-              type="button"
-              onClick={() => setFullScreen((v) => !v)}
-              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
-              title={fullScreen ? 'Exit full window' : 'Full window'}
-            >
-              {fullScreen ? 'Exit full' : 'Full window'}
-            </button>
+            {/* Mode toggle buttons */}
+            {drawerMode === 'drawer' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setDrawerMode('popout')}
+                  className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+                  title="Pop out"
+                >
+                  <PictureInPicture2 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerMode('fullscreen')}
+                  className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+                  title="Fullscreen"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
+            {drawerMode === 'popout' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setDrawerMode('drawer')}
+                  className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+                  title="Dock to side"
+                >
+                  <Pin className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerMode('fullscreen')}
+                  className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+                  title="Fullscreen"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
+            {drawerMode === 'fullscreen' && (
+              <button
+                type="button"
+                onClick={() => setDrawerMode('drawer')}
+                className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+                title="Exit fullscreen"
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-[color:var(--color-muted)]" title="Close">
               ✕
             </button>
