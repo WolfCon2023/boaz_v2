@@ -3056,15 +3056,42 @@ stratflowRouter.get('/projects/:projectId/activity', async (req: any, res) => {
 
   const limit = Math.min(parseInt(String(req.query.limit || '50'), 10) || 50, 100)
   const cursor = req.query.cursor ? objIdOrNull(String(req.query.cursor)) : null
+  const search = req.query.q ? String(req.query.q).trim() : ''
 
   const filter: any = { projectId: pid }
   if (cursor) {
     filter._id = { $lt: cursor }
   }
+  if (search) {
+    const regex = { $regex: search, $options: 'i' }
+    filter.$or = [
+      { kind: regex },
+      { actorId: regex },
+      { 'meta.title': regex },
+      { 'meta.summary': regex },
+      { 'meta.ruleName': regex },
+      { 'meta.toColumnName': regex },
+      { 'meta.fromColumnName': regex },
+    ]
+  }
+
+  const baseFilter: any = { projectId: pid }
+  if (search) {
+    const regex = { $regex: search, $options: 'i' }
+    baseFilter.$or = [
+      { kind: regex },
+      { actorId: regex },
+      { 'meta.title': regex },
+      { 'meta.summary': regex },
+      { 'meta.ruleName': regex },
+      { 'meta.toColumnName': regex },
+      { 'meta.fromColumnName': regex },
+    ]
+  }
 
   const [items, total] = await Promise.all([
     db.collection('sf_activity').find(filter).sort({ createdAt: -1, _id: -1 } as any).limit(limit + 1).toArray(),
-    db.collection('sf_activity').countDocuments({ projectId: pid } as any),
+    db.collection('sf_activity').countDocuments(baseFilter),
   ])
   const hasMore = items.length > limit
   if (hasMore) items.pop()

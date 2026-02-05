@@ -585,6 +585,7 @@ export default function StratflowProject() {
   const [saveFilterName, setSaveFilterName] = React.useState('')
   const savedFiltersKey = `sfSavedFilters:${projectId || ''}`
   const [savedFilters, setSavedFilters] = React.useState<Array<{ id: string; name: string; state: any }>>([])
+  const [activitySearch, setActivitySearch] = React.useState('')
 
   React.useEffect(() => {
     try {
@@ -1117,10 +1118,11 @@ export default function StratflowProject() {
   })
 
   const activityQ = useInfiniteQuery({
-    queryKey: ['stratflow', 'activity', projectId],
+    queryKey: ['stratflow', 'activity', projectId, activitySearch],
     queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       const params = new URLSearchParams({ limit: '50' })
       if (pageParam) params.set('cursor', pageParam)
+      if (activitySearch.trim()) params.set('q', activitySearch.trim())
       return (await http.get(`/api/stratflow/projects/${projectId}/activity?${params}`)).data as { data: { items: ActivityItem[]; nextCursor: string | null; total: number } }
     },
     initialPageParam: undefined as string | undefined,
@@ -4129,7 +4131,16 @@ export default function StratflowProject() {
                   <div className="text-sm font-semibold">Activity feed</div>
                   <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">Recent changes across issues and sprints.</div>
                 </div>
-                <div className="text-xs text-[color:var(--color-text-muted)]">{activityQ.isFetching ? 'Loading…' : 'Live'}</div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    placeholder="Search activity..."
+                    value={activitySearch}
+                    onChange={(e) => setActivitySearch(e.target.value)}
+                    className="h-8 w-48 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 text-sm placeholder:text-[color:var(--color-text-muted)] focus:border-[color:var(--color-primary-500)] focus:outline-none"
+                  />
+                  <div className="text-xs text-[color:var(--color-text-muted)]">{activityQ.isFetching ? 'Loading…' : 'Live'}</div>
+                </div>
               </div>
               <div className="divide-y divide-[color:var(--color-border)]">
                 {(activityQ.data?.pages.flatMap((p) => p.data.items) ?? []).map((a) => (
