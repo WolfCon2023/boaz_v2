@@ -3054,8 +3054,23 @@ stratflowRouter.get('/projects/:projectId/activity', async (req: any, res) => {
   if (!project) return res.status(404).json({ data: null, error: 'not_found' })
   if (project === 'forbidden') return res.status(403).json({ data: null, error: 'forbidden' })
 
-  const limit = Math.min(parseInt(String(req.query.limit || '100'), 10) || 100, 500)
-  const items = await db.collection('sf_activity').find({ projectId: pid } as any).sort({ createdAt: -1 } as any).limit(limit).toArray()
+  const limit = Math.min(parseInt(String(req.query.limit || '50'), 10) || 50, 100)
+  const cursor = req.query.cursor ? objIdOrNull(String(req.query.cursor)) : null
+
+  const filter: any = { projectId: pid }
+  if (cursor) {
+    filter._id = { $lt: cursor }
+  }
+
+  const [items, total] = await Promise.all([
+    db.collection('sf_activity').find(filter).sort({ createdAt: -1, _id: -1 } as any).limit(limit + 1).toArray(),
+    db.collection('sf_activity').countDocuments({ projectId: pid } as any),
+  ])
+  const hasMore = items.length > limit
+  if (hasMore) items.pop()
+
+  const nextCursor = hasMore && items.length > 0 ? String(items[items.length - 1]._id) : null
+
   res.json({
     data: {
       items: items.map((d: any) => ({
@@ -3066,6 +3081,8 @@ stratflowRouter.get('/projects/:projectId/activity', async (req: any, res) => {
         sprintId: d.sprintId ? String(d.sprintId) : null,
         createdAt: toIsoOrNull(d.createdAt),
       })),
+      nextCursor,
+      total,
     },
     error: null,
   })

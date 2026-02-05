@@ -660,9 +660,7 @@ renewalsRouter.delete('/:id', async (req, res) => {
       auth?.email
     )
 
-    await db.collection<RenewalDoc>('renewals').deleteOne({ _id })
-
-    res.json({ data: { ok: true }, error: null })
+    await db.collection<RenewalDoc>('renewals').deleteOne({ _id })    res.json({ data: { ok: true }, error: null })
   } catch (err) {
     res.status(400).json({ data: null, error: 'invalid_id' })
   }

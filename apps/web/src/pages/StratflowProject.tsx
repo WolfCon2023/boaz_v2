@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
@@ -1116,9 +1116,15 @@ export default function StratflowProject() {
     },
   })
 
-  const activityQ = useQuery<{ data: { items: ActivityItem[] } }>({
+  const activityQ = useInfiniteQuery<{ data: { items: ActivityItem[]; nextCursor: string | null; total: number } }>({
     queryKey: ['stratflow', 'activity', projectId],
-    queryFn: async () => (await http.get(`/api/stratflow/projects/${projectId}/activity?limit=200`)).data,
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: '50' })
+      if (pageParam) params.set('cursor', pageParam)
+      return (await http.get(`/api/stratflow/projects/${projectId}/activity?${params}`)).data
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.data.nextCursor ?? undefined,
     retry: false,
     enabled: Boolean(projectId) && view === 'activity',
   })
@@ -4126,7 +4132,7 @@ export default function StratflowProject() {
                 <div className="text-xs text-[color:var(--color-text-muted)]">{activityQ.isFetching ? 'Loading…' : 'Live'}</div>
               </div>
               <div className="divide-y divide-[color:var(--color-border)]">
-                {(activityQ.data?.data.items ?? []).map((a) => (
+                {(activityQ.data?.pages.flatMap((p) => p.data.items) ?? []).map((a) => (
                   <div key={a._id} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -4157,10 +4163,27 @@ export default function StratflowProject() {
                     </div>
                   </div>
                 ))}
-                {!activityQ.isLoading && !(activityQ.data?.data.items ?? []).length ? (
+                {!activityQ.isLoading && !(activityQ.data?.pages.flatMap((p) => p.data.items) ?? []).length ? (
                   <div className="px-4 py-8 text-center text-sm text-[color:var(--color-text-muted)]">No activity yet.</div>
                 ) : null}
+                {activityQ.hasNextPage && (
+                  <div className="px-4 py-3">
+                    <button
+                      type="button"
+                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-4 py-2 text-sm font-medium hover:bg-[color:var(--color-panel-hover)] disabled:opacity-50"
+                      onClick={() => activityQ.fetchNextPage()}
+                      disabled={activityQ.isFetchingNextPage}
+                    >
+                      {activityQ.isFetchingNextPage ? 'Loading more…' : 'Load more'}
+                    </button>
+                  </div>
+                )}
               </div>
+              {activityQ.data && (
+                <div className="border-t border-[color:var(--color-border)] px-4 py-2 text-xs text-[color:var(--color-text-muted)]">
+                  Showing {activityQ.data.pages.flatMap((p) => p.data.items).length} of {activityQ.data.pages[0]?.data.total ?? 0} items
+                </div>
+              )}
             </section>
           )}
         </>
