@@ -162,15 +162,6 @@ export function StratflowIssueDrawer({
     enabled: Boolean(projectId),
   })
 
-  const boardId = issue?.boardId
-  const columnsQ = useQuery<{ data: { board: any; columns: { _id: string; boardId: string; name: string; order: number; wipLimit?: number | null }[] } }>({
-    queryKey: ['stratflow', 'board', boardId],
-    queryFn: async () => (await http.get(`/api/stratflow/boards/${boardId}`)).data,
-    retry: false,
-    enabled: Boolean(boardId),
-  })
-  const columns = columnsQ.data?.data.columns ?? []
-
   const commentsQ = useQuery<{ data: { items: Comment[] } }>({
     queryKey: ['stratflow', 'issue', issueId, 'comments'],
     queryFn: async () => (await http.get(`/api/stratflow/issues/${issueId}/comments`)).data,
@@ -186,6 +177,16 @@ export function StratflowIssueDrawer({
   })
 
   const issue = issueQ.data?.data
+
+  const boardId = issue?.boardId
+  const columnsQ = useQuery<{ data: { board: any; columns: { _id: string; boardId: string; name: string; order: number; wipLimit?: number | null }[] } }>({
+    queryKey: ['stratflow', 'board', boardId],
+    queryFn: async () => (await http.get(`/api/stratflow/boards/${boardId}`)).data,
+    retry: false,
+    enabled: Boolean(boardId),
+  })
+  const columns = columnsQ.data?.data.columns ?? []
+
   const sprints = sprintsQ.data?.data.items ?? []
   const members = membersQ.data?.data.users ?? []
   const projectComponents = componentsQ.data?.data.items ?? []
