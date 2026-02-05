@@ -5,7 +5,7 @@ import { http, getApiUrl } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
-import { Type, Image, MousePointerClick, Minus, Columns, GripVertical } from 'lucide-react'
+import { Type, Image, MousePointerClick, Minus, Columns, GripVertical, UserMinus } from 'lucide-react'
 import { useToast } from '@/components/Toast'
 import { DndContext, type DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -380,7 +380,7 @@ function SegmentsTab() {
 
 type SimpleBlock = {
   id: string
-  type: 'text' | 'heading' | 'image' | 'button' | 'divider' | 'two-columns'
+  type: 'text' | 'heading' | 'image' | 'button' | 'divider' | 'two-columns' | 'unsubscribe'
   content: string
   imageUrl?: string
   imageWidth?: string
@@ -434,6 +434,10 @@ function SimpleBuilderUI({
     }
     if (type === 'image') {
       newBlock.imageWidth = '600px'
+    }
+    if (type === 'unsubscribe') {
+      newBlock.content = "Don't want to receive these emails? Click here to unsubscribe."
+      newBlock.align = 'center'
     }
     setBlocks((prev) => [...prev, newBlock])
     setEditingBlockId(newBlock.id)
@@ -532,6 +536,7 @@ function SimpleBuilderUI({
               {block.type === 'button' && '🔘 Button'}
               {block.type === 'divider' && '➖ Divider'}
               {block.type === 'two-columns' && '📊 Two Columns'}
+              {block.type === 'unsubscribe' && '🚫 Unsubscribe'}
             </span>
             <button
               type="button"
@@ -613,6 +618,7 @@ function SimpleBuilderUI({
             {block.type === 'button' && <div>🔘 {block.buttonText || '(Empty button)'}</div>}
             {block.type === 'divider' && <div className="border-t my-2"></div>}
             {block.type === 'two-columns' && <div className="grid grid-cols-2 gap-2 text-xs">{block.content.split('|||')[0] || '(Left)'} | {block.content.split('|||')[1] || '(Right)'}</div>}
+            {block.type === 'unsubscribe' && <div className="text-xs text-slate-500">{block.content || "(Unsubscribe text)"}</div>}
           </div>
       </div>
     )
@@ -639,6 +645,9 @@ function SimpleBuilderUI({
           </button>
           <button type="button" onClick={() => addBlock('two-columns')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm">
             <Columns size={14} /> Two Columns
+          </button>
+          <button type="button" onClick={() => addBlock('unsubscribe')} className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm text-red-500 border-red-200 hover:bg-red-50">
+            <UserMinus size={14} /> Unsubscribe
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--color-text-muted)]">
@@ -1082,7 +1091,7 @@ function CampaignsTab() {
   // Simple builder state
   type SimpleBlock = {
     id: string
-    type: 'text' | 'heading' | 'image' | 'button' | 'divider' | 'two-columns'
+    type: 'text' | 'heading' | 'image' | 'button' | 'divider' | 'two-columns' | 'unsubscribe'
     content: string
     imageUrl?: string
     imageWidth?: string
@@ -1182,6 +1191,14 @@ function CampaignsTab() {
       </mj-column>
       <mj-column>
         <mj-text align="${align}" color="${textColor}" font-size="16px">${escapeHtml(right || '').replace(/\n/g, '<br />')}</mj-text>
+      </mj-column>
+    </mj-section>`
+        
+        case 'unsubscribe':
+          const unsubText = block.content || 'Click here to unsubscribe'
+          return `    <mj-section background-color="${bgColor}">
+      <mj-column>
+        <mj-text align="${align}" font-size="12px" color="#64748b">${escapeHtml(unsubText).replace('unsubscribe', '<a href="{{unsubscribeUrl}}" style="color:#60a5fa">unsubscribe</a>')}</mj-text>
       </mj-column>
     </mj-section>`
         
