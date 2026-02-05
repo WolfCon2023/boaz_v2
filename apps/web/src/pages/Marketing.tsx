@@ -1195,10 +1195,23 @@ function CampaignsTab() {
     </mj-section>`
         
         case 'unsubscribe':
-          const unsubText = block.content || 'Click here to unsubscribe'
+          // Generate unsubscribe section with proper link - split text around "unsubscribe" word
+          const unsubContent = block.content || "Don't want to receive these emails? Click here to unsubscribe."
+          const unsubLower = unsubContent.toLowerCase()
+          const unsubIdx = unsubLower.indexOf('unsubscribe')
+          if (unsubIdx >= 0) {
+            const before = unsubContent.slice(0, unsubIdx)
+            const after = unsubContent.slice(unsubIdx + 'unsubscribe'.length)
+            return `    <mj-section background-color="${bgColor}">
+      <mj-column>
+        <mj-text align="${align}" font-size="12px" color="#64748b">${escapeHtml(before)}<a href="{{unsubscribeUrl}}" style="color:#60a5fa">unsubscribe</a>${escapeHtml(after)}</mj-text>
+      </mj-column>
+    </mj-section>`
+          }
+          // Fallback if no "unsubscribe" word found - just make whole text a link
           return `    <mj-section background-color="${bgColor}">
       <mj-column>
-        <mj-text align="${align}" font-size="12px" color="#64748b">${escapeHtml(unsubText).replace('unsubscribe', '<a href="{{unsubscribeUrl}}" style="color:#60a5fa">unsubscribe</a>')}</mj-text>
+        <mj-text align="${align}" font-size="12px" color="#64748b"><a href="{{unsubscribeUrl}}" style="color:#60a5fa">${escapeHtml(unsubContent)}</a></mj-text>
       </mj-column>
     </mj-section>`
         

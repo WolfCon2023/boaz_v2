@@ -41,28 +41,55 @@ function buildFilterFromRules(rules: any[]): any {
 }
 
 function injectUnsubscribe(html: string, unsubscribeUrl: string): string {
+  let result = html
+  let found = false
+  
   // Support both {{unsubscribeUrl}} and {{unsubscribeurl}} (case-insensitive)
-  if (html.includes('{{unsubscribeUrl}}')) {
-    return html.replaceAll('{{unsubscribeUrl}}', unsubscribeUrl)
+  if (result.includes('{{unsubscribeUrl}}')) {
+    result = result.replaceAll('{{unsubscribeUrl}}', unsubscribeUrl)
+    found = true
   }
-  if (html.includes('{{unsubscribeurl}}')) {
-    return html.replaceAll('{{unsubscribeurl}}', unsubscribeUrl)
+  if (result.includes('{{unsubscribeurl}}')) {
+    result = result.replaceAll('{{unsubscribeurl}}', unsubscribeUrl)
+    found = true
+  }
+
+  // Handle HTML-encoded curly braces (&#123; and &#125;)
+  // MJML or other processors may encode {{ as &#123;&#123; and }} as &#125;&#125;
+  const htmlEncodedRegex = /&#123;&#123;unsubscribeurl&#125;&#125;/gi
+  if (htmlEncodedRegex.test(result)) {
+    result = result.replace(htmlEncodedRegex, unsubscribeUrl)
+    found = true
+  }
+
+  // Handle URL-encoded curly braces (%7B and %7D)
+  const urlEncodedRegex = /%7B%7Bunsubscribeurl%7D%7D/gi
+  if (urlEncodedRegex.test(result)) {
+    result = result.replace(urlEncodedRegex, unsubscribeUrl)
+    found = true
   }
 
   // Also handle older patterns like "http://{{unsubscribeurl}}/" or "https://{{unsubscribeurl}}"
   const fullRegex = /https?:\/\/\{\{unsubscribeurl\}\}\/?/gi
-  if (fullRegex.test(html)) {
-    return html.replace(fullRegex, unsubscribeUrl)
+  if (fullRegex.test(result)) {
+    result = result.replace(fullRegex, unsubscribeUrl)
+    found = true
   }
 
   // Case-insensitive replacement as fallback for bare token
   const regex = /\{\{unsubscribeurl\}\}/gi
-  if (regex.test(html)) {
-    return html.replace(regex, unsubscribeUrl)
+  if (regex.test(result)) {
+    result = result.replace(regex, unsubscribeUrl)
+    found = true
   }
-  // If no placeholder found, append footer
-  const footer = `<p style="font-size:12px;color:#64748b">You received this email because you subscribed. <a href="${unsubscribeUrl}">Unsubscribe</a></p>`
-  return html + footer
+  
+  // If no placeholder found at all, append footer
+  if (!found) {
+    const footer = `<p style="font-size:12px;color:#64748b">You received this email because you subscribed. <a href="${unsubscribeUrl}">Unsubscribe</a></p>`
+    result = result + footer
+  }
+  
+  return result
 }
 
 function injectSurveyUrl(html: string, surveyUrl?: string | null): string {

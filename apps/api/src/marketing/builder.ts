@@ -24,7 +24,16 @@ function injectUnsubscribeForTest(html: string, campaignId: ObjectId, testEmail:
   if (result.includes('{{unsubscribeurl}}')) {
     result = result.replaceAll('{{unsubscribeurl}}', unsubscribeUrl)
   }
-  // Case-insensitive fallback
+  
+  // Handle HTML-encoded curly braces (&#123; and &#125;)
+  const htmlEncodedRegex = /&#123;&#123;unsubscribeurl&#125;&#125;/gi
+  result = result.replace(htmlEncodedRegex, unsubscribeUrl)
+  
+  // Handle URL-encoded curly braces (%7B and %7D)
+  const urlEncodedRegex = /%7B%7Bunsubscribeurl%7D%7D/gi
+  result = result.replace(urlEncodedRegex, unsubscribeUrl)
+  
+  // Case-insensitive fallback for bare token
   result = result.replace(/\{\{unsubscribeurl\}\}/gi, unsubscribeUrl)
   
   return result
