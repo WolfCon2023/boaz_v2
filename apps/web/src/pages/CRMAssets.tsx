@@ -135,11 +135,9 @@ export default function CRMAssets() {
   // Audit trail state for each entity type
   const [showEnvHistory, setShowEnvHistory] = React.useState(false)
   const [showProdHistory, setShowProdHistory] = React.useState(false)
-  const [showLicenseHistory, setShowLicenseHistory] = React.useState(false)
 
   React.useEffect(() => { setShowEnvHistory(false) }, [editingEnv])
   React.useEffect(() => { setShowProdHistory(false) }, [editingProd])
-  React.useEffect(() => { setShowLicenseHistory(false) }, [editingLicense])
 
   const envHistoryQ = useQuery({
     queryKey: ['asset-history', 'environment', editingEnv?._id],
