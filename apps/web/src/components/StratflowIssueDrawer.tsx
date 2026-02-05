@@ -162,6 +162,15 @@ export function StratflowIssueDrawer({
     enabled: Boolean(projectId),
   })
 
+  const boardId = issue?.boardId
+  const columnsQ = useQuery<{ data: { board: any; columns: { _id: string; boardId: string; name: string; order: number; wipLimit?: number | null }[] } }>({
+    queryKey: ['stratflow', 'board', boardId],
+    queryFn: async () => (await http.get(`/api/stratflow/boards/${boardId}`)).data,
+    retry: false,
+    enabled: Boolean(boardId),
+  })
+  const columns = columnsQ.data?.data.columns ?? []
+
   const commentsQ = useQuery<{ data: { items: Comment[] } }>({
     queryKey: ['stratflow', 'issue', issueId, 'comments'],
     queryFn: async () => (await http.get(`/api/stratflow/issues/${issueId}/comments`)).data,
@@ -202,6 +211,7 @@ export function StratflowIssueDrawer({
   }, [projectIssues])
 
   const [title, setTitle] = React.useState('')
+  const [columnId, setColumnId] = React.useState<string>('')
   const [type, setType] = React.useState<'Epic' | 'Story' | 'Task' | 'Defect' | 'Spike'>('Task')
   const [priority, setPriority] = React.useState<'Highest' | 'High' | 'Medium' | 'Low'>('Medium')
   const [description, setDescription] = React.useState('')
@@ -229,6 +239,7 @@ export function StratflowIssueDrawer({
   React.useEffect(() => {
     if (!issue) return
     setTitle(String(issue.title || ''))
+    setColumnId(issue.columnId || '')
     setType(normalizeIssueType(issue.type))
     setPriority(normalizePriority(issue.priority))
     setDescription(String(issue.description || ''))
@@ -256,7 +267,7 @@ export function StratflowIssueDrawer({
       const parsedPoints = points === '' ? null : Number(points)
       if (points !== '' && !Number.isFinite(parsedPoints)) throw new Error('Story points must be a number.')
 
-      const payload = {
+      const payload: Record<string, any> = {
         title: title.trim(),
         type,
         priority,
@@ -275,6 +286,10 @@ export function StratflowIssueDrawer({
           .filter(Boolean),
         components: selectedComponents,
       }
+      // Only include columnId when it actually changed to avoid unnecessary moves
+      if (columnId && columnId !== issue?.columnId) {
+        payload.columnId = columnId
+      }
       return (await http.patch(`/api/stratflow/issues/${issueId}`, payload)).data
     },
     onSuccess: async () => {
@@ -284,7 +299,11 @@ export function StratflowIssueDrawer({
       await qc.invalidateQueries({ queryKey: ['stratflow', 'projectIssues', projectId] })
     },
     onError: (err: any) => {
-      toast.showToast(err?.response?.data?.error || err?.message || 'Failed to save issue.', 'error')
+      const code = err?.response?.data?.error
+      if (code === 'wip_limit_reached') toast.showToast('WIP limit reached for that column.', 'error')
+      else if (code === 'missing_acceptance_criteria') toast.showToast('Stories require acceptance criteria to move to Done.', 'error')
+      else if (code === 'missing_description') toast.showToast('Defects require a description to move to Done.', 'error')
+      else toast.showToast(code || err?.message || 'Failed to save issue.', 'error')
     },
   })
 
@@ -467,8 +486,25 @@ export function StratflowIssueDrawer({
         <div className="flex-shrink-0 flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] px-4 py-3">
           <div className="min-w-0">
             <div className="text-sm font-semibold truncate">Issue Focus</div>
-            <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-              {issue?.statusKey ? `Status: ${issue.statusKey.replaceAll('_', ' ')}` : 'Status: —'}
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-xs text-[color:var(--color-text-muted)]">Status:</span>
+              {columns.length > 0 ? (
+                <select
+                  value={columnId}
+                  onChange={(e) => setColumnId(e.target.value)}
+                  className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-0.5 text-xs"
+                >
+                  {columns.map((col) => (
+                    <option key={col._id} value={col._id}>
+                      {col.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-xs text-[color:var(--color-text-muted)]">
+                  {issue?.statusKey ? issue.statusKey.replaceAll('_', ' ') : '—'}
+                </span>
+              )}
             </div>
             <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
               Shortcuts: <span className="font-medium">Esc</span> close · <span className="font-medium">F</span> full window ·{' '}

@@ -1891,6 +1891,7 @@ const issueUpdateSchema = z.object({
   targetEndDate: z.string().optional().nullable(),
   labels: z.array(z.string()).optional(),
   components: z.array(z.string()).optional(),
+  columnId: z.string().min(6).optional(),
 })
 
 // GET /api/stratflow/issues/:issueId
@@ -2089,6 +2090,49 @@ stratflowRouter.patch('/issues/:issueId', async (req: any, res) => {
       if (!epic || normIssueType(epic.type) !== 'Epic') return res.status(400).json({ data: null, error: 'invalid_epic' })
       update.epicId = eid
     }
+  }
+
+  // Handle column (status) change via dropdown
+  if (parsed.data.columnId !== undefined) {
+    const toCol = objIdOrNull(parsed.data.columnId)
+    if (!toCol) return res.status(400).json({ data: null, error: 'invalid_column_id' })
+    const col = await db.collection('sf_columns').findOne({ _id: toCol, boardId: issue.boardId } as any)
+    if (!col) return res.status(404).json({ data: null, error: 'column_not_found' })
+
+    // WIP limit check
+    if (col.wipLimit && col.wipLimit > 0) {
+      const count = await db.collection('sf_issues').countDocuments({ boardId: issue.boardId, columnId: toCol } as any)
+      if (count >= col.wipLimit) return res.status(400).json({ data: null, error: 'wip_limit_reached' })
+    }
+
+    // Validate done-column requirements
+    const nextStatusKey = statusKeyFromColumnName(String(col.name || ''))
+    if (nextStatusKey === 'done') {
+      const t = normIssueType(issue.type)
+      if (t === 'Story' && !String(issue.acceptanceCriteria || parsed.data.acceptanceCriteria || '').trim()) {
+        return res.status(400).json({ data: null, error: 'missing_acceptance_criteria' })
+      }
+      if (t === 'Defect' && !String(issue.description || parsed.data.description || '').trim()) {
+        return res.status(400).json({ data: null, error: 'missing_description' })
+      }
+    }
+
+    // Place at end of destination column
+    const destItems = await db.collection('sf_issues').find({ boardId: issue.boardId, columnId: toCol, _id: { $ne: iid } } as any).sort({ order: 1 } as any).toArray()
+    const lastOrder = destItems.length ? Number(destItems[destItems.length - 1].order || 0) : 0
+    update.columnId = toCol
+    update.order = lastOrder + 1000
+    update.statusKey = nextStatusKey
+
+    // Log the move separately
+    await logActivity(db, {
+      projectId: issue.projectId,
+      actorId: auth.userId,
+      kind: 'issue_moved',
+      issueId: iid,
+      meta: { toColumnId: String(toCol), toColumnName: col.name },
+      createdAt: update.updatedAt,
+    })
   }
 
   await db.collection('sf_issues').updateOne({ _id: iid } as any, { $set: update } as any)

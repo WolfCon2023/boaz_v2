@@ -2301,7 +2301,23 @@ export default function StratflowProject() {
                         <td className="px-4 py-3 text-[color:var(--color-text-muted)]">
                           {it.assigneeId ? memberLabelForUserId(it.assigneeId).label : '—'}
                         </td>
-                        <td className="px-4 py-3 text-[color:var(--color-text-muted)]">{columnNameById[it.columnId] || '—'}</td>
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            value={it.columnId}
+                            onChange={(e) => {
+                              const toColumnId = e.target.value
+                              if (toColumnId === it.columnId) return
+                              moveIssue.mutate({ issueId: it._id, toColumnId, toIndex: 99999 })
+                            }}
+                            className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-xs"
+                          >
+                            {columns.map((col) => (
+                              <option key={col._id} value={col._id}>
+                                {col.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
                       </tr>
                     ))}
                     {!filteredListIssues.length && !issuesQ.isLoading ? (
