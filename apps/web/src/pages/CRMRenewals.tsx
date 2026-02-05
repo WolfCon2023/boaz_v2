@@ -7,7 +7,7 @@ import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { formatDate } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { HelpCircle } from 'lucide-react'
-import { AuditTrail, AuditEntry } from '@/components/AuditTrail'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 
 type Renewal = {
   _id: string

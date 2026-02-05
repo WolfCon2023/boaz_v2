@@ -1,5 +1,3 @@
-import * as React from 'react'
-
 /**
  * Shared Audit Trail component for displaying history/audit logs
  * across all BOAZ modules with a consistent table design.

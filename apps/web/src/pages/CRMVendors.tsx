@@ -4,7 +4,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
-import { AuditTrail, AuditEntry } from '@/components/AuditTrail'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 
 type Vendor = {
   _id: string

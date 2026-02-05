@@ -6,7 +6,7 @@ import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
-import { AuditTrail, AuditEntry } from '@/components/AuditTrail'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 
 type Customer = {
   id: string
@@ -157,16 +157,6 @@ export default function CRMAssets() {
     queryFn: async () => {
       if (!editingProd?._id) return { data: { history: [] } }
       const res = await http.get(`/api/assets/history/product/${editingProd._id}`)
-      return res.data as { data: { history: Array<{ _id: string; createdAt: string; eventType: string; description: string; userName?: string; userEmail?: string; oldValue?: any; newValue?: any; metadata?: Record<string, any> }> } }
-    },
-  })
-
-  const licenseHistoryQ = useQuery({
-    queryKey: ['asset-history', 'license', editingLicense?._id],
-    enabled: !!editingLicense?._id && showLicenseHistory,
-    queryFn: async () => {
-      if (!editingLicense?._id) return { data: { history: [] } }
-      const res = await http.get(`/api/assets/history/license/${editingLicense._id}`)
       return res.data as { data: { history: Array<{ _id: string; createdAt: string; eventType: string; description: string; userName?: string; userEmail?: string; oldValue?: any; newValue?: any; metadata?: Record<string, any> }> } }
     },
   })

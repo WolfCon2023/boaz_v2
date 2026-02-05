@@ -6,7 +6,7 @@ import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http, getApiUrl } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { formatDate } from '@/lib/dateFormat'
-import { AuditTrail, AuditEntry } from '@/components/AuditTrail'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
 type QuotePick = { _id: string; quoteNumber?: number; title?: string; accountId?: string }

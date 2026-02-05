@@ -8,7 +8,7 @@ import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
-import { AuditTrail, AuditEntry } from '@/components/AuditTrail'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 
 type Ticket = {
   _id: string
