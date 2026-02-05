@@ -3,8 +3,32 @@ import mjml2html from 'mjml'
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { sendEmail } from '../alerts/mail.js'
+import { env } from '../env.js'
 
 export const marketingBuilderRouter = Router()
+
+/**
+ * Replace {{unsubscribeUrl}} placeholder with actual URL for test emails
+ */
+function injectUnsubscribeForTest(html: string, campaignId: ObjectId, testEmail: string, baseUrl: string): string {
+  // Use env.ORIGIN for proper URL generation behind proxies
+  const origin = (env.ORIGIN || '').split(',')[0]?.trim() || baseUrl
+  const normalizedOrigin = origin.replace(/\/$/, '')
+  const unsubscribeUrl = `${normalizedOrigin}/api/marketing/unsubscribe?e=${encodeURIComponent(testEmail)}&c=${campaignId.toHexString()}`
+  
+  // Replace all variants of the placeholder
+  let result = html
+  if (result.includes('{{unsubscribeUrl}}')) {
+    result = result.replaceAll('{{unsubscribeUrl}}', unsubscribeUrl)
+  }
+  if (result.includes('{{unsubscribeurl}}')) {
+    result = result.replaceAll('{{unsubscribeurl}}', unsubscribeUrl)
+  }
+  // Case-insensitive fallback
+  result = result.replace(/\{\{unsubscribeurl\}\}/gi, unsubscribeUrl)
+  
+  return result
+}
 
 function applyFontFamilyToHtml(html: string, fontFamily?: string | null) {
   const ff = String(fontFamily || '').trim()
@@ -69,6 +93,10 @@ marketingBuilderRouter.post('/campaigns/:id/test-send', async (req, res) => {
   // Apply font override (request takes precedence over campaign default)
   const fontFamily = (req.body && 'fontFamily' in req.body) ? (req.body as any).fontFamily : (campaign as any).fontFamily
   html = applyFontFamilyToHtml(html, fontFamily)
+
+  // Replace unsubscribe placeholder with actual URL for test emails
+  const baseUrl = `${req.protocol}://${req.get('host')}`
+  html = injectUnsubscribeForTest(html, _id, to, baseUrl)
 
   try {
     await sendEmail({ to, subject, html })
