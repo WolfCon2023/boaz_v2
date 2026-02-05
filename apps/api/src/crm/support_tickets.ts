@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { getDb, getNextSequence } from '../db.js'
-import { ObjectId, Sort } from 'mongodb'
+import { ObjectId, Sort, Db } from 'mongodb'
 import multer, { FileFilterCallback } from 'multer'
 import fs from 'fs'
 import path from 'path'
@@ -12,6 +12,53 @@ import { requireAuth } from '../auth/rbac.js'
 import { dispatchCrmEvent } from './integrations_core.js'
 
 export const supportTicketsRouter = Router()
+
+type TicketHistoryEntry = {
+  _id: ObjectId
+  ticketId: string
+  eventType: 'created' | 'updated' | 'status_changed' | 'priority_changed' | 'assigned' | 'escalated' | 'resolved' | 'closed' | 'comment_added' | 'field_changed' | 'deleted'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add ticket history entry
+async function addTicketHistory(
+  db: Db,
+  ticketId: string,
+  eventType: TicketHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('ticket_history').insertOne({
+      _id: new ObjectId(),
+      ticketId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as TicketHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add ticket history:', err)
+    // Don't fail the main operation if history fails
+  }
+}
 
 // === Ticket Attachments (disk storage, similar to CRM documents) ===
 const ticketUploadDir = env.UPLOAD_DIR
@@ -515,6 +562,27 @@ supportTicketsRouter.post('/tickets', async (req, res) => {
           { source: 'crm.support_tickets.create' },
         ).catch(() => {})
 
+        // Add history entry for creation
+        const auth = (req as any).auth as { userId: string; email: string } | undefined
+        let creatorName: string | undefined
+        try {
+          if (auth?.userId) {
+            const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+            if (user && typeof (user as any).name === 'string') {
+              creatorName = (user as any).name
+            }
+          }
+        } catch {}
+        await addTicketHistory(
+          db,
+          result.insertedId.toHexString(),
+          'created',
+          `Ticket #${doc.ticketNumber} created: ${doc.shortDescription}`,
+          auth?.userId,
+          creatorName,
+          auth?.email
+        )
+
         // Send email notification to assignee if assigned
         if (doc.assignee) {
           const assigneeEmail = extractAssigneeEmail(doc.assignee)
@@ -717,6 +785,92 @@ supportTicketsRouter.put('/tickets/:id', async (req, res) => {
     
     await db.collection<TicketDoc>('support_tickets').updateOne({ _id }, { $set: update })
     
+    // Get user info for history
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    let userName: string | undefined
+    try {
+      if (auth?.userId) {
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+        if (user && typeof (user as any).name === 'string') {
+          userName = (user as any).name
+        }
+      }
+    } catch {}
+
+    // Track history for significant changes
+    if (update.status && update.status !== currentTicket.status) {
+      let eventType: TicketHistoryEntry['eventType'] = 'status_changed'
+      if (update.status === 'resolved') eventType = 'resolved'
+      else if (update.status === 'closed') eventType = 'closed'
+      
+      await addTicketHistory(
+        db,
+        req.params.id,
+        eventType,
+        `Status changed from "${currentTicket.status}" to "${update.status}"`,
+        auth?.userId,
+        userName,
+        auth?.email,
+        currentTicket.status,
+        update.status
+      )
+    }
+
+    if (update.priority && update.priority !== currentTicket.priority) {
+      const isEscalation = ['high', 'urgent', 'p1'].includes(update.priority) && 
+                          !['high', 'urgent', 'p1'].includes(currentTicket.priority || '')
+      await addTicketHistory(
+        db,
+        req.params.id,
+        isEscalation ? 'escalated' : 'priority_changed',
+        `Priority changed from "${currentTicket.priority}" to "${update.priority}"`,
+        auth?.userId,
+        userName,
+        auth?.email,
+        currentTicket.priority,
+        update.priority
+      )
+    }
+
+    if (update.assignee && update.assignee !== currentTicket.assignee) {
+      await addTicketHistory(
+        db,
+        req.params.id,
+        'assigned',
+        `Assigned to ${update.assignee}`,
+        auth?.userId,
+        userName,
+        auth?.email,
+        currentTicket.assignee,
+        update.assignee
+      )
+    }
+
+    // Track other field changes
+    const changedFields: string[] = []
+    if (update.shortDescription && update.shortDescription !== currentTicket.shortDescription) changedFields.push('shortDescription')
+    if (update.description && update.description !== currentTicket.description) changedFields.push('description')
+    if (update.slaDueAt) changedFields.push('slaDueAt')
+    if (update.accountId) changedFields.push('accountId')
+    if (update.contactId) changedFields.push('contactId')
+    if (update.owner && update.owner !== currentTicket.owner) changedFields.push('owner')
+
+    const otherChanges = changedFields.filter(f => !['status', 'priority', 'assignee'].includes(f))
+    if (otherChanges.length > 0) {
+      await addTicketHistory(
+        db,
+        req.params.id,
+        'field_changed',
+        `Fields updated: ${otherChanges.join(', ')}`,
+        auth?.userId,
+        userName,
+        auth?.email,
+        undefined,
+        undefined,
+        { changedFields: otherChanges }
+      )
+    }
+    
     // Send email notification if assignee was added or changed
     if (update.assignee && update.assignee !== currentTicket.assignee) {
       const assigneeEmail = extractAssigneeEmail(update.assignee)
@@ -749,8 +903,51 @@ supportTicketsRouter.post('/tickets/:id/comments', async (req, res) => {
       { _id },
       { $push: { comments: comment as TicketComment }, $set: { updatedAt: new Date() } }
     )
+
+    // Add history entry for comment
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    let userName: string | undefined
+    try {
+      if (auth?.userId) {
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+        if (user && typeof (user as any).name === 'string') {
+          userName = (user as any).name
+        }
+      }
+    } catch {}
+    await addTicketHistory(
+      db,
+      req.params.id,
+      'comment_added',
+      `Comment added by ${comment.author}`,
+      auth?.userId,
+      userName,
+      auth?.email,
+      undefined,
+      undefined,
+      { commentPreview: comment.body.slice(0, 100) }
+    )
+
     res.json({ data: { ok: true }, error: null })
   } catch {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
+
+// GET /api/crm/support/tickets/:id/history - Get ticket history
+supportTicketsRouter.get('/tickets/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const ticketId = req.params.id
+    const history = await db
+      .collection<TicketHistoryEntry>('ticket_history')
+      .find({ ticketId })
+      .sort({ createdAt: -1 })
+      .toArray()
+    res.json({ data: { history }, error: null })
+  } catch (err) {
+    console.error('Error fetching ticket history:', err)
     res.status(400).json({ data: null, error: 'invalid_id' })
   }
 })
@@ -761,6 +958,34 @@ supportTicketsRouter.delete('/tickets/:id', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
   try {
     const _id = new ObjectId(req.params.id)
+    
+    // Get ticket before deletion for history
+    const ticket = await db.collection<TicketDoc>('support_tickets').findOne({ _id })
+    if (!ticket) {
+      return res.status(404).json({ data: null, error: 'ticket_not_found' })
+    }
+
+    // Add history entry before deletion
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    let userName: string | undefined
+    try {
+      if (auth?.userId) {
+        const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+        if (user && typeof (user as any).name === 'string') {
+          userName = (user as any).name
+        }
+      }
+    } catch {}
+    await addTicketHistory(
+      db,
+      req.params.id,
+      'deleted',
+      `Ticket #${ticket.ticketNumber} deleted: ${ticket.shortDescription}`,
+      auth?.userId,
+      userName,
+      auth?.email
+    )
+
     const result = await db.collection<TicketDoc>('support_tickets').deleteOne({ _id })
     
     if (result.deletedCount === 0) {

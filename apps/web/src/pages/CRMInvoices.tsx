@@ -8,6 +8,7 @@ import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 import { Plus, X, Package, Send, Printer } from 'lucide-react'
 
 type Invoice = { 
@@ -1716,46 +1717,21 @@ export default function CRMInvoices() {
                   <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
                 </div>
                 {showHistory && historyQ.data && (
-                  <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs space-y-3">
-                    <div>
-                      <div className="font-semibold mb-2">Invoice Information</div>
-                      <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
-                      <div className="mt-1">Invoice: {historyQ.data.data.invoice?.invoiceNumber ?? ''} {historyQ.data.data.invoice?.title ?? ''} • Status: {historyQ.data.data.invoice?.status ?? ''}</div>
-                    </div>
-                    
-                    <div>
-                      <div className="font-semibold mb-2">History Timeline</div>
-                      {historyQ.data.data.history && historyQ.data.data.history.length > 0 ? (
-                        <div className="space-y-2 max-h-80 overflow-y-auto">
-                          {historyQ.data.data.history.map((entry) => (
-                            <div key={entry._id} className="rounded-lg border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg)] p-2">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                  <div className="font-medium">{entry.description}</div>
-                                  {entry.userName && (
-                                    <div className="mt-0.5 text-[10px] text-[color:var(--color-text-muted)]">
-                                      By: {entry.userName} ({entry.userEmail})
-                                    </div>
-                                  )}
-                                  {(entry.oldValue !== undefined || entry.newValue !== undefined) && (
-                                    <div className="mt-1 text-[10px] text-[color:var(--color-text-muted)]">
-                                      {entry.oldValue !== undefined && <span>From: {JSON.stringify(entry.oldValue)}</span>}
-                                      {entry.oldValue !== undefined && entry.newValue !== undefined && <span> → </span>}
-                                      {entry.newValue !== undefined && <span>To: {JSON.stringify(entry.newValue)}</span>}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="text-[10px] text-[color:var(--color-text-muted)] whitespace-nowrap">
-                                  {formatDateTime(entry.createdAt)}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-[color:var(--color-text-muted)]">No history entries found.</div>
-                      )}
-                    </div>
+                  <div className="col-span-full mt-3">
+                    <AuditTrail
+                      entries={(historyQ.data.data.history || []).map((entry): AuditEntry => ({
+                        timestamp: entry.createdAt,
+                        action: entry.eventType,
+                        userName: entry.userName,
+                        userEmail: entry.userEmail,
+                        description: entry.description,
+                        oldValue: entry.oldValue,
+                        newValue: entry.newValue,
+                        metadata: entry.metadata,
+                      }))}
+                      title="Invoice History"
+                      emptyMessage="No history entries found."
+                    />
                   </div>
                 )}
                 <div className="col-span-full mt-4 pt-4 border-t">

@@ -1,10 +1,57 @@
 import { Router } from 'express'
-import { ObjectId, Sort, SortDirection } from 'mongodb'
+import { ObjectId, Sort, SortDirection, Db } from 'mongodb'
 import { z } from 'zod'
 import { getDb } from '../db.js'
 import { requireAuth } from '../auth/rbac.js'
 
 export const renewalsRouter = Router()
+
+type RenewalHistoryEntry = {
+  _id: ObjectId
+  renewalId: string
+  eventType: 'created' | 'updated' | 'status_changed' | 'health_changed' | 'risk_changed' | 'field_changed' | 'deleted'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add renewal history entry
+async function addRenewalHistory(
+  db: Db,
+  renewalId: string,
+  eventType: RenewalHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('renewal_history').insertOne({
+      _id: new ObjectId(),
+      renewalId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as RenewalHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add renewal history:', err)
+    // Don't fail the main operation if history fails
+  }
+}
 
 // Require auth for all renewals routes so we can safely use req.auth
 renewalsRouter.use(requireAuth)
@@ -403,6 +450,17 @@ renewalsRouter.post('/', async (req, res) => {
 
   await db.collection<RenewalDoc>('renewals').insertOne(doc)
 
+  // Add history entry for creation
+  await addRenewalHistory(
+    db,
+    String(doc._id),
+    'created',
+    `Renewal created: ${doc.name}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   res.status(201).json({
     data: {
       ...doc,
@@ -429,6 +487,13 @@ renewalsRouter.put('/:id', async (req, res) => {
     return res.status(400).json({ data: null, error: 'invalid_id' })
   }
 
+  // Get current renewal for history comparison
+  const currentRenewal = await db.collection<RenewalDoc>('renewals').findOne({ _id })
+  if (!currentRenewal) {
+    return res.status(404).json({ data: null, error: 'not_found' })
+  }
+
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
   const data = parsed.data
   const update: any = { ...data, updatedAt: new Date() }
 
@@ -468,6 +533,77 @@ renewalsRouter.put('/:id', async (req, res) => {
 
   await db.collection<RenewalDoc>('renewals').updateOne({ _id }, { $set: update })
 
+  // Track history for significant changes
+  if (data.status && data.status !== currentRenewal.status) {
+    await addRenewalHistory(
+      db,
+      req.params.id,
+      'status_changed',
+      `Status changed from "${currentRenewal.status}" to "${data.status}"`,
+      auth?.userId,
+      auth?.name,
+      auth?.email,
+      currentRenewal.status,
+      data.status
+    )
+  }
+
+  if (data.healthScore !== undefined && data.healthScore !== currentRenewal.healthScore) {
+    await addRenewalHistory(
+      db,
+      req.params.id,
+      'health_changed',
+      `Health score changed from ${currentRenewal.healthScore ?? 'N/A'} to ${data.healthScore ?? 'N/A'}`,
+      auth?.userId,
+      auth?.name,
+      auth?.email,
+      currentRenewal.healthScore,
+      data.healthScore
+    )
+  }
+
+  if (data.churnRisk && data.churnRisk !== currentRenewal.churnRisk) {
+    await addRenewalHistory(
+      db,
+      req.params.id,
+      'risk_changed',
+      `Churn risk changed from "${currentRenewal.churnRisk ?? 'N/A'}" to "${data.churnRisk}"`,
+      auth?.userId,
+      auth?.name,
+      auth?.email,
+      currentRenewal.churnRisk,
+      data.churnRisk
+    )
+  }
+
+  // Track other field changes
+  const changedFields: string[] = []
+  if (data.name && data.name !== currentRenewal.name) changedFields.push('name')
+  if (data.mrr !== undefined && data.mrr !== currentRenewal.mrr) changedFields.push('mrr')
+  if (data.arr !== undefined && data.arr !== currentRenewal.arr) changedFields.push('arr')
+  if (data.renewalDate !== undefined) changedFields.push('renewalDate')
+  if (data.termStart !== undefined) changedFields.push('termStart')
+  if (data.termEnd !== undefined) changedFields.push('termEnd')
+  if (data.upsellPotential && data.upsellPotential !== currentRenewal.upsellPotential) changedFields.push('upsellPotential')
+  if (data.notes !== undefined && data.notes !== currentRenewal.notes) changedFields.push('notes')
+  if (data.ownerEmail !== undefined && data.ownerEmail !== currentRenewal.ownerEmail) changedFields.push('owner')
+
+  const otherChanges = changedFields.filter(f => !['status', 'healthScore', 'churnRisk'].includes(f))
+  if (otherChanges.length > 0) {
+    await addRenewalHistory(
+      db,
+      req.params.id,
+      'field_changed',
+      `Fields updated: ${otherChanges.join(', ')}`,
+      auth?.userId,
+      auth?.name,
+      auth?.email,
+      undefined,
+      undefined,
+      { changedFields: otherChanges }
+    )
+  }
+
   const updated = await db.collection<RenewalDoc>('renewals').findOne({ _id })
   if (!updated) return res.status(404).json({ data: null, error: 'not_found' })
 
@@ -481,4 +617,53 @@ renewalsRouter.put('/:id', async (req, res) => {
   })
 })
 
+// GET /api/crm/renewals/:id/history - Get renewal history
+renewalsRouter.get('/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const renewalId = req.params.id
+    const history = await db
+      .collection<RenewalHistoryEntry>('renewal_history')
+      .find({ renewalId })
+      .sort({ createdAt: -1 })
+      .toArray()
+    res.json({ data: { history }, error: null })
+  } catch (err) {
+    console.error('Error fetching renewal history:', err)
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})
 
+// DELETE /api/crm/renewals/:id
+renewalsRouter.delete('/:id', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const _id = new ObjectId(req.params.id)
+
+    // Get renewal before deletion for history
+    const renewal = await db.collection<RenewalDoc>('renewals').findOne({ _id })
+    if (!renewal) {
+      return res.status(404).json({ data: null, error: 'not_found' })
+    }
+
+    // Add history entry before deletion
+    const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+    await addRenewalHistory(
+      db,
+      req.params.id,
+      'deleted',
+      `Renewal deleted: ${renewal.name}`,
+      auth?.userId,
+      auth?.name,
+      auth?.email
+    )
+
+    await db.collection<RenewalDoc>('renewals').deleteOne({ _id })
+
+    res.json({ data: { ok: true }, error: null })
+  } catch (err) {
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})

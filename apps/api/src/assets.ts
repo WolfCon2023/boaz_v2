@@ -1,10 +1,60 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { ObjectId } from 'mongodb'
+import { ObjectId, Db } from 'mongodb'
 import { getDb } from './db.js'
 import { requireAuth } from './auth/rbac.js'
 
 export const assetsRouter = Router()
+
+type AssetHistoryEntry = {
+  _id: ObjectId
+  entityType: 'environment' | 'product' | 'license'
+  entityId: string
+  eventType: 'created' | 'updated' | 'status_changed' | 'field_changed' | 'deleted'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add asset history entry
+async function addAssetHistory(
+  db: Db,
+  entityType: AssetHistoryEntry['entityType'],
+  entityId: string,
+  eventType: AssetHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('asset_history').insertOne({
+      _id: new ObjectId(),
+      entityType,
+      entityId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as AssetHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add asset history:', err)
+    // Don't fail the main operation if history fails
+  }
+}
 
 assetsRouter.use(requireAuth)
 
@@ -250,6 +300,20 @@ assetsRouter.post('/environments', async (req, res) => {
   }
 
   await db.collection<EnvironmentDoc>('assets_environments').insertOne(doc as any)
+
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addAssetHistory(
+    db,
+    'environment',
+    _id,
+    'created',
+    `Environment created: ${doc.name}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   res.status(201).json({ data: serializeEnvironment(doc), error: null })
 })
 
@@ -286,6 +350,40 @@ assetsRouter.put('/environments/:environmentId', async (req, res) => {
   await coll.updateOne({ _id: id } as any, { $set: update } as any)
   const updated = await coll.findOne({ _id: id } as any)
 
+  // Add history for status change or other updates
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  if (parsed.data.status && parsed.data.status !== existing.status) {
+    await addAssetHistory(
+      db,
+      'environment',
+      id,
+      'status_changed',
+      `Status changed from "${existing.status}" to "${parsed.data.status}"`,
+      auth?.userId,
+      auth?.name,
+      auth?.email,
+      existing.status,
+      parsed.data.status
+    )
+  } else {
+    const changedFields = Object.keys(parsed.data).filter(k => k !== 'status')
+    if (changedFields.length > 0) {
+      await addAssetHistory(
+        db,
+        'environment',
+        id,
+        'field_changed',
+        `Environment updated: ${existing.name}`,
+        auth?.userId,
+        auth?.name,
+        auth?.email,
+        undefined,
+        undefined,
+        { changedFields }
+      )
+    }
+  }
+
   res.json({ data: serializeEnvironment(updated as EnvironmentDoc), error: null })
 })
 
@@ -294,6 +392,24 @@ assetsRouter.delete('/environments/:environmentId', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const id = String(req.params.environmentId)
+  
+  // Get environment before deletion for history
+  const existing = await db.collection<EnvironmentDoc>('assets_environments').findOne({ _id: id } as any)
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Add history before deletion
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addAssetHistory(
+    db,
+    'environment',
+    id,
+    'deleted',
+    `Environment deleted: ${existing.name}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   const result = await db.collection<EnvironmentDoc>('assets_environments').deleteOne({ _id: id } as any)
   if (!result.deletedCount) {
     return res.status(404).json({ data: null, error: 'not_found' })
@@ -336,6 +452,20 @@ assetsRouter.post('/products', async (req, res) => {
   }
 
   await db.collection<InstalledProductDoc>('assets_products').insertOne(doc as any)
+
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addAssetHistory(
+    db,
+    'product',
+    _id,
+    'created',
+    `Product created: ${doc.productName}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   res.status(201).json({ data: serializeProduct(doc), error: null })
 })
 
@@ -414,6 +544,40 @@ assetsRouter.put('/products/:productId', async (req, res) => {
   await coll.updateOne({ _id: id } as any, { $set: update } as any)
   const updated = await coll.findOne({ _id: id } as any)
 
+  // Add history for status change or other updates
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  if (parsed.data.status && parsed.data.status !== existing.status) {
+    await addAssetHistory(
+      db,
+      'product',
+      id,
+      'status_changed',
+      `Status changed from "${existing.status}" to "${parsed.data.status}"`,
+      auth?.userId,
+      auth?.name,
+      auth?.email,
+      existing.status,
+      parsed.data.status
+    )
+  } else {
+    const changedFields = Object.keys(update).filter(k => k !== 'status' && k !== 'updatedAt')
+    if (changedFields.length > 0) {
+      await addAssetHistory(
+        db,
+        'product',
+        id,
+        'field_changed',
+        `Product updated: ${existing.productName}`,
+        auth?.userId,
+        auth?.name,
+        auth?.email,
+        undefined,
+        undefined,
+        { changedFields }
+      )
+    }
+  }
+
   res.json({ data: serializeProduct(updated as InstalledProductDoc), error: null })
 })
 
@@ -422,6 +586,24 @@ assetsRouter.delete('/products/:productId', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const id = String(req.params.productId)
+  
+  // Get product before deletion for history
+  const existing = await db.collection<InstalledProductDoc>('assets_products').findOne({ _id: id } as any)
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Add history before deletion
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addAssetHistory(
+    db,
+    'product',
+    id,
+    'deleted',
+    `Product deleted: ${existing.productName}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   const result = await db.collection<InstalledProductDoc>('assets_products').deleteOne({ _id: id } as any)
   if (!result.deletedCount) {
     return res.status(404).json({ data: null, error: 'not_found' })
@@ -466,6 +648,20 @@ assetsRouter.post('/licenses', async (req, res) => {
   }
 
   await db.collection<LicenseDoc>('assets_licenses').insertOne(doc as any)
+
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addAssetHistory(
+    db,
+    'license',
+    _id,
+    'created',
+    `License created: ${doc.licenseType} (${doc.licenseCount} licenses)`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   res.status(201).json({ data: serializeLicense(doc), error: null })
 })
 
@@ -522,6 +718,40 @@ assetsRouter.put('/licenses/:licenseId', async (req, res) => {
   await coll.updateOne({ _id: id } as any, { $set: update } as any)
   const updated = await coll.findOne({ _id: id } as any)
 
+  // Add history for renewal status change or other updates
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  if (parsed.data.renewalStatus && parsed.data.renewalStatus !== existing.renewalStatus) {
+    await addAssetHistory(
+      db,
+      'license',
+      id,
+      'status_changed',
+      `Renewal status changed from "${existing.renewalStatus}" to "${parsed.data.renewalStatus}"`,
+      auth?.userId,
+      auth?.name,
+      auth?.email,
+      existing.renewalStatus,
+      parsed.data.renewalStatus
+    )
+  } else {
+    const changedFields = Object.keys(update).filter(k => k !== 'renewalStatus' && k !== 'updatedAt')
+    if (changedFields.length > 0) {
+      await addAssetHistory(
+        db,
+        'license',
+        id,
+        'field_changed',
+        `License updated: ${existing.licenseType}`,
+        auth?.userId,
+        auth?.name,
+        auth?.email,
+        undefined,
+        undefined,
+        { changedFields }
+      )
+    }
+  }
+
   res.json({ data: serializeLicense(updated as LicenseDoc), error: null })
 })
 
@@ -530,6 +760,24 @@ assetsRouter.delete('/licenses/:licenseId', async (req, res) => {
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
   const id = String(req.params.licenseId)
+  
+  // Get license before deletion for history
+  const existing = await db.collection<LicenseDoc>('assets_licenses').findOne({ _id: id } as any)
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Add history before deletion
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addAssetHistory(
+    db,
+    'license',
+    id,
+    'deleted',
+    `License deleted: ${existing.licenseType}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   const result = await db.collection<LicenseDoc>('assets_licenses').deleteOne({ _id: id } as any)
   if (!result.deletedCount) {
     return res.status(404).json({ data: null, error: 'not_found' })
@@ -835,4 +1083,27 @@ assetsRouter.get('/product-report', async (req, res) => {
   res.json({ data: { items: formattedRows }, error: null })
 })
 
-
+// GET /api/assets/history/:entityType/:entityId - Get history for an asset entity
+assetsRouter.get('/history/:entityType/:entityId', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  const entityType = req.params.entityType as 'environment' | 'product' | 'license'
+  const entityId = req.params.entityId
+  
+  if (!['environment', 'product', 'license'].includes(entityType)) {
+    return res.status(400).json({ data: null, error: 'invalid_entity_type' })
+  }
+  
+  try {
+    const history = await db
+      .collection<AssetHistoryEntry>('asset_history')
+      .find({ entityType, entityId })
+      .sort({ createdAt: -1 })
+      .toArray()
+    res.json({ data: { history }, error: null })
+  } catch (err) {
+    console.error('Error fetching asset history:', err)
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})

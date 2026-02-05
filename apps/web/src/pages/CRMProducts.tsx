@@ -5,6 +5,7 @@ import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { formatDateTime } from '@/lib/dateFormat'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 import { Package, Layers, Tag, FileText, TrendingUp, Download, TrendingDown, DollarSign, PackageIcon, BarChart3, PieChart, FileDown } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, Legend } from 'recharts'
 import { useToast } from '@/components/Toast'
@@ -2531,77 +2532,20 @@ export default function CRMProducts() {
                     </button>
                   </div>
                   {activeTab === 'products' && showHistory && historyQ.data && historyQ.data.data.history && (
-                    <div className="mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
-                      <h3 className="mb-3 text-sm font-semibold">Product History</h3>
-                      {historyQ.data.data.history.length > 0 ? (
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
-                          {historyQ.data.data.history.map((entry) => {
-                            const getEventIcon = (type: string) => {
-                              switch (type) {
-                                case 'created':
-                                  return '✨'
-                                case 'field_changed':
-                                  return '📋'
-                                case 'updated':
-                                  return '📝'
-                                default:
-                                  return '📌'
-                              }
-                            }
-                            const getEventColor = (type: string) => {
-                              switch (type) {
-                                case 'created':
-                                  return 'text-blue-600'
-                                case 'field_changed':
-                                  return 'text-gray-600'
-                                case 'updated':
-                                  return 'text-gray-600'
-                                default:
-                                  return 'text-gray-600'
-                              }
-                            }
-                            return (
-                              <div
-                                key={entry._id}
-                                className="flex gap-3 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3 text-xs"
-                              >
-                                <div className="flex-shrink-0 text-lg">{getEventIcon(entry.eventType)}</div>
-                                <div className="flex-1 min-w-0">
-                                  <div className={`font-medium ${getEventColor(entry.eventType)}`}>{entry.description}</div>
-                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[color:var(--color-text-muted)]">
-                                    {entry.userName && <span>by {entry.userName}</span>}
-                                    {entry.userEmail && !entry.userName && <span>by {entry.userEmail}</span>}
-                                    <span>•</span>
-                                    <span>{formatDateTime(entry.createdAt)}</span>
-                                  </div>
-                                  {(entry.oldValue !== undefined || entry.newValue !== undefined) && (
-                                    <div className="mt-2 space-y-1 border-l-2 border-[color:var(--color-border)] pl-2">
-                                      {entry.oldValue !== undefined && (
-                                        <div className="text-[color:var(--color-text-muted)]">
-                                          <span className="font-medium">From:</span>{' '}
-                                          {typeof entry.oldValue === 'object'
-                                            ? JSON.stringify(entry.oldValue)
-                                            : String(entry.oldValue)}
-                                        </div>
-                                      )}
-                                      {entry.newValue !== undefined && (
-                                        <div className="text-[color:var(--color-text-muted)]">
-                                          <span className="font-medium">To:</span>{' '}
-                                          {typeof entry.newValue === 'object'
-                                            ? JSON.stringify(entry.newValue)
-                                            : String(entry.newValue)}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-[color:var(--color-text-muted)]">No history available.</div>
-                      )}
+                    <div className="mt-3">
+                      <AuditTrail
+                        entries={historyQ.data.data.history.map((entry): AuditEntry => ({
+                          timestamp: entry.createdAt,
+                          action: entry.eventType,
+                          userName: entry.userName,
+                          userEmail: entry.userEmail,
+                          description: entry.description,
+                          oldValue: entry.oldValue,
+                          newValue: entry.newValue,
+                        }))}
+                        title="Product History"
+                        emptyMessage="No history available."
+                      />
                     </div>
                   )}
                 </form>
@@ -2688,31 +2632,20 @@ export default function CRMProducts() {
                     </button>
                   </div>
                   {activeTab === 'bundles' && showHistory && historyQ.data && historyQ.data.data.history && (
-                    <div className="mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
-                      <h3 className="mb-3 text-sm font-semibold">Bundle History</h3>
-                      {historyQ.data.data.history.length > 0 ? (
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
-                          {historyQ.data.data.history.map((entry) => (
-                            <div
-                              key={entry._id}
-                              className="flex gap-3 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3 text-xs"
-                            >
-                              <div className="flex-shrink-0 text-lg">📌</div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium">{entry.description}</div>
-                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[color:var(--color-text-muted)]">
-                                  {entry.userName && <span>by {entry.userName}</span>}
-                                  {entry.userEmail && !entry.userName && <span>by {entry.userEmail}</span>}
-                                  <span>•</span>
-                                  <span>{formatDateTime(entry.createdAt)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-[color:var(--color-text-muted)]">No history available.</div>
-                      )}
+                    <div className="mt-3">
+                      <AuditTrail
+                        entries={historyQ.data.data.history.map((entry): AuditEntry => ({
+                          timestamp: entry.createdAt,
+                          action: entry.eventType,
+                          userName: entry.userName,
+                          userEmail: entry.userEmail,
+                          description: entry.description,
+                          oldValue: entry.oldValue,
+                          newValue: entry.newValue,
+                        }))}
+                        title="Bundle History"
+                        emptyMessage="No history available."
+                      />
                     </div>
                   )}
                 </form>
@@ -2830,31 +2763,20 @@ export default function CRMProducts() {
                     </button>
                   </div>
                   {activeTab === 'discounts' && showHistory && historyQ.data && historyQ.data.data.history && (
-                    <div className="mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
-                      <h3 className="mb-3 text-sm font-semibold">Discount History</h3>
-                      {historyQ.data.data.history.length > 0 ? (
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
-                          {historyQ.data.data.history.map((entry) => (
-                            <div
-                              key={entry._id}
-                              className="flex gap-3 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3 text-xs"
-                            >
-                              <div className="flex-shrink-0 text-lg">📌</div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium">{entry.description}</div>
-                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[color:var(--color-text-muted)]">
-                                  {entry.userName && <span>by {entry.userName}</span>}
-                                  {entry.userEmail && !entry.userName && <span>by {entry.userEmail}</span>}
-                                  <span>•</span>
-                                  <span>{formatDateTime(entry.createdAt)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-[color:var(--color-text-muted)]">No history available.</div>
-                      )}
+                    <div className="mt-3">
+                      <AuditTrail
+                        entries={historyQ.data.data.history.map((entry): AuditEntry => ({
+                          timestamp: entry.createdAt,
+                          action: entry.eventType,
+                          userName: entry.userName,
+                          userEmail: entry.userEmail,
+                          description: entry.description,
+                          oldValue: entry.oldValue,
+                          newValue: entry.newValue,
+                        }))}
+                        title="Discount History"
+                        emptyMessage="No history available."
+                      />
                     </div>
                   )}
                 </form>
@@ -2923,31 +2845,20 @@ export default function CRMProducts() {
                     </button>
                   </div>
                   {activeTab === 'terms' && showHistory && historyQ.data && historyQ.data.data.history && (
-                    <div className="mt-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-muted)] p-4">
-                      <h3 className="mb-3 text-sm font-semibold">Terms History</h3>
-                      {historyQ.data.data.history.length > 0 ? (
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
-                          {historyQ.data.data.history.map((entry) => (
-                            <div
-                              key={entry._id}
-                              className="flex gap-3 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-3 text-xs"
-                            >
-                              <div className="flex-shrink-0 text-lg">📌</div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium">{entry.description}</div>
-                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[color:var(--color-text-muted)]">
-                                  {entry.userName && <span>by {entry.userName}</span>}
-                                  {entry.userEmail && !entry.userName && <span>by {entry.userEmail}</span>}
-                                  <span>•</span>
-                                  <span>{formatDateTime(entry.createdAt)}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-[color:var(--color-text-muted)]">No history available.</div>
-                      )}
+                    <div className="mt-3">
+                      <AuditTrail
+                        entries={historyQ.data.data.history.map((entry): AuditEntry => ({
+                          timestamp: entry.createdAt,
+                          action: entry.eventType,
+                          userName: entry.userName,
+                          userEmail: entry.userEmail,
+                          description: entry.description,
+                          oldValue: entry.oldValue,
+                          newValue: entry.newValue,
+                        }))}
+                        title="Terms History"
+                        emptyMessage="No history available."
+                      />
                     </div>
                   )}
                 </form>

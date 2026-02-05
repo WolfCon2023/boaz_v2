@@ -9,6 +9,7 @@ import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
 import { RelatedTasks } from '@/components/RelatedTasks'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 
 type Contact = { _id: string; name?: string; email?: string; company?: string; mobilePhone?: string; officePhone?: string; isPrimary?: boolean; primaryPhone?: 'mobile' | 'office' }
 
@@ -1111,31 +1112,38 @@ export default function CRMContacts() {
                 <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
               </div>
               {showHistory && (
-                <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs">
-                  <div className="mb-1 font-semibold">History</div>
-                  {historyQ.isLoading && <div>Loading…</div>}
+                <div className="col-span-full mt-3 space-y-4">
+                  {historyQ.isLoading && <div className="text-sm">Loading…</div>}
                   {historyQ.data && (
-                    <div className="space-y-2">
-                      <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
-                      <div>
-                        <div className="font-semibold">Enrollments</div>
-                        <ul className="list-disc pl-5">
-                          {historyQ.data.data.enrollments.map((e, idx) => (
-                            <li key={idx}>{e.sequenceName} (enrolled: {formatDateTime(e.startedAt)}{e.completedAt ? `; completed: ${formatDateTime(e.completedAt)}` : ''})</li>
-                          ))}
-                          {historyQ.data.data.enrollments.length === 0 && <li>None</li>}
-                        </ul>
-                      </div>
-                      <div>
-                        <div className="font-semibold">Outreach events</div>
-                        <ul className="list-disc pl-5">
-                          {historyQ.data.data.events.map((ev, idx) => (
-                            <li key={idx}>{formatDateTime(ev.at)} - {ev.channel} {ev.event}{ev.recipient ? ` (${ev.recipient})` : ''}</li>
-                          ))}
-                          {historyQ.data.data.events.length === 0 && <li>None</li>}
-                        </ul>
-                      </div>
-                    </div>
+                    <>
+                      <AuditTrail
+                        entries={[
+                          // Map outreach events to audit entries
+                          ...historyQ.data.data.events.map((ev): AuditEntry => ({
+                            timestamp: ev.at,
+                            action: ev.event,
+                            description: `${ev.channel} ${ev.event}${ev.recipient ? ` (${ev.recipient})` : ''}`,
+                          })),
+                          // Map enrollments to audit entries
+                          ...historyQ.data.data.enrollments.map((e): AuditEntry => ({
+                            timestamp: e.startedAt,
+                            action: 'enrolled',
+                            description: `Enrolled in ${e.sequenceName}${e.completedAt ? ` (completed: ${formatDateTime(e.completedAt)})` : ''}`,
+                          })),
+                        ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())}
+                        title="Contact History"
+                        emptyMessage="No history available for this contact."
+                        actionLabels={{
+                          sent: { label: 'Email Sent', color: 'text-blue-400' },
+                          delivered: { label: 'Delivered', color: 'text-green-400' },
+                          opened: { label: 'Opened', color: 'text-emerald-400' },
+                          clicked: { label: 'Clicked', color: 'text-cyan-400' },
+                          bounced: { label: 'Bounced', color: 'text-red-400' },
+                          unsubscribed: { label: 'Unsubscribed', color: 'text-gray-400' },
+                          enrolled: { label: 'Enrolled', color: 'text-purple-400' },
+                        }}
+                      />
+                    </>
                   )}
                 </div>
               )}

@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast'
 import { formatDate } from '@/lib/dateFormat'
 import { RelatedTasks } from '@/components/RelatedTasks'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 
 type Project = {
   _id: string
@@ -57,6 +58,7 @@ export default function CRMProjects() {
   const [editStartDate, setEditStartDate] = React.useState<string>('')
   const [editTargetEndDate, setEditTargetEndDate] = React.useState<string>('')
   const [editActualEndDate, setEditActualEndDate] = React.useState<string>('')
+  const [showHistory, setShowHistory] = React.useState(false)
 
   // Initialize from URL
   const initialized = React.useRef(false)
@@ -138,6 +140,35 @@ export default function CRMProjects() {
       return res.data as { data: { items: DealPick[]; total: number } }
     },
   })
+
+  const historyQ = useQuery({
+    queryKey: ['project-history', editing?._id, showHistory],
+    enabled: Boolean(editing?._id && showHistory),
+    queryFn: async () => {
+      const res = await http.get(`/api/crm/projects/${editing?._id}/history`)
+      return res.data as {
+        data: {
+          history: Array<{
+            _id: string
+            eventType: string
+            description: string
+            userName?: string
+            userEmail?: string
+            oldValue?: any
+            newValue?: any
+            createdAt: string
+          }>
+          project: Project
+          createdAt: string
+        }
+      }
+    },
+  })
+
+  // Reset history visibility when editing changes
+  React.useEffect(() => {
+    setShowHistory(false)
+  }, [editing?._id])
 
   const accounts = accountsQ.data?.data.items ?? []
   const deals = dealsQ.data?.data.items ?? []
@@ -706,6 +737,15 @@ export default function CRMProjects() {
                     Projects can be linked to Accounts, Deals, Tasks, and Documents elsewhere in the CRM.
                   </div>
                   <div className="flex items-center gap-2">
+                    {editing?._id && (
+                      <button
+                        type="button"
+                        onClick={() => setShowHistory((v) => !v)}
+                        className="rounded-xl border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
+                      >
+                        {showHistory ? 'Hide history' : 'View history'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={closeEdit}
@@ -722,6 +762,23 @@ export default function CRMProjects() {
                   </div>
                 </div>
               </form>
+              {showHistory && historyQ.data && (
+                <div className="mt-4">
+                  <AuditTrail
+                    entries={(historyQ.data.data.history || []).map((entry): AuditEntry => ({
+                      timestamp: entry.createdAt,
+                      action: entry.eventType,
+                      userName: entry.userName,
+                      userEmail: entry.userEmail,
+                      description: entry.description,
+                      oldValue: entry.oldValue,
+                      newValue: entry.newValue,
+                    }))}
+                    title="Project History"
+                    emptyMessage="No history available for this project."
+                  />
+                </div>
+              )}
               {editing?._id && (
                 <div className="mt-4 border-t border-[color:var(--color-border)] pt-3">
                   <RelatedTasks relatedType="project" relatedId={editing._id} />

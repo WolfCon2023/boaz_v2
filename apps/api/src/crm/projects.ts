@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { ObjectId } from 'mongodb'
+import { ObjectId, Db } from 'mongodb'
 import { getDb } from '../db.js'
 import { requireAuth } from '../auth/rbac.js'
 
@@ -12,6 +12,53 @@ projectsRouter.use(requireAuth)
 type ProjectStatus = 'not_started' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled'
 type ProjectType = 'implementation' | 'onboarding' | 'change_request' | 'internal'
 type ProjectHealth = 'on_track' | 'at_risk' | 'off_track'
+
+type ProjectHistoryEntry = {
+  _id: ObjectId
+  projectId: string
+  eventType: 'created' | 'updated' | 'status_changed' | 'health_changed' | 'progress_updated' | 'field_changed' | 'deleted'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add history entry
+async function addProjectHistory(
+  db: Db,
+  projectId: string,
+  eventType: ProjectHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('project_history').insertOne({
+      _id: new ObjectId(),
+      projectId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as ProjectHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add project history:', err)
+    // Don't fail the main operation if history fails
+  }
+}
 
 type ProjectDoc = {
   _id: string
@@ -447,6 +494,17 @@ projectsRouter.post('/', async (req, res) => {
 
   await db.collection<ProjectDoc>('crm_projects').insertOne(doc)
 
+  // Add history entry for creation
+  await addProjectHistory(
+    db,
+    newId,
+    'created',
+    `Project "${body.name}" created`,
+    auth?.userId,
+    ownerName,
+    auth?.email
+  )
+
   // If this is an onboarding project, update the parent account's onboarding status
   if (doc.type === 'onboarding' && doc.accountId) {
     await recomputeOnboardingStatus(db, doc.accountId)
@@ -464,6 +522,19 @@ projectsRouter.put('/:id', async (req, res) => {
 
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  let userName: string | undefined
+  try {
+    if (auth?.userId) {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+      if (user && typeof (user as any).name === 'string') {
+        userName = (user as any).name
+      }
+    }
+  } catch {
+    // ignore lookup failures
+  }
 
   const idStr = String(req.params.id)
   const coll = db.collection<ProjectDoc>('crm_projects')
@@ -530,6 +601,77 @@ projectsRouter.put('/:id', async (req, res) => {
   await coll.updateOne({ _id: idStr } as any, { $set: update } as any)
   const updated = (await coll.findOne({ _id: idStr } as any)) as ProjectDoc | null
 
+  // Track history for significant changes
+  if (body.status !== undefined && body.status !== existing.status) {
+    await addProjectHistory(
+      db,
+      idStr,
+      'status_changed',
+      `Status changed from "${existing.status}" to "${body.status}"`,
+      auth?.userId,
+      userName,
+      auth?.email,
+      existing.status,
+      body.status
+    )
+  }
+
+  if (body.health !== undefined && body.health !== existing.health) {
+    await addProjectHistory(
+      db,
+      idStr,
+      'health_changed',
+      `Health changed from "${existing.health}" to "${body.health}"`,
+      auth?.userId,
+      userName,
+      auth?.email,
+      existing.health,
+      body.health
+    )
+  }
+
+  if (body.progressPercent !== undefined && body.progressPercent !== existing.progressPercent) {
+    await addProjectHistory(
+      db,
+      idStr,
+      'progress_updated',
+      `Progress updated from ${existing.progressPercent ?? 0}% to ${body.progressPercent}%`,
+      auth?.userId,
+      userName,
+      auth?.email,
+      existing.progressPercent,
+      body.progressPercent
+    )
+  }
+
+  // Track other field changes
+  const changedFields: string[] = []
+  if (body.name !== undefined && body.name !== existing.name) changedFields.push('name')
+  if (body.description !== undefined && body.description !== existing.description) changedFields.push('description')
+  if (body.type !== undefined && body.type !== existing.type) changedFields.push('type')
+  if (body.accountId !== undefined && body.accountId !== existing.accountId) changedFields.push('accountId')
+  if (body.dealId !== undefined && body.dealId !== existing.dealId) changedFields.push('dealId')
+  if (body.startDate !== undefined) changedFields.push('startDate')
+  if (body.targetEndDate !== undefined) changedFields.push('targetEndDate')
+  if (body.actualEndDate !== undefined) changedFields.push('actualEndDate')
+
+  // Remove fields already tracked separately
+  const otherChanges = changedFields.filter(f => !['status', 'health', 'progressPercent'].includes(f))
+  if (otherChanges.length > 0) {
+    await addProjectHistory(
+      db,
+      idStr,
+      'field_changed',
+      `Fields updated: ${otherChanges.join(', ')}`,
+      auth?.userId,
+      userName,
+      auth?.email,
+      undefined,
+      undefined,
+      { changedFields: otherChanges }
+    )
+  }
+
   // Recompute onboarding status for affected accounts
   const previousAccountId = existing.accountId
   const nextAccountId = (update.accountId ?? existing.accountId) || null
@@ -549,6 +691,19 @@ projectsRouter.delete('/:id', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  let userName: string | undefined
+  try {
+    if (auth?.userId) {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+      if (user && typeof (user as any).name === 'string') {
+        userName = (user as any).name
+      }
+    }
+  } catch {
+    // ignore lookup failures
+  }
+
   const idStr = String(req.params.id)
   const coll = db.collection<ProjectDoc>('crm_projects')
 
@@ -556,6 +711,17 @@ projectsRouter.delete('/:id', async (req, res) => {
   if (!existing) {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
+
+  // Add history entry before deletion
+  await addProjectHistory(
+    db,
+    idStr,
+    'deleted',
+    `Project "${existing.name}" deleted`,
+    auth?.userId,
+    userName,
+    auth?.email
+  )
 
   const result = await coll.deleteOne({ _id: idStr } as any)
   if (!result.deletedCount) {
@@ -567,6 +733,47 @@ projectsRouter.delete('/:id', async (req, res) => {
   }
 
   res.json({ data: { ok: true }, error: null })
+})
+
+// GET /api/crm/projects/:id/history
+projectsRouter.get('/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const idStr = String(req.params.id)
+  
+  // Get project info
+  const project = await db.collection<ProjectDoc>('crm_projects').findOne({ _id: idStr } as any)
+  if (!project) {
+    return res.status(404).json({ data: null, error: 'not_found' })
+  }
+
+  // Get history entries
+  const history = await db
+    .collection<ProjectHistoryEntry>('project_history')
+    .find({ projectId: idStr })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .toArray()
+
+  res.json({
+    data: {
+      project: serializeProject(project),
+      history: history.map((h) => ({
+        _id: h._id.toHexString(),
+        eventType: h.eventType,
+        description: h.description,
+        userName: h.userName,
+        userEmail: h.userEmail,
+        oldValue: h.oldValue,
+        newValue: h.newValue,
+        metadata: h.metadata,
+        createdAt: h.createdAt.toISOString(),
+      })),
+      createdAt: project.createdAt?.toISOString?.() ?? new Date().toISOString(),
+    },
+    error: null,
+  })
 })
 
 

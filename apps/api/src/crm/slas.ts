@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { ObjectId } from 'mongodb'
+import { ObjectId, Db } from 'mongodb'
 import { getDb, getNextSequence } from '../db.js'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { sendEmail } from '../alerts/mail.js'
@@ -9,6 +9,52 @@ import { env } from '../env.js'
 import { requireAuth } from '../auth/rbac.js'
 
 export const slasRouter = Router()
+
+type SlaHistoryEntry = {
+  _id: ObjectId
+  slaId: string
+  eventType: 'created' | 'updated' | 'status_changed' | 'signed' | 'activated' | 'renewed' | 'terminated' | 'field_changed' | 'deleted'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add SLA history entry
+async function addSlaHistory(
+  db: Db,
+  slaId: string,
+  eventType: SlaHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('sla_history').insertOne({
+      _id: new ObjectId(),
+      slaId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as SlaHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add SLA history:', err)
+  }
+}
 
 slasRouter.use(requireAuth)
 
@@ -1142,6 +1188,19 @@ slasRouter.post('/', async (req, res) => {
   }
 
   await db.collection<SlaContractDoc>('sla_contracts').insertOne(doc)
+
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addSlaHistory(
+    db,
+    doc._id.toHexString(),
+    'created',
+    `SLA contract created: ${doc.name}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   res.status(201).json({ data: serialize(doc), error: null })
 })
 
@@ -1291,6 +1350,52 @@ slasRouter.put('/:id', async (req, res) => {
   const updated = await coll.findOne({ _id: existing._id })
   if (!updated) return res.status(500).json({ data: null, error: 'update_failed' })
 
+  // Add history for status change or other updates
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  if (body.status && body.status !== existing.status) {
+    let eventType: SlaHistoryEntry['eventType'] = 'status_changed'
+    if (body.status === 'active') eventType = 'activated'
+    else if (body.status === 'terminated') eventType = 'terminated'
+    
+    await addSlaHistory(
+      db,
+      id,
+      eventType,
+      `Status changed from "${existing.status}" to "${body.status}"`,
+      auth?.userId,
+      auth?.name,
+      auth?.email,
+      existing.status,
+      body.status
+    )
+  } else if (body.signedAtCustomer || body.signedAtProvider) {
+    await addSlaHistory(
+      db,
+      id,
+      'signed',
+      `Contract signed${body.signedByCustomer ? ` by ${body.signedByCustomer}` : ''}`,
+      auth?.userId,
+      auth?.name,
+      auth?.email
+    )
+  } else {
+    const changedFields = Object.keys(update).filter(k => k !== 'status' && k !== 'updatedAt')
+    if (changedFields.length > 0) {
+      await addSlaHistory(
+        db,
+        id,
+        'field_changed',
+        `Contract updated: ${existing.name}`,
+        auth?.userId,
+        auth?.name,
+        auth?.email,
+        undefined,
+        undefined,
+        { changedFields: changedFields.slice(0, 10) }
+      )
+    }
+  }
+
   res.json({ data: serialize(updated), error: null })
 })
 
@@ -1301,6 +1406,22 @@ slasRouter.delete('/:id', async (req, res) => {
 
   const { id } = req.params
   if (!ObjectId.isValid(id)) return res.status(400).json({ data: null, error: 'invalid_id' })
+
+  // Get SLA before deletion for history
+  const existing = await db.collection<SlaContractDoc>('sla_contracts').findOne({ _id: new ObjectId(id) })
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Add history before deletion
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addSlaHistory(
+    db,
+    id,
+    'deleted',
+    `Contract deleted: ${existing.name}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
 
   const result = await db.collection<SlaContractDoc>('sla_contracts').deleteOne({ _id: new ObjectId(id) })
   if (!result.deletedCount) {
@@ -2252,4 +2373,23 @@ slasRouter.get('/by-account', async (req, res) => {
   res.json({ data: { items }, error: null })
 })
 
-
+// GET /api/crm/slas/:id/history - Get SLA contract history
+slasRouter.get('/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  
+  const { id } = req.params
+  if (!ObjectId.isValid(id)) return res.status(400).json({ data: null, error: 'invalid_id' })
+  
+  try {
+    const history = await db
+      .collection<SlaHistoryEntry>('sla_history')
+      .find({ slaId: id })
+      .sort({ createdAt: -1 })
+      .toArray()
+    res.json({ data: { history }, error: null })
+  } catch (err) {
+    console.error('Error fetching SLA history:', err)
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})

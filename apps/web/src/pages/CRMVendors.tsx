@@ -4,6 +4,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
+import { AuditTrail, AuditEntry } from '@/components/AuditTrail'
 
 type Vendor = {
   _id: string
@@ -32,6 +33,20 @@ export default function CRMVendors() {
   const [statusFilter, setStatusFilter] = React.useState<'all' | 'Active' | 'Inactive'>('all')
   const [editing, setEditing] = React.useState<Vendor | null>(null)
   const [categoriesDraft, setCategoriesDraft] = React.useState('')
+
+  // Audit trail state
+  const [showHistory, setShowHistory] = React.useState(false)
+  React.useEffect(() => { setShowHistory(false) }, [editing])
+
+  const historyQ = useQuery({
+    queryKey: ['vendor-history', editing?._id],
+    enabled: !!editing?._id && showHistory,
+    queryFn: async () => {
+      if (!editing?._id) return { data: { history: [] } }
+      const res = await http.get(`/api/crm/vendors/${editing._id}/history`)
+      return res.data as { data: { history: Array<{ _id: string; createdAt: string; eventType: string; description: string; userName?: string; userEmail?: string; oldValue?: any; newValue?: any; metadata?: Record<string, any> }> } }
+    },
+  })
 
   const { data, isFetching } = useQuery({
     queryKey: ['vendors', q, statusFilter],
@@ -421,6 +436,36 @@ export default function CRMVendors() {
                     className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
                   />
                 </div>
+                {editing._id && (
+                  <div className="md:col-span-2 mt-2">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="text-[11px] font-semibold">History</div>
+                      <button
+                        type="button"
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="text-[10px] text-[color:var(--color-primary-500)] hover:underline"
+                      >
+                        {showHistory ? 'Hide audit trail' : 'View audit trail'}
+                      </button>
+                    </div>
+                    {showHistory && (
+                      <AuditTrail
+                        entries={(historyQ.data?.data?.history || []).map((h) => ({
+                          timestamp: h.createdAt,
+                          action: h.eventType,
+                          userName: h.userName,
+                          userEmail: h.userEmail,
+                          description: h.description,
+                          oldValue: h.oldValue,
+                          newValue: h.newValue,
+                          metadata: h.metadata,
+                        } as AuditEntry))}
+                        maxHeight="150px"
+                        emptyMessage={historyQ.isLoading ? 'Loading...' : 'No audit history yet.'}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex justify-end gap-2">

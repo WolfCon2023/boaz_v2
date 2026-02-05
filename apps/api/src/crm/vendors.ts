@@ -1,10 +1,56 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { ObjectId } from 'mongodb'
+import { ObjectId, Db } from 'mongodb'
 import { getDb } from '../db.js'
 import { requireAuth } from '../auth/rbac.js'
 
 export const vendorsRouter = Router()
+
+type VendorHistoryEntry = {
+  _id: ObjectId
+  vendorId: string
+  eventType: 'created' | 'updated' | 'status_changed' | 'field_changed' | 'deleted'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add vendor history entry
+async function addVendorHistory(
+  db: Db,
+  vendorId: string,
+  eventType: VendorHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('vendor_history').insertOne({
+      _id: new ObjectId(),
+      vendorId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as VendorHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add vendor history:', err)
+  }
+}
 
 vendorsRouter.use(requireAuth)
 
@@ -161,6 +207,19 @@ vendorsRouter.post('/', async (req, res) => {
   }
 
   await db.collection<VendorDoc>('crm_vendors').insertOne(doc as any)
+
+  // Add history entry for creation
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addVendorHistory(
+    db,
+    _id.toHexString(),
+    'created',
+    `Vendor created: ${doc.name}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   res.status(201).json({ data: serializeVendor(doc), error: null })
 })
 
@@ -197,6 +256,38 @@ vendorsRouter.put('/:id', async (req, res) => {
   await coll.updateOne({ _id } as any, { $set: update } as any)
   const updated = await coll.findOne({ _id } as any)
 
+  // Add history for status change or other updates
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  if (parsed.data.status && parsed.data.status !== existing.status) {
+    await addVendorHistory(
+      db,
+      req.params.id,
+      'status_changed',
+      `Status changed from "${existing.status}" to "${parsed.data.status}"`,
+      auth?.userId,
+      auth?.name,
+      auth?.email,
+      existing.status,
+      parsed.data.status
+    )
+  } else {
+    const changedFields = Object.keys(parsed.data).filter(k => k !== 'status')
+    if (changedFields.length > 0) {
+      await addVendorHistory(
+        db,
+        req.params.id,
+        'field_changed',
+        `Vendor updated: ${existing.name}`,
+        auth?.userId,
+        auth?.name,
+        auth?.email,
+        undefined,
+        undefined,
+        { changedFields }
+      )
+    }
+  }
+
   res.json({ data: updated ? serializeVendor(updated) : null, error: null })
 })
 
@@ -212,6 +303,22 @@ vendorsRouter.delete('/:id', async (req, res) => {
     return res.status(400).json({ data: null, error: 'invalid_id' })
   }
 
+  // Get vendor before deletion for history
+  const existing = await db.collection<VendorDoc>('crm_vendors').findOne({ _id } as any)
+  if (!existing) return res.status(404).json({ data: null, error: 'not_found' })
+
+  // Add history before deletion
+  const auth = (req as any).auth as { userId: string; email: string; name?: string } | undefined
+  await addVendorHistory(
+    db,
+    req.params.id,
+    'deleted',
+    `Vendor deleted: ${existing.name}`,
+    auth?.userId,
+    auth?.name,
+    auth?.email
+  )
+
   const result = await db.collection<VendorDoc>('crm_vendors').deleteOne({ _id } as any)
   if (!result.deletedCount) {
     return res.status(404).json({ data: null, error: 'not_found' })
@@ -220,4 +327,20 @@ vendorsRouter.delete('/:id', async (req, res) => {
   res.json({ data: { ok: true }, error: null })
 })
 
-
+// GET /api/crm/vendors/:id/history - Get vendor history
+vendorsRouter.get('/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  try {
+    const vendorId = req.params.id
+    const history = await db
+      .collection<VendorHistoryEntry>('vendor_history')
+      .find({ vendorId })
+      .sort({ createdAt: -1 })
+      .toArray()
+    res.json({ data: { history }, error: null })
+  } catch (err) {
+    console.error('Error fetching vendor history:', err)
+    res.status(400).json({ data: null, error: 'invalid_id' })
+  }
+})

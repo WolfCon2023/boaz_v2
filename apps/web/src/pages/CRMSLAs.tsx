@@ -6,6 +6,7 @@ import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http, getApiUrl } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { formatDate } from '@/lib/dateFormat'
+import { AuditTrail, AuditEntry } from '@/components/AuditTrail'
 
 type AccountPick = { _id: string; accountNumber?: number; name?: string }
 type QuotePick = { _id: string; quoteNumber?: number; title?: string; accountId?: string }
@@ -235,6 +236,20 @@ export default function CRMSLAs() {
   const [emailTo, setEmailTo] = React.useState('')
   const [emailSubject, setEmailSubject] = React.useState('')
   const [emailContract, setEmailContract] = React.useState<SlaContract | null>(null)
+
+  // Audit trail state
+  const [showHistory, setShowHistory] = React.useState(false)
+  React.useEffect(() => { setShowHistory(false) }, [editing])
+
+  const historyQ = useQuery({
+    queryKey: ['sla-history', editing?._id],
+    enabled: !!editing?._id && showHistory,
+    queryFn: async () => {
+      if (!editing?._id) return { data: { history: [] } }
+      const res = await http.get(`/api/crm/slas/${editing._id}/history`)
+      return res.data as { data: { history: Array<{ _id: string; createdAt: string; eventType: string; description: string; userName?: string; userEmail?: string; oldValue?: any; newValue?: any; metadata?: Record<string, any> }> } }
+    },
+  })
 
   const accountsQ = useQuery({
     queryKey: ['accounts-pick'],
@@ -1957,6 +1972,53 @@ export default function CRMSLAs() {
                         )
                       })}
                     </ul>
+                  </div>
+                )}
+
+                {/* Audit Trail Section */}
+                {editing._id && (
+                  <div className="mt-3 border-t border-[color:var(--color-border)] pt-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="text-sm font-semibold">Audit Trail</div>
+                      <button
+                        type="button"
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="text-xs text-[color:var(--color-primary-500)] hover:underline"
+                      >
+                        {showHistory ? 'Hide audit trail' : 'View audit trail'}
+                      </button>
+                    </div>
+                    {showHistory && (
+                      <AuditTrail
+                        entries={(() => {
+                          const entries: AuditEntry[] = []
+                          if (historyQ.data?.data?.history) {
+                            for (const h of historyQ.data.data.history) {
+                              entries.push({
+                                timestamp: h.createdAt,
+                                action: h.eventType,
+                                userName: h.userName,
+                                userEmail: h.userEmail,
+                                description: h.description,
+                                oldValue: h.oldValue,
+                                newValue: h.newValue,
+                                metadata: h.metadata,
+                              })
+                            }
+                          }
+                          return entries
+                        })()}
+                        maxHeight="200px"
+                        actionLabels={{
+                          'created': { label: 'Created', color: 'text-emerald-400' },
+                          'status_changed': { label: 'Status Changed', color: 'text-blue-400' },
+                          'health_changed': { label: 'Health Changed', color: 'text-amber-400' },
+                          'field_changed': { label: 'Updated', color: 'text-sky-400' },
+                          'deleted': { label: 'Deleted', color: 'text-red-400' },
+                        }}
+                        emptyMessage={historyQ.isLoading ? 'Loading history...' : 'No audit history yet.'}
+                      />
+                    )}
                   </div>
                 )}
 

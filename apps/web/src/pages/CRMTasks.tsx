@@ -6,6 +6,7 @@ import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 
 type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
 type TaskType = 'call' | 'meeting' | 'todo' | 'email' | 'note'
@@ -65,6 +66,7 @@ export default function CRMTasks() {
   const [newRelatedId, setNewRelatedId] = React.useState('')
 
   const [editingTask, setEditingTask] = React.useState<Task | null>(null)
+  const [showHistory, setShowHistory] = React.useState(false)
   const [editType, setEditType] = React.useState<TaskType>('todo')
   const [editStatus, setEditStatus] = React.useState<TaskStatus>('open')
   const [editPriority, setEditPriority] = React.useState<TaskPriority>('normal')
@@ -144,6 +146,35 @@ export default function CRMTasks() {
       return res.data as { data: { items: Array<{ _id: string; name?: string }> } }
     },
   })
+
+  const historyQ = useQuery({
+    queryKey: ['task-history', editingTask?._id, showHistory],
+    enabled: Boolean(editingTask?._id && showHistory),
+    queryFn: async () => {
+      const res = await http.get(`/api/crm/tasks/${editingTask?._id}/history`)
+      return res.data as {
+        data: {
+          history: Array<{
+            _id: string
+            eventType: string
+            description: string
+            userName?: string
+            userEmail?: string
+            oldValue?: any
+            newValue?: any
+            createdAt: string
+          }>
+          task: Task
+          createdAt: string
+        }
+      }
+    },
+  })
+
+  // Reset history visibility when editing task changes
+  React.useEffect(() => {
+    setShowHistory(false)
+  }, [editingTask?._id])
 
   // Create lookup maps for related entities
   const contactById = React.useMemo(() => {
@@ -1245,6 +1276,13 @@ export default function CRMTasks() {
                 <div className="flex gap-2">
                   <button
                     type="button"
+                    onClick={() => setShowHistory((v) => !v)}
+                    className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                  >
+                    {showHistory ? 'Hide history' : 'View history'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={cancelEdit}
                     className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
                   >
@@ -1260,6 +1298,23 @@ export default function CRMTasks() {
                   </button>
                 </div>
               </div>
+              {showHistory && historyQ.data && (
+                <div className="mt-4 border-t border-[color:var(--color-border)] pt-4">
+                  <AuditTrail
+                    entries={(historyQ.data.data.history || []).map((entry): AuditEntry => ({
+                      timestamp: entry.createdAt,
+                      action: entry.eventType,
+                      userName: entry.userName,
+                      userEmail: entry.userEmail,
+                      description: entry.description,
+                      oldValue: entry.oldValue,
+                      newValue: entry.newValue,
+                    }))}
+                    title="Task History"
+                    emptyMessage="No history available for this task."
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

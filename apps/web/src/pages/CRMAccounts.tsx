@@ -9,6 +9,7 @@ import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { DocumentsList } from '@/components/DocumentsList'
 import { RelatedTasks } from '@/components/RelatedTasks'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 
 type Account = {
   _id: string
@@ -2162,42 +2163,39 @@ export default function CRMAccounts() {
                   </div>
                 )}
                 {showHistory && (
-                  <div className="col-span-full mt-3 rounded-xl border border-[color:var(--color-border)] p-3 text-xs">
-                    {historyQ.isLoading && <div>Loading…</div>}
+                  <div className="col-span-full mt-3 space-y-4">
+                    {historyQ.isLoading && <div className="text-sm">Loading…</div>}
                     {historyQ.data && (
-                      <div className="space-y-2">
-                        <div>Created: {formatDateTime(historyQ.data.data.createdAt)}</div>
-                        <div>
-                          <div className="font-semibold">Account history</div>
-                          <ul className="list-disc pl-5">
-                            {(historyQ.data.data.history ?? []).map((h, i) => (
-                              <li key={i}>
-                                {h.createdAt ? `${formatDateTime(h.createdAt)} – ` : ''}
-                                {h.description ?? ''}
-                                {h.userName ? ` (${h.userName})` : ''}
-                              </li>
-                            ))}
-                            {(!historyQ.data.data.history ||
-                              historyQ.data.data.history.length === 0) && <li>None</li>}
-                          </ul>
+                      <>
+                        <AuditTrail
+                          entries={(historyQ.data.data.history ?? []).map((h): AuditEntry => ({
+                            timestamp: h.createdAt || '',
+                            action: 'updated',
+                            userName: h.userName,
+                            description: h.description,
+                          }))}
+                          title="Account History"
+                          emptyMessage="No history available for this account."
+                        />
+                        <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 text-xs space-y-3">
+                          <div>
+                            <div className="font-semibold mb-1">Related Deals</div>
+                            <ul className="list-disc pl-5">{historyQ.data.data.deals.map((d, i) => (<li key={i}>{d.dealNumber ?? ''} {d.title ?? ''} {d.amount ? `$${d.amount}` : ''} {d.stage ?? ''} {d.closeDate ? `• Close: ${formatDate(d.closeDate)}` : ''}</li>))}{historyQ.data.data.deals.length===0 && <li className="text-[color:var(--color-text-muted)]">None</li>}</ul>
+                          </div>
+                          <div>
+                            <div className="font-semibold mb-1">Related Quotes</div>
+                            <ul className="list-disc pl-5">{historyQ.data.data.quotes.map((q, i) => (<li key={i}>{q.quoteNumber ?? ''} {q.title ?? ''} ${q.total ?? ''} {q.status ?? ''} {q.updatedAt ? `• Updated: ${formatDateTime(q.updatedAt)}` : ''}</li>))}{historyQ.data.data.quotes.length===0 && <li className="text-[color:var(--color-text-muted)]">None</li>}</ul>
+                          </div>
+                          <div>
+                            <div className="font-semibold mb-1">Related Invoices</div>
+                            <ul className="list-disc pl-5">{historyQ.data.data.invoices.map((inv, i) => (<li key={i}>{inv.invoiceNumber ?? ''} {inv.title ?? ''} ${inv.total ?? ''} {inv.status ?? ''} {inv.issuedAt ? `• Issued: ${formatDate(inv.issuedAt)}` : ''} {inv.dueDate ? `• Due: ${formatDate(inv.dueDate)}` : ''}</li>))}{historyQ.data.data.invoices.length===0 && <li className="text-[color:var(--color-text-muted)]">None</li>}</ul>
+                          </div>
+                          <div>
+                            <div className="font-semibold mb-1">Activities</div>
+                            <ul className="list-disc pl-5">{historyQ.data.data.activities.map((a, i) => (<li key={i}>{formatDateTime(a.at)} - {a.type ?? ''} {a.subject ?? ''}</li>))}{historyQ.data.data.activities.length===0 && <li className="text-[color:var(--color-text-muted)]">None</li>}</ul>
+                          </div>
                         </div>
-                        <div>
-                          <div className="font-semibold">Deals</div>
-                          <ul className="list-disc pl-5">{historyQ.data.data.deals.map((d, i) => (<li key={i}>{d.dealNumber ?? ''} {d.title ?? ''} {d.amount ? `$${d.amount}` : ''} {d.stage ?? ''} {d.closeDate ? `• Close: ${formatDate(d.closeDate)}` : ''}</li>))}{historyQ.data.data.deals.length===0 && <li>None</li>}</ul>
-                        </div>
-                        <div>
-                          <div className="font-semibold">Quotes</div>
-                          <ul className="list-disc pl-5">{historyQ.data.data.quotes.map((q, i) => (<li key={i}>{q.quoteNumber ?? ''} {q.title ?? ''} ${q.total ?? ''} {q.status ?? ''} {q.updatedAt ? `• Updated: ${formatDateTime(q.updatedAt)}` : ''}</li>))}{historyQ.data.data.quotes.length===0 && <li>None</li>}</ul>
-                        </div>
-                        <div>
-                          <div className="font-semibold">Invoices</div>
-                          <ul className="list-disc pl-5">{historyQ.data.data.invoices.map((inv, i) => (<li key={i}>{inv.invoiceNumber ?? ''} {inv.title ?? ''} ${inv.total ?? ''} {inv.status ?? ''} {inv.issuedAt ? `• Issued: ${formatDate(inv.issuedAt)}` : ''} {inv.dueDate ? `• Due: ${formatDate(inv.dueDate)}` : ''}</li>))}{historyQ.data.data.invoices.length===0 && <li>None</li>}</ul>
-                        </div>
-                        <div>
-                          <div className="font-semibold">Activities</div>
-                          <ul className="list-disc pl-5">{historyQ.data.data.activities.map((a, i) => (<li key={i}>{formatDateTime(a.at)} - {a.type ?? ''} {a.subject ?? ''}</li>))}{historyQ.data.data.activities.length===0 && <li>None</li>}</ul>
-                        </div>
-                      </div>
+                      </>
                     )}
                   </div>
                 )}

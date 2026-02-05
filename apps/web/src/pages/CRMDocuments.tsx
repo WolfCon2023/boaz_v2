@@ -5,6 +5,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
+import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 import { FileText, Upload, Download, Trash2, Eye, Users, Plus, X, Search, History, Lock, Unlock, HelpCircle, BookOpen } from 'lucide-react'
 
 type DocumentVersion = {
@@ -1313,70 +1314,25 @@ export default function CRMDocuments() {
             </div>
 
             {showHistory && historyQ.data && (
-              <div className="space-y-4">
-                <h3 className="font-medium">Document History</h3>
-                {historyQ.data.data.history && historyQ.data.data.history.length > 0 ? (
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {historyQ.data.data.history.map((entry) => {
-                      const getEventIcon = (type: string) => {
-                        switch (type) {
-                          case 'created': return '✨'
-                          case 'updated': return '📝'
-                          case 'version_uploaded': return '📤'
-                          case 'version_downloaded': return '📥'
-                          case 'permission_added': return '➕'
-                          case 'permission_updated': return '🔄'
-                          case 'permission_removed': return '➖'
-                          case 'deleted': return '🗑️'
-                          case 'field_changed': return '📋'
-                          case 'checked_out': return '🔒'
-                          case 'checked_in': return '🔓'
-                          default: return '📌'
-                        }
-                      }
-                      const getEventColor = (type: string) => {
-                        switch (type) {
-                          case 'created': return 'text-blue-600'
-                          case 'updated': return 'text-gray-600'
-                          case 'version_uploaded': return 'text-green-600'
-                          case 'version_downloaded': return 'text-blue-500'
-                          case 'permission_added': return 'text-green-500'
-                          case 'permission_updated': return 'text-yellow-600'
-                          case 'permission_removed': return 'text-red-500'
-                          case 'deleted': return 'text-red-600'
-                          case 'field_changed': return 'text-gray-600'
-                          case 'checked_out': return 'text-yellow-600'
-                          case 'checked_in': return 'text-green-600'
-                          default: return 'text-gray-600'
-                        }
-                      }
-                      return (
-                        <div
-                          key={entry._id}
-                          className="flex items-start gap-3 p-3 rounded-lg border bg-[color:var(--color-panel)]"
-                        >
-                          <span className="text-xl flex-shrink-0">{getEventIcon(entry.eventType)}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className={`font-medium ${getEventColor(entry.eventType)}`}>
-                              {entry.description}
-                            </div>
-                            <div className="text-xs text-[color:var(--color-text-muted)] mt-1">
-                              {entry.userName || entry.userEmail || 'System'} • {formatDateTime(entry.createdAt)}
-                            </div>
-                            {entry.oldValue && entry.newValue && (
-                              <div className="text-xs text-[color:var(--color-text-muted)] mt-1">
-                                Changed from "{String(entry.oldValue)}" to "{String(entry.newValue)}"
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-sm text-[color:var(--color-text-muted)]">No history available</div>
-                )}
-              </div>
+              <AuditTrail
+                entries={(historyQ.data.data.history || []).map((entry): AuditEntry => ({
+                  timestamp: entry.createdAt,
+                  action: entry.eventType,
+                  userName: entry.userName,
+                  userEmail: entry.userEmail,
+                  description: entry.description,
+                  oldValue: entry.oldValue,
+                  newValue: entry.newValue,
+                  metadata: entry.metadata,
+                }))}
+                title="Document History"
+                emptyMessage="No history available"
+                actionLabels={{
+                  permission_added: { label: 'Permission Added', color: 'text-green-400' },
+                  permission_updated: { label: 'Permission Updated', color: 'text-amber-400' },
+                  permission_removed: { label: 'Permission Removed', color: 'text-red-400' },
+                }}
+              />
             )}
 
             {showVersions && !showHistory && (

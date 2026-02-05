@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { getDb } from '../db.js'
 import { z } from 'zod'
-import { ObjectId } from 'mongodb'
+import { ObjectId, Db } from 'mongodb'
 import { requireAuth } from '../auth/rbac.js'
 
 export const tasksRouter = Router()
@@ -13,6 +13,53 @@ type TaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
 type TaskType = 'call' | 'meeting' | 'todo' | 'email' | 'note'
 type TaskPriority = 'low' | 'normal' | 'high'
 type TaskRelatedType = 'contact' | 'account' | 'deal' | 'invoice' | 'quote' | 'project'
+
+type TaskHistoryEntry = {
+  _id: ObjectId
+  taskId: string
+  eventType: 'created' | 'updated' | 'status_changed' | 'priority_changed' | 'completed' | 'reopened' | 'field_changed' | 'deleted'
+  description: string
+  userId?: string
+  userName?: string
+  userEmail?: string
+  oldValue?: any
+  newValue?: any
+  metadata?: Record<string, any>
+  createdAt: Date
+}
+
+// Helper function to add history entry
+async function addTaskHistory(
+  db: Db,
+  taskId: string,
+  eventType: TaskHistoryEntry['eventType'],
+  description: string,
+  userId?: string,
+  userName?: string,
+  userEmail?: string,
+  oldValue?: any,
+  newValue?: any,
+  metadata?: Record<string, any>
+) {
+  try {
+    await db.collection('task_history').insertOne({
+      _id: new ObjectId(),
+      taskId,
+      eventType,
+      description,
+      userId,
+      userName,
+      userEmail,
+      oldValue,
+      newValue,
+      metadata,
+      createdAt: new Date(),
+    } as TaskHistoryEntry)
+  } catch (err) {
+    console.error('Failed to add task history:', err)
+    // Don't fail the main operation if history fails
+  }
+}
 
 type TaskDoc = {
   _id: string
@@ -275,6 +322,17 @@ tasksRouter.post('/', async (req, res) => {
 
   await db.collection<TaskDoc>('crm_tasks').insertOne(doc)
 
+  // Add history entry for creation
+  await addTaskHistory(
+    db,
+    newId,
+    'created',
+    `Task "${parsed.data.subject}" created`,
+    auth?.userId,
+    ownerName,
+    auth?.email
+  )
+
   res.status(201).json({ data: serializeTask(doc), error: null })
 })
 
@@ -287,6 +345,19 @@ tasksRouter.put('/:id', async (req, res) => {
 
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  let userName: string | undefined
+  try {
+    if (auth?.userId) {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+      if (user && typeof (user as any).name === 'string') {
+        userName = (user as any).name
+      }
+    }
+  } catch {
+    // ignore lookup failures
+  }
 
   const idStr = String(req.params.id)
   const update: Partial<TaskDoc> = {}
@@ -335,6 +406,87 @@ tasksRouter.put('/:id', async (req, res) => {
   await coll.updateOne(filter as any, { $set: update } as any)
   const updated = await coll.findOne(filter as any)
 
+  // Track history for significant changes
+  if (body.status && body.status !== existing.status) {
+    if (body.status === 'completed' && existing.status !== 'completed') {
+      await addTaskHistory(
+        db,
+        idStr,
+        'completed',
+        `Task marked as completed`,
+        auth?.userId,
+        userName,
+        auth?.email,
+        existing.status,
+        body.status
+      )
+    } else if ((body.status === 'open' || body.status === 'in_progress') && existing.status === 'completed') {
+      await addTaskHistory(
+        db,
+        idStr,
+        'reopened',
+        `Task reopened (status changed from "${existing.status}" to "${body.status}")`,
+        auth?.userId,
+        userName,
+        auth?.email,
+        existing.status,
+        body.status
+      )
+    } else {
+      await addTaskHistory(
+        db,
+        idStr,
+        'status_changed',
+        `Status changed from "${existing.status}" to "${body.status}"`,
+        auth?.userId,
+        userName,
+        auth?.email,
+        existing.status,
+        body.status
+      )
+    }
+  }
+
+  if (body.priority && body.priority !== existing.priority) {
+    await addTaskHistory(
+      db,
+      idStr,
+      'priority_changed',
+      `Priority changed from "${existing.priority}" to "${body.priority}"`,
+      auth?.userId,
+      userName,
+      auth?.email,
+      existing.priority,
+      body.priority
+    )
+  }
+
+  // Track other field changes
+  const changedFields: string[] = []
+  if (body.subject !== undefined && body.subject !== existing.subject) changedFields.push('subject')
+  if (body.description !== undefined && body.description !== existing.description) changedFields.push('description')
+  if (body.type && body.type !== existing.type) changedFields.push('type')
+  if (body.dueAt !== undefined) changedFields.push('dueAt')
+  if (body.relatedType !== undefined && body.relatedType !== existing.relatedType) changedFields.push('relatedType')
+  if (body.relatedId !== undefined && body.relatedId !== existing.relatedId) changedFields.push('relatedId')
+
+  // Remove fields already tracked separately
+  const otherChanges = changedFields.filter(f => !['status', 'priority'].includes(f))
+  if (otherChanges.length > 0) {
+    await addTaskHistory(
+      db,
+      idStr,
+      'field_changed',
+      `Fields updated: ${otherChanges.join(', ')}`,
+      auth?.userId,
+      userName,
+      auth?.email,
+      undefined,
+      undefined,
+      { changedFields: otherChanges }
+    )
+  }
+
   res.json({ data: serializeTask(updated as TaskDoc), error: null })
 })
 
@@ -342,6 +494,19 @@ tasksRouter.put('/:id', async (req, res) => {
 tasksRouter.post('/:id/complete', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  let userName: string | undefined
+  try {
+    if (auth?.userId) {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+      if (user && typeof (user as any).name === 'string') {
+        userName = (user as any).name
+      }
+    }
+  } catch {
+    // ignore lookup failures
+  }
 
   const idStr = String(req.params.id)
   const now = new Date()
@@ -356,6 +521,19 @@ tasksRouter.post('/:id/complete', async (req, res) => {
   await coll.updateOne(filter as any, { $set: { status: 'completed' as TaskStatus, completedAt: now, updatedAt: now } } as any)
   const updated = await coll.findOne(filter as any)
 
+  // Add history entry for completion
+  await addTaskHistory(
+    db,
+    idStr,
+    'completed',
+    `Task marked as completed`,
+    auth?.userId,
+    userName,
+    auth?.email,
+    existing.status,
+    'completed'
+  )
+
   res.json({ data: serializeTask(updated as TaskDoc), error: null })
 })
 
@@ -364,13 +542,84 @@ tasksRouter.delete('/:id', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
+  const auth = (req as any).auth as { userId: string; email: string } | undefined
+  let userName: string | undefined
+  try {
+    if (auth?.userId) {
+      const user = await db.collection('users').findOne({ _id: new ObjectId(auth.userId) })
+      if (user && typeof (user as any).name === 'string') {
+        userName = (user as any).name
+      }
+    }
+  } catch {
+    // ignore lookup failures
+  }
+
   const idStr = String(req.params.id)
+  
+  const existing = await db.collection<TaskDoc>('crm_tasks').findOne({ _id: idStr } as any)
+  if (!existing) {
+    return res.status(404).json({ data: null, error: 'not_found' })
+  }
+
+  // Add history entry before deletion
+  await addTaskHistory(
+    db,
+    idStr,
+    'deleted',
+    `Task "${existing.subject}" deleted`,
+    auth?.userId,
+    userName,
+    auth?.email
+  )
+
   const result = await db.collection<TaskDoc>('crm_tasks').deleteOne({ _id: idStr } as any)
   if (!result.deletedCount) {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
 
   res.json({ data: { ok: true }, error: null })
+})
+
+// GET /api/crm/tasks/:id/history
+tasksRouter.get('/:id/history', async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+
+  const idStr = String(req.params.id)
+  
+  // Get task info
+  const task = await db.collection<TaskDoc>('crm_tasks').findOne({ _id: idStr } as any)
+  if (!task) {
+    return res.status(404).json({ data: null, error: 'not_found' })
+  }
+
+  // Get history entries
+  const history = await db
+    .collection<TaskHistoryEntry>('task_history')
+    .find({ taskId: idStr })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .toArray()
+
+  res.json({
+    data: {
+      task: serializeTask(task),
+      history: history.map((h) => ({
+        _id: h._id.toHexString(),
+        eventType: h.eventType,
+        description: h.description,
+        userName: h.userName,
+        userEmail: h.userEmail,
+        oldValue: h.oldValue,
+        newValue: h.newValue,
+        metadata: h.metadata,
+        createdAt: h.createdAt.toISOString(),
+      })),
+      createdAt: task.createdAt?.toISOString?.() ?? new Date().toISOString(),
+    },
+    error: null,
+  })
 })
 
 

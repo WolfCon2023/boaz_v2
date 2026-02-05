@@ -6,6 +6,7 @@ import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { AuditTrail, AuditEntry } from '@/components/AuditTrail'
 
 type Customer = {
   id: string
@@ -130,6 +131,45 @@ export default function CRMAssets() {
   const [licenseExpiration, setLicenseExpiration] = React.useState('')
   const [licenseRenewalStatus, setLicenseRenewalStatus] = React.useState('Active')
   const [licenseCost, setLicenseCost] = React.useState('')
+
+  // Audit trail state for each entity type
+  const [showEnvHistory, setShowEnvHistory] = React.useState(false)
+  const [showProdHistory, setShowProdHistory] = React.useState(false)
+  const [showLicenseHistory, setShowLicenseHistory] = React.useState(false)
+
+  React.useEffect(() => { setShowEnvHistory(false) }, [editingEnv])
+  React.useEffect(() => { setShowProdHistory(false) }, [editingProd])
+  React.useEffect(() => { setShowLicenseHistory(false) }, [editingLicense])
+
+  const envHistoryQ = useQuery({
+    queryKey: ['asset-history', 'environment', editingEnv?._id],
+    enabled: !!editingEnv?._id && showEnvHistory,
+    queryFn: async () => {
+      if (!editingEnv?._id) return { data: { history: [] } }
+      const res = await http.get(`/api/assets/history/environment/${editingEnv._id}`)
+      return res.data as { data: { history: Array<{ _id: string; createdAt: string; eventType: string; description: string; userName?: string; userEmail?: string; oldValue?: any; newValue?: any; metadata?: Record<string, any> }> } }
+    },
+  })
+
+  const prodHistoryQ = useQuery({
+    queryKey: ['asset-history', 'product', editingProd?._id],
+    enabled: !!editingProd?._id && showProdHistory,
+    queryFn: async () => {
+      if (!editingProd?._id) return { data: { history: [] } }
+      const res = await http.get(`/api/assets/history/product/${editingProd._id}`)
+      return res.data as { data: { history: Array<{ _id: string; createdAt: string; eventType: string; description: string; userName?: string; userEmail?: string; oldValue?: any; newValue?: any; metadata?: Record<string, any> }> } }
+    },
+  })
+
+  const licenseHistoryQ = useQuery({
+    queryKey: ['asset-history', 'license', editingLicense?._id],
+    enabled: !!editingLicense?._id && showLicenseHistory,
+    queryFn: async () => {
+      if (!editingLicense?._id) return { data: { history: [] } }
+      const res = await http.get(`/api/assets/history/license/${editingLicense._id}`)
+      return res.data as { data: { history: Array<{ _id: string; createdAt: string; eventType: string; description: string; userName?: string; userEmail?: string; oldValue?: any; newValue?: any; metadata?: Record<string, any> }> } }
+    },
+  })
 
   const customersQ = useQuery({
     queryKey: ['assets-customers'],
@@ -1157,6 +1197,34 @@ export default function CRMAssets() {
                     className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
                   />
                 </div>
+                <div className="md:col-span-2 mt-2">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-[11px] font-semibold">History</div>
+                    <button
+                      type="button"
+                      onClick={() => setShowEnvHistory(!showEnvHistory)}
+                      className="text-[10px] text-[color:var(--color-primary-500)] hover:underline"
+                    >
+                      {showEnvHistory ? 'Hide audit trail' : 'View audit trail'}
+                    </button>
+                  </div>
+                  {showEnvHistory && (
+                    <AuditTrail
+                      entries={(envHistoryQ.data?.data?.history || []).map((h) => ({
+                        timestamp: h.createdAt,
+                        action: h.eventType,
+                        userName: h.userName,
+                        userEmail: h.userEmail,
+                        description: h.description,
+                        oldValue: h.oldValue,
+                        newValue: h.newValue,
+                        metadata: h.metadata,
+                      } as AuditEntry))}
+                      maxHeight="150px"
+                      emptyMessage={envHistoryQ.isLoading ? 'Loading...' : 'No audit history yet.'}
+                    />
+                  )}
+                </div>
               </div>
               <div className="mt-4 flex justify-end gap-2">
                 <button
@@ -1291,6 +1359,34 @@ export default function CRMAssets() {
                     onChange={(e) => setEditingProd({ ...editingProd, deploymentDate: e.target.value })}
                     className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
                   />
+                </div>
+                <div className="md:col-span-2 mt-2">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-[11px] font-semibold">History</div>
+                    <button
+                      type="button"
+                      onClick={() => setShowProdHistory(!showProdHistory)}
+                      className="text-[10px] text-[color:var(--color-primary-500)] hover:underline"
+                    >
+                      {showProdHistory ? 'Hide audit trail' : 'View audit trail'}
+                    </button>
+                  </div>
+                  {showProdHistory && (
+                    <AuditTrail
+                      entries={(prodHistoryQ.data?.data?.history || []).map((h) => ({
+                        timestamp: h.createdAt,
+                        action: h.eventType,
+                        userName: h.userName,
+                        userEmail: h.userEmail,
+                        description: h.description,
+                        oldValue: h.oldValue,
+                        newValue: h.newValue,
+                        metadata: h.metadata,
+                      } as AuditEntry))}
+                      maxHeight="150px"
+                      emptyMessage={prodHistoryQ.isLoading ? 'Loading...' : 'No audit history yet.'}
+                    />
+                  )}
                 </div>
               </div>
               <div className="mt-4 flex justify-end gap-2">
