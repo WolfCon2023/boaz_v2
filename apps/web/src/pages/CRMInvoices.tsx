@@ -316,7 +316,11 @@ export default function CRMInvoices() {
       const res = await http.post(`/api/crm/invoices/${id}/payments`, { amount, method })
       return res.data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['invoices'] })
+      const formattedAmount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(variables.amount)
+      toast.showToast(`BOAZ says: A payment of ${formattedAmount} has been applied.`, 'success')
+    },
   })
   const refund = useMutation({
     mutationFn: async ({ id, amount, reason }: { id: string; amount: number; reason?: string }) => {
@@ -1628,7 +1632,10 @@ export default function CRMInvoices() {
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => {
                     const input = (document.getElementById('payAmount') as HTMLInputElement)
                     const amt = Number(input.value)
-                    if (amt > 0) pay.mutate({ id: editing._id, amount: amt })
+                    if (amt > 0) {
+                      pay.mutate({ id: editing._id, amount: amt })
+                      input.value = ''
+                    }
                   }}>Apply payment</button>
                   <input id="refundAmount" type="number" step="0.01" placeholder="Refund amount" className="w-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
                   <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => {
