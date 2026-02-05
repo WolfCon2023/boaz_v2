@@ -7,43 +7,41 @@ export const marketingUnsubscribeRouter = Router()
 
 // GET /api/marketing/unsubscribe?e=email&c=campaignId (public endpoint)
 marketingUnsubscribeRouter.get('/unsubscribe', async (req, res) => {
-  console.log('📧 Unsubscribe request received:', { 
-    email: req.query.e, 
-    campaignId: req.query.c,
-    url: req.originalUrl 
-  })
-  
-  const db = await getDb()
-  if (!db) {
-    console.error('❌ Database unavailable for unsubscribe')
-    return res.status(500).send('db_unavailable')
-  }
-  
-  const email = String(req.query.e || '').toLowerCase().trim()
-  const c = String(req.query.c || '')
-  
-  if (!email) {
-    console.error('❌ Missing email parameter')
-    return res.status(400).send('missing_email')
-  }
-  
-  const doc: any = { email, at: new Date() }
-  if (ObjectId.isValid(c)) doc.campaignId = new ObjectId(c)
-  
   try {
+    console.log('📧 Unsubscribe request received:', { 
+      email: req.query.e, 
+      campaignId: req.query.c,
+      url: req.originalUrl 
+    })
+    
+    const email = String(req.query.e || '').toLowerCase().trim()
+    const c = String(req.query.c || '')
+    
+    if (!email) {
+      console.error('❌ Missing email parameter')
+      return res.status(400).send('missing_email')
+    }
+    
+    const db = await getDb()
+    if (!db) {
+      console.error('❌ Database unavailable for unsubscribe')
+      return res.status(500).send('db_unavailable')
+    }
+    
+    const doc: any = { email, at: new Date() }
+    if (c && ObjectId.isValid(c)) {
+      doc.campaignId = new ObjectId(c)
+    }
+    
     await db.collection('marketing_unsubscribes').updateOne(
       { email }, 
       { $set: doc }, 
       { upsert: true }
     )
     console.log('✅ Successfully unsubscribed:', email)
-  } catch (err) {
-    console.error('❌ Failed to unsubscribe:', err)
-    return res.status(500).send('Failed to process unsubscribe request')
-  }
-  
-  res.setHeader('Content-Type', 'text/html; charset=utf-8')
-  res.send(`<!doctype html>
+    
+    res.setHeader('Content-Type', 'text/html; charset=utf-8')
+    return res.send(`<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -104,6 +102,10 @@ marketingUnsubscribeRouter.get('/unsubscribe', async (req, res) => {
   </div>
 </body>
 </html>`)
+  } catch (err: any) {
+    console.error('❌ Unsubscribe error:', err?.message || err, err?.stack)
+    return res.status(500).send('Failed to process unsubscribe request: ' + (err?.message || 'unknown error'))
+  }
 })
 
 // GET /api/marketing/unsubscribes (list all unsubscribes - requires auth)
