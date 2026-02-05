@@ -169,11 +169,6 @@ app.use('/api/webhooks', webhooksRouter)
 app.get('/health', (_req, res) => {
   res.json(createHealthResponse('api'))
 })
-
-// Debug endpoint to test marketing routes
-app.get('/api/marketing/test-route', (_req, res) => {
-  res.json({ ok: true, message: 'Marketing routes are mounted', timestamp: new Date().toISOString() })
-})
 // Simple metrics placeholder; replace with real queries when DB is connected
 app.get('/api/metrics/summary', requireAuth, async (req, res) => {
   try {

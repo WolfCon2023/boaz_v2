@@ -5,11 +5,6 @@ import { requireAuth, requirePermission } from '../auth/rbac.js'
 
 export const marketingUnsubscribeRouter = Router()
 
-// GET /api/marketing/unsubscribe-health - Simple health check (no DB required)
-marketingUnsubscribeRouter.get('/unsubscribe-health', (_req, res) => {
-  res.json({ ok: true, timestamp: new Date().toISOString(), message: 'Unsubscribe endpoint is reachable' })
-})
-
 // GET /api/marketing/unsubscribe?e=email&c=campaignId (public endpoint)
 marketingUnsubscribeRouter.get('/unsubscribe', async (req, res) => {
   try {
