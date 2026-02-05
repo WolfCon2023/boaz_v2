@@ -1116,15 +1116,15 @@ export default function StratflowProject() {
     },
   })
 
-  const activityQ = useInfiniteQuery<{ data: { items: ActivityItem[]; nextCursor: string | null; total: number } }>({
+  const activityQ = useInfiniteQuery({
     queryKey: ['stratflow', 'activity', projectId],
-    queryFn: async ({ pageParam }) => {
+    queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
       const params = new URLSearchParams({ limit: '50' })
       if (pageParam) params.set('cursor', pageParam)
-      return (await http.get(`/api/stratflow/projects/${projectId}/activity?${params}`)).data
+      return (await http.get(`/api/stratflow/projects/${projectId}/activity?${params}`)).data as { data: { items: ActivityItem[]; nextCursor: string | null; total: number } }
     },
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.data.nextCursor ?? undefined,
+    getNextPageParam: (lastPage: { data: { items: ActivityItem[]; nextCursor: string | null; total: number } }) => lastPage.data.nextCursor ?? undefined,
     retry: false,
     enabled: Boolean(projectId) && view === 'activity',
   })
