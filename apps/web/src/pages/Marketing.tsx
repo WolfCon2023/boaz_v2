@@ -991,7 +991,7 @@ function SimpleBuilderUI({
             className="w-full rounded-lg border px-3 py-2 text-sm bg-transparent"
           />
           <p className="text-xs text-[color:var(--color-text-muted)] mt-1">
-            Footer will display as: © {new Date().getFullYear()} {footerText || '(your text here)'} - Unsubscribe
+            Footer will display as: © {new Date().getFullYear()} {footerText || '(your text here)'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1213,7 +1213,7 @@ function CampaignsTab() {
 ${sections}
     <mj-section>
       <mj-column>
-        <mj-text align="center" font-size="12px" color="#64748b">© ${new Date().getFullYear()}${footerDisplay} - <a href="{{unsubscribeUrl}}" style="color:#60a5fa">Unsubscribe</a></mj-text>
+        <mj-text align="center" font-size="12px" color="#64748b">© ${new Date().getFullYear()}${footerDisplay}</mj-text>
       </mj-column>
     </mj-section>
   </mj-body>
