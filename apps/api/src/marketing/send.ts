@@ -285,10 +285,8 @@ marketingSendRouter.post('/campaigns/:id/send', async (req, res) => {
       if (!email) continue
       total++
       if (unsubSet.has(email.toLowerCase())) { skipped++; continue }
-      // Use env.ORIGIN for unsubscribe URL to ensure correct URL behind proxies
-      const unsubscribeOrigin = (env.ORIGIN || '').split(',')[0]?.trim() || base
-      const normalizedUnsubscribeOrigin = unsubscribeOrigin.replace(/\/$/, '')
-      const unsubscribeUrl = `${normalizedUnsubscribeOrigin}/api/marketing/unsubscribe?e=${encodeURIComponent(email)}&c=${_id.toHexString()}`
+      // Use the API's own URL (from request) for unsubscribe links - NOT env.ORIGIN which is the frontend
+      const unsubscribeUrl = `${base}/api/marketing/unsubscribe?e=${encodeURIComponent(email)}&c=${_id.toHexString()}`
       const pixelUrl = `${base}/api/marketing/pixel.gif?c=${_id.toHexString()}&e=${encodeURIComponent(email)}`
 
       let surveyUrl: string | undefined

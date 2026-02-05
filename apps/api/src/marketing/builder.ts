@@ -3,7 +3,6 @@ import mjml2html from 'mjml'
 import { ObjectId } from 'mongodb'
 import { getDb } from '../db.js'
 import { sendEmail } from '../alerts/mail.js'
-import { env } from '../env.js'
 
 export const marketingBuilderRouter = Router()
 
@@ -11,10 +10,9 @@ export const marketingBuilderRouter = Router()
  * Replace {{unsubscribeUrl}} placeholder with actual URL for test emails
  */
 function injectUnsubscribeForTest(html: string, campaignId: ObjectId, testEmail: string, baseUrl: string): string {
-  // Use env.ORIGIN for proper URL generation behind proxies
-  const origin = (env.ORIGIN || '').split(',')[0]?.trim() || baseUrl
-  const normalizedOrigin = origin.replace(/\/$/, '')
-  const unsubscribeUrl = `${normalizedOrigin}/api/marketing/unsubscribe?e=${encodeURIComponent(testEmail)}&c=${campaignId.toHexString()}`
+  // Use the API's own URL (baseUrl from request) for unsubscribe links - NOT env.ORIGIN which is the frontend
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, '')
+  const unsubscribeUrl = `${normalizedBaseUrl}/api/marketing/unsubscribe?e=${encodeURIComponent(testEmail)}&c=${campaignId.toHexString()}`
   
   // Replace all variants of the placeholder
   let result = html
