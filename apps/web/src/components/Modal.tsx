@@ -1,6 +1,8 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { Maximize2, Minimize2, PictureInPicture2, Pin } from 'lucide-react'
+
+type ModalMode = 'default' | 'popout' | 'fullscreen'
 
 export type ModalProps = {
   /** Whether the modal is open */
@@ -24,10 +26,10 @@ export type ModalProps = {
 }
 
 /**
- * Shared Modal component with fullscreen toggle capability.
- * 
+ * Shared Modal component with fullscreen toggle and pop-out capability.
+ *
  * Features:
- * - Toggle between default size and fullscreen
+ * - Three modes: default (centered), pop-out (draggable + resizable), fullscreen
  * - Smooth transition animations
  * - Click outside to close
  * - Consistent styling across the app
@@ -44,13 +46,19 @@ export function Modal({
   headerActions,
   subtitle,
 }: ModalProps) {
-  const [isFullscreen, setIsFullscreen] = React.useState(false)
+  const [mode, setMode] = React.useState<ModalMode>('default')
   const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
 
-  // Reset fullscreen state when modal closes
+  // Drag state for pop-out mode
+  const [dragPos, setDragPos] = React.useState<{ x: number; y: number } | null>(null)
+  const dragRef = React.useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null)
+  const modalBoxRef = React.useRef<HTMLDivElement>(null)
+
+  // Reset state when modal closes
   React.useEffect(() => {
     if (!open) {
-      setIsFullscreen(false)
+      setMode('default')
+      setDragPos(null)
     }
   }, [open])
 
@@ -71,58 +79,193 @@ export function Modal({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [open, onClose])
 
+  // Drag handlers for pop-out mode
+  const handleDragStart = React.useCallback(
+    (e: React.MouseEvent) => {
+      if (mode !== 'popout') return
+      // Only drag from left mouse button; ignore clicks on buttons/inputs inside the header
+      if (e.button !== 0) return
+      const target = e.target as HTMLElement
+      if (target.closest('button') || target.closest('input') || target.closest('a')) return
+
+      e.preventDefault()
+      const box = modalBoxRef.current
+      if (!box) return
+
+      const rect = box.getBoundingClientRect()
+      const currentX = dragPos?.x ?? rect.left
+      const currentY = dragPos?.y ?? rect.top
+
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        originX: currentX,
+        originY: currentY,
+      }
+
+      const handleMove = (ev: MouseEvent) => {
+        if (!dragRef.current) return
+        const dx = ev.clientX - dragRef.current.startX
+        const dy = ev.clientY - dragRef.current.startY
+        setDragPos({
+          x: dragRef.current.originX + dx,
+          y: dragRef.current.originY + dy,
+        })
+      }
+
+      const handleUp = () => {
+        dragRef.current = null
+        window.removeEventListener('mousemove', handleMove)
+        window.removeEventListener('mouseup', handleUp)
+      }
+
+      window.addEventListener('mousemove', handleMove)
+      window.addEventListener('mouseup', handleUp)
+    },
+    [mode, dragPos],
+  )
+
+  // When entering pop-out, initialise position to current centered position
+  const enterPopout = React.useCallback(() => {
+    setMode('popout')
+    // Position will be set after render via the ref; start with null so we center first
+    setDragPos(null)
+  }, [])
+
+  // Initialise drag position on first pop-out render
+  React.useEffect(() => {
+    if (mode === 'popout' && dragPos === null && modalBoxRef.current) {
+      const rect = modalBoxRef.current.getBoundingClientRect()
+      setDragPos({ x: rect.left, y: rect.top })
+    }
+  }, [mode, dragPos])
+
   if (!open || !portalEl) return null
+
+  // Build modal container classes & styles per mode
+  const isPopout = mode === 'popout'
+  const isFullscreen = mode === 'fullscreen'
+
+  const containerClasses = [
+    isFullscreen
+      ? 'w-[calc(100vw-2rem)] h-[calc(100vh-2rem)]'
+      : isPopout
+        ? ''
+        : `w-[min(90vw,${width})] max-h-[90vh]`,
+    'rounded-2xl border border-[color:var(--color-border)]',
+    'bg-[color:var(--color-panel)] p-4 shadow-2xl',
+    isPopout ? '' : 'transition-all duration-300 ease-in-out',
+    isPopout ? 'overflow-hidden' : 'overflow-y-auto',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const containerStyle: React.CSSProperties = isPopout
+    ? {
+        position: 'absolute',
+        left: dragPos?.x ?? undefined,
+        top: dragPos?.y ?? undefined,
+        width: `min(90vw, ${width})`,
+        height: '70vh',
+        minWidth: 320,
+        minHeight: 200,
+        maxWidth: 'calc(100vw - 1rem)',
+        maxHeight: 'calc(100vh - 1rem)',
+        resize: 'both' as const,
+      }
+    : {}
 
   const modalContent = (
     <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/60 transition-opacity duration-200" 
-        onClick={onClose} 
+      <div
+        className={`absolute inset-0 transition-opacity duration-200 ${isPopout ? 'bg-black/30' : 'bg-black/60'}`}
+        onClick={onClose}
       />
-      
-      {/* Modal container */}
-      <div className="absolute inset-0 flex items-center justify-center p-4">
+
+      {/* Modal positioning wrapper */}
+      <div
+        className={
+          isPopout
+            ? 'absolute inset-0 pointer-events-none'
+            : 'absolute inset-0 flex items-center justify-center p-4'
+        }
+      >
         <div
-          className={`
-            ${isFullscreen 
-              ? 'w-[calc(100vw-2rem)] h-[calc(100vh-2rem)]' 
-              : `w-[min(90vw,${width})] max-h-[90vh]`
-            }
-            overflow-y-auto rounded-2xl border border-[color:var(--color-border)] 
-            bg-[color:var(--color-panel)] p-4 shadow-2xl
-            transition-all duration-300 ease-in-out
-            ${className}
-          `}
+          ref={modalBoxRef}
+          className={`${containerClasses} ${isPopout ? 'pointer-events-auto' : ''}`}
+          style={containerStyle}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           {(title || showFullscreenToggle || headerActions) && (
-            <div className="mb-3 flex items-start justify-between gap-2">
+            <div
+              className={`mb-3 flex items-start justify-between gap-2 ${isPopout ? 'cursor-move select-none' : ''}`}
+              onMouseDown={handleDragStart}
+            >
               <div className="flex-1 min-w-0">
-                {title && (
-                  <div className="text-base font-semibold">{title}</div>
-                )}
+                {title && <div className="text-base font-semibold">{title}</div>}
                 {subtitle && (
-                  <div className="text-[11px] text-[color:var(--color-text-muted)] mt-0.5">
-                    {subtitle}
-                  </div>
+                  <div className="text-[11px] text-[color:var(--color-text-muted)] mt-0.5">{subtitle}</div>
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {headerActions}
-                {showFullscreenToggle && (
+                {showFullscreenToggle && mode === 'default' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={enterPopout}
+                      className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+                      title="Pop out"
+                    >
+                      <PictureInPicture2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode('fullscreen')}
+                      className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+                      title="Fullscreen"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
+                {showFullscreenToggle && mode === 'popout' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('default')
+                        setDragPos(null)
+                      }}
+                      className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+                      title="Dock"
+                    >
+                      <Pin className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('fullscreen')
+                        setDragPos(null)
+                      }}
+                      className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
+                      title="Fullscreen"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
+                {showFullscreenToggle && mode === 'fullscreen' && (
                   <button
                     type="button"
-                    onClick={() => setIsFullscreen(!isFullscreen)}
+                    onClick={() => setMode('default')}
                     className="rounded-full border border-[color:var(--color-border)] p-1.5 text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)] hover:text-[color:var(--color-text)] transition-colors"
-                    title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                    title="Exit fullscreen"
                   >
-                    {isFullscreen ? (
-                      <Minimize2 className="h-3.5 w-3.5" />
-                    ) : (
-                      <Maximize2 className="h-3.5 w-3.5" />
-                    )}
+                    <Minimize2 className="h-3.5 w-3.5" />
                   </button>
                 )}
                 <button
@@ -135,9 +278,17 @@ export function Modal({
               </div>
             </div>
           )}
-          
+
           {/* Content */}
-          <div className={isFullscreen ? 'h-[calc(100%-3rem)] overflow-y-auto' : ''}>
+          <div
+            className={
+              isFullscreen
+                ? 'h-[calc(100%-3rem)] overflow-y-auto'
+                : isPopout
+                  ? 'h-[calc(100%-3rem)] overflow-y-auto'
+                  : ''
+            }
+          >
             {children}
           </div>
         </div>
@@ -149,29 +300,49 @@ export function Modal({
 }
 
 /**
- * Hook to manage modal state with fullscreen support.
+ * Hook to manage modal state with fullscreen and pop-out support.
  * Useful when you need more control over the modal state.
  */
 export function useModal() {
   const [isOpen, setIsOpen] = React.useState(false)
-  const [isFullscreen, setIsFullscreen] = React.useState(false)
+  const [mode, setMode] = React.useState<ModalMode>('default')
+
+  // Keep legacy boolean accessors for backward compatibility
+  const isFullscreen = mode === 'fullscreen'
+  const isPopout = mode === 'popout'
 
   const open = React.useCallback(() => setIsOpen(true), [])
   const close = React.useCallback(() => {
     setIsOpen(false)
-    setIsFullscreen(false)
+    setMode('default')
   }, [])
   const toggle = React.useCallback(() => setIsOpen((prev) => !prev), [])
-  const toggleFullscreen = React.useCallback(() => setIsFullscreen((prev) => !prev), [])
+  const toggleFullscreen = React.useCallback(
+    () => setMode((prev) => (prev === 'fullscreen' ? 'default' : 'fullscreen')),
+    [],
+  )
 
   return {
     isOpen,
     isFullscreen,
+    isPopout,
+    mode,
     open,
     close,
     toggle,
     toggleFullscreen,
     setIsOpen,
-    setIsFullscreen,
+    setMode,
+    // Legacy setter – maps boolean to mode for backward compat
+    setIsFullscreen: (val: boolean | ((prev: boolean) => boolean)) => {
+      if (typeof val === 'function') {
+        setMode((prev) => {
+          const wasFull = prev === 'fullscreen'
+          return val(wasFull) ? 'fullscreen' : 'default'
+        })
+      } else {
+        setMode(val ? 'fullscreen' : 'default')
+      }
+    },
   }
 }
