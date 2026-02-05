@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
+import { Modal } from '@/components/Modal'
 import { http, apiBaseURL } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { useAccessToken } from '@/components/Auth'
@@ -899,15 +900,13 @@ export default function CRMExpenses() {
       </section>
 
       {/* Create/Edit Modal */}
-      {isCreating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={closeModal} />
-          <div className="relative z-10 max-h-[90vh] w-[min(90vw,40rem)] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold">
-              {editing?._id ? `Edit Expense #${editing.expenseNumber}` : 'New Expense'}
-            </h2>
-
-            <div className="space-y-4">
+      <Modal
+        open={isCreating}
+        onClose={closeModal}
+        title={editing?._id ? `Edit Expense #${editing.expenseNumber}` : 'New Expense'}
+        width="40rem"
+      >
+        <div className="space-y-4">
               {/* Date and Payee */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
@@ -1142,36 +1141,42 @@ export default function CRMExpenses() {
               )}
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => saveExpense.mutate()}
-                disabled={!formDate || !formDescription || formLines.length === 0 || formTotal <= 0 || saveExpense.isPending}
-                className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-              >
-                {saveExpense.isPending ? 'Saving...' : editing?._id ? 'Update' : 'Create'}
-              </button>
-            </div>
-          </div>
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={closeModal}
+            className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => saveExpense.mutate()}
+            disabled={!formDate || !formDescription || formLines.length === 0 || formTotal <= 0 || saveExpense.isPending}
+            className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+          >
+            {saveExpense.isPending ? 'Saving...' : editing?._id ? 'Update' : 'Create'}
+          </button>
         </div>
-      )}
+      </Modal>
 
       {/* Submit for Approval Dialog - Multi-Level Approval Chain */}
-      {submitDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setSubmitDialogOpen(false)} />
-          <div className="relative z-10 w-[min(90vw,32rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
-            <h2 className="mb-4 text-lg font-semibold">Submit for Approval</h2>
-            <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">
-              Select approvers for each level. The expense will be routed through:
-            </p>
+      <Modal
+        open={submitDialogOpen}
+        onClose={() => {
+          setSubmitDialogOpen(false)
+          setSubmitExpenseId(null)
+          setSelectedManagerApproverId('')
+          setSelectedSeniorManagerApproverId('')
+          setSelectedFinanceManagerApproverId('')
+        }}
+        title="Submit for Approval"
+        width="32rem"
+        showFullscreenToggle={false}
+      >
+        <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">
+          Select approvers for each level. The expense will be routed through:
+        </p>
             
             {/* Approval Flow Visual */}
             <div className="mb-4 flex items-center justify-center gap-2 rounded-lg bg-[color:var(--color-muted)] p-3 text-xs">
@@ -1257,48 +1262,47 @@ export default function CRMExpenses() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setSubmitDialogOpen(false)
-                  setSubmitExpenseId(null)
-                  setSelectedManagerApproverId('')
-                  setSelectedSeniorManagerApproverId('')
-                  setSelectedFinanceManagerApproverId('')
-                }}
-                className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmitWithApprover}
-                disabled={!selectedManagerApproverId || !selectedSeniorManagerApproverId || !selectedFinanceManagerApproverId || submitExpense.isPending}
-                className="rounded-lg bg-amber-500 px-4 py-2 text-sm text-white hover:bg-amber-600 disabled:opacity-50"
-              >
-                {submitExpense.isPending ? 'Submitting...' : 'Submit for Approval'}
-              </button>
-            </div>
-          </div>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setSubmitDialogOpen(false)
+              setSubmitExpenseId(null)
+              setSelectedManagerApproverId('')
+              setSelectedSeniorManagerApproverId('')
+              setSelectedFinanceManagerApproverId('')
+            }}
+            className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmitWithApprover}
+            disabled={!selectedManagerApproverId || !selectedSeniorManagerApproverId || !selectedFinanceManagerApproverId || submitExpense.isPending}
+            className="rounded-lg bg-amber-500 px-4 py-2 text-sm text-white hover:bg-amber-600 disabled:opacity-50"
+          >
+            {submitExpense.isPending ? 'Submitting...' : 'Submit for Approval'}
+          </button>
         </div>
-      )}
+      </Modal>
 
       {/* Expense Detail Modal with Attachments */}
-      {viewingExpense && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setViewingExpense(null)} />
-          <div className="relative z-10 max-h-[90vh] w-[min(90vw,48rem)] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
-                Expense #{viewingExpense.expenseNumber}
-              </h2>
-              <span
-                className={`inline-block rounded-full border px-2 py-0.5 text-xs ${STATUS_COLORS[viewingExpense.status]}`}
-              >
-                {STATUS_LABELS[viewingExpense.status]}
-              </span>
-            </div>
+      <Modal
+        open={!!viewingExpense}
+        onClose={() => setViewingExpense(null)}
+        title={viewingExpense ? `Expense #${viewingExpense.expenseNumber}` : ''}
+        width="48rem"
+        headerActions={viewingExpense && (
+          <span
+            className={`inline-block rounded-full border px-2 py-0.5 text-xs ${STATUS_COLORS[viewingExpense.status]}`}
+          >
+            {STATUS_LABELS[viewingExpense.status]}
+          </span>
+        )}
+      >
+        {viewingExpense && (
+          <>
 
             {/* Expense Details */}
             <div className="mb-6 grid gap-4 text-sm sm:grid-cols-2">
@@ -1508,19 +1512,9 @@ export default function CRMExpenses() {
                 </div>
               </div>
             )}
-
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setViewingExpense(null)}
-                className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

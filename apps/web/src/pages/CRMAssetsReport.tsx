@@ -5,6 +5,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { formatDateOnly } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { Modal } from '@/components/Modal'
 
 type Customer = {
   id: string
@@ -622,162 +623,151 @@ export default function CRMAssetsReport() {
         )}
       </section>
 
-      {editingLicense && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => {
-              if (updateLicense.isPending) return
-              setEditingLicense(null)
-            }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,34rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-xs shadow-2xl">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">Edit license</div>
-                  <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                    {editingLicense.productName} –{' '}
-                    {editingLicense.licenseIdentifier || editingLicense.licenseKey || 'License'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-2 md:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Type
-                  </label>
-                  <select
-                    value={editLicenseType}
-                    onChange={(e) => setEditLicenseType(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  >
-                    <option value="Subscription">Subscription</option>
-                    <option value="Seat-based">Seat based</option>
-                    <option value="Device-based">Device based</option>
-                    <option value="Perpetual">Perpetual</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    License identifier
-                  </label>
-                  <input
-                    type="text"
-                    value={editLicenseIdentifier}
-                    onChange={(e) => setEditLicenseIdentifier(e.target.value)}
-                    placeholder="Agreement ID, SKU, etc."
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    License key
-                  </label>
-                  <input
-                    type="text"
-                    value={editLicenseKey}
-                    onChange={(e) => setEditLicenseKey(e.target.value)}
-                    placeholder="XXXX-XXXX-XXXX-XXXX"
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Licenses purchased
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={editLicenseCount}
-                    onChange={(e) => setEditLicenseCount(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Seats assigned
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={editSeatsAssigned}
-                    onChange={(e) => setEditSeatsAssigned(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Expiration
-                  </label>
-                  <input
-                    type="date"
-                    value={editExpiration}
-                    onChange={(e) => setEditExpiration(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Renewal status
-                  </label>
-                  <select
-                    value={editRenewalStatus}
-                    onChange={(e) =>
-                      setEditRenewalStatus(e.target.value as 'Active' | 'Pending Renewal' | 'Expired')
-                    }
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Pending Renewal">Pending Renewal</option>
-                    <option value="Expired">Expired</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Cost (optional)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={editCost}
-                    onChange={(e) => setEditCost(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                  disabled={updateLicense.isPending}
-                  onClick={() => setEditingLicense(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={updateLicense.isPending || !editLicenseCount || Number(editLicenseCount) <= 0}
-                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                  onClick={() => {
-                    if (!editLicenseCount || Number(editLicenseCount) <= 0) {
-                      toast.showToast('License count must be at least 1.', 'error')
-                      return
-                    }
-                    updateLicense.mutate()
-                  }}
-                >
-                  Save changes
-                </button>
-              </div>
+      <Modal
+        open={!!editingLicense}
+        onClose={() => {
+          if (updateLicense.isPending) return
+          setEditingLicense(null)
+        }}
+        title="Edit license"
+        subtitle={editingLicense ? `${editingLicense.productName} – ${editingLicense.licenseIdentifier || editingLicense.licenseKey || 'License'}` : undefined}
+        width="34rem"
+        showFullscreenToggle={false}
+      >
+        <div className="text-xs">
+          <div className="grid gap-2 md:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Type
+              </label>
+              <select
+                value={editLicenseType}
+                onChange={(e) => setEditLicenseType(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+              >
+                <option value="Subscription">Subscription</option>
+                <option value="Seat-based">Seat based</option>
+                <option value="Device-based">Device based</option>
+                <option value="Perpetual">Perpetual</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                License identifier
+              </label>
+              <input
+                type="text"
+                value={editLicenseIdentifier}
+                onChange={(e) => setEditLicenseIdentifier(e.target.value)}
+                placeholder="Agreement ID, SKU, etc."
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                License key
+              </label>
+              <input
+                type="text"
+                value={editLicenseKey}
+                onChange={(e) => setEditLicenseKey(e.target.value)}
+                placeholder="XXXX-XXXX-XXXX-XXXX"
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Licenses purchased
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={editLicenseCount}
+                onChange={(e) => setEditLicenseCount(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Seats assigned
+              </label>
+              <input
+                type="number"
+                min={0}
+                value={editSeatsAssigned}
+                onChange={(e) => setEditSeatsAssigned(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Expiration
+              </label>
+              <input
+                type="date"
+                value={editExpiration}
+                onChange={(e) => setEditExpiration(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Renewal status
+              </label>
+              <select
+                value={editRenewalStatus}
+                onChange={(e) =>
+                  setEditRenewalStatus(e.target.value as 'Active' | 'Pending Renewal' | 'Expired')
+                }
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+              >
+                <option value="Active">Active</option>
+                <option value="Pending Renewal">Pending Renewal</option>
+                <option value="Expired">Expired</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Cost (optional)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={editCost}
+                onChange={(e) => setEditCost(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
             </div>
           </div>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+              disabled={updateLicense.isPending}
+              onClick={() => setEditingLicense(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={updateLicense.isPending || !editLicenseCount || Number(editLicenseCount) <= 0}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              onClick={() => {
+                if (!editLicenseCount || Number(editLicenseCount) <= 0) {
+                  toast.showToast('License count must be at least 1.', 'error')
+                  return
+                }
+                updateLicense.mutate()
+              }}
+            >
+              Save changes
+            </button>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

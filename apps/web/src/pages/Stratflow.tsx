@@ -5,6 +5,7 @@ import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMNav } from '@/components/CRMNav'
 import { KBHelpButton } from '@/components/KBHelpButton'
+import { Modal } from '@/components/Modal'
 
 type Project = {
   _id: string
@@ -178,22 +179,14 @@ export default function Stratflow() {
       </section>
 
       {createOpen && (
-        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setCreateOpen(false)}>
-          <div
-            className="w-[min(90vw,40rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between gap-3 border-b border-[color:var(--color-border)] pb-3">
-              <div>
-                <div className="text-base font-semibold">New project</div>
-                <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                  {step === 'template' ? 'Step 1 of 2 · Choose a template' : 'Step 2 of 2 · Name and details'}
-                </div>
-              </div>
-              <button type="button" onClick={() => setCreateOpen(false)} className="p-2 rounded hover:bg-[color:var(--color-muted)]">
-                ✕
-              </button>
-            </div>
+        <Modal
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          title="New project"
+          subtitle={step === 'template' ? 'Step 1 of 2 · Choose a template' : 'Step 2 of 2 · Name and details'}
+          width="40rem"
+          showFullscreenToggle={false}
+        >
 
             {step === 'template' ? (
               <div className="space-y-3">
@@ -326,8 +319,7 @@ export default function Stratflow() {
                     : 'Create project'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

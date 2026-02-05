@@ -1,5 +1,4 @@
 import * as React from 'react'
-import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
@@ -15,6 +14,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { StratflowIssueDrawer, type StratflowIssueType, type StratflowPriority } from '@/components/StratflowIssueDrawer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { KBHelpButton } from '@/components/KBHelpButton'
+import { Modal } from '@/components/Modal'
 
 type Board = {
   _id: string
@@ -1548,226 +1548,208 @@ export default function StratflowProject() {
           ) : null}
         </div>
 
-        {saveFilterOpen ? (
-          <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={() => setSaveFilterOpen(false)}>
-            <div
-              className="mx-auto mt-24 w-[min(92vw,28rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="text-sm font-semibold">Save filter</div>
-              <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">Save the current List filters for quick reuse.</div>
-              <div className="mt-4 space-y-2">
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Name</label>
-                <input
-                  value={saveFilterName}
-                  onChange={(e) => setSaveFilterName(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  placeholder="e.g., My triage"
-                />
-              </div>
-              <div className="mt-4 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-                  onClick={() => setSaveFilterOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                  disabled={!saveFilterName.trim()}
-                  onClick={() => {
-                    const id = `f_${Date.now()}`
-                    const state = { assignedToMeOnly, blockedOnly, listQ, listColumnId, listType, listEpicId }
-                    const next = [...savedFilters, { id, name: saveFilterName.trim(), state }]
-                    setSavedFilters(next)
-                    try {
-                      localStorage.setItem(savedFiltersKey, JSON.stringify(next))
-                    } catch {
-                      // ignore
-                    }
-                    setSaveFilterName('')
-                    setSaveFilterOpen(false)
-                    toast.showToast('Filter saved.', 'success')
-                  }}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
+        <Modal
+          open={saveFilterOpen}
+          onClose={() => setSaveFilterOpen(false)}
+          title="Save filter"
+          subtitle="Save the current List filters for quick reuse."
+          width="28rem"
+          showFullscreenToggle={false}
+        >
+          <div className="mt-4 space-y-2">
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Name</label>
+            <input
+              value={saveFilterName}
+              onChange={(e) => setSaveFilterName(e.target.value)}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              placeholder="e.g., My triage"
+            />
           </div>
-        ) : null}
-
-        {ruleModalOpen ? (
-          <div className="fixed inset-0 z-[2147483647] bg-black/40" onClick={() => setRuleModalOpen(false)}>
-            <div
-              className="mx-auto mt-20 w-[min(92vw,44rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-5 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+              onClick={() => setSaveFilterOpen(false)}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold">New automation rule</div>
-                  <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                    Automation runs on the server and is logged in Activity when applied.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)]"
-                  onClick={() => setRuleModalOpen(false)}
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              disabled={!saveFilterName.trim()}
+              onClick={() => {
+                const id = `f_${Date.now()}`
+                const state = { assignedToMeOnly, blockedOnly, listQ, listColumnId, listType, listEpicId }
+                const next = [...savedFilters, { id, name: saveFilterName.trim(), state }]
+                setSavedFilters(next)
+                try {
+                  localStorage.setItem(savedFiltersKey, JSON.stringify(next))
+                } catch {
+                  // ignore
+                }
+                setSaveFilterName('')
+                setSaveFilterOpen(false)
+                toast.showToast('Filter saved.', 'success')
+              }}
+            >
+              Save
+            </button>
+          </div>
+        </Modal>
+
+        <Modal
+          open={ruleModalOpen}
+          onClose={() => setRuleModalOpen(false)}
+          title="New automation rule"
+          subtitle="Automation runs on the server and is logged in Activity when applied."
+          width="44rem"
+          showFullscreenToggle={false}
+        >
+          {!isOwner ? (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Only the <b>project owner</b> can create or edit automation rules.
+            </div>
+          ) : null}
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Name</label>
+              <input
+                value={ruleForm.name}
+                onChange={(e) => setRuleForm((p) => ({ ...p, name: e.target.value }))}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                placeholder="e.g., Mark blocked issues"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Trigger</label>
+              <select
+                value={ruleForm.triggerKind}
+                onChange={(e) => setRuleForm((p) => ({ ...p, triggerKind: e.target.value as any }))}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+              >
+                <option value="issue_moved">Issue moved</option>
+                <option value="issue_link_added">Dependency added</option>
+                <option value="issue_link_removed">Dependency removed</option>
+                <option value="sprint_closed">Sprint closed</option>
+              </select>
+            </div>
+
+            {ruleForm.triggerKind === 'issue_moved' ? (
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">To status</label>
+                <select
+                  value={ruleForm.toStatusKey}
+                  onChange={(e) => setRuleForm((p) => ({ ...p, toStatusKey: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
                 >
-                  Close
-                </button>
+                  <option value="backlog">Backlog</option>
+                  <option value="todo">To do</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="in_review">In review</option>
+                  <option value="done">Done</option>
+                </select>
               </div>
+            ) : null}
 
-              {!isOwner ? (
-                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  Only the <b>project owner</b> can create or edit automation rules.
-                </div>
-              ) : null}
+            {ruleForm.triggerKind === 'issue_link_added' || ruleForm.triggerKind === 'issue_link_removed' ? (
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Link type</label>
+                <select
+                  value={ruleForm.linkType}
+                  onChange={(e) => setRuleForm((p) => ({ ...p, linkType: e.target.value }))}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+                >
+                  <option value="blocked_by">Blocked by</option>
+                  <option value="blocks">Blocks</option>
+                  <option value="relates_to">Relates to</option>
+                </select>
+              </div>
+            ) : null}
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {ruleForm.triggerKind !== 'sprint_closed' ? (
+              <>
                 <div className="space-y-2">
-                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Name</label>
-                  <input
-                    value={ruleForm.name}
-                    onChange={(e) => setRuleForm((p) => ({ ...p, name: e.target.value }))}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    placeholder="e.g., Mark blocked issues"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Trigger</label>
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Issue type (optional)</label>
                   <select
-                    value={ruleForm.triggerKind}
-                    onChange={(e) => setRuleForm((p) => ({ ...p, triggerKind: e.target.value as any }))}
+                    value={ruleForm.issueType}
+                    onChange={(e) => setRuleForm((p) => ({ ...p, issueType: e.target.value }))}
                     className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
                   >
-                    <option value="issue_moved">Issue moved</option>
-                    <option value="issue_link_added">Dependency added</option>
-                    <option value="issue_link_removed">Dependency removed</option>
-                    <option value="sprint_closed">Sprint closed</option>
+                    <option value="">Any</option>
+                    <option value="Epic">Epic</option>
+                    <option value="Story">Story</option>
+                    <option value="Task">Task</option>
+                    <option value="Defect">Defect</option>
+                    <option value="Spike">Spike</option>
                   </select>
                 </div>
-
-                {ruleForm.triggerKind === 'issue_moved' ? (
-                  <div className="space-y-2">
-                    <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">To status</label>
-                    <select
-                      value={ruleForm.toStatusKey}
-                      onChange={(e) => setRuleForm((p) => ({ ...p, toStatusKey: e.target.value }))}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
-                    >
-                      <option value="backlog">Backlog</option>
-                      <option value="todo">To do</option>
-                      <option value="in_progress">In progress</option>
-                      <option value="in_review">In review</option>
-                      <option value="done">Done</option>
-                    </select>
-                  </div>
-                ) : null}
-
-                {ruleForm.triggerKind === 'issue_link_added' || ruleForm.triggerKind === 'issue_link_removed' ? (
-                  <div className="space-y-2">
-                    <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Link type</label>
-                    <select
-                      value={ruleForm.linkType}
-                      onChange={(e) => setRuleForm((p) => ({ ...p, linkType: e.target.value }))}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
-                    >
-                      <option value="blocked_by">Blocked by</option>
-                      <option value="blocks">Blocks</option>
-                      <option value="relates_to">Relates to</option>
-                    </select>
-                  </div>
-                ) : null}
-
-                {ruleForm.triggerKind !== 'sprint_closed' ? (
-                  <>
-                    <div className="space-y-2">
-                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Issue type (optional)</label>
-                      <select
-                        value={ruleForm.issueType}
-                        onChange={(e) => setRuleForm((p) => ({ ...p, issueType: e.target.value }))}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
-                      >
-                        <option value="">Any</option>
-                        <option value="Epic">Epic</option>
-                        <option value="Story">Story</option>
-                        <option value="Task">Task</option>
-                        <option value="Defect">Defect</option>
-                        <option value="Spike">Spike</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Blocked? (optional)</label>
-                      <select
-                        value={ruleForm.isBlocked}
-                        onChange={(e) => setRuleForm((p) => ({ ...p, isBlocked: e.target.value as any }))}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
-                      >
-                        <option value="">Any</option>
-                        <option value="true">Only blocked</option>
-                        <option value="false">Only not-blocked</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Add labels</label>
-                      <input
-                        value={ruleForm.addLabels}
-                        onChange={(e) => setRuleForm((p) => ({ ...p, addLabels: e.target.value }))}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                        placeholder="e.g., blocked, needs-review"
-                      />
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Remove labels</label>
-                      <input
-                        value={ruleForm.removeLabels}
-                        onChange={(e) => setRuleForm((p) => ({ ...p, removeLabels: e.target.value }))}
-                        className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                        placeholder="e.g., blocked"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="sm:col-span-2">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={ruleForm.moveOpenIssuesToBacklog}
-                        onChange={(e) => setRuleForm((p) => ({ ...p, moveOpenIssuesToBacklog: e.target.checked }))}
-                      />
-                      Move open sprint issues back to backlog when sprint closes
-                    </label>
-                    <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                      This runs after the sprint is closed. It only moves issues that are not Done.
-                    </div>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Blocked? (optional)</label>
+                  <select
+                    value={ruleForm.isBlocked}
+                    onChange={(e) => setRuleForm((p) => ({ ...p, isBlocked: e.target.value as any }))}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+                  >
+                    <option value="">Any</option>
+                    <option value="true">Only blocked</option>
+                    <option value="false">Only not-blocked</option>
+                  </select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Add labels</label>
+                  <input
+                    value={ruleForm.addLabels}
+                    onChange={(e) => setRuleForm((p) => ({ ...p, addLabels: e.target.value }))}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                    placeholder="e.g., blocked, needs-review"
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)]">Remove labels</label>
+                  <input
+                    value={ruleForm.removeLabels}
+                    onChange={(e) => setRuleForm((p) => ({ ...p, removeLabels: e.target.value }))}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                    placeholder="e.g., blocked"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={ruleForm.moveOpenIssuesToBacklog}
+                    onChange={(e) => setRuleForm((p) => ({ ...p, moveOpenIssuesToBacklog: e.target.checked }))}
+                  />
+                  Move open sprint issues back to backlog when sprint closes
+                </label>
+                <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
+                  This runs after the sprint is closed. It only moves issues that are not Done.
+                </div>
               </div>
-
-              <div className="mt-4 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-                  onClick={() => setRuleModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={!isOwner || createRule.isPending || !ruleForm.name.trim()}
-                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                  onClick={() => createRule.mutate()}
-                >
-                  {createRule.isPending ? 'Creating…' : 'Create rule'}
-                </button>
-              </div>
-            </div>
+            )}
           </div>
-        ) : null}
+
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+              onClick={() => setRuleModalOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={!isOwner || createRule.isPending || !ruleForm.name.trim()}
+              className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              onClick={() => createRule.mutate()}
+            >
+              {createRule.isPending ? 'Creating…' : 'Create rule'}
+            </button>
+          </div>
+        </Modal>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
@@ -4188,231 +4170,213 @@ export default function StratflowProject() {
         <StratflowIssueDrawer issueId={focusedIssueId} projectId={String(projectId || '')} onClose={closeIssueFocus} />
       ) : null}
 
-      {/* Release Modal - using portal for proper positioning */}
-      {releaseModalOpen && createPortal(
-        <div 
-          className="fixed inset-0 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          style={{ zIndex: 2147483647 }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeReleaseModal()
-          }}
-        >
-          <div 
-            className="bg-[color:var(--color-panel)] rounded-2xl shadow-2xl border border-[color:var(--color-border)] w-[min(90vw,28rem)] p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-lg font-semibold mb-4">{editingReleaseId ? 'Edit Release' : 'New Release'}</div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Name *</label>
-                <input
-                  value={releaseForm.name}
-                  onChange={(e) => setReleaseForm((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  placeholder="e.g., Q1 2026 Release"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Version *</label>
-                <input
-                  value={releaseForm.version}
-                  onChange={(e) => setReleaseForm((p) => ({ ...p, version: e.target.value }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  placeholder="e.g., 1.0.0"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Status</label>
-                <select
-                  value={releaseForm.state}
-                  onChange={(e) => setReleaseForm((p) => ({ ...p, state: e.target.value as 'planned' | 'in_progress' | 'released' }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                >
-                  <option value="planned" className="text-gray-900 bg-white">Planned</option>
-                  <option value="in_progress" className="text-gray-900 bg-white">In Progress</option>
-                  <option value="released" className="text-gray-900 bg-white">Released</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Description</label>
-                <textarea
-                  value={releaseForm.description}
-                  onChange={(e) => setReleaseForm((p) => ({ ...p, description: e.target.value }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  rows={2}
-                  placeholder="Optional description"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Target Date</label>
-                <input
-                  type="date"
-                  value={releaseForm.targetDate}
-                  onChange={(e) => setReleaseForm((p) => ({ ...p, targetDate: e.target.value }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeReleaseModal}
-                className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={(editingReleaseId ? updateRelease.isPending : createRelease.isPending) || !releaseForm.name.trim() || !releaseForm.version.trim()}
-                onClick={() => editingReleaseId ? updateRelease.mutate() : createRelease.mutate()}
-                className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-              >
-                {editingReleaseId 
-                  ? (updateRelease.isPending ? 'Saving...' : 'Save Changes')
-                  : (createRelease.isPending ? 'Creating...' : 'Create Release')
-                }
-              </button>
-            </div>
+      {/* Release Modal */}
+      <Modal
+        open={releaseModalOpen}
+        onClose={closeReleaseModal}
+        title={editingReleaseId ? 'Edit Release' : 'New Release'}
+        width="28rem"
+        showFullscreenToggle={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Name *</label>
+            <input
+              value={releaseForm.name}
+              onChange={(e) => setReleaseForm((p) => ({ ...p, name: e.target.value }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              placeholder="e.g., Q1 2026 Release"
+            />
           </div>
-        </div>,
-        document.body
-      )}
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Version *</label>
+            <input
+              value={releaseForm.version}
+              onChange={(e) => setReleaseForm((p) => ({ ...p, version: e.target.value }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              placeholder="e.g., 1.0.0"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Status</label>
+            <select
+              value={releaseForm.state}
+              onChange={(e) => setReleaseForm((p) => ({ ...p, state: e.target.value as 'planned' | 'in_progress' | 'released' }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+            >
+              <option value="planned" className="text-gray-900 bg-white">Planned</option>
+              <option value="in_progress" className="text-gray-900 bg-white">In Progress</option>
+              <option value="released" className="text-gray-900 bg-white">Released</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Description</label>
+            <textarea
+              value={releaseForm.description}
+              onChange={(e) => setReleaseForm((p) => ({ ...p, description: e.target.value }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              rows={2}
+              placeholder="Optional description"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Target Date</label>
+            <input
+              type="date"
+              value={releaseForm.targetDate}
+              onChange={(e) => setReleaseForm((p) => ({ ...p, targetDate: e.target.value }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={closeReleaseModal}
+            className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={(editingReleaseId ? updateRelease.isPending : createRelease.isPending) || !releaseForm.name.trim() || !releaseForm.version.trim()}
+            onClick={() => editingReleaseId ? updateRelease.mutate() : createRelease.mutate()}
+            className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+          >
+            {editingReleaseId 
+              ? (updateRelease.isPending ? 'Saving...' : 'Save Changes')
+              : (createRelease.isPending ? 'Creating...' : 'Create Release')
+            }
+          </button>
+        </div>
+      </Modal>
 
-      {/* New Template Modal - using portal for proper positioning */}
-      {templateModalOpen && createPortal(
-        <div 
-          className="fixed inset-0 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          style={{ zIndex: 2147483647 }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setTemplateModalOpen(false)
-          }}
-        >
-          <div 
-            className="bg-[color:var(--color-panel)] rounded-2xl shadow-2xl border border-[color:var(--color-border)] w-[min(90vw,32rem)] max-h-[90vh] overflow-y-auto p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-lg font-semibold mb-4">New Issue Template</div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Template Name *</label>
-                <input
-                  value={templateForm.name}
-                  onChange={(e) => setTemplateForm((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  placeholder="e.g., Bug Report, Feature Request"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Description</label>
-                <input
-                  value={templateForm.description}
-                  onChange={(e) => setTemplateForm((p) => ({ ...p, description: e.target.value }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  placeholder="When to use this template"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Issue Type</label>
-                  <select
-                    value={templateForm.type}
-                    onChange={(e) => setTemplateForm((p) => ({ ...p, type: e.target.value as StratflowIssueType }))}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  >
-                    <option value="Task">Task</option>
-                    <option value="Story">Story</option>
-                    <option value="Defect">Defect</option>
-                    <option value="Epic">Epic</option>
-                    <option value="Spike">Spike</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Priority</label>
-                  <select
-                    value={templateForm.priority}
-                    onChange={(e) => setTemplateForm((p) => ({ ...p, priority: e.target.value as StratflowPriority }))}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Highest">Highest</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Title</label>
-                <input
-                  value={templateForm.defaultTitle}
-                  onChange={(e) => setTemplateForm((p) => ({ ...p, defaultTitle: e.target.value }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  placeholder="Pre-filled title (optional)"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Description</label>
-                <textarea
-                  value={templateForm.defaultDescription}
-                  onChange={(e) => setTemplateForm((p) => ({ ...p, defaultDescription: e.target.value }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  rows={3}
-                  placeholder="Pre-filled description (optional)"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Acceptance Criteria</label>
-                <textarea
-                  value={templateForm.defaultAcceptanceCriteria}
-                  onChange={(e) => setTemplateForm((p) => ({ ...p, defaultAcceptanceCriteria: e.target.value }))}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  rows={2}
-                  placeholder="Pre-filled acceptance criteria (optional)"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Story Points</label>
-                  <input
-                    type="number"
-                    value={templateForm.defaultStoryPoints}
-                    onChange={(e) => setTemplateForm((p) => ({ ...p, defaultStoryPoints: e.target.value }))}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    placeholder="e.g., 3"
-                    min="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Labels</label>
-                  <input
-                    value={templateForm.defaultLabels}
-                    onChange={(e) => setTemplateForm((p) => ({ ...p, defaultLabels: e.target.value }))}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    placeholder="comma, separated"
-                  />
-                </div>
-              </div>
+      {/* New Template Modal */}
+      <Modal
+        open={templateModalOpen}
+        onClose={() => setTemplateModalOpen(false)}
+        title="New Issue Template"
+        width="32rem"
+        showFullscreenToggle={false}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Template Name *</label>
+            <input
+              value={templateForm.name}
+              onChange={(e) => setTemplateForm((p) => ({ ...p, name: e.target.value }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              placeholder="e.g., Bug Report, Feature Request"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Description</label>
+            <input
+              value={templateForm.description}
+              onChange={(e) => setTemplateForm((p) => ({ ...p, description: e.target.value }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              placeholder="When to use this template"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Issue Type</label>
+              <select
+                value={templateForm.type}
+                onChange={(e) => setTemplateForm((p) => ({ ...p, type: e.target.value as StratflowIssueType }))}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              >
+                <option value="Task">Task</option>
+                <option value="Story">Story</option>
+                <option value="Defect">Defect</option>
+                <option value="Epic">Epic</option>
+                <option value="Spike">Spike</option>
+              </select>
             </div>
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setTemplateModalOpen(false)}
-                className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+            <div>
+              <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Priority</label>
+              <select
+                value={templateForm.priority}
+                onChange={(e) => setTemplateForm((p) => ({ ...p, priority: e.target.value as StratflowPriority }))}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={createTemplate.isPending || !templateForm.name.trim()}
-                onClick={() => createTemplate.mutate()}
-                className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-              >
-                {createTemplate.isPending ? 'Creating...' : 'Create Template'}
-              </button>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Highest">Highest</option>
+              </select>
             </div>
           </div>
-        </div>,
-        document.body
-      )}
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Title</label>
+            <input
+              value={templateForm.defaultTitle}
+              onChange={(e) => setTemplateForm((p) => ({ ...p, defaultTitle: e.target.value }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              placeholder="Pre-filled title (optional)"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Description</label>
+            <textarea
+              value={templateForm.defaultDescription}
+              onChange={(e) => setTemplateForm((p) => ({ ...p, defaultDescription: e.target.value }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              rows={3}
+              placeholder="Pre-filled description (optional)"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Acceptance Criteria</label>
+            <textarea
+              value={templateForm.defaultAcceptanceCriteria}
+              onChange={(e) => setTemplateForm((p) => ({ ...p, defaultAcceptanceCriteria: e.target.value }))}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              rows={2}
+              placeholder="Pre-filled acceptance criteria (optional)"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Story Points</label>
+              <input
+                type="number"
+                value={templateForm.defaultStoryPoints}
+                onChange={(e) => setTemplateForm((p) => ({ ...p, defaultStoryPoints: e.target.value }))}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                placeholder="e.g., 3"
+                min="0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Default Labels</label>
+              <input
+                value={templateForm.defaultLabels}
+                onChange={(e) => setTemplateForm((p) => ({ ...p, defaultLabels: e.target.value }))}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                placeholder="comma, separated"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setTemplateModalOpen(false)}
+            className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={createTemplate.isPending || !templateForm.name.trim()}
+            onClick={() => createTemplate.mutate()}
+            className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+          >
+            {createTemplate.isPending ? 'Creating...' : 'Create Template'}
+          </button>
+        </div>
+      </Modal>
       </div>
     </TooltipProvider>
   )

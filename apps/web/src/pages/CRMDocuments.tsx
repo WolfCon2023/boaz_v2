@@ -6,6 +6,7 @@ import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
+import { Modal } from '@/components/Modal'
 import { FileText, Upload, Download, Trash2, Eye, Users, Plus, X, Search, History, Lock, Unlock, HelpCircle, BookOpen } from 'lucide-react'
 
 type DocumentVersion = {
@@ -978,17 +979,12 @@ export default function CRMDocuments() {
       </div>
 
       {/* Upload Modal */}
-      {showUpload && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowUpload(false)}>
-          <div className="bg-[color:var(--color-panel)] rounded-lg border p-6 w-[min(90vw,40rem)] max-h-[90vh] overflow-y-auto mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-[color:var(--color-panel)] pb-2 border-b mb-4 -mx-6 px-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">Upload Document</h2>
-                <button onClick={() => setShowUpload(false)} className="p-1 rounded hover:bg-[color:var(--color-muted)]">
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
+      <Modal
+        open={showUpload}
+        onClose={() => setShowUpload(false)}
+        title="Upload Document"
+        width="40rem"
+      >
             <form onSubmit={handleUpload} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">File *</label>
@@ -1182,136 +1178,124 @@ export default function CRMDocuments() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Document Details Modal */}
-      {selectedDoc && (showVersions || showHistory || showPermissions) && docDetail && docDetail.data && docDetail.data._id === selectedDoc._id && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => { setShowVersions(false); setShowHistory(false); setShowPermissions(false); setSelectedDoc(null) }}>
-          <div className="bg-[color:var(--color-panel)] rounded-lg border p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex-1">
-                <h2 className="text-xl font-bold">{docDetail.data.name}</h2>
-                {docDetail.data.checkedOutBy && (
-                  <div className="text-sm text-yellow-600 mt-1">
-                    🔒 Checked out by {docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}
-                    {docDetail.data.checkedOutAt && ` (${formatDateTime(docDetail.data.checkedOutAt)})`}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
+      <Modal
+        open={!!(selectedDoc && (showVersions || showHistory || showPermissions) && docDetail && docDetail.data && docDetail.data._id === selectedDoc._id)}
+        onClose={() => { setShowVersions(false); setShowHistory(false); setShowPermissions(false); setSelectedDoc(null) }}
+        title={docDetail?.data?.name}
+        subtitle={docDetail?.data?.checkedOutBy && (
+          <span className="text-yellow-600">
+            🔒 Checked out by {docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}
+            {docDetail.data.checkedOutAt && ` (${formatDateTime(docDetail.data.checkedOutAt)})`}
+          </span>
+        )}
+        width="56rem"
+        headerActions={selectedDoc && docDetail?.data && docDetail.data._id === selectedDoc._id && (
+          <>
+            <button
+              onClick={() => checkout.mutate(docDetail.data._id)}
+              disabled={!!(docDetail.data.checkedOutBy && currentUserId && currentUserEmail && 
+                String(docDetail.data.checkedOutBy) !== String(currentUserId) && 
+                docDetail.data.checkedOutByEmail?.toLowerCase() !== currentUserEmail.toLowerCase() && 
+                !isAdmin)}
+              className="p-2 rounded hover:bg-[color:var(--color-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
+              title={docDetail.data.checkedOutBy && currentUserId && String(docDetail.data.checkedOutBy) !== String(currentUserId) && !isAdmin 
+                ? `Cannot check out - checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}` 
+                : "Check out this document"}
+            >
+              <Lock size={16} />
+            </button>
+            {(() => {
+              // CRITICAL: Ensure we're comparing against the correct document
+              // Only proceed if docDetail matches the currently selected document
+              if (!docDetail?.data || docDetail.data._id !== selectedDoc._id) {
+                return null
+              }
+              
+              // Normalize both IDs to strings for comparison
+              const checkedOutById = docDetail.data.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
+              const myUserId = currentUserId ? String(currentUserId) : null
+              const myUserEmail = currentUserEmail
+              
+              // Check if checked out by current user - compare by ID or email as fallback
+              // Allow check-in if either ID matches OR email matches
+              const isCheckedOutByMe = checkedOutById && (
+                (myUserId && checkedOutById === myUserId) || 
+                (docDetail.data.checkedOutByEmail && myUserEmail && docDetail.data.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase())
+              )
+              const isCheckedOutByOther = checkedOutById && !isCheckedOutByMe
+              
+              // Always show check-in button, but enable/disable based on state
+              return (
                 <button
-                  onClick={() => checkout.mutate(docDetail.data._id)}
-                  disabled={!!(docDetail.data.checkedOutBy && currentUserId && currentUserEmail && 
-                    String(docDetail.data.checkedOutBy) !== String(currentUserId) && 
-                    docDetail.data.checkedOutByEmail?.toLowerCase() !== currentUserEmail.toLowerCase() && 
-                    !isAdmin)}
-                  className="p-2 rounded hover:bg-[color:var(--color-muted)] disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={docDetail.data.checkedOutBy && currentUserId && String(docDetail.data.checkedOutBy) !== String(currentUserId) && !isAdmin 
-                    ? `Cannot check out - checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}` 
-                    : "Check out this document"}
-                >
-                  <Lock size={16} />
-                </button>
-                {(() => {
-                  // CRITICAL: Ensure we're comparing against the correct document
-                  // Only proceed if docDetail matches the currently selected document
-                  if (!docDetail?.data || docDetail.data._id !== selectedDoc._id) {
-                    return null
-                  }
-                  
-                  // Normalize both IDs to strings for comparison
-                  const checkedOutById = docDetail.data.checkedOutBy ? String(docDetail.data.checkedOutBy) : null
-                  const myUserId = currentUserId ? String(currentUserId) : null
-                  const myUserEmail = currentUserEmail
-                  
-                  // Check if checked out by current user - compare by ID or email as fallback
-                  // Allow check-in if either ID matches OR email matches
-                  const isCheckedOutByMe = checkedOutById && (
-                    (myUserId && checkedOutById === myUserId) || 
-                    (docDetail.data.checkedOutByEmail && myUserEmail && docDetail.data.checkedOutByEmail.toLowerCase() === myUserEmail.toLowerCase())
-                  )
-                  const isCheckedOutByOther = checkedOutById && !isCheckedOutByMe
-                  
-                  // Always show check-in button, but enable/disable based on state
-                  return (
-                    <button
-                      onClick={async () => {
-                        if (isCheckedOutByMe) {
-                          const ok = await confirm('Check in this document?', {
-                            confirmText: 'Check in',
-                          })
-                          if (ok) {
-                            checkin.mutate(docDetail.data._id)
-                          }
-                        } else if (isCheckedOutByOther && isAdmin) {
-                          const ok = await confirm(
-                            `Force check-in? This document is checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}.`,
-                            { confirmText: 'Force check-in', confirmColor: 'danger' }
-                          )
-                          if (ok) {
-                            checkin.mutate(docDetail.data._id)
-                          }
-                        }
-                      }}
-                      disabled={!isCheckedOutByMe && !(isCheckedOutByOther && isAdmin)}
-                      className={`p-2 rounded ${
-                        isCheckedOutByMe 
-                          ? 'hover:bg-[color:var(--color-muted)] text-green-600' 
-                          : isCheckedOutByOther && isAdmin
-                          ? 'hover:bg-[color:var(--color-muted)] text-orange-600'
-                          : 'opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]'
-                      }`}
-                      title={
-                        isCheckedOutByMe 
-                          ? 'Check in (you have this checked out)'
-                          : isCheckedOutByOther && isAdmin
-                          ? `Force check-in (checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail})`
-                          : isCheckedOutByOther
-                          ? `Cannot check in - checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}. You must wait for them to check it in.`
-                          : 'Document is not checked out'
+                  onClick={async () => {
+                    if (isCheckedOutByMe) {
+                      const ok = await confirm('Check in this document?', {
+                        confirmText: 'Check in',
+                      })
+                      if (ok) {
+                        checkin.mutate(docDetail.data._id)
                       }
-                    >
-                      <Unlock size={16} />
-                    </button>
-                  )
-                })()}
-                <button
-                  onClick={() => {
-                    setShowHistory(!showHistory)
-                    setShowVersions(false)
-                    setShowPermissions(false)
+                    } else if (isCheckedOutByOther && isAdmin) {
+                      const ok = await confirm(
+                        `Force check-in? This document is checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}.`,
+                        { confirmText: 'Force check-in', confirmColor: 'danger' }
+                      )
+                      if (ok) {
+                        checkin.mutate(docDetail.data._id)
+                      }
+                    }
                   }}
-                  className="p-2 rounded hover:bg-[color:var(--color-muted)]"
-                  title="History"
+                  disabled={!isCheckedOutByMe && !(isCheckedOutByOther && isAdmin)}
+                  className={`p-2 rounded ${
+                    isCheckedOutByMe 
+                      ? 'hover:bg-[color:var(--color-muted)] text-green-600' 
+                      : isCheckedOutByOther && isAdmin
+                      ? 'hover:bg-[color:var(--color-muted)] text-orange-600'
+                      : 'opacity-50 cursor-not-allowed text-[color:var(--color-text-muted)]'
+                  }`}
+                  title={
+                    isCheckedOutByMe 
+                      ? 'Check in (you have this checked out)'
+                      : isCheckedOutByOther && isAdmin
+                      ? `Force check-in (checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail})`
+                      : isCheckedOutByOther
+                      ? `Cannot check in - checked out by ${docDetail.data.checkedOutByName || docDetail.data.checkedOutByEmail}. You must wait for them to check it in.`
+                      : 'Document is not checked out'
+                  }
                 >
-                  <History size={16} />
+                  <Unlock size={16} />
                 </button>
-                <button
-                  onClick={() => {
-                    setShowPermissions(!showPermissions)
-                    setShowVersions(false)
-                    setShowHistory(false)
-                  }}
-                  className="p-2 rounded hover:bg-[color:var(--color-muted)]"
-                  title="Permissions"
-                >
-                  <Users size={16} />
-                </button>
-                <button
-                  onClick={() => {
-                    setShowVersions(false)
-                    setShowHistory(false)
-                    setShowPermissions(false)
-                    setSelectedDoc(null)
-                  }}
-                  className="p-2 rounded hover:bg-[color:var(--color-muted)]"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
+              )
+            })()}
+            <button
+              onClick={() => {
+                setShowHistory(!showHistory)
+                setShowVersions(false)
+                setShowPermissions(false)
+              }}
+              className="p-2 rounded hover:bg-[color:var(--color-muted)]"
+              title="History"
+            >
+              <History size={16} />
+            </button>
+            <button
+              onClick={() => {
+                setShowPermissions(!showPermissions)
+                setShowVersions(false)
+                setShowHistory(false)
+              }}
+              className="p-2 rounded hover:bg-[color:var(--color-muted)]"
+              title="Permissions"
+            >
+              <Users size={16} />
+            </button>
+          </>
+        )}>
+        {selectedDoc && docDetail?.data && docDetail.data._id === selectedDoc._id && (
+          <>
 
             {showHistory && historyQ.data && (
               <AuditTrail
@@ -1547,9 +1531,9 @@ export default function CRMDocuments() {
                 )}
               </div>
             )}
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
     </>
   )

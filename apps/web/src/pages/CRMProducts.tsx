@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
-import { createPortal } from 'react-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
+import { Modal } from '@/components/Modal'
 import { formatDateTime } from '@/lib/dateFormat'
 import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 import { Package, Layers, Tag, FileText, TrendingUp, Download, TrendingDown, DollarSign, PackageIcon, BarChart3, PieChart, FileDown } from 'lucide-react'
@@ -117,7 +117,6 @@ export default function CRMProducts() {
   const [activeTab, setActiveTab] = React.useState<'products' | 'bundles' | 'discounts' | 'terms' | 'profitability' | 'terms-ledger'>('products')
   const [q, setQ] = React.useState('')
   const [editing, setEditing] = React.useState<Product | Bundle | Discount | CustomTerms | null>(null)
-  const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   const [productFormPrice, setProductFormPrice] = React.useState(0)
   const [productFormCost, setProductFormCost] = React.useState(0)
   const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)
@@ -592,24 +591,6 @@ export default function CRMProducts() {
       qc.invalidateQueries({ queryKey: ['terms'] })
     },
   })
-
-  React.useEffect(() => {
-    if (!editing && !sendingTerms) {
-      setPortalEl(null)
-      return
-    }
-    const el = document.createElement('div')
-    el.setAttribute('data-overlay', editing ? 'product-editor' : 'terms-send-modal')
-    Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' })
-    document.body.appendChild(el)
-    setPortalEl(el)
-    return () => {
-      try {
-        document.body.removeChild(el)
-      } catch {}
-      setPortalEl(null)
-    }
-  }, [editing, sendingTerms])
 
   // Update form state when editing product
   React.useEffect(() => {
@@ -2288,19 +2269,21 @@ export default function CRMProducts() {
       )}
 
       {/* Editor Modal */}
-      {editing && portalEl && createPortal(
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl my-8">
-              <div className="mb-4 text-lg font-semibold">
-                {activeTab === 'products' && (editing._id ? 'Edit Product' : 'New Product')}
-                {activeTab === 'bundles' && (editing._id ? 'Edit Bundle' : 'New Bundle')}
-                {activeTab === 'discounts' && (editing._id ? 'Edit Discount' : 'New Discount')}
-                {activeTab === 'terms' && (editing._id ? 'Edit Terms' : 'New Terms')}
-              </div>
-
-              {/* Product Form */}
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={
+          activeTab === 'products' ? (editing?._id ? 'Edit Product' : 'New Product') :
+          activeTab === 'bundles' ? (editing?._id ? 'Edit Bundle' : 'New Bundle') :
+          activeTab === 'discounts' ? (editing?._id ? 'Edit Discount' : 'New Discount') :
+          activeTab === 'terms' ? (editing?._id ? 'Edit Terms' : 'New Terms') :
+          'Edit'
+        }
+        width="48rem"
+      >
+        {editing && (
+          <>
+            {/* Product Form */}
               {activeTab === 'products' && (() => {
                 const margin = productFormPrice - productFormCost
                 const marginPercent = productFormPrice > 0 ? ((margin / productFormPrice) * 100) : 0
@@ -2863,24 +2846,24 @@ export default function CRMProducts() {
                   )}
                 </form>
               )}
-            </div>
-          </div>
-        </div>,
-        portalEl
-      )}
+          </>
+        )}
+      </Modal>
 
       {/* Send Terms for Review Modal */}
-      {sendingTerms && portalEl && createPortal(
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div className="absolute inset-0 bg-black/60" onClick={() => setSendingTerms(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-              <div className="mb-4 text-lg font-semibold">Send Terms for Review</div>
-              <div className="mb-4 p-3 rounded-lg bg-[color:var(--color-muted)]">
-                <div className="text-sm font-medium">{sendingTerms.name}</div>
-                {sendingTerms.description && <div className="text-xs text-[color:var(--color-text-muted)] mt-1">{sendingTerms.description}</div>}
-              </div>
-              <form
+      <Modal
+        open={!!sendingTerms}
+        onClose={() => setSendingTerms(null)}
+        title="Send Terms for Review"
+        width="40rem"
+      >
+        {sendingTerms && (
+          <>
+            <div className="mb-4 p-3 rounded-lg bg-[color:var(--color-muted)]">
+              <div className="text-sm font-medium">{sendingTerms.name}</div>
+              {sendingTerms.description && <div className="text-xs text-[color:var(--color-text-muted)] mt-1">{sendingTerms.description}</div>}
+            </div>
+            <form
                 onSubmit={(e) => {
                   e.preventDefault()
                   const selectedAccount = sendTermsAccountId ? accounts.find(a => a._id === sendTermsAccountId) : null
@@ -2977,28 +2960,26 @@ export default function CRMProducts() {
                   />
                 </div>
                 
-                <div className="flex items-center justify-end gap-2 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setSendingTerms(null)}
-                    className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={sendTermsForReview.isPending}
-                    className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                  >
-                    {sendTermsForReview.isPending ? 'Sending...' : 'Send for Review'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>,
-        portalEl
-      )}
+              <div className="flex items-center justify-end gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setSendingTerms(null)}
+                  className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendTermsForReview.isPending}
+                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                >
+                  {sendTermsForReview.isPending ? 'Sending...' : 'Send for Review'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

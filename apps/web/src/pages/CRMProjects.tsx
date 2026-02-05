@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/dateFormat'
 import { RelatedTasks } from '@/components/RelatedTasks'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
+import { Modal } from '@/components/Modal'
 
 type Project = {
   _id: string
@@ -586,24 +587,15 @@ export default function CRMProjects() {
         )}
       </div>
 
-      {editing && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div className="absolute inset-0 bg-black/60" onClick={closeEdit} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-base font-semibold">
-                  {editing._id ? 'Edit project' : 'New project'}
-                </h2>
-                <button
-                  type="button"
-                  onClick={closeEdit}
-                  className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-                >
-                  Close
-                </button>
-              </div>
-              <form onSubmit={handleSave} className="space-y-3">
+      <Modal
+        open={Boolean(editing)}
+        onClose={closeEdit}
+        title={editing?._id ? 'Edit project' : 'New project'}
+        width="48rem"
+      >
+        {editing && (
+          <>
+            <form onSubmit={handleSave} className="space-y-3">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
                     <label className="block text-xs font-medium">Name</label>
@@ -761,33 +753,32 @@ export default function CRMProjects() {
                     </button>
                   </div>
                 </div>
-              </form>
-              {showHistory && historyQ.data && (
-                <div className="mt-4">
-                  <AuditTrail
-                    entries={(historyQ.data.data.history || []).map((entry): AuditEntry => ({
-                      timestamp: entry.createdAt,
-                      action: entry.eventType,
-                      userName: entry.userName,
-                      userEmail: entry.userEmail,
-                      description: entry.description,
-                      oldValue: entry.oldValue,
-                      newValue: entry.newValue,
-                    }))}
-                    title="Project History"
-                    emptyMessage="No history available for this project."
-                  />
-                </div>
-              )}
-              {editing?._id && (
-                <div className="mt-4 border-t border-[color:var(--color-border)] pt-3">
-                  <RelatedTasks relatedType="project" relatedId={editing._id} />
-                </div>
-              )}
+          </form>
+          {showHistory && historyQ.data && (
+            <div className="mt-4">
+              <AuditTrail
+                entries={(historyQ.data.data.history || []).map((entry): AuditEntry => ({
+                  timestamp: entry.createdAt,
+                  action: entry.eventType,
+                  userName: entry.userName,
+                  userEmail: entry.userEmail,
+                  description: entry.description,
+                  oldValue: entry.oldValue,
+                  newValue: entry.newValue,
+                }))}
+                title="Project History"
+                emptyMessage="No history available for this project."
+              />
             </div>
-          </div>
-        </div>
-      )}
+          )}
+          {editing?._id && (
+            <div className="mt-4 border-t border-[color:var(--color-border)] pt-3">
+              <RelatedTasks relatedType="project" relatedId={editing._id} />
+            </div>
+          )}
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

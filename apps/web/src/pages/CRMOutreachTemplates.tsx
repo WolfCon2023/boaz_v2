@@ -3,6 +3,7 @@ import * as React from 'react'
 import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
+import { Modal } from '@/components/Modal'
 
 type Template = { _id: string; name?: string; channel?: 'email'|'sms'; subject?: string; body?: string; variant?: string | null }
 
@@ -102,30 +103,29 @@ export default function CRMOutreachTemplates() {
         </table>
       </div>
 
-      {editing && (
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 text-base font-semibold">Edit template</div>
-              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); update.mutate({ _id: editing._id, name: String(fd.get('name')||'')||undefined, channel: String(fd.get('channel')||'')||undefined, subject: String(fd.get('subject')||'')||undefined, variant: (String(fd.get('variant')||'')||null), body: String(fd.get('body')||'')||undefined }); setEditing(null) }}>
-                <input name="name" defaultValue={editing.name ?? ''} placeholder="Template name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <select name="channel" defaultValue={editing.channel ?? 'email'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
-                  <option value="email">Email</option>
-                  <option value="sms">SMS</option>
-                </select>
-                <input name="subject" defaultValue={editing.subject ?? ''} placeholder="Subject" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <input name="variant" defaultValue={editing.variant ?? ''} placeholder="Variant (A/B)" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <textarea name="body" defaultValue={editing.body ?? ''} placeholder="Body" className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
-                <div className="col-span-full mt-2 flex items-center justify-end gap-2">
-                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
-                  <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
-                </div>
-              </form>
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit template"
+        width="48rem"
+      >
+        {editing && (
+          <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); update.mutate({ _id: editing._id, name: String(fd.get('name')||'')||undefined, channel: String(fd.get('channel')||'')||undefined, subject: String(fd.get('subject')||'')||undefined, variant: (String(fd.get('variant')||'')||null), body: String(fd.get('body')||'')||undefined }); setEditing(null) }}>
+            <input name="name" defaultValue={editing.name ?? ''} placeholder="Template name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            <select name="channel" defaultValue={editing.channel ?? 'email'} className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)] font-semibold">
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+            </select>
+            <input name="subject" defaultValue={editing.subject ?? ''} placeholder="Subject" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            <input name="variant" defaultValue={editing.variant ?? ''} placeholder="Variant (A/B)" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            <textarea name="body" defaultValue={editing.body ?? ''} placeholder="Body" className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+            <div className="col-span-full mt-2 flex items-center justify-end gap-2">
+              <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
+              <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
             </div>
-          </div>
-        </div>
-      )}
+          </form>
+        )}
+      </Modal>
     </div>
   )
 }

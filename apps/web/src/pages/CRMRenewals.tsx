@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
 import { HelpCircle } from 'lucide-react'
 import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
+import { Modal } from '@/components/Modal'
 
 type Renewal = {
   _id: string
@@ -814,241 +815,237 @@ export default function CRMRenewals() {
         </div>
       </div>
 
-      {editing && (
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setEditing(null)}
-          />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,40rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 text-base font-semibold">Edit renewal</div>
-              <form
-                className="space-y-3"
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  if (!editing) return
-                  const fd = new FormData(e.currentTarget)
-                  const payload: any = {
-                    _id: editing._id,
-                    name: String(fd.get('name') || '').trim() || undefined,
-                    accountId: String(fd.get('accountId') || '') || undefined,
-                    status: String(fd.get('status') || '') || undefined,
-                    renewalDate: String(fd.get('renewalDate') || '') || undefined,
-                    mrr: fd.get('mrr') ? Number(fd.get('mrr')) : undefined,
-                    arr: fd.get('arr') ? Number(fd.get('arr')) : undefined,
-                    healthScore: fd.get('healthScore')
-                      ? Number(fd.get('healthScore'))
-                      : undefined,
-                    churnRisk: String(fd.get('churnRisk') || '') || undefined,
-                    upsellPotential: String(fd.get('upsellPotential') || '') || undefined,
-                    notes: String(fd.get('notes') || '') || undefined,
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit renewal"
+        width="40rem"
+      >
+        {editing && (
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!editing) return
+              const fd = new FormData(e.currentTarget)
+              const payload: any = {
+                _id: editing._id,
+                name: String(fd.get('name') || '').trim() || undefined,
+                accountId: String(fd.get('accountId') || '') || undefined,
+                status: String(fd.get('status') || '') || undefined,
+                renewalDate: String(fd.get('renewalDate') || '') || undefined,
+                mrr: fd.get('mrr') ? Number(fd.get('mrr')) : undefined,
+                arr: fd.get('arr') ? Number(fd.get('arr')) : undefined,
+                healthScore: fd.get('healthScore')
+                  ? Number(fd.get('healthScore'))
+                  : undefined,
+                churnRisk: String(fd.get('churnRisk') || '') || undefined,
+                upsellPotential: String(fd.get('upsellPotential') || '') || undefined,
+                notes: String(fd.get('notes') || '') || undefined,
+              }
+              update.mutate(payload)
+              setEditing(null)
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  Renewal / Subscription name
+                </label>
+                <input
+                  name="name"
+                  defaultValue={editing.name}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  Account
+                </label>
+                <select
+                  name="accountId"
+                  defaultValue={editing.accountId ?? ''}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">(none)</option>
+                  {accounts.map((a) => (
+                    <option key={a._id} value={a._id}>
+                      {(a.accountNumber ?? '-')} - {a.name ?? 'Account'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  Status
+                </label>
+                <select
+                  name="status"
+                  defaultValue={editing.status}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Pending Renewal">Pending Renewal</option>
+                  <option value="Churned">Churned</option>
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="On Hold">On Hold</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  Renewal date
+                </label>
+                <input
+                  type="date"
+                  name="renewalDate"
+                  defaultValue={
+                    editing.renewalDate ? editing.renewalDate.slice(0, 10) : ''
                   }
-                  update.mutate(payload)
-                  setEditing(null)
-                }}
-              >
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Renewal / Subscription name
-                    </label>
-                    <input
-                      name="name"
-                      defaultValue={editing.name}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Account
-                    </label>
-                    <select
-                      name="accountId"
-                      defaultValue={editing.accountId ?? ''}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                    >
-                      <option value="">(none)</option>
-                      {accounts.map((a) => (
-                        <option key={a._id} value={a._id}>
-                          {(a.accountNumber ?? '-')} - {a.name ?? 'Account'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Status
-                    </label>
-                    <select
-                      name="status"
-                      defaultValue={editing.status}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Pending Renewal">Pending Renewal</option>
-                      <option value="Churned">Churned</option>
-                      <option value="Cancelled">Cancelled</option>
-                      <option value="On Hold">On Hold</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Renewal date
-                    </label>
-                    <input
-                      type="date"
-                      name="renewalDate"
-                      defaultValue={
-                        editing.renewalDate ? editing.renewalDate.slice(0, 10) : ''
-                      }
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      MRR
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="mrr"
-                      defaultValue={editing.mrr ?? undefined}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      ARR
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="arr"
-                      defaultValue={editing.arr ?? undefined}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Health (0–10)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      step="0.1"
-                      name="healthScore"
-                      defaultValue={editing.healthScore ?? undefined}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Churn risk
-                    </label>
-                    <select
-                      name="churnRisk"
-                      defaultValue={editing.churnRisk ?? ''}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                    >
-                      <option value="">(none)</option>
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Upsell potential
-                    </label>
-                    <select
-                      name="upsellPotential"
-                      defaultValue={editing.upsellPotential ?? ''}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                    >
-                      <option value="">(none)</option>
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                    </select>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
-                      Notes
-                    </label>
-                    <textarea
-                      name="notes"
-                      defaultValue={editing.notes ?? ''}
-                      rows={3}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div className="sm:col-span-2 mt-2">
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="text-sm font-semibold">History</div>
-                      <button
-                        type="button"
-                        onClick={() => setShowHistory(!showHistory)}
-                        className="text-xs text-[color:var(--color-primary-500)] hover:underline"
-                      >
-                        {showHistory ? 'Hide audit trail' : 'View audit trail'}
-                      </button>
-                    </div>
-                    {showHistory && (
-                      <AuditTrail
-                        entries={(() => {
-                          const entries: AuditEntry[] = []
-                          if (historyQ.data?.data?.history) {
-                            for (const h of historyQ.data.data.history) {
-                              entries.push({
-                                timestamp: h.createdAt,
-                                action: h.eventType,
-                                userName: h.userName,
-                                userEmail: h.userEmail,
-                                description: h.description,
-                                oldValue: h.oldValue,
-                                newValue: h.newValue,
-                                metadata: h.metadata,
-                              })
-                            }
-                          }
-                          return entries
-                        })()}
-                        maxHeight="200px"
-                        actionLabels={{
-                          'created': { label: 'Created', color: 'text-emerald-400' },
-                          'status_changed': { label: 'Status Changed', color: 'text-blue-400' },
-                          'health_changed': { label: 'Health Changed', color: 'text-amber-400' },
-                          'risk_changed': { label: 'Risk Changed', color: 'text-red-400' },
-                          'field_changed': { label: 'Updated', color: 'text-sky-400' },
-                          'deleted': { label: 'Deleted', color: 'text-red-400' },
-                        }}
-                        emptyMessage={historyQ.isLoading ? 'Loading history...' : 'No audit history yet.'}
-                      />
-                    )}
-                  </div>
-                </div>
-                <div className="mt-4 flex justify-end gap-2">
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  MRR
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  name="mrr"
+                  defaultValue={editing.mrr ?? undefined}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  ARR
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  name="arr"
+                  defaultValue={editing.arr ?? undefined}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  Health (0–10)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step="0.1"
+                  name="healthScore"
+                  defaultValue={editing.healthScore ?? undefined}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  Churn risk
+                </label>
+                <select
+                  name="churnRisk"
+                  defaultValue={editing.churnRisk ?? ''}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">(none)</option>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  Upsell potential
+                </label>
+                <select
+                  name="upsellPotential"
+                  defaultValue={editing.upsellPotential ?? ''}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+                >
+                  <option value="">(none)</option>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
+                  Notes
+                </label>
+                <textarea
+                  name="notes"
+                  defaultValue={editing.notes ?? ''}
+                  rows={3}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="sm:col-span-2 mt-2">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-sm font-semibold">History</div>
                   <button
                     type="button"
-                    className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-                    onClick={() => setEditing(null)}
+                    onClick={() => setShowHistory(!showHistory)}
+                    className="text-xs text-[color:var(--color-primary-500)] hover:underline"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
-                  >
-                    Save changes
+                    {showHistory ? 'Hide audit trail' : 'View audit trail'}
                   </button>
                 </div>
-              </form>
+                {showHistory && (
+                  <AuditTrail
+                    entries={(() => {
+                      const entries: AuditEntry[] = []
+                      if (historyQ.data?.data?.history) {
+                        for (const h of historyQ.data.data.history) {
+                          entries.push({
+                            timestamp: h.createdAt,
+                            action: h.eventType,
+                            userName: h.userName,
+                            userEmail: h.userEmail,
+                            description: h.description,
+                            oldValue: h.oldValue,
+                            newValue: h.newValue,
+                            metadata: h.metadata,
+                          })
+                        }
+                      }
+                      return entries
+                    })()}
+                    maxHeight="200px"
+                    actionLabels={{
+                      'created': { label: 'Created', color: 'text-emerald-400' },
+                      'status_changed': { label: 'Status Changed', color: 'text-blue-400' },
+                      'health_changed': { label: 'Health Changed', color: 'text-amber-400' },
+                      'risk_changed': { label: 'Risk Changed', color: 'text-red-400' },
+                      'field_changed': { label: 'Updated', color: 'text-sky-400' },
+                      'deleted': { label: 'Deleted', color: 'text-red-400' },
+                    }}
+                    emptyMessage={historyQ.isLoading ? 'Loading history...' : 'No audit history yet.'}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                onClick={() => setEditing(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+              >
+                Save changes
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   )
 }

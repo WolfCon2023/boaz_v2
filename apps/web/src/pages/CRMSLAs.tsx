@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
+import { Modal } from '@/components/Modal'
 import { http, getApiUrl } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { formatDate } from '@/lib/dateFormat'
@@ -1128,54 +1129,38 @@ export default function CRMSLAs() {
         </div>
       </section>
 
-      {editing && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div className="absolute inset-0 bg-black/60" onClick={closeModal} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-                <div className="mb-3 space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="space-y-0.5">
-                    <h2 className="text-base font-semibold">
-                      {editing._id ? 'Edit contract / SLA' : 'New contract / SLA'}
-                    </h2>
-                    {editing.contractNumber != null && (
-                      <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                        Contract #{editing.contractNumber} · Status: {editing.status}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {editing._id && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const baseName = editing.name || 'Contract template'
-                          const slug =
-                            baseName
-                              .toLowerCase()
-                              .replace(/[^a-z0-9]+/g, '-')
-                              .replace(/^-|-$/g, '') || 'contract-template'
-                          setTemplateKey(slug)
-                          setTemplateName(baseName)
-                          setTemplateDescription('')
-                          setTemplateDialogOpen(true)
-                        }}
-                        className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-                      >
-                        Save as template
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--color-text-muted)]">
+      <Modal
+        open={!!editing}
+        onClose={closeModal}
+        title={editing?._id ? 'Edit contract / SLA' : 'New contract / SLA'}
+        subtitle={editing?.contractNumber != null ? `Contract #${editing.contractNumber} · Status: ${editing.status}` : undefined}
+        width="48rem"
+        headerActions={
+          editing?._id ? (
+            <button
+              type="button"
+              onClick={() => {
+                const baseName = editing.name || 'Contract template'
+                const slug =
+                  baseName
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-|-$/g, '') || 'contract-template'
+                setTemplateKey(slug)
+                setTemplateName(baseName)
+                setTemplateDescription('')
+                setTemplateDialogOpen(true)
+              }}
+              className="rounded-full border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]"
+            >
+              Save as template
+            </button>
+          ) : undefined
+        }
+      >
+        {editing && (
+        <>
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--color-text-muted)] mb-3">
                   <span className="font-semibold text-[color:var(--color-text)]">Template:</span>
                   <select
                     value={selectedTemplateId}
@@ -1236,7 +1221,6 @@ export default function CRMSLAs() {
                     </>
                   )}
                 </div>
-              </div>
               <form onSubmit={handleSave} className="space-y-4 text-sm">
                 <div className="space-y-2 rounded-2xl border border-[color:var(--color-border-soft)] bg-[color:var(--color-bg-elevated)] p-3">
                   <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)]">
@@ -2043,45 +2027,29 @@ export default function CRMSLAs() {
                   </div>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
+        </>
+        )}
+      </Modal>
 
-      {emailDialogOpen && emailContract && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => {
-              setEmailDialogOpen(false)
-              setEmailContract(null)
-            }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,26rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</div>
-                  <div className="text-sm text-[color:var(--color-text-muted)]">
-                    {emailMode === 'signed'
-                      ? 'Email a copy of the fully signed contract PDF.'
-                      : emailMode === 'attachment'
-                        ? 'Email this attached contract document.'
-                        : 'Send this contract for secure review and digital signature.'}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmailDialogOpen(false)
-                    setEmailContract(null)
-                  }}
-                  className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-                >
-                  Close
-                </button>
-              </div>
-              <form
+      <Modal
+        open={emailDialogOpen && !!emailContract}
+        onClose={() => {
+          setEmailDialogOpen(false)
+          setEmailContract(null)
+        }}
+        title={<span className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</span>}
+        subtitle={
+          emailMode === 'signed'
+            ? 'Email a copy of the fully signed contract PDF.'
+            : emailMode === 'attachment'
+              ? 'Email this attached contract document.'
+              : 'Send this contract for secure review and digital signature.'
+        }
+        width="26rem"
+        showFullscreenToggle={false}
+      >
+        {emailContract && (
+          <form
                 className="space-y-3 text-sm"
                 onSubmit={async (e) => {
                   e.preventDefault()
@@ -2170,39 +2138,19 @@ export default function CRMSLAs() {
                   </div>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
-      {templateDialogOpen && editing && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => {
-              setTemplateDialogOpen(false)
-            }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,26rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</div>
-                  <div className="text-sm text-[color:var(--color-text-muted)]">
-                    Save this contract as a reusable template.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTemplateDialogOpen(false)
-                  }}
-                  className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]"
-                >
-                  Close
-                </button>
-              </div>
-              <form
+      <Modal
+        open={templateDialogOpen && !!editing}
+        onClose={() => setTemplateDialogOpen(false)}
+        title={<span className="text-xs font-semibold text-[color:var(--color-primary)]">BOAZ says</span>}
+        subtitle="Save this contract as a reusable template."
+        width="26rem"
+        showFullscreenToggle={false}
+      >
+        {editing && (
+          <form
                 className="space-y-3 text-sm"
                 onSubmit={async (e) => {
                   e.preventDefault()
@@ -2272,10 +2220,8 @@ export default function CRMSLAs() {
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

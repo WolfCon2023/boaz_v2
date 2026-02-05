@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
+import { Modal } from '@/components/Modal'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
@@ -1105,558 +1106,539 @@ export default function CRMAssets() {
       </section>
 
       {/* Edit environment modal */}
-      {editingEnv && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setEditingEnv(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,28rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl text-xs">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">Edit environment</div>
-                  <div className="text-[11px] text-[color:var(--color-text-muted)]">{editingEnv.name}</div>
-                </div>
+      <Modal
+        open={!!editingEnv}
+        onClose={() => setEditingEnv(null)}
+        title="Edit Environment"
+        subtitle={editingEnv?.name}
+        width="28rem"
+        showFullscreenToggle={false}
+        className="text-xs"
+      >
+        {editingEnv && (
+          <>
+            <div className="space-y-2">
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Name</label>
+                <input
+                  type="text"
+                  defaultValue={editingEnv.name}
+                  onBlur={(e) => setEditingEnv({ ...editingEnv, name: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
               </div>
-              <div className="space-y-2">
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Name</label>
-                  <input
-                    type="text"
-                    defaultValue={editingEnv.name}
-                    onBlur={(e) => setEditingEnv({ ...editingEnv, name: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Type</label>
-                    <select
-                      defaultValue={editingEnv.environmentType}
-                      onChange={(e) =>
-                        setEditingEnv({
-                          ...editingEnv,
-                          environmentType: e.target.value,
-                        })
-                      }
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    >
-                      <option value="Production">Production</option>
-                      <option value="UAT">UAT</option>
-                      <option value="Dev">Dev</option>
-                      <option value="Sandbox">Sandbox</option>
-                      <option value="Retail Store">Retail Store</option>
-                      <option value="Satellite Office">Satellite Office</option>
-                      <option value="Cloud Tenant">Cloud Tenant</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Status</label>
-                    <select
-                      defaultValue={editingEnv.status}
-                      onChange={(e) =>
-                        setEditingEnv({
-                          ...editingEnv,
-                          status: e.target.value,
-                        })
-                      }
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                      <option value="Planned">Planned</option>
-                      <option value="Retired">Retired</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Location</label>
-                  <input
-                    type="text"
-                    defaultValue={editingEnv.location ?? ''}
-                    onBlur={(e) => setEditingEnv({ ...editingEnv, location: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Notes</label>
-                  <textarea
-                    rows={3}
-                    defaultValue={editingEnv.notes ?? ''}
-                    onBlur={(e) => setEditingEnv({ ...editingEnv, notes: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div className="md:col-span-2 mt-2">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="text-[11px] font-semibold">History</div>
-                    <button
-                      type="button"
-                      onClick={() => setShowEnvHistory(!showEnvHistory)}
-                      className="text-[10px] text-[color:var(--color-primary-500)] hover:underline"
-                    >
-                      {showEnvHistory ? 'Hide audit trail' : 'View audit trail'}
-                    </button>
-                  </div>
-                  {showEnvHistory && (
-                    <AuditTrail
-                      entries={(envHistoryQ.data?.data?.history || []).map((h) => ({
-                        timestamp: h.createdAt,
-                        action: h.eventType,
-                        userName: h.userName,
-                        userEmail: h.userEmail,
-                        description: h.description,
-                        oldValue: h.oldValue,
-                        newValue: h.newValue,
-                        metadata: h.metadata,
-                      } as AuditEntry))}
-                      maxHeight="150px"
-                      emptyMessage={envHistoryQ.isLoading ? 'Loading...' : 'No audit history yet.'}
-                    />
-                  )}
-                </div>
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                  onClick={() => setEditingEnv(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={updateEnvironment.isPending}
-                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                  onClick={() => {
-                    if (!editingEnv) return
-                    updateEnvironment.mutate({
-                      _id: editingEnv._id,
-                      name: editingEnv.name,
-                      environmentType: editingEnv.environmentType,
-                      status: editingEnv.status,
-                      location: editingEnv.location,
-                      notes: editingEnv.notes,
-                    })
-                  }}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit product modal */}
-      {editingProd && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setEditingProd(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,36rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl text-xs">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">Edit installed product</div>
-                  <div className="text-[11px] text-[color:var(--color-text-muted)]">{editingProd.productName}</div>
-                </div>
-              </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Product name</label>
-                  <input
-                    type="text"
-                    defaultValue={editingProd.productName}
-                    onBlur={(e) => setEditingProd({ ...editingProd, productName: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Environment</label>
-                  <select
-                    defaultValue={editingProd.environmentId}
-                    onChange={(e) => setEditingProd({ ...editingProd, environmentId: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  >
-                    {environments.map((env) => (
-                      <option key={env._id} value={env._id}>
-                        {env.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Type</label>
                   <select
-                    defaultValue={editingProd.productType}
-                    onChange={(e) => setEditingProd({ ...editingProd, productType: e.target.value })}
+                    defaultValue={editingEnv.environmentType}
+                    onChange={(e) =>
+                      setEditingEnv({
+                        ...editingEnv,
+                        environmentType: e.target.value,
+                      })
+                    }
                     className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
                   >
-                    <option value="Software">Software</option>
-                    <option value="Hardware">Hardware</option>
-                    <option value="Cloud Service">Cloud Service</option>
-                    <option value="Integration">Integration</option>
-                    <option value="Subscription">Subscription</option>
+                    <option value="Production">Production</option>
+                    <option value="UAT">UAT</option>
+                    <option value="Dev">Dev</option>
+                    <option value="Sandbox">Sandbox</option>
+                    <option value="Retail Store">Retail Store</option>
+                    <option value="Satellite Office">Satellite Office</option>
+                    <option value="Cloud Tenant">Cloud Tenant</option>
                   </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Vendor</label>
-                  <input
-                    type="text"
-                    defaultValue={editingProd.vendor ?? ''}
-                    onBlur={(e) => setEditingProd({ ...editingProd, vendor: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Version</label>
-                  <input
-                    type="text"
-                    defaultValue={editingProd.version ?? ''}
-                    onBlur={(e) => setEditingProd({ ...editingProd, version: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Status</label>
                   <select
-                    defaultValue={editingProd.status}
-                    onChange={(e) => setEditingProd({ ...editingProd, status: e.target.value })}
+                    defaultValue={editingEnv.status}
+                    onChange={(e) =>
+                      setEditingEnv({
+                        ...editingEnv,
+                        status: e.target.value,
+                      })
+                    }
                     className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
                   >
                     <option value="Active">Active</option>
-                    <option value="Needs Upgrade">Needs Upgrade</option>
-                    <option value="Pending Renewal">Pending Renewal</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Planned">Planned</option>
                     <option value="Retired">Retired</option>
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Location</label>
+                <input
+                  type="text"
+                  defaultValue={editingEnv.location ?? ''}
+                  onBlur={(e) => setEditingEnv({ ...editingEnv, location: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Notes</label>
+                <textarea
+                  rows={3}
+                  defaultValue={editingEnv.notes ?? ''}
+                  onBlur={(e) => setEditingEnv({ ...editingEnv, notes: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div className="md:col-span-2 mt-2">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-[11px] font-semibold">History</div>
+                  <button
+                    type="button"
+                    onClick={() => setShowEnvHistory(!showEnvHistory)}
+                    className="text-[10px] text-[color:var(--color-primary-500)] hover:underline"
+                  >
+                    {showEnvHistory ? 'Hide audit trail' : 'View audit trail'}
+                  </button>
+                </div>
+                {showEnvHistory && (
+                  <AuditTrail
+                    entries={(envHistoryQ.data?.data?.history || []).map((h) => ({
+                      timestamp: h.createdAt,
+                      action: h.eventType,
+                      userName: h.userName,
+                      userEmail: h.userEmail,
+                      description: h.description,
+                      oldValue: h.oldValue,
+                      newValue: h.newValue,
+                      metadata: h.metadata,
+                    } as AuditEntry))}
+                    maxHeight="150px"
+                    emptyMessage={envHistoryQ.isLoading ? 'Loading...' : 'No audit history yet.'}
+                  />
+                )}
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                onClick={() => setEditingEnv(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={updateEnvironment.isPending}
+                className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                onClick={() => {
+                  if (!editingEnv) return
+                  updateEnvironment.mutate({
+                    _id: editingEnv._id,
+                    name: editingEnv.name,
+                    environmentType: editingEnv.environmentType,
+                    status: editingEnv.status,
+                    location: editingEnv.location,
+                    notes: editingEnv.notes,
+                  })
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {/* Edit product modal */}
+      <Modal
+        open={!!editingProd}
+        onClose={() => setEditingProd(null)}
+        title="Edit Installed Product"
+        subtitle={editingProd?.productName}
+        width="36rem"
+        showFullscreenToggle={false}
+        className="text-xs"
+      >
+        {editingProd && (
+          <>
+            <div className="grid gap-2 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Product name</label>
+                <input
+                  type="text"
+                  defaultValue={editingProd.productName}
+                  onBlur={(e) => setEditingProd({ ...editingProd, productName: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Environment</label>
+                <select
+                  defaultValue={editingProd.environmentId}
+                  onChange={(e) => setEditingProd({ ...editingProd, environmentId: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  {environments.map((env) => (
+                    <option key={env._id} value={env._id}>
+                      {env.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Type</label>
+                <select
+                  defaultValue={editingProd.productType}
+                  onChange={(e) => setEditingProd({ ...editingProd, productType: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="Software">Software</option>
+                  <option value="Hardware">Hardware</option>
+                  <option value="Cloud Service">Cloud Service</option>
+                  <option value="Integration">Integration</option>
+                  <option value="Subscription">Subscription</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Vendor</label>
+                <input
+                  type="text"
+                  defaultValue={editingProd.vendor ?? ''}
+                  onBlur={(e) => setEditingProd({ ...editingProd, vendor: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Version</label>
+                <input
+                  type="text"
+                  defaultValue={editingProd.version ?? ''}
+                  onBlur={(e) => setEditingProd({ ...editingProd, version: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Status</label>
+                <select
+                  defaultValue={editingProd.status}
+                  onChange={(e) => setEditingProd({ ...editingProd, status: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Needs Upgrade">Needs Upgrade</option>
+                  <option value="Pending Renewal">Pending Renewal</option>
+                  <option value="Retired">Retired</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Support level</label>
+                <select
+                  defaultValue={editingProd.supportLevel ?? 'Standard'}
+                  onChange={(e) => setEditingProd({ ...editingProd, supportLevel: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                >
+                  <option value="Basic">Basic</option>
+                  <option value="Standard">Standard</option>
+                  <option value="Premium">Premium</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Deployment date</label>
+                <input
+                  type="date"
+                  defaultValue={editingProd.deploymentDate ? editingProd.deploymentDate.slice(0, 10) : ''}
+                  onChange={(e) => setEditingProd({ ...editingProd, deploymentDate: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div className="md:col-span-2 mt-2">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-[11px] font-semibold">History</div>
+                  <button
+                    type="button"
+                    onClick={() => setShowProdHistory(!showProdHistory)}
+                    className="text-[10px] text-[color:var(--color-primary-500)] hover:underline"
+                  >
+                    {showProdHistory ? 'Hide audit trail' : 'View audit trail'}
+                  </button>
+                </div>
+                {showProdHistory && (
+                  <AuditTrail
+                    entries={(prodHistoryQ.data?.data?.history || []).map((h) => ({
+                      timestamp: h.createdAt,
+                      action: h.eventType,
+                      userName: h.userName,
+                      userEmail: h.userEmail,
+                      description: h.description,
+                      oldValue: h.oldValue,
+                      newValue: h.newValue,
+                      metadata: h.metadata,
+                    } as AuditEntry))}
+                    maxHeight="150px"
+                    emptyMessage={prodHistoryQ.isLoading ? 'Loading...' : 'No audit history yet.'}
+                  />
+                )}
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                onClick={() => setEditingProd(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={updateProduct.isPending}
+                className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                onClick={() => {
+                  if (!editingProd) return
+                  updateProduct.mutate({
+                    _id: editingProd._id,
+                    productName: editingProd.productName,
+                    environmentId: editingProd.environmentId,
+                    productType: editingProd.productType,
+                    vendor: editingProd.vendor,
+                    version: editingProd.version,
+                    status: editingProd.status,
+                    supportLevel: editingProd.supportLevel,
+                    deploymentDate: editingProd.deploymentDate || undefined,
+                  })
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {/* Licenses modal */}
+      <Modal
+        open={!!licenseProduct}
+        onClose={() => {
+          setLicenseProduct(null)
+          setEditingLicense(null)
+        }}
+        title="Licenses"
+        subtitle={licenseProduct?.productName}
+        width="40rem"
+        className="text-xs"
+        headerActions={
+          licensesQ.isFetching ? (
+            <span className="text-[11px] text-[color:var(--color-text-muted)]">Loading…</span>
+          ) : null
+        }
+      >
+        {licenseProduct && (
+          <>
+            <div className="mb-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold text-[color:var(--color-text)]">
+                  {editingLicense ? 'Edit license' : 'Add license'}
+                </div>
+                {editingLicense && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-[color:var(--color-text-muted)] underline"
+                    onClick={() => {
+                      setEditingLicense(null)
+                      setLicenseType('Subscription')
+                      setLicenseIdentifier('')
+                      setLicenseKey('')
+                      setLicenseCount('1')
+                      setLicenseSeatsAssigned('0')
+                      setLicenseExpiration('')
+                      setLicenseRenewalStatus('Active')
+                      setLicenseCost('')
+                    }}
+                  >
+                    Switch to add new
+                  </button>
+                )}
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
                 <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Support level</label>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Type</label>
                   <select
-                    defaultValue={editingProd.supportLevel ?? 'Standard'}
-                    onChange={(e) => setEditingProd({ ...editingProd, supportLevel: e.target.value })}
+                    value={licenseType}
+                    onChange={(e) => setLicenseType(e.target.value)}
                     className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
                   >
-                    <option value="Basic">Basic</option>
-                    <option value="Standard">Standard</option>
-                    <option value="Premium">Premium</option>
+                    <option value="Subscription">Subscription</option>
+                    <option value="Seat-based">Seat-based</option>
+                    <option value="Device-based">Device-based</option>
+                    <option value="Perpetual">Perpetual</option>
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Deployment date</label>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    License identifier
+                  </label>
                   <input
-                    type="date"
-                    defaultValue={editingProd.deploymentDate ? editingProd.deploymentDate.slice(0, 10) : ''}
-                    onChange={(e) => setEditingProd({ ...editingProd, deploymentDate: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                    type="text"
+                    value={licenseIdentifier}
+                    onChange={(e) => setLicenseIdentifier(e.target.value)}
+                    placeholder="Agreement ID, SKU, etc."
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
                   />
                 </div>
-                <div className="md:col-span-2 mt-2">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="text-[11px] font-semibold">History</div>
-                    <button
-                      type="button"
-                      onClick={() => setShowProdHistory(!showProdHistory)}
-                      className="text-[10px] text-[color:var(--color-primary-500)] hover:underline"
-                    >
-                      {showProdHistory ? 'Hide audit trail' : 'View audit trail'}
-                    </button>
-                  </div>
-                  {showProdHistory && (
-                    <AuditTrail
-                      entries={(prodHistoryQ.data?.data?.history || []).map((h) => ({
-                        timestamp: h.createdAt,
-                        action: h.eventType,
-                        userName: h.userName,
-                        userEmail: h.userEmail,
-                        description: h.description,
-                        oldValue: h.oldValue,
-                        newValue: h.newValue,
-                        metadata: h.metadata,
-                      } as AuditEntry))}
-                      maxHeight="150px"
-                      emptyMessage={prodHistoryQ.isLoading ? 'Loading...' : 'No audit history yet.'}
-                    />
-                  )}
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">License key</label>
+                  <input
+                    type="text"
+                    value={licenseKey}
+                    onChange={(e) => setLicenseKey(e.target.value)}
+                    placeholder="XXXX-XXXX-XXXX-XXXX"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Licenses purchased
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={licenseCount}
+                    onChange={(e) => setLicenseCount(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Seats assigned
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={licenseSeatsAssigned}
+                    onChange={(e) => setLicenseSeatsAssigned(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Expiration</label>
+                  <input
+                    type="date"
+                    value={licenseExpiration}
+                    onChange={(e) => setLicenseExpiration(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Renewal status
+                  </label>
+                  <select
+                    value={licenseRenewalStatus}
+                    onChange={(e) => setLicenseRenewalStatus(e.target.value)}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Pending Renewal">Pending Renewal</option>
+                    <option value="Expired">Expired</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Cost (optional)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={licenseCost}
+                    onChange={(e) => setLicenseCost(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+                  />
                 </div>
               </div>
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                  onClick={() => setEditingProd(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={updateProduct.isPending}
+                  disabled={createLicense.isPending || updateLicense.isPending}
                   className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
                   onClick={() => {
-                    if (!editingProd) return
-                    updateProduct.mutate({
-                      _id: editingProd._id,
-                      productName: editingProd.productName,
-                      environmentId: editingProd.environmentId,
-                      productType: editingProd.productType,
-                      vendor: editingProd.vendor,
-                      version: editingProd.version,
-                      status: editingProd.status,
-                      supportLevel: editingProd.supportLevel,
-                      deploymentDate: editingProd.deploymentDate || undefined,
-                    })
+                    if (!licenseCount || Number(licenseCount) <= 0) {
+                      toast.showToast('License count must be at least 1.', 'error')
+                      return
+                    }
+                    if (editingLicense) updateLicense.mutate()
+                    else createLicense.mutate()
                   }}
                 >
-                  Save
+                  {editingLicense ? 'Save changes' : 'Add license'}
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Licenses modal */}
-      {licenseProduct && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => {
-              setLicenseProduct(null)
-              setEditingLicense(null)
-            }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,40rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl text-xs">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">Licenses</div>
-                  <div className="text-[11px] text-[color:var(--color-text-muted)]">{licenseProduct.productName}</div>
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold text-[color:var(--color-text)]">Existing licenses</div>
+              {licenses.length === 0 ? (
+                <div className="text-[11px] text-[color:var(--color-text-muted)]">
+                  No licenses recorded for this product yet.
                 </div>
-                {licensesQ.isFetching && (
-                  <span className="text-[11px] text-[color:var(--color-text-muted)]">Loading…</span>
-                )}
-              </div>
-
-              <div className="mb-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-semibold text-[color:var(--color-text)]">
-                    {editingLicense ? 'Edit license' : 'Add license'}
-                  </div>
-                  {editingLicense && (
-                    <button
-                      type="button"
-                      className="text-[10px] text-[color:var(--color-text-muted)] underline"
-                      onClick={() => {
-                        setEditingLicense(null)
-                        setLicenseType('Subscription')
-                        setLicenseIdentifier('')
-                        setLicenseKey('')
-                        setLicenseCount('1')
-                        setLicenseSeatsAssigned('0')
-                        setLicenseExpiration('')
-                        setLicenseRenewalStatus('Active')
-                        setLicenseCost('')
-                      }}
-                    >
-                      Switch to add new
-                    </button>
-                  )}
-                </div>
-                <div className="grid gap-2 md:grid-cols-3">
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Type</label>
-                    <select
-                      value={licenseType}
-                      onChange={(e) => setLicenseType(e.target.value)}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    >
-                      <option value="Subscription">Subscription</option>
-                      <option value="Seat-based">Seat-based</option>
-                      <option value="Device-based">Device-based</option>
-                      <option value="Perpetual">Perpetual</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      License identifier
-                    </label>
-                    <input
-                      type="text"
-                      value={licenseIdentifier}
-                      onChange={(e) => setLicenseIdentifier(e.target.value)}
-                      placeholder="Agreement ID, SKU, etc."
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">License key</label>
-                    <input
-                      type="text"
-                      value={licenseKey}
-                      onChange={(e) => setLicenseKey(e.target.value)}
-                      placeholder="XXXX-XXXX-XXXX-XXXX"
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      Licenses purchased
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={licenseCount}
-                      onChange={(e) => setLicenseCount(e.target.value)}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      Seats assigned
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={licenseSeatsAssigned}
-                      onChange={(e) => setLicenseSeatsAssigned(e.target.value)}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Expiration</label>
-                    <input
-                      type="date"
-                      value={licenseExpiration}
-                      onChange={(e) => setLicenseExpiration(e.target.value)}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      Renewal status
-                    </label>
-                    <select
-                      value={licenseRenewalStatus}
-                      onChange={(e) => setLicenseRenewalStatus(e.target.value)}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Pending Renewal">Pending Renewal</option>
-                      <option value="Expired">Expired</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">Cost (optional)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={licenseCost}
-                      onChange={(e) => setLicenseCost(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    disabled={createLicense.isPending || updateLicense.isPending}
-                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                    onClick={() => {
-                      if (!licenseCount || Number(licenseCount) <= 0) {
-                        toast.showToast('License count must be at least 1.', 'error')
-                        return
-                      }
-                      if (editingLicense) updateLicense.mutate()
-                      else createLicense.mutate()
-                    }}
-                  >
-                    {editingLicense ? 'Save changes' : 'Add license'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-[11px] font-semibold text-[color:var(--color-text)]">Existing licenses</div>
-                {licenses.length === 0 ? (
-                  <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                    No licenses recorded for this product yet.
-                  </div>
-                ) : (
-                  <ul className="space-y-2">
-                    {licenses.map((lic) => {
-                      const overAllocated = lic.seatsAssigned > lic.licenseCount && lic.licenseCount > 0
-                      const expLabel = lic.expirationDate ? formatDateTime(lic.expirationDate) : 'No expiration'
-                      return (
-                        <li
-                          key={lic._id}
-                          className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-[10px] uppercase">
-                                  {lic.licenseType}
-                                </span>
-                                <span className="text-[11px] font-medium">
-                                  {lic.licenseIdentifier || lic.licenseKey || 'License'}
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap gap-3 text-[10px] text-[color:var(--color-text-muted)]">
-                                <span>
-                                  Count: {lic.licenseCount} • Seats assigned:{' '}
-                                  <span className={overAllocated ? 'text-[color:var(--color-danger)] font-semibold' : ''}>
-                                    {lic.seatsAssigned}
-                                  </span>
-                                </span>
-                                <span>Expires: {expLabel}</span>
-                                <span>Status: {lic.renewalStatus}</span>
-                                {typeof lic.cost === 'number' && <span>Cost: {lic.cost.toFixed(2)}</span>}
-                              </div>
+              ) : (
+                <ul className="space-y-2">
+                  {licenses.map((lic) => {
+                    const overAllocated = lic.seatsAssigned > lic.licenseCount && lic.licenseCount > 0
+                    const expLabel = lic.expirationDate ? formatDateTime(lic.expirationDate) : 'No expiration'
+                    return (
+                      <li
+                        key={lic._id}
+                        className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full bg-[color:var(--color-muted)] px-2 py-0.5 text-[10px] uppercase">
+                                {lic.licenseType}
+                              </span>
+                              <span className="text-[11px] font-medium">
+                                {lic.licenseIdentifier || lic.licenseKey || 'License'}
+                              </span>
                             </div>
-                            <button
-                              type="button"
-                              className="h-7 rounded border border-[color:var(--color-border)] px-2 py-0 text-[10px] hover:bg-[color:var(--color-muted)]"
-                              onClick={() => {
-                                setEditingLicense(lic)
-                                setLicenseType(lic.licenseType)
-                                setLicenseIdentifier(lic.licenseIdentifier ?? '')
-                                setLicenseKey(lic.licenseKey ?? '')
-                                setLicenseCount(String(lic.licenseCount ?? 1))
-                                setLicenseSeatsAssigned(String(lic.seatsAssigned ?? 0))
-                                setLicenseExpiration(lic.expirationDate ? lic.expirationDate.slice(0, 10) : '')
-                                setLicenseRenewalStatus(lic.renewalStatus)
-                                setLicenseCost(
-                                  typeof lic.cost === 'number' && Number.isFinite(lic.cost)
-                                    ? String(lic.cost)
-                                    : '',
-                                )
-                              }}
-                            >
-                              Edit
-                            </button>
+                            <div className="flex flex-wrap gap-3 text-[10px] text-[color:var(--color-text-muted)]">
+                              <span>
+                                Count: {lic.licenseCount} • Seats assigned:{' '}
+                                <span className={overAllocated ? 'text-[color:var(--color-danger)] font-semibold' : ''}>
+                                  {lic.seatsAssigned}
+                                </span>
+                              </span>
+                              <span>Expires: {expLabel}</span>
+                              <span>Status: {lic.renewalStatus}</span>
+                              {typeof lic.cost === 'number' && <span>Cost: {lic.cost.toFixed(2)}</span>}
+                            </div>
                           </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                  onClick={() => {
-                    setLicenseProduct(null)
-                    setEditingLicense(null)
-                  }}
-                >
-                  Close
-                </button>
-              </div>
+                          <button
+                            type="button"
+                            className="h-7 rounded border border-[color:var(--color-border)] px-2 py-0 text-[10px] hover:bg-[color:var(--color-muted)]"
+                            onClick={() => {
+                              setEditingLicense(lic)
+                              setLicenseType(lic.licenseType)
+                              setLicenseIdentifier(lic.licenseIdentifier ?? '')
+                              setLicenseKey(lic.licenseKey ?? '')
+                              setLicenseCount(String(lic.licenseCount ?? 1))
+                              setLicenseSeatsAssigned(String(lic.seatsAssigned ?? 0))
+                              setLicenseExpiration(lic.expirationDate ? lic.expirationDate.slice(0, 10) : '')
+                              setLicenseRenewalStatus(lic.renewalStatus)
+                              setLicenseCost(
+                                typeof lic.cost === 'number' && Number.isFinite(lic.cost)
+                                  ? String(lic.cost)
+                                  : '',
+                              )
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   )
 }

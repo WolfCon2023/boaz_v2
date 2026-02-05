@@ -5,6 +5,7 @@ import { CRMNav } from '@/components/CRMNav'
 import { http } from '@/lib/http'
 import { formatDateOnly } from '@/lib/dateFormat'
 import { useToast } from '@/components/Toast'
+import { Modal } from '@/components/Modal'
 
 type Customer = {
   id: string
@@ -508,135 +509,125 @@ export default function CRMAssetsProductsReport() {
         )}
       </section>
 
-      {editingProduct && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => {
-              if (updateProduct.isPending) return
-              setEditingProduct(null)
-            }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,34rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-xs shadow-2xl">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">Edit installed product</div>
-                  <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                    {editingProduct.productName}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-2 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Product name
-                  </label>
-                  <input
-                    type="text"
-                    value={editProductName}
-                    onChange={(e) => setEditProductName(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Type
-                  </label>
-                  <select
-                    value={editProductType}
-                    onChange={(e) => setEditProductType(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  >
-                    <option value="Software">Software</option>
-                    <option value="Hardware">Hardware</option>
-                    <option value="Cloud Service">Cloud Service</option>
-                    <option value="Integration">Integration</option>
-                    <option value="Subscription">Subscription</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Vendor
-                  </label>
-                  <input
-                    type="text"
-                    value={editVendor}
-                    onChange={(e) => setEditVendor(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Status
-                  </label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Needs Upgrade">Needs Upgrade</option>
-                    <option value="Pending Renewal">Pending Renewal</option>
-                    <option value="Retired">Retired</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Support level
-                  </label>
-                  <select
-                    value={editSupportLevel}
-                    onChange={(e) => setEditSupportLevel(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  >
-                    <option value="Basic">Basic</option>
-                    <option value="Standard">Standard</option>
-                    <option value="Premium">Premium</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Deployment date
-                  </label>
-                  <input
-                    type="date"
-                    value={editDeploymentDate}
-                    onChange={(e) => setEditDeploymentDate(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                  disabled={updateProduct.isPending}
-                  onClick={() => setEditingProduct(null)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={updateProduct.isPending || !editProductName.trim()}
-                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                  onClick={() => {
-                    if (!editProductName.trim()) {
-                      toast.showToast('Product name is required.', 'error')
-                      return
-                    }
-                    updateProduct.mutate()
-                  }}
-                >
-                  Save changes
-                </button>
-              </div>
+      <Modal
+        open={!!editingProduct}
+        onClose={() => {
+          if (updateProduct.isPending) return
+          setEditingProduct(null)
+        }}
+        title="Edit installed product"
+        subtitle={editingProduct?.productName}
+        width="34rem"
+        showFullscreenToggle={false}
+      >
+        <div className="text-xs">
+          <div className="grid gap-2 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Product name
+              </label>
+              <input
+                type="text"
+                value={editProductName}
+                onChange={(e) => setEditProductName(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Type
+              </label>
+              <select
+                value={editProductType}
+                onChange={(e) => setEditProductType(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+              >
+                <option value="Software">Software</option>
+                <option value="Hardware">Hardware</option>
+                <option value="Cloud Service">Cloud Service</option>
+                <option value="Integration">Integration</option>
+                <option value="Subscription">Subscription</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Vendor
+              </label>
+              <input
+                type="text"
+                value={editVendor}
+                onChange={(e) => setEditVendor(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Status
+              </label>
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+              >
+                <option value="Active">Active</option>
+                <option value="Needs Upgrade">Needs Upgrade</option>
+                <option value="Pending Renewal">Pending Renewal</option>
+                <option value="Retired">Retired</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Support level
+              </label>
+              <select
+                value={editSupportLevel}
+                onChange={(e) => setEditSupportLevel(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+              >
+                <option value="Basic">Basic</option>
+                <option value="Standard">Standard</option>
+                <option value="Premium">Premium</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                Deployment date
+              </label>
+              <input
+                type="date"
+                value={editDeploymentDate}
+                onChange={(e) => setEditDeploymentDate(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-2 py-1.5 text-xs"
+              />
             </div>
           </div>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+              disabled={updateProduct.isPending}
+              onClick={() => setEditingProduct(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={updateProduct.isPending || !editProductName.trim()}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+              onClick={() => {
+                if (!editProductName.trim()) {
+                  toast.showToast('Product name is required.', 'error')
+                  return
+                }
+                updateProduct.mutate()
+              }}
+            >
+              Save changes
+            </button>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

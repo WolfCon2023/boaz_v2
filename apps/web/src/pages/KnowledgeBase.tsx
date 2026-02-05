@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { CRMNav } from '@/components/CRMNav'
+import { Modal } from '@/components/Modal'
 import { http, apiBaseURL } from '@/lib/http'
 
 type Article = { _id: string; title?: string; body?: string; tags?: string[]; category?: string; updatedAt?: string; attachments?: { _id: string; filename: string; contentType?: string; size?: number }[] }
@@ -195,70 +196,69 @@ export default function KnowledgeBase() {
         </div>
       </div>
 
-      {editing && (
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 text-base font-semibold">Edit article</div>
-              <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, title: String(fd.get('title')||'')||undefined, body: String(fd.get('body')||'')||undefined, category: normalizeLabel(fd.get('category')) || undefined, tags: String(fd.get('tags')||'').split(',').map(s=>s.trim()).filter(Boolean) }; update.mutate(payload); setEditing(null) }}>
-                <input name="title" defaultValue={editing.title ?? ''} placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <input list="kb-category-options" name="category" defaultValue={editing.category ?? 'Knowledge Sharing'} placeholder="Category" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <input name="tags" defaultValue={(editing.tags ?? []).join(', ')} placeholder="Tags" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-                <textarea name="body" defaultValue={editing.body ?? ''} placeholder="Body" className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit article"
+        width="48rem"
+      >
+        {editing && (
+          <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const payload: any = { _id: editing._id, title: String(fd.get('title')||'')||undefined, body: String(fd.get('body')||'')||undefined, category: normalizeLabel(fd.get('category')) || undefined, tags: String(fd.get('tags')||'').split(',').map(s=>s.trim()).filter(Boolean) }; update.mutate(payload); setEditing(null) }}>
+            <input name="title" defaultValue={editing.title ?? ''} placeholder="Title" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            <input list="kb-category-options" name="category" defaultValue={editing.category ?? 'Knowledge Sharing'} placeholder="Category" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            <input name="tags" defaultValue={(editing.tags ?? []).join(', ')} placeholder="Tags" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            <textarea name="body" defaultValue={editing.body ?? ''} placeholder="Body" className="sm:col-span-2 h-40 rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"></textarea>
 
-                <div className="sm:col-span-2 mt-1">
-                  <div className="mb-1 text-sm font-semibold">Attachments</div>
-                  <div className="space-y-2 rounded-lg border border-[color:var(--color-border)] p-2">
-                    {(editing.attachments ?? []).length === 0 && (
-                      <div className="text-xs text-[color:var(--color-text-muted)]">No attachments.</div>
-                    )}
-                    {(editing.attachments ?? []).map((att) => {
-                      const name = att.filename || 'file'
-                      const lower = name.toLowerCase()
-                      const ext = lower.split('.').pop() || ''
-                      const isPdf = ext === 'pdf'
-                      const isImage = ['png','jpg','jpeg','gif','webp'].includes(ext)
-                      const isDoc = ['doc','docx'].includes(ext)
-                      const isXls = ['xls','xlsx','csv'].includes(ext)
-                      const icon = isPdf ? '📄' : isImage ? '🖼️' : isDoc ? '📝' : isXls ? '📊' : '📎'
-                      const viewHref = `${apiBaseURL}/api/crm/support/kb/${editing._id}/attachments/${att._id}`
-                      const downloadHref = `${viewHref}?download=1`
-                      return (
-                        <div key={att._id} className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="select-none">{icon}</span>
-                            <a href={viewHref} target="_blank" rel="noopener noreferrer" className="truncate text-[color:var(--color-primary-600)] hover:underline">
-                              {name}
-                            </a>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {typeof att.size === 'number' && <span className="text-xs text-[color:var(--color-text-muted)]">{Math.ceil(att.size / 1024)} KB</span>}
-                            <a href={downloadHref} className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" target="_blank" rel="noopener noreferrer">Download</a>
-                            <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={async () => {
-                              if (!confirm('Delete attachment?')) return
-                              await removeAttachment.mutateAsync({ articleId: editing._id, attId: att._id })
-                              setEditing((prev) => prev ? { ...prev, attachments: (prev.attachments ?? []).filter((a) => a._id !== att._id) } : prev)
-                            }}>Delete</button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                    <UploadAttachmentRow articleId={editing._id} onUploaded={(a) => setEditing((prev) => prev ? { ...prev, attachments: [...(prev.attachments ?? []), a] } : prev)} uploadAttachment={uploadAttachment} />
-                  </div>
-                </div>
-                <div className="col-span-full mt-2 flex items-center justify-between gap-2">
-                  <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-danger-600)] hover:bg-[color:var(--color-muted)]" onClick={async () => { if (!editing?._id) return; if (!confirm('Delete this article?')) return; await remove.mutateAsync(editing._id); setEditing(null) }}>Delete</button>
-                  <div className="flex items-center gap-2">
-                    <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
-                    <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
-                  </div>
-                </div>
-              </form>
+            <div className="sm:col-span-2 mt-1">
+              <div className="mb-1 text-sm font-semibold">Attachments</div>
+              <div className="space-y-2 rounded-lg border border-[color:var(--color-border)] p-2">
+                {(editing.attachments ?? []).length === 0 && (
+                  <div className="text-xs text-[color:var(--color-text-muted)]">No attachments.</div>
+                )}
+                {(editing.attachments ?? []).map((att) => {
+                  const name = att.filename || 'file'
+                  const lower = name.toLowerCase()
+                  const ext = lower.split('.').pop() || ''
+                  const isPdf = ext === 'pdf'
+                  const isImage = ['png','jpg','jpeg','gif','webp'].includes(ext)
+                  const isDoc = ['doc','docx'].includes(ext)
+                  const isXls = ['xls','xlsx','csv'].includes(ext)
+                  const icon = isPdf ? '📄' : isImage ? '🖼️' : isDoc ? '📝' : isXls ? '📊' : '📎'
+                  const viewHref = `${apiBaseURL}/api/crm/support/kb/${editing._id}/attachments/${att._id}`
+                  const downloadHref = `${viewHref}?download=1`
+                  return (
+                    <div key={att._id} className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="select-none">{icon}</span>
+                        <a href={viewHref} target="_blank" rel="noopener noreferrer" className="truncate text-[color:var(--color-primary-600)] hover:underline">
+                          {name}
+                        </a>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {typeof att.size === 'number' && <span className="text-xs text-[color:var(--color-text-muted)]">{Math.ceil(att.size / 1024)} KB</span>}
+                        <a href={downloadHref} className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" target="_blank" rel="noopener noreferrer">Download</a>
+                        <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-2 py-1 text-xs hover:bg-[color:var(--color-muted)]" onClick={async () => {
+                          if (!confirm('Delete attachment?')) return
+                          await removeAttachment.mutateAsync({ articleId: editing._id, attId: att._id })
+                          setEditing((prev) => prev ? { ...prev, attachments: (prev.attachments ?? []).filter((a) => a._id !== att._id) } : prev)
+                        }}>Delete</button>
+                      </div>
+                    </div>
+                  )
+                })}
+                <UploadAttachmentRow articleId={editing._id} onUploaded={(a) => setEditing((prev) => prev ? { ...prev, attachments: [...(prev.attachments ?? []), a] } : prev)} uploadAttachment={uploadAttachment} />
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+            <div className="col-span-full mt-2 flex items-center justify-between gap-2">
+              <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm text-[color:var(--color-danger-600)] hover:bg-[color:var(--color-muted)]" onClick={async () => { if (!editing?._id) return; if (!confirm('Delete this article?')) return; await remove.mutateAsync(editing._id); setEditing(null) }}>Delete</button>
+              <div className="flex items-center gap-2">
+                <button type="button" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setEditing(null)}>Cancel</button>
+                <button type="submit" className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">Save</button>
+              </div>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   )
 }

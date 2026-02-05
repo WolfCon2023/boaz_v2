@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as React from 'react'
-import { createPortal } from 'react-dom'
 import { useSearchParams, Link } from 'react-router-dom'
 import { http } from '@/lib/http'
 import { CRMNav } from '@/components/CRMNav'
@@ -11,6 +10,7 @@ import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
 import { Plus, X, Package, Send } from 'lucide-react'
 import { DocumentsList } from '@/components/DocumentsList'
+import { Modal } from '@/components/Modal'
 
 type Quote = {
   _id: string
@@ -713,16 +713,6 @@ export default function CRMQuotes() {
       } 
     },
   })
-  const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
-  React.useEffect(() => {
-    if (!editing) return
-    const el = document.createElement('div')
-    el.setAttribute('data-overlay', 'quote-editor')
-    Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' })
-    document.body.appendChild(el)
-    setPortalEl(el)
-    return () => { try { document.body.removeChild(el) } catch {}; setPortalEl(null) }
-  }, [editing])
 
   // Check if user has manager role for approval queue link
   const { data: rolesData } = useQuery<{ roles: Array<{ name: string; permissions: string[] }>; isAdmin?: boolean }>({
@@ -922,13 +912,9 @@ export default function CRMQuotes() {
         </div>
       </div>
 
-      {editing && portalEl && createPortal(
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,64rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3 text-base font-semibold">Edit quote</div>
-              <form
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit quote" width="64rem">
+        {editing && (
+          <form
                 className="grid gap-2 sm:grid-cols-2"
                 onSubmit={(e) => {
                   e.preventDefault()
@@ -1689,9 +1675,8 @@ export default function CRMQuotes() {
                   />
                 </div>
               </form>
-            </div>
-          </div>
-        </div>, portalEl)}
+        )}
+      </Modal>
       {showSaveViewDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowSaveViewDialog(false)}>
           <div className="absolute inset-0 bg-black/60" />

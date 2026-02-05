@@ -4,11 +4,11 @@
  * Manage external customer portal users
  */
 
-import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '../lib/http'
 import { useToast } from '../components/Toast'
+import { Modal } from '@/components/Modal'
 import { Users, Plus, Mail, CheckCircle, XCircle, RefreshCw, Trash2, ShieldCheck, Edit } from 'lucide-react'
 
 type CustomerPortalUser = {
@@ -34,37 +34,6 @@ export default function AdminCustomerPortalUsers() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingUser, setEditingUser] = useState<CustomerPortalUser | null>(null)
-  
-  const [createPortalEl, setCreatePortalEl] = useState<HTMLElement | null>(null)
-  const [editPortalEl, setEditPortalEl] = useState<HTMLElement | null>(null)
-
-  // Portal setup for create modal
-  useEffect(() => {
-    if (!showCreateModal) return
-    const el = document.createElement('div')
-    el.setAttribute('data-overlay', 'create-customer-user')
-    Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' })
-    document.body.appendChild(el)
-    setCreatePortalEl(el)
-    return () => {
-      try { document.body.removeChild(el) } catch {}
-      setCreatePortalEl(null)
-    }
-  }, [showCreateModal])
-
-  // Portal setup for edit modal
-  useEffect(() => {
-    if (!showEditModal || !editingUser) return
-    const el = document.createElement('div')
-    el.setAttribute('data-overlay', 'edit-customer-user')
-    Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' })
-    document.body.appendChild(el)
-    setEditPortalEl(el)
-    return () => {
-      try { document.body.removeChild(el) } catch {}
-      setEditPortalEl(null)
-    }
-  }, [showEditModal, editingUser])
   
   // Create form
   const [newEmail, setNewEmail] = useState('')
@@ -476,232 +445,224 @@ export default function AdminCustomerPortalUsers() {
     </div>
 
       {/* Create User Modal */}
-      {showCreateModal && createPortalEl && createPortal(
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowCreateModal(false)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-              <div className="mb-4 text-lg font-semibold text-[color:var(--color-text)]">Create Customer User</div>
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create Customer User"
+        width="48rem"
+        showFullscreenToggle={false}
+      >
+        <form onSubmit={handleCreateUser} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Email *</span>
+              <input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                required
+              />
+            </label>
 
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Email *</span>
-                  <input
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    required
-                  />
-                </label>
-
-                <label className="block text-sm">
-                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Full Name *</span>
-                  <input
-                    type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    required
-                  />
-                </label>
-              </div>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-[color:var(--color-text-muted)]">Password * (min. 8 characters)</span>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  minLength={8}
-                  required
-                />
-              </label>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Company</span>
-                  <input
-                    type="text"
-                    value={newCompany}
-                    onChange={(e) => setNewCompany(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  />
-                </label>
-
-                <label className="block text-sm">
-                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Phone</span>
-                  <input
-                    type="tel"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  />
-                </label>
-              </div>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-[color:var(--color-text-muted)]">Link to CRM Account (optional)</span>
-                <select
-                  value={newAccountId}
-                  onChange={(e) => setNewAccountId(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                >
-                  <option value="">No account (customer can register independently)</option>
-                  {accountsQ.isLoading && <option value="">Loading accounts...</option>}
-                  {accountsQ.data?.map((account) => (
-                    <option key={account._id} value={account._id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-                <span className="mt-1 block text-xs text-[color:var(--color-text-muted)]">
-                  Link this user to an existing CRM account for invoice/quote/ticket access
-                </span>
-              </label>
-
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={sendVerificationEmail}
-                  onChange={(e) => setSendVerificationEmail(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                <span className="text-[color:var(--color-text-muted)]">
-                  Send verification email (uncheck to auto-verify)
-                </span>
-              </label>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createUserMutation.isPending}
-                  className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                >
-                  {createUserMutation.isPending ? 'Creating...' : 'Create User'}
-                </button>
-              </div>
-            </form>
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Full Name *</span>
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                required
+              />
+            </label>
           </div>
-        </div>
-        </div>,
-        createPortalEl
-      )}
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-[color:var(--color-text-muted)]">Password * (min. 8 characters)</span>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              minLength={8}
+              required
+            />
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Company</span>
+              <input
+                type="text"
+                value={newCompany}
+                onChange={(e) => setNewCompany(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Phone</span>
+              <input
+                type="tel"
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-[color:var(--color-text-muted)]">Link to CRM Account (optional)</span>
+            <select
+              value={newAccountId}
+              onChange={(e) => setNewAccountId(e.target.value)}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="">No account (customer can register independently)</option>
+              {accountsQ.isLoading && <option value="">Loading accounts...</option>}
+              {accountsQ.data?.map((account) => (
+                <option key={account._id} value={account._id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-[color:var(--color-text-muted)]">
+              Link this user to an existing CRM account for invoice/quote/ticket access
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={sendVerificationEmail}
+              onChange={(e) => setSendVerificationEmail(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="text-[color:var(--color-text-muted)]">
+              Send verification email (uncheck to auto-verify)
+            </span>
+          </label>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              className="flex-1 rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={createUserMutation.isPending}
+              className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+            >
+              {createUserMutation.isPending ? 'Creating...' : 'Create User'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Edit User Modal */}
-      {showEditModal && editingUser && editPortalEl && createPortal(
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div className="absolute inset-0 bg-black/60" onClick={() => {
-            setShowEditModal(false)
-            setEditingUser(null)
-          }} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-              <div className="mb-4 text-lg font-semibold text-[color:var(--color-text)]">Edit Customer User</div>
+      <Modal
+        open={showEditModal && !!editingUser}
+        onClose={() => {
+          setShowEditModal(false)
+          setEditingUser(null)
+        }}
+        title="Edit Customer User"
+        width="48rem"
+        showFullscreenToggle={false}
+      >
+        <form onSubmit={handleEditUser} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Email</span>
+              <input
+                type="email"
+                value={editEmail}
+                disabled
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-3 py-2 text-sm text-[color:var(--color-text-muted)] cursor-not-allowed"
+              />
+              <span className="mt-1 block text-xs text-[color:var(--color-text-muted)]">
+                Email cannot be changed
+              </span>
+            </label>
 
-            <form onSubmit={handleEditUser} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Email</span>
-                  <input
-                    type="email"
-                    value={editEmail}
-                    disabled
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-3 py-2 text-sm text-[color:var(--color-text-muted)] cursor-not-allowed"
-                  />
-                  <span className="mt-1 block text-xs text-[color:var(--color-text-muted)]">
-                    Email cannot be changed
-                  </span>
-                </label>
-
-                <label className="block text-sm">
-                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Full Name *</span>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                    required
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Company</span>
-                  <input
-                    type="text"
-                    value={editCompany}
-                    onChange={(e) => setEditCompany(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  />
-                </label>
-
-                <label className="block text-sm">
-                  <span className="mb-1 block text-[color:var(--color-text-muted)]">Phone</span>
-                  <input
-                    type="tel"
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
-                  />
-                </label>
-              </div>
-
-              <label className="block text-sm">
-                <span className="mb-1 block text-[color:var(--color-text-muted)]">Link to CRM Account</span>
-                <select
-                  value={editAccountId}
-                  onChange={(e) => setEditAccountId(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
-                >
-                  <option value="">No account (customer can access independently)</option>
-                  {accountsQ.isLoading && <option value="">Loading accounts...</option>}
-                  {accountsQ.data?.map((account) => (
-                    <option key={account._id} value={account._id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-                <span className="mt-1 block text-xs text-[color:var(--color-text-muted)]">
-                  Link this user to a CRM account for invoice/quote/ticket access
-                </span>
-              </label>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditModal(false)
-                    setEditingUser(null)
-                  }}
-                  className="flex-1 rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={editUserMutation.isPending}
-                  className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                >
-                  {editUserMutation.isPending ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </form>
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Full Name *</span>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+                required
+              />
+            </label>
           </div>
-        </div>
-        </div>,
-        editPortalEl
-      )}
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Company</span>
+              <input
+                type="text"
+                value={editCompany}
+                onChange={(e) => setEditCompany(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              />
+            </label>
+
+            <label className="block text-sm">
+              <span className="mb-1 block text-[color:var(--color-text-muted)]">Phone</span>
+              <input
+                type="tel"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-[color:var(--color-text-muted)]">Link to CRM Account</span>
+            <select
+              value={editAccountId}
+              onChange={(e) => setEditAccountId(e.target.value)}
+              className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm text-[color:var(--color-text)]"
+            >
+              <option value="">No account (customer can access independently)</option>
+              {accountsQ.isLoading && <option value="">Loading accounts...</option>}
+              {accountsQ.data?.map((account) => (
+                <option key={account._id} value={account._id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-[color:var(--color-text-muted)]">
+              Link this user to a CRM account for invoice/quote/ticket access
+            </span>
+          </label>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShowEditModal(false)
+                setEditingUser(null)
+              }}
+              className="flex-1 rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm text-[color:var(--color-text)] hover:bg-[color:var(--color-muted)]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={editUserMutation.isPending}
+              className="flex-1 rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+            >
+              {editUserMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </>
   )
 }

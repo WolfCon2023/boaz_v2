@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { FinNav } from '@/components/FinNav'
 import { FinHubHelpButton } from '@/components/FinHubHelpButton'
+import { Modal } from '@/components/Modal'
 
 // Types
 type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense'
@@ -1247,10 +1248,13 @@ export default function FinancialIntelligence() {
             </div>
 
             {/* New Account Modal */}
-            {showNewAccount && (
-              <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60">
-                <div className="w-[min(90vw,32rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-                  <h2 className="mb-4 text-lg font-semibold">New Account</h2>
+            <Modal
+              open={showNewAccount}
+              onClose={() => setShowNewAccount(false)}
+              title="New Account"
+              width="32rem"
+              showFullscreenToggle={false}
+            >
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -1330,9 +1334,7 @@ export default function FinancialIntelligence() {
                       {createAccountMutation.isPending ? 'Creating...' : 'Create Account'}
                     </button>
                   </div>
-                </div>
-              </div>
-            )}
+            </Modal>
           </div>
         )}
 
@@ -1410,10 +1412,13 @@ export default function FinancialIntelligence() {
             )}
 
             {/* New Period Modal */}
-            {showNewPeriod && (
-              <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60">
-                <div className="w-[min(90vw,24rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-                  <h2 className="mb-4 text-lg font-semibold">Generate Fiscal Year</h2>
+            <Modal
+              open={showNewPeriod}
+              onClose={() => setShowNewPeriod(false)}
+              title="Generate Fiscal Year"
+              width="24rem"
+              showFullscreenToggle={false}
+            >
                   <p className="mb-4 text-sm text-[color:var(--color-text-muted)]">
                     This will create 12 monthly accounting periods for the selected fiscal year.
                   </p>
@@ -1446,9 +1451,7 @@ export default function FinancialIntelligence() {
                       {generatePeriodsMutation.isPending ? 'Generating...' : 'Generate Periods'}
                     </button>
                   </div>
-                </div>
-              </div>
-            )}
+            </Modal>
           </div>
         )}
 
@@ -1529,10 +1532,12 @@ export default function FinancialIntelligence() {
             </div>
 
             {/* New Entry Modal */}
-            {showNewEntry && (
-              <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60 overflow-y-auto py-8">
-                <div className="w-[min(90vw,48rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-                  <h2 className="mb-4 text-lg font-semibold">New Journal Entry</h2>
+            <Modal
+              open={showNewEntry}
+              onClose={() => setShowNewEntry(false)}
+              title="New Journal Entry"
+              width="48rem"
+            >
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -1677,9 +1682,7 @@ export default function FinancialIntelligence() {
                       Error: {(createEntryMutation.error as any)?.response?.data?.error || 'Failed to create entry'}
                     </div>
                   )}
-                </div>
-              </div>
-            )}
+            </Modal>
           </div>
         )}
 
@@ -1816,10 +1819,12 @@ export default function FinancialIntelligence() {
             </div>
 
             {/* New Expense Modal */}
-            {showNewExpense && (
-              <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60 overflow-y-auto py-8">
-                <div className="w-[min(90vw,40rem)] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-                  <h2 className="mb-4 text-lg font-semibold">New Expense</h2>
+            <Modal
+              open={showNewExpense}
+              onClose={() => setShowNewExpense(false)}
+              title="New Expense"
+              width="40rem"
+            >
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -1993,9 +1998,7 @@ export default function FinancialIntelligence() {
                       Error: {(createExpenseMutation.error as any)?.response?.data?.error || 'Failed to create expense'}
                     </div>
                   )}
-                </div>
-              </div>
-            )}
+            </Modal>
           </div>
         )}
 
@@ -2364,25 +2367,15 @@ export default function FinancialIntelligence() {
         )}
 
         {/* Account Drill-Down Modal */}
-        {drillDownAccountId && drillDown && (
-          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60 overflow-y-auto py-8">
-            <div className="w-[min(90vw,56rem)] max-h-[80vh] rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-2xl flex flex-col">
-              <div className="border-b border-[color:var(--color-border)] bg-[color:var(--color-muted)] px-4 py-3 flex items-center justify-between rounded-t-2xl">
-                <div>
-                  <h2 className="font-semibold">{drillDown.account.accountNumber} - {drillDown.account.name}</h2>
-                  <div className="text-xs text-[color:var(--color-text-muted)]">
-                    {drillDown.account.type} • {drillDown.account.subType} • Normal Balance: {drillDown.account.normalBalance}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDrillDownAccountId(null)}
-                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-1 text-sm hover:bg-[color:var(--color-muted)]"
-                >
-                  Close
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4">
+        {drillDown && (
+          <Modal
+            open={!!drillDownAccountId}
+            onClose={() => setDrillDownAccountId(null)}
+            title={`${drillDown.account.accountNumber} - ${drillDown.account.name}`}
+            subtitle={`${drillDown.account.type} • ${drillDown.account.subType} • Normal Balance: ${drillDown.account.normalBalance}`}
+            width="56rem"
+          >
+              <div>
                 <div className="mb-4 flex items-center justify-between">
                   <div className="text-sm text-[color:var(--color-text-muted)]">
                     {drillDown.summary.totalTransactions} transactions
@@ -2429,8 +2422,7 @@ export default function FinancialIntelligence() {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
+          </Modal>
         )}
       </div>
     </div>

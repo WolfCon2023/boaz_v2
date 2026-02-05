@@ -1,11 +1,11 @@
 import * as React from 'react'
-import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CRMNav } from '@/components/CRMNav'
 import { formatDateTime } from '@/lib/dateFormat'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
+import { Modal } from '@/components/Modal'
 
 type SurveyQuestion = {
   id: string
@@ -79,19 +79,12 @@ export default function CRMSurveys() {
   const [typeFilter, setTypeFilter] = React.useState<'all' | 'NPS' | 'CSAT' | 'Post‑interaction'>('all')
   const [editing, setEditing] = React.useState<SurveyProgram | null>(null)
   const [showEditor, setShowEditor] = React.useState(false)
-  const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
   const [selectedProgramId, setSelectedProgramId] = React.useState<string | null>(null)
   const [testScore, setTestScore] = React.useState<string>('')
   const [testComment, setTestComment] = React.useState<string>('')
   const [testAnswers, setTestAnswers] = React.useState<Record<string, string>>({})
   const toast = useToast()
   const queryClient = useQueryClient()
-
-  React.useEffect(() => {
-    if (typeof document !== 'undefined') {
-      setPortalEl(document.body)
-    }
-  }, [])
 
   const { data, isLoading } = useQuery({
     queryKey: ['surveys-programs', typeFilter],
@@ -814,31 +807,15 @@ export default function CRMSurveys() {
         </div>
       </div>
 
-      {showEditor && editing && portalEl && createPortal(
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div className="absolute inset-0 bg-black/60" onClick={closeEditor} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="max-h-[90vh] w-[min(90vw,40rem)] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    {editing.id ? 'Edit survey program' : 'New survey program'}
-                  </h2>
-                    <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                    Define the survey name, type, channel, and status, plus the exact question text and scale
-                    guidance your customers will see.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeEditor}
-                  className="rounded-full border border-[color:var(--color-border)] px-2 py-1 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                >
-                  Close
-                </button>
-              </div>
-
-              <form className="space-y-4" onSubmit={handleSaveProgram}>
+      <Modal
+        open={showEditor && !!editing}
+        onClose={closeEditor}
+        title={editing?.id ? 'Edit survey program' : 'New survey program'}
+        subtitle="Define the survey name, type, channel, and status, plus the exact question text and scale guidance your customers will see."
+        width="40rem"
+      >
+        {editing && (
+          <form className="space-y-4" onSubmit={handleSaveProgram}>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">
                     Program name
@@ -1112,12 +1089,9 @@ export default function CRMSurveys() {
                     </button>
                   </div>
                 </div>
-              </form>
-            </div>
-          </div>
-        </div>,
-        portalEl
-      )}
+          </form>
+        )}
+      </Modal>
     </div>
   )
 }

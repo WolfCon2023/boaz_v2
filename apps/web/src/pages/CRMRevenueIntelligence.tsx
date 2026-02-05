@@ -6,6 +6,7 @@ import { FinHubHelpButton } from '@/components/FinHubHelpButton'
 import { http } from '@/lib/http'
 import { formatDateOnly } from '@/lib/dateFormat'
 import { useAccessToken } from '@/components/Auth'
+import { Modal } from '@/components/Modal'
 
 type ForecastPeriod = 'current_month' | 'current_quarter' | 'next_month' | 'next_quarter' | 'current_year' | 'next_year'
 type DealStage = 'Lead' | 'Qualified' | 'Proposal' | 'Negotiation' | 'Closed Won' | 'Closed Lost'
@@ -1815,308 +1816,287 @@ export default function CRMRevenueIntelligence() {
       )}
 
       {/* Deal Score Detail Modal */}
-      {selectedDealId && forecast && (
-        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60">
-          <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-            {(() => {
-              const deal = forecast.deals.find((d) => d._id === selectedDealId)
-              if (!deal) return null
+      <Modal
+        open={!!selectedDealId && !!forecast}
+        onClose={() => setSelectedDealId(null)}
+        title={(() => {
+          if (!forecast || !selectedDealId) return undefined
+          const deal = forecast.deals.find((d) => d._id === selectedDealId)
+          return deal?.title || 'Untitled'
+        })()}
+        subtitle="AI Deal Scoring Analysis"
+        width="48rem"
+        showFullscreenToggle={false}
+      >
+        {(() => {
+          if (!forecast || !selectedDealId) return null
+          const deal = forecast.deals.find((d) => d._id === selectedDealId)
+          if (!deal) return null
 
-              return (
-                <>
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-lg font-semibold">{deal.title || 'Untitled'}</h2>
-                      <p className="text-xs text-[color:var(--color-text-muted)]">AI Deal Scoring Analysis</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDealId(null)}
-                      className="rounded-full px-3 py-1 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+          return (
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                  <div className="text-[10px] text-[color:var(--color-text-muted)]">AI Score</div>
+                  <div className="mt-1 text-2xl font-semibold">{deal.aiScore}</div>
+                </div>
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                  <div className="text-[10px] text-[color:var(--color-text-muted)]">Confidence</div>
+                  <div className="mt-1">
+                    <span className={`rounded-full border px-2 py-1 text-xs ${getConfidenceColor(deal.aiConfidence)}`}>
+                      {deal.aiConfidence}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                  <div className="text-[10px] text-[color:var(--color-text-muted)]">Value</div>
+                  <div className="mt-1 text-2xl font-semibold">{formatCurrency(deal.amount || 0)}</div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Scoring Factors</h3>
+                <div className="space-y-2">
+                  {deal.aiFactors.map((factor, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-3 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3"
                     >
-                      Close
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
-                        <div className="text-[10px] text-[color:var(--color-text-muted)]">AI Score</div>
-                        <div className="mt-1 text-2xl font-semibold">{deal.aiScore}</div>
-                      </div>
-                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
-                        <div className="text-[10px] text-[color:var(--color-text-muted)]">Confidence</div>
-                        <div className="mt-1">
-                          <span className={`rounded-full border px-2 py-1 text-xs ${getConfidenceColor(deal.aiConfidence)}`}>
-                            {deal.aiConfidence}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
-                        <div className="text-[10px] text-[color:var(--color-text-muted)]">Value</div>
-                        <div className="mt-1 text-2xl font-semibold">{formatCurrency(deal.amount || 0)}</div>
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          factor.impact > 0
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-red-500/20 text-red-400'
+                        }`}
+                      >
+                        {factor.impact > 0 ? '+' : ''}
+                        {factor.impact}
+                      </span>
+                      <div className="flex-1">
+                        <div className="text-xs font-semibold">{factor.factor}</div>
+                        <div className="text-[11px] text-[color:var(--color-text-muted)]">{factor.description}</div>
                       </div>
                     </div>
-
-                    <div>
-                      <h3 className="mb-2 text-sm font-semibold">Scoring Factors</h3>
-                      <div className="space-y-2">
-                        {deal.aiFactors.map((factor, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-start gap-3 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3"
-                          >
-                            <span
-                              className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                factor.impact > 0
-                                  ? 'bg-emerald-500/20 text-emerald-400'
-                                  : 'bg-red-500/20 text-red-400'
-                              }`}
-                            >
-                              {factor.impact > 0 ? '+' : ''}
-                              {factor.impact}
-                            </span>
-                            <div className="flex-1">
-                              <div className="text-xs font-semibold">{factor.factor}</div>
-                              <div className="text-[11px] text-[color:var(--color-text-muted)]">{factor.description}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )
-            })()}
-          </div>
-        </div>
-      )}
+                  ))}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       {/* Scoring Settings Modal */}
-      {showScoringSettings && (
-        <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/60 p-4">
-          <div className="w-[min(90vw,56rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 shadow-2xl">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold">Revenue Intelligence – Scoring Settings</h2>
-                <p className="text-xs text-[color:var(--color-text-muted)]">
-                  Admin only. Edit JSON and save to apply immediately to AI scoring.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowScoringSettings(false)}
-                className="rounded-full px-3 py-1 text-xs text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-              >
-                Close
-              </button>
-            </div>
+      <Modal
+        open={showScoringSettings}
+        onClose={() => setShowScoringSettings(false)}
+        title="Revenue Intelligence – Scoring Settings"
+        subtitle="Admin only. Edit JSON and save to apply immediately to AI scoring."
+        width="56rem"
+        showFullscreenToggle={true}
+      >
+        {settingsError && (
+          <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+            {settingsError}
+          </div>
+        )}
 
-            {settingsError && (
-              <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
-                {settingsError}
-              </div>
-            )}
-
-            <div className="mb-3 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  // Switching to simple: parse JSON if needed
-                  if (settingsMode === 'json') {
-                    try {
-                      const parsed = JSON.parse(settingsText || '{}')
-                      const normalized = normalizeSettings(parsed)
-                      setSettingsDraft(normalized)
-                      setSettingsText(JSON.stringify(normalized, null, 2))
-                      setSettingsError(null)
-                    } catch (e: any) {
-                      setSettingsError(`Invalid JSON: ${e?.message || 'Parse error'}`)
-                      return
-                    }
-                  }
-                  setSettingsMode('simple')
-                }}
-                className={`rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs ${settingsMode === 'simple' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}
-              >
-                Simple editor
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  // Switching to JSON: serialize current draft
-                  if (settingsDraft) {
-                    setSettingsText(JSON.stringify(settingsDraft, null, 2))
-                  }
-                  setSettingsMode('json')
-                }}
-                className={`rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs ${settingsMode === 'json' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}
-              >
-                Advanced (JSON)
-              </button>
-            </div>
-
-            {settingsMode === 'simple' ? (
-              <div className="space-y-4">
-                <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
-                  <div className="mb-2 text-sm font-semibold">Stage weights</div>
-                  <div className="text-xs text-[color:var(--color-text-muted)] mb-3">
-                    Positive = increases score; negative = decreases score.
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {Object.entries(settingsDraft?.stageWeights || {})
-                      .sort(([a], [b]) => a.localeCompare(b))
-                      .map(([k, v]) => (
-                        <label key={k} className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs">
-                          <span className="truncate">{k}</span>
-                          <input
-                            type="number"
-                            value={v}
-                            onChange={(e) => {
-                              const next = normalizeSettings(settingsDraft || {})
-                              next.stageWeights[k] = Number(e.target.value)
-                              setSettingsDraft(next)
-                              setSettingsText(JSON.stringify(next, null, 2))
-                            }}
-                            className="w-24 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
-                          />
-                        </label>
-                      ))}
-                  </div>
-
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    <input
-                      type="text"
-                      value={newStageKey}
-                      onChange={(e) => setNewStageKey(e.target.value)}
-                      placeholder="New stage name…"
-                      className="rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs"
-                    />
-                    <input
-                      type="number"
-                      value={newStageWeight}
-                      onChange={(e) => setNewStageWeight(e.target.value)}
-                      placeholder="Weight"
-                      className="rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const key = newStageKey.trim()
-                        if (!key) return
-                        const next = normalizeSettings(settingsDraft || {})
-                        next.stageWeights[key] = Number(newStageWeight || 0)
-                        setSettingsDraft(next)
-                        setSettingsText(JSON.stringify(next, null, 2))
-                        setNewStageKey('')
-                        setNewStageWeight('')
-                      }}
-                      className="rounded bg-[color:var(--color-primary-600)] px-3 py-2 text-xs font-semibold text-white hover:bg-[color:var(--color-primary-700)]"
-                    >
-                      Add stage
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
-                    <div className="mb-2 text-sm font-semibold">Activity thresholds</div>
-                    <div className="grid gap-2 sm:grid-cols-2 text-xs">
-                      {(['hotDays','warmDays','coolDays','coldDays'] as const).map((k) => (
-                        <label key={k} className="flex items-center justify-between gap-2 rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2">
-                          <span>{k}</span>
-                          <input
-                            type="number"
-                            value={(settingsDraft?.activity as any)?.[k] ?? 0}
-                            onChange={(e) => {
-                              const next = normalizeSettings(settingsDraft || {})
-                              ;(next.activity as any)[k] = Number(e.target.value)
-                              setSettingsDraft(next)
-                              setSettingsText(JSON.stringify(next, null, 2))
-                            }}
-                            className="w-24 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
-                    <div className="mb-2 text-sm font-semibold">At‑risk thresholds</div>
-                    <div className="grid gap-2 sm:grid-cols-2 text-xs">
-                      {(['noActivityDays','stuckInStageDays'] as const).map((k) => (
-                        <label key={k} className="flex items-center justify-between gap-2 rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2">
-                          <span>{k}</span>
-                          <input
-                            type="number"
-                            value={(settingsDraft?.stalePanel as any)?.[k] ?? 0}
-                            onChange={(e) => {
-                              const next = normalizeSettings(settingsDraft || {})
-                              ;(next.stalePanel as any)[k] = Number(e.target.value)
-                              setSettingsDraft(next)
-                              setSettingsText(JSON.stringify(next, null, 2))
-                            }}
-                            className="w-24 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-xs text-[color:var(--color-text-muted)]">
-                  Tip: If you need deeper control (impacts for each factor), switch to <strong>Advanced (JSON)</strong>.
-                </div>
-              </div>
-            ) : (
-              <textarea
-                value={settingsText}
-                onChange={(e) => setSettingsText(e.target.value)}
-                className="w-full min-h-[320px] rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 font-mono text-[11px] text-[color:var(--color-text)]"
-                placeholder={riSettings ? JSON.stringify(riSettings, null, 2) : 'Loading settings…'}
-              />
-            )}
-
-            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={loadRecommendedDefaults}
-                className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
-                title="Load recommended BOAZ-OS defaults"
-              >
-                Load recommended defaults
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const current = settingsQ.data?.data
-                  setSettingsText(current ? JSON.stringify(current, null, 2) : '')
+        <div className="mb-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              // Switching to simple: parse JSON if needed
+              if (settingsMode === 'json') {
+                try {
+                  const parsed = JSON.parse(settingsText || '{}')
+                  const normalized = normalizeSettings(parsed)
+                  setSettingsDraft(normalized)
+                  setSettingsText(JSON.stringify(normalized, null, 2))
                   setSettingsError(null)
-                }}
-                className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
-              >
-                Reset changes
-              </button>
-              <button
-                type="button"
-                disabled={saveSettingsMutation.isPending}
-                onClick={() => {
-                  try {
-                    const parsed = JSON.parse(settingsText || '{}')
-                    const normalized = normalizeSettings(parsed)
-                    setSettingsError(null)
-                    saveSettingsMutation.mutate(normalized)
-                  } catch (e: any) {
-                    setSettingsError(`Invalid JSON: ${e?.message || 'Parse error'}`)
-                  }
-                }}
-                className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-xs font-semibold text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-              >
-                {saveSettingsMutation.isPending ? 'Saving…' : 'Save settings'}
-              </button>
+                } catch (e: any) {
+                  setSettingsError(`Invalid JSON: ${e?.message || 'Parse error'}`)
+                  return
+                }
+              }
+              setSettingsMode('simple')
+            }}
+            className={`rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs ${settingsMode === 'simple' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}
+          >
+            Simple editor
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              // Switching to JSON: serialize current draft
+              if (settingsDraft) {
+                setSettingsText(JSON.stringify(settingsDraft, null, 2))
+              }
+              setSettingsMode('json')
+            }}
+            className={`rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs ${settingsMode === 'json' ? 'bg-[color:var(--color-muted)]' : 'hover:bg-[color:var(--color-muted)]'}`}
+          >
+            Advanced (JSON)
+          </button>
+        </div>
+
+        {settingsMode === 'simple' ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+              <div className="mb-2 text-sm font-semibold">Stage weights</div>
+              <div className="text-xs text-[color:var(--color-text-muted)] mb-3">
+                Positive = increases score; negative = decreases score.
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {Object.entries(settingsDraft?.stageWeights || {})
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([k, v]) => (
+                    <label key={k} className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs">
+                      <span className="truncate">{k}</span>
+                      <input
+                        type="number"
+                        value={v}
+                        onChange={(e) => {
+                          const next = normalizeSettings(settingsDraft || {})
+                          next.stageWeights[k] = Number(e.target.value)
+                          setSettingsDraft(next)
+                          setSettingsText(JSON.stringify(next, null, 2))
+                        }}
+                        className="w-24 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
+                      />
+                    </label>
+                  ))}
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <input
+                  type="text"
+                  value={newStageKey}
+                  onChange={(e) => setNewStageKey(e.target.value)}
+                  placeholder="New stage name…"
+                  className="rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs"
+                />
+                <input
+                  type="number"
+                  value={newStageWeight}
+                  onChange={(e) => setNewStageWeight(e.target.value)}
+                  placeholder="Weight"
+                  className="rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const key = newStageKey.trim()
+                    if (!key) return
+                    const next = normalizeSettings(settingsDraft || {})
+                    next.stageWeights[key] = Number(newStageWeight || 0)
+                    setSettingsDraft(next)
+                    setSettingsText(JSON.stringify(next, null, 2))
+                    setNewStageKey('')
+                    setNewStageWeight('')
+                  }}
+                  className="rounded bg-[color:var(--color-primary-600)] px-3 py-2 text-xs font-semibold text-white hover:bg-[color:var(--color-primary-700)]"
+                >
+                  Add stage
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                <div className="mb-2 text-sm font-semibold">Activity thresholds</div>
+                <div className="grid gap-2 sm:grid-cols-2 text-xs">
+                  {(['hotDays','warmDays','coolDays','coldDays'] as const).map((k) => (
+                    <label key={k} className="flex items-center justify-between gap-2 rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2">
+                      <span>{k}</span>
+                      <input
+                        type="number"
+                        value={(settingsDraft?.activity as any)?.[k] ?? 0}
+                        onChange={(e) => {
+                          const next = normalizeSettings(settingsDraft || {})
+                          ;(next.activity as any)[k] = Number(e.target.value)
+                          setSettingsDraft(next)
+                          setSettingsText(JSON.stringify(next, null, 2))
+                        }}
+                        className="w-24 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3">
+                <div className="mb-2 text-sm font-semibold">At‑risk thresholds</div>
+                <div className="grid gap-2 sm:grid-cols-2 text-xs">
+                  {(['noActivityDays','stuckInStageDays'] as const).map((k) => (
+                    <label key={k} className="flex items-center justify-between gap-2 rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2">
+                      <span>{k}</span>
+                      <input
+                        type="number"
+                        value={(settingsDraft?.stalePanel as any)?.[k] ?? 0}
+                        onChange={(e) => {
+                          const next = normalizeSettings(settingsDraft || {})
+                          ;(next.stalePanel as any)[k] = Number(e.target.value)
+                          setSettingsDraft(next)
+                          setSettingsText(JSON.stringify(next, null, 2))
+                        }}
+                        className="w-24 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1 text-xs text-right"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Tip: If you need deeper control (impacts for each factor), switch to <strong>Advanced (JSON)</strong>.
             </div>
           </div>
+        ) : (
+          <textarea
+            value={settingsText}
+            onChange={(e) => setSettingsText(e.target.value)}
+            className="w-full min-h-[320px] rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-3 font-mono text-[11px] text-[color:var(--color-text)]"
+            placeholder={riSettings ? JSON.stringify(riSettings, null, 2) : 'Loading settings…'}
+          />
+        )}
+
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={loadRecommendedDefaults}
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+            title="Load recommended BOAZ-OS defaults"
+          >
+            Load recommended defaults
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const current = settingsQ.data?.data
+              setSettingsText(current ? JSON.stringify(current, null, 2) : '')
+              setSettingsError(null)
+            }}
+            className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+          >
+            Reset changes
+          </button>
+          <button
+            type="button"
+            disabled={saveSettingsMutation.isPending}
+            onClick={() => {
+              try {
+                const parsed = JSON.parse(settingsText || '{}')
+                const normalized = normalizeSettings(parsed)
+                setSettingsError(null)
+                saveSettingsMutation.mutate(normalized)
+              } catch (e: any) {
+                setSettingsError(`Invalid JSON: ${e?.message || 'Parse error'}`)
+              }
+            }}
+            className="rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-xs font-semibold text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+          >
+            {saveSettingsMutation.isPending ? 'Saving…' : 'Save settings'}
+          </button>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
 import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
+import { Modal } from '@/components/Modal'
 
 type Ticket = {
   _id: string
@@ -674,8 +675,6 @@ export default function SupportTickets() {
   }
 
   const [editing, setEditing] = React.useState<Ticket | null>(null)
-  const [portalEl, setPortalEl] = React.useState<HTMLElement | null>(null)
-  React.useEffect(() => { if (!editing) return; const el = document.createElement('div'); el.setAttribute('data-overlay', 'ticket-editor'); Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483647' }); document.body.appendChild(el); setPortalEl(el); return () => { try { document.body.removeChild(el) } catch {}; setPortalEl(null) } }, [editing])
 
   // Initialize edit assignee and owner when editing starts
   React.useEffect(() => {
@@ -1014,34 +1013,34 @@ export default function SupportTickets() {
         </div>
       </div>
 
-      {editing && portalEl && createPortal(
-        <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>
-          <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,48rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 shadow-2xl">
-              <div className="mb-3">
-                <div className="text-base font-semibold">Edit ticket</div>
-                {(editing.requesterName || editing.requesterEmail || editing.requesterPhone) && (
-                  <div className="mt-2 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-3 text-xs">
-                    <div className="font-semibold text-[color:var(--color-text)] mb-1">Customer Contact Information</div>
-                    {editing.requesterName && (
-                      <div className="text-[color:var(--color-text-muted)]">
-                        <span className="font-medium">Name:</span> {editing.requesterName}
-                      </div>
-                    )}
-                    {editing.requesterEmail && (
-                      <div className="text-[color:var(--color-text-muted)]">
-                        <span className="font-medium">Email:</span> {editing.requesterEmail}
-                      </div>
-                    )}
-                    {editing.requesterPhone && (
-                      <div className="text-[color:var(--color-text-muted)]">
-                        <span className="font-medium">Phone:</span> {editing.requesterPhone}
-                      </div>
-                    )}
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit ticket"
+        width="48rem"
+      >
+        {editing && (
+          <>
+            {(editing.requesterName || editing.requesterEmail || editing.requesterPhone) && (
+              <div className="mb-3 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-elevated)] p-3 text-xs">
+                <div className="font-semibold text-[color:var(--color-text)] mb-1">Customer Contact Information</div>
+                {editing.requesterName && (
+                  <div className="text-[color:var(--color-text-muted)]">
+                    <span className="font-medium">Name:</span> {editing.requesterName}
+                  </div>
+                )}
+                {editing.requesterEmail && (
+                  <div className="text-[color:var(--color-text-muted)]">
+                    <span className="font-medium">Email:</span> {editing.requesterEmail}
+                  </div>
+                )}
+                {editing.requesterPhone && (
+                  <div className="text-[color:var(--color-text-muted)]">
+                    <span className="font-medium">Phone:</span> {editing.requesterPhone}
                   </div>
                 )}
               </div>
+            )}
               <form className="grid gap-2 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const assignee = selectedEditAssignee ? `${selectedEditAssignee.name} <${selectedEditAssignee.email}>` : ''; const owner = selectedEditOwner ? `${selectedEditOwner.name} <${selectedEditOwner.email}>` : ''; const payload: any = { _id: editing._id, shortDescription: String(fd.get('shortDescription')||'')||undefined, status: String(fd.get('status')||'')||undefined, priority: String(fd.get('priority')||'')||undefined, assignee: assignee || undefined, owner: owner || undefined, description: String(fd.get('description')||'')||undefined }; const sla = String(fd.get('slaDueAt')||''); if (sla) payload.slaDueAt = new Date(sla).toISOString(); update.mutate(payload); setEditing(null) }}>
                 <label className="text-xs text-[color:var(--color-text-muted)]">Short description</label>
                 <input name="shortDescription" defaultValue={editing.shortDescription ?? editing.title ?? ''} placeholder="Short description" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
@@ -1530,9 +1529,9 @@ export default function SupportTickets() {
                   </div>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>, portalEl)}
+          </>
+        )}
+      </Modal>
 
       {slaEditing && slaPortal && createPortal(
         <div className="fixed inset-0" style={{ zIndex: 2147483647 }}>

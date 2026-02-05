@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CRMNav } from '@/components/CRMNav'
 import { CRMHelpButton } from '@/components/CRMHelpButton'
+import { Modal } from '@/components/Modal'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { AuditTrail, type AuditEntry } from '@/components/AuditTrail'
@@ -255,261 +256,254 @@ export default function CRMVendors() {
         )}
       </section>
 
-      {editing && (
-        <div className="fixed inset-0 z-[2147483647]">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-[min(90vw,40rem)] max-h-[90vh] overflow-y-auto rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-xs shadow-2xl">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">
-                    {editing._id ? 'Edit vendor' : 'Add vendor'}
-                  </div>
-                  <div className="text-[11px] text-[color:var(--color-text-muted)]">
-                    Maintain a single source of truth for vendor metadata and support details.
-                  </div>
-                </div>
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={editing?._id ? 'Edit vendor' : 'Add vendor'}
+        subtitle="Maintain a single source of truth for vendor metadata and support details."
+        width="40rem"
+        className="text-xs"
+      >
+        {editing && (
+          <>
+            <div className="grid gap-2 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={editing.name}
+                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
               </div>
-
-              <div className="grid gap-2 md:grid-cols-2">
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    value={editing.name}
-                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Legal name (optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={editing.legalName ?? ''}
-                    onChange={(e) => setEditing({ ...editing, legalName: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Website
-                  </label>
-                  <input
-                    type="text"
-                    value={editing.website ?? ''}
-                    onChange={(e) => setEditing({ ...editing, website: e.target.value })}
-                    placeholder="https://example.com"
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Status
-                  </label>
-                  <select
-                    value={editing.status}
-                    onChange={(e) =>
-                      setEditing({
-                        ...editing,
-                        status: e.target.value as 'Active' | 'Inactive',
-                      })
-                    }
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Support email
-                  </label>
-                  <input
-                    type="email"
-                    value={editing.supportEmail ?? ''}
-                    onChange={(e) => setEditing({ ...editing, supportEmail: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Support phone
-                  </label>
-                  <input
-                    type="text"
-                    value={editing.supportPhone ?? ''}
-                    onChange={(e) => setEditing({ ...editing, supportPhone: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Categories, comma separated (for example CRM, Telephony, Infrastructure)
-                  </label>
-                  <input
-                    type="text"
-                    value={categoriesDraft}
-                    onChange={(e) => setCategoriesDraft(e.target.value)}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                <div className="md:col-span-2 grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      Address line 1
-                    </label>
-                    <input
-                      type="text"
-                      value={editing.addressLine1 ?? ''}
-                      onChange={(e) => setEditing({ ...editing, addressLine1: e.target.value })}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      Address line 2
-                    </label>
-                    <input
-                      type="text"
-                      value={editing.addressLine2 ?? ''}
-                      onChange={(e) => setEditing({ ...editing, addressLine2: e.target.value })}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      City
-                    </label>
-                    <input
-                      type="text"
-                      value={editing.city ?? ''}
-                      onChange={(e) => setEditing({ ...editing, city: e.target.value })}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      State or region
-                    </label>
-                    <input
-                      type="text"
-                      value={editing.state ?? ''}
-                      onChange={(e) => setEditing({ ...editing, state: e.target.value })}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      Postal code
-                    </label>
-                    <input
-                      type="text"
-                      value={editing.postalCode ?? ''}
-                      onChange={(e) => setEditing({ ...editing, postalCode: e.target.value })}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                      Country
-                    </label>
-                    <input
-                      type="text"
-                      value={editing.country ?? ''}
-                      onChange={(e) => setEditing({ ...editing, country: e.target.value })}
-                      className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                    />
-                  </div>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
-                    Notes
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={editing.notes ?? ''}
-                    onChange={(e) => setEditing({ ...editing, notes: e.target.value })}
-                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
-                  />
-                </div>
-                {editing._id && (
-                  <div className="md:col-span-2 mt-2">
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="text-[11px] font-semibold">History</div>
-                      <button
-                        type="button"
-                        onClick={() => setShowHistory(!showHistory)}
-                        className="text-[10px] text-[color:var(--color-primary-500)] hover:underline"
-                      >
-                        {showHistory ? 'Hide audit trail' : 'View audit trail'}
-                      </button>
-                    </div>
-                    {showHistory && (
-                      <AuditTrail
-                        entries={(historyQ.data?.data?.history || []).map((h) => ({
-                          timestamp: h.createdAt,
-                          action: h.eventType,
-                          userName: h.userName,
-                          userEmail: h.userEmail,
-                          description: h.description,
-                          oldValue: h.oldValue,
-                          newValue: h.newValue,
-                          metadata: h.metadata,
-                        } as AuditEntry))}
-                        maxHeight="150px"
-                        emptyMessage={historyQ.isLoading ? 'Loading...' : 'No audit history yet.'}
-                      />
-                    )}
-                  </div>
-                )}
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                  Legal name (optional)
+                </label>
+                <input
+                  type="text"
+                  value={editing.legalName ?? ''}
+                  onChange={(e) => setEditing({ ...editing, legalName: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
               </div>
-
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
-                  onClick={() => setEditing(null)}
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                  Website
+                </label>
+                <input
+                  type="text"
+                  value={editing.website ?? ''}
+                  onChange={(e) => setEditing({ ...editing, website: e.target.value })}
+                  placeholder="https://example.com"
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                  Status
+                </label>
+                <select
+                  value={editing.status}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      status: e.target.value as 'Active' | 'Inactive',
+                    })
+                  }
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={saveVendor.isPending || !editing.name.trim()}
-                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
-                  onClick={() => {
-                    const payload: any = {
-                      name: editing.name.trim(),
-                      legalName: editing.legalName?.trim() || undefined,
-                      website: editing.website?.trim() || undefined,
-                      supportEmail: editing.supportEmail?.trim() || undefined,
-                      supportPhone: editing.supportPhone?.trim() || undefined,
-                      addressLine1: editing.addressLine1?.trim() || undefined,
-                      addressLine2: editing.addressLine2?.trim() || undefined,
-                      city: editing.city?.trim() || undefined,
-                      state: editing.state?.trim() || undefined,
-                      postalCode: editing.postalCode?.trim() || undefined,
-                      country: editing.country?.trim() || undefined,
-                      status: editing.status,
-                      categories: categoriesDraft
-                        .split(',')
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                      notes: editing.notes ?? undefined,
-                    }
-                    saveVendor.mutate(payload)
-                  }}
-                >
-                  Save
-                </button>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
               </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                  Support email
+                </label>
+                <input
+                  type="email"
+                  value={editing.supportEmail ?? ''}
+                  onChange={(e) => setEditing({ ...editing, supportEmail: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                  Support phone
+                </label>
+                <input
+                  type="text"
+                  value={editing.supportPhone ?? ''}
+                  onChange={(e) => setEditing({ ...editing, supportPhone: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                  Categories, comma separated (for example CRM, Telephony, Infrastructure)
+                </label>
+                <input
+                  type="text"
+                  value={categoriesDraft}
+                  onChange={(e) => setCategoriesDraft(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div className="md:col-span-2 grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Address line 1
+                  </label>
+                  <input
+                    type="text"
+                    value={editing.addressLine1 ?? ''}
+                    onChange={(e) => setEditing({ ...editing, addressLine1: e.target.value })}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Address line 2
+                  </label>
+                  <input
+                    type="text"
+                    value={editing.addressLine2 ?? ''}
+                    onChange={(e) => setEditing({ ...editing, addressLine2: e.target.value })}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={editing.city ?? ''}
+                    onChange={(e) => setEditing({ ...editing, city: e.target.value })}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    State or region
+                  </label>
+                  <input
+                    type="text"
+                    value={editing.state ?? ''}
+                    onChange={(e) => setEditing({ ...editing, state: e.target.value })}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Postal code
+                  </label>
+                  <input
+                    type="text"
+                    value={editing.postalCode ?? ''}
+                    onChange={(e) => setEditing({ ...editing, postalCode: e.target.value })}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                    Country
+                  </label>
+                  <input
+                    type="text"
+                    value={editing.country ?? ''}
+                    onChange={(e) => setEditing({ ...editing, country: e.target.value })}
+                    className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-[11px] text-[color:var(--color-text-muted)]">
+                  Notes
+                </label>
+                <textarea
+                  rows={3}
+                  value={editing.notes ?? ''}
+                  onChange={(e) => setEditing({ ...editing, notes: e.target.value })}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-2 py-1.5 text-xs"
+                />
+              </div>
+              {editing._id && (
+                <div className="md:col-span-2 mt-2">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-[11px] font-semibold">History</div>
+                    <button
+                      type="button"
+                      onClick={() => setShowHistory(!showHistory)}
+                      className="text-[10px] text-[color:var(--color-primary-500)] hover:underline"
+                    >
+                      {showHistory ? 'Hide audit trail' : 'View audit trail'}
+                    </button>
+                  </div>
+                  {showHistory && (
+                    <AuditTrail
+                      entries={(historyQ.data?.data?.history || []).map((h) => ({
+                        timestamp: h.createdAt,
+                        action: h.eventType,
+                        userName: h.userName,
+                        userEmail: h.userEmail,
+                        description: h.description,
+                        oldValue: h.oldValue,
+                        newValue: h.newValue,
+                        metadata: h.metadata,
+                      } as AuditEntry))}
+                      maxHeight="150px"
+                      emptyMessage={historyQ.isLoading ? 'Loading...' : 'No audit history yet.'}
+                    />
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        </div>
-      )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[color:var(--color-text-muted)] hover:bg-[color:var(--color-muted)]"
+                onClick={() => setEditing(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saveVendor.isPending || !editing.name.trim()}
+                className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-primary-600)] px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[color:var(--color-primary-700)] disabled:opacity-50"
+                onClick={() => {
+                  const payload: any = {
+                    name: editing.name.trim(),
+                    legalName: editing.legalName?.trim() || undefined,
+                    website: editing.website?.trim() || undefined,
+                    supportEmail: editing.supportEmail?.trim() || undefined,
+                    supportPhone: editing.supportPhone?.trim() || undefined,
+                    addressLine1: editing.addressLine1?.trim() || undefined,
+                    addressLine2: editing.addressLine2?.trim() || undefined,
+                    city: editing.city?.trim() || undefined,
+                    state: editing.state?.trim() || undefined,
+                    postalCode: editing.postalCode?.trim() || undefined,
+                    country: editing.country?.trim() || undefined,
+                    status: editing.status,
+                    categories: categoriesDraft
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                    notes: editing.notes ?? undefined,
+                  }
+                  saveVendor.mutate(payload)
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
     </div>
   )
 }
