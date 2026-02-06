@@ -65,6 +65,7 @@ type AppointmentDoc = {
   m365EventId?: string | null
   notes?: string | null
   orgVisible?: boolean
+  locationType?: 'video' | 'phone' | 'in_person' | 'custom'
   startsAt: Date
   endsAt: Date
   timeZone: string
@@ -508,50 +509,6 @@ async function sendCancelEmails(db: any, appointment: AppointmentDoc, type: Appo
   }
 }
 
-async function createMeetingTaskFromAppointment(
-  db: any,
-  ownerUserId: string,
-  appointment: AppointmentDoc,
-  type: AppointmentTypeDoc,
-  contactId?: string | null,
-) {
-  try {
-    const newId = new ObjectId().toHexString()
-    const subject = `${type.name}: ${appointment.attendeeName}`.slice(0, 180)
-
-    const relatedType: 'contact' | undefined = contactId ? 'contact' : undefined
-    const relatedId: string | undefined = contactId ? String(contactId) : undefined
-
-    await db.collection('crm_tasks').insertOne({
-      _id: newId,
-      type: 'meeting',
-      subject,
-      description: appointment.notes ?? undefined,
-      status: 'open',
-      priority: 'normal',
-      dueAt: appointment.startsAt,
-      completedAt: null,
-      ownerUserId,
-      ownerName: undefined,
-      ownerEmail: undefined,
-      relatedType,
-      relatedId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      metadata: {
-        source: 'scheduler',
-        appointmentId: String(appointment._id),
-        appointmentTypeId: String(type._id),
-        attendeeEmail: appointment.attendeeEmail,
-        attendeeName: appointment.attendeeName,
-        relatedType: relatedType ?? null,
-        relatedId: relatedId ?? null,
-      },
-    } as any)
-  } catch {
-    // best-effort
-  }
-}
 
 const internal = Router()
 internal.use(requireAuth)
@@ -816,6 +773,7 @@ internal.get('/appointments', async (req: any, res) => {
         reminderMinutesBefore: d.reminderMinutesBefore ?? null,
         reminderEmailSentAt: d.reminderEmailSentAt?.toISOString?.() ?? null,
         orgVisible: d.orgVisible === true,
+        locationType: d.locationType ?? 'video',
         startsAt: d.startsAt?.toISOString?.() ?? null,
         endsAt: d.endsAt?.toISOString?.() ?? null,
         createdAt: d.createdAt?.toISOString?.() ?? null,
@@ -859,6 +817,7 @@ internal.get('/appointments/:id', async (req: any, res) => {
       reminderMinutesBefore: d.reminderMinutesBefore ?? null,
       reminderEmailSentAt: d.reminderEmailSentAt?.toISOString?.() ?? null,
       orgVisible: d.orgVisible === true,
+      locationType: d.locationType ?? 'video',
       notes: d.notes ?? null,
       startsAt: d.startsAt?.toISOString?.() ?? null,
       endsAt: d.endsAt?.toISOString?.() ?? null,
@@ -1036,6 +995,7 @@ internal.post('/appointments/book', async (req: any, res) => {
     m365EventId: null,
     notes: parsed.data.notes ? parsed.data.notes.trim() : null,
     orgVisible: parsed.data.orgVisible === true,
+    locationType: type.locationType ?? 'video',
     startsAt: startUtc,
     endsAt: endUtc,
     timeZone: tz,
@@ -1045,7 +1005,6 @@ internal.post('/appointments/book', async (req: any, res) => {
   }
 
   await db.collection('appointments').insertOne(doc as any)
-  await createMeetingTaskFromAppointment(db, String(type.ownerUserId), doc, type, contactId)
 
   // Email + webhook events are best-effort
   sendInviteEmails(db, doc, type)
@@ -1229,6 +1188,7 @@ internal.get('/appointments/by-contact/:contactId', async (req: any, res) => {
         endsAt: d.endsAt?.toISOString?.() ?? null,
         timeZone: d.timeZone ?? null,
         status: d.status ?? null,
+        locationType: d.locationType ?? 'video',
         attendeeName: d.attendeeName ?? null,
         attendeeEmail: d.attendeeEmail ?? null,
         attendeePhone: d.attendeePhone ?? null,
@@ -1528,6 +1488,7 @@ publicRouter.post('/book/:slug', async (req, res) => {
     reminderEmailSentAt: null,
     m365EventId: null,
     notes: parsed.data.notes ? parsed.data.notes.trim() : null,
+    locationType: type.locationType ?? 'video',
     startsAt: startUtc,
     endsAt: endUtc,
     timeZone: tz,
@@ -1546,7 +1507,6 @@ publicRouter.post('/book/:slug', async (req, res) => {
   doc.contactId = contactId
 
   await db.collection('appointments').insertOne(doc as any)
-  await createMeetingTaskFromAppointment(db, String(ownerUserId), doc, type, contactId)
 
   sendInviteEmails(db, doc, type)
     .then(async () => {

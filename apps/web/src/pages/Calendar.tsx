@@ -15,6 +15,7 @@ type CalendarEvent =
       ownerName?: string | null
       ownerEmail?: string | null
       orgVisible?: boolean
+      locationType?: 'video' | 'phone' | 'in_person' | 'custom'
       title: string
       startsAt: string
       endsAt: string
@@ -80,11 +81,23 @@ function dateKey(d: Date) {
 }
 
 function getEventColorKey(e: CalendarEvent): keyof ColorPrefs {
-  if (e.kind === 'appointment') return 'appointment'
+  if (e.kind === 'appointment') {
+    const lt = (e as any).locationType
+    if (lt === 'phone') return 'call'
+    if (lt === 'video') return 'meeting'
+    return 'appointment' // in_person, custom, or undefined
+  }
   const tt = (e as any).taskType
   if (tt === 'meeting') return 'meeting'
   if (tt === 'call') return 'call'
   return 'meeting' // default tasks to meeting color
+}
+
+const LOCATION_TYPE_LABELS: Record<string, string> = {
+  video: 'Video Meeting',
+  phone: 'Phone Call',
+  in_person: 'In-Person',
+  custom: 'Appointment',
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -159,7 +172,9 @@ function AppointmentDetail({
   const start = new Date(apt.startsAt)
   const end = new Date(apt.endsAt)
   const isCancelled = !!(apt.cancelledAt || apt.cancelReason)
-  const accentColor = colors.appointment
+  const lt = apt.locationType || 'video'
+  const accentColor = lt === 'phone' ? colors.call : lt === 'video' ? colors.meeting : colors.appointment
+  const locationLabel = LOCATION_TYPE_LABELS[lt] || 'Appointment'
 
   return (
     <div className="space-y-5">
@@ -179,8 +194,13 @@ function AppointmentDetail({
       {/* ── Status Badges ── */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-block rounded-full px-3 py-0.5 text-xs font-semibold text-white" style={{ backgroundColor: accentColor }}>
-          {apt.appointmentTypeName || 'Appointment'}
+          {locationLabel}
         </span>
+        {apt.appointmentTypeName && (
+          <span className="inline-block rounded-full border border-[color:var(--color-border)] px-3 py-0.5 text-xs font-medium text-[color:var(--color-text)]">
+            {apt.appointmentTypeName}
+          </span>
+        )}
         {isCancelled ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-3 py-0.5 text-xs font-semibold text-red-400">
             <XCircle className="h-3 w-3" /> Cancelled
@@ -1107,7 +1127,7 @@ export default function Calendar() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold">{e.title}</span>
                         <span className="rounded-full px-2 py-0.5 text-[10px] text-white" style={{ backgroundColor: eventBg(e) }}>
-                          {e.kind === 'appointment' ? 'appointment' : (e as any).taskType || 'task'}
+                          {e.kind === 'appointment' ? (LOCATION_TYPE_LABELS[(e as any).locationType] || 'Appointment') : (e as any).taskType || 'task'}
                         </span>
                         {view === 'org' && e.kind === 'appointment' && (e as any).orgVisible && (
                           <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400">
