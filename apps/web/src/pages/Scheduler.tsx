@@ -267,21 +267,6 @@ export default function Scheduler() {
     return userAppointmentColor
   }, [userAppointmentColor])
 
-  // Legacy Tailwind-class version kept for non-calendar-tab usage
-  const getAppointmentTypeColor = React.useCallback((typeId: string) => {
-    const typeIndex = types.findIndex((t) => t._id === typeId)
-    const colors = [
-      'bg-blue-600',
-      'bg-purple-600',
-      'bg-green-600',
-      'bg-orange-600',
-      'bg-pink-600',
-      'bg-indigo-600',
-      'bg-teal-600',
-      'bg-red-600',
-    ]
-    return colors[typeIndex % colors.length] || 'bg-[color:var(--color-primary-600)]'
-  }, [types])
 
   const usersQ = useQuery<{ data: { items: SystemUser[] } }>({
     queryKey: ['scheduler', 'users'],
