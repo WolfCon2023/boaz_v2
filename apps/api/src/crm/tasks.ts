@@ -244,7 +244,7 @@ tasksRouter.get('/counts', async (req, res) => {
   return res.json({ data: { items }, error: null })
 })
 
-// GET /api/crm/tasks/:id - debug helper and single-task fetch
+// GET /api/crm/tasks/:id - single-task fetch with related entity details
 tasksRouter.get('/:id', async (req, res) => {
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
@@ -258,7 +258,46 @@ tasksRouter.get('/:id', async (req, res) => {
     return res.status(404).json({ data: null, error: 'not_found' })
   }
 
-  return res.json({ data: serializeTask(doc), error: null })
+  const serialized: any = serializeTask(doc)
+
+  // Enrich with related entity details (contact name/email/phone, account name, deal name)
+  if (doc.relatedType && doc.relatedId) {
+    try {
+      const collectionMap: Record<string, string> = {
+        contact: 'contacts',
+        account: 'accounts',
+        deal: 'deals',
+        invoice: 'invoices',
+        quote: 'quotes',
+        project: 'projects',
+      }
+      const relCollection = collectionMap[doc.relatedType]
+      if (relCollection) {
+        let relDoc: any = null
+        // contacts/accounts/deals use ObjectId; try ObjectId first, then string
+        if (ObjectId.isValid(doc.relatedId)) {
+          relDoc = await db.collection(relCollection).findOne({ _id: new ObjectId(doc.relatedId) })
+        }
+        if (!relDoc) {
+          relDoc = await db.collection(relCollection).findOne({ _id: doc.relatedId } as any)
+        }
+        if (relDoc) {
+          serialized.relatedEntity = {
+            id: String(relDoc._id),
+            type: doc.relatedType,
+            name: relDoc.name || relDoc.subject || relDoc.title || relDoc.dealName || null,
+            email: relDoc.email || null,
+            phone: relDoc.mobilePhone || relDoc.officePhone || relDoc.phone || null,
+            company: relDoc.company || relDoc.accountName || null,
+          }
+        }
+      }
+    } catch (_e) {
+      // Non-critical – just skip entity enrichment
+    }
+  }
+
+  return res.json({ data: serialized, error: null })
 })
 
 // POST /api/crm/tasks

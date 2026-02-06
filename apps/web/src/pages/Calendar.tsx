@@ -425,6 +425,41 @@ function TaskDetail({
         )}
       </div>
 
+      {/* ── Contact / Meeting With Section ── */}
+      {task.relatedEntity && (
+        <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)] mb-3">
+            {taskType === 'meeting' ? 'Meeting With' : taskType === 'call' ? 'Call With' : `Related ${task.relatedEntity.type || 'Contact'}`}
+          </div>
+          <div className="space-y-2.5">
+            {task.relatedEntity.name && (
+              <div className="flex items-center gap-2.5">
+                <User className="h-4 w-4 text-[color:var(--color-text-muted)] shrink-0" />
+                <span className="text-sm font-medium">{task.relatedEntity.name}</span>
+              </div>
+            )}
+            {task.relatedEntity.email && (
+              <div className="flex items-center gap-2.5">
+                <Mail className="h-4 w-4 text-[color:var(--color-text-muted)] shrink-0" />
+                <a href={`mailto:${task.relatedEntity.email}`} className="text-sm text-[color:var(--color-primary-600)] hover:underline">{task.relatedEntity.email}</a>
+              </div>
+            )}
+            {task.relatedEntity.phone && (
+              <div className="flex items-center gap-2.5">
+                <Phone className="h-4 w-4 text-[color:var(--color-text-muted)] shrink-0" />
+                <span className="text-sm">{task.relatedEntity.phone}</span>
+              </div>
+            )}
+            {task.relatedEntity.company && (
+              <div className="flex items-center gap-2.5">
+                <FileText className="h-4 w-4 text-[color:var(--color-text-muted)] shrink-0" />
+                <span className="text-sm">{task.relatedEntity.company}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Description ── */}
       {task.description && (
         <div>
@@ -446,7 +481,7 @@ function TaskDetail({
             </div>
           </div>
         )}
-        {task.relatedType && task.relatedId && (
+        {task.relatedType && task.relatedId && !task.relatedEntity && (
           <div>
             <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Related {task.relatedType}</div>
             <div className="flex items-center gap-2">
