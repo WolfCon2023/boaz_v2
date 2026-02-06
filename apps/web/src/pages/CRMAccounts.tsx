@@ -362,7 +362,8 @@ export default function CRMAccounts() {
 
   const [pendingOpenAccountId, setPendingOpenAccountId] = React.useState<string | null>(null)
 
-  // Initialize from URL and localStorage once
+  const colsLoaded = React.useRef(false)
+  // Initialize from URL and server-stored preferences once
   React.useEffect(() => {
     if (initializedFromUrl.current) return
     initializedFromUrl.current = true
@@ -377,23 +378,15 @@ export default function CRMAccounts() {
     if (openId) {
       setPendingOpenAccountId(openId)
     }
-    try {
-      const stored = localStorage.getItem('ACCOUNTS_COLS')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCols(ensureCoreCols(parsed))
-        }
-      }
-    } catch {}
-    try {
-      const views = localStorage.getItem('ACCOUNTS_SAVED_VIEWS')
-      if (views) {
-        const parsed = JSON.parse(views)
-        if (Array.isArray(parsed)) setSavedViews(parsed)
-      }
-    } catch {}
     ;(async () => {
+      // Load user-specific column preferences from server
+      try {
+        const colRes = await http.get('/api/column-prefs', { params: { pageKey: 'accounts' } })
+        const serverCols = colRes.data?.data
+        if (Array.isArray(serverCols) && serverCols.length > 0) setCols(ensureCoreCols(serverCols))
+      } catch {}
+      colsLoaded.current = true
+      // Load user-specific saved views from server
       try {
         const res = await http.get('/api/views', { params: { viewKey: 'accounts' } })
         const items = (res.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
@@ -410,7 +403,7 @@ export default function CRMAccounts() {
     })()
   }, [searchParams])
 
-  // Persist to URL/localStorage
+  // Persist URL params and save column prefs to server
   React.useEffect(() => {
     const params: Record<string, string> = {}
     if (query) params.q = query
@@ -419,9 +412,10 @@ export default function CRMAccounts() {
     const colKeys = cols.filter((c) => c.visible).map((c) => c.key).join(',')
     if (colKeys) params.cols = colKeys
     setSearchParams(params, { replace: true })
-    try { localStorage.setItem('ACCOUNTS_COLS', JSON.stringify(cols)) } catch {}
-    try { localStorage.setItem('ACCOUNTS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
-  }, [query, sort, dir, cols, savedViews, setSearchParams, onboardingFilter])
+    if (colsLoaded.current) {
+      http.put('/api/column-prefs', { pageKey: 'accounts', columns: cols }).catch(() => {})
+    }
+  }, [query, sort, dir, cols, setSearchParams, onboardingFilter])
 
   // If deep-linked with openAccountId, open that account drawer once data is loaded
   React.useEffect(() => {

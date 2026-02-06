@@ -126,7 +126,8 @@ export default function CRMDeals() {
   const [inlineStage, setInlineStage] = React.useState<string>('')
   const [inlineCloseDate, setInlineCloseDate] = React.useState<string>('')
 
-  // Initialize from URL and localStorage once
+  const colsLoaded = React.useRef(false)
+  // Initialize from URL and server-stored preferences once
   React.useEffect(() => {
     if (initializedFromUrl.current) return
     initializedFromUrl.current = true
@@ -157,16 +158,6 @@ export default function CRMDeals() {
     setPage(page0)
     setPageSize(limit0)
 
-    // Columns from localStorage or URL (comma-separated keys or full array)
-    try {
-      const stored = localStorage.getItem('DEALS_COLS')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCols(ensureSurveyCol(parsed))
-        }
-      }
-    } catch {}
     const colsParam = get('cols')
     if (colsParam) {
       const keys = new Set(colsParam.split(',').map((s) => s.trim()).filter(Boolean))
@@ -175,15 +166,15 @@ export default function CRMDeals() {
       )
     }
 
-    // Load saved views
-    try {
-      const views = localStorage.getItem('DEALS_SAVED_VIEWS')
-      if (views) {
-        const parsed = JSON.parse(views)
-        if (Array.isArray(parsed)) setSavedViews(parsed)
-      }
-    } catch {}
     ;(async () => {
+      // Load user-specific column preferences from server
+      try {
+        const colRes = await http.get('/api/column-prefs', { params: { pageKey: 'deals' } })
+        const serverCols = colRes.data?.data
+        if (Array.isArray(serverCols) && serverCols.length > 0) setCols(ensureSurveyCol(serverCols))
+      } catch {}
+      colsLoaded.current = true
+      // Load user-specific saved views from server
       try {
         const res = await http.get('/api/views', { params: { viewKey: 'deals' } })
         const items = (res.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
@@ -200,7 +191,7 @@ export default function CRMDeals() {
     })()
   }, [searchParams])
 
-  // Persist filters and columns to URL/localStorage
+  // Persist URL params and save column prefs to server
   React.useEffect(() => {
     const params: Record<string, string> = {}
     if (q) params.q = q
@@ -216,9 +207,10 @@ export default function CRMDeals() {
     const colKeys = cols.filter((c) => c.visible).map((c) => c.key).join(',')
     if (colKeys) params.cols = colKeys
     setSearchParams(params, { replace: true })
-    try { localStorage.setItem('DEALS_COLS', JSON.stringify(cols)) } catch {}
-    try { localStorage.setItem('DEALS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
-  }, [q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize, cols, savedViews, setSearchParams])
+    if (colsLoaded.current) {
+      http.put('/api/column-prefs', { pageKey: 'deals', columns: cols }).catch(() => {})
+    }
+  }, [q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize, cols, setSearchParams])
   const { data, isFetching } = useQuery<{ data: { items: Deal[]; total: number; page: number; limit: number } }>({
     queryKey: ['deals', q, sort, dir, stage, minAmount, maxAmount, startDate, endDate, page, pageSize],
     queryFn: async () => {

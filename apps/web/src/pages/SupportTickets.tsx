@@ -273,12 +273,20 @@ export default function SupportTickets() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-  // Sync filters from URL query params
+  const colsLoaded = React.useRef(false)
+  // Sync filters from URL query params and load user-specific prefs
   React.useEffect(() => {
     if (!initializedFromUrl.current) {
-      try { const stored = localStorage.getItem('TICKETS_COLS'); if (stored) { const parsed = JSON.parse(stored); if (Array.isArray(parsed) && parsed.length>0) setCols(parsed) } } catch {}
-      try { const views = localStorage.getItem('TICKETS_SAVED_VIEWS'); if (views) { const parsed = JSON.parse(views); if (Array.isArray(parsed)) setSavedViews(parsed) } } catch {}
       initializedFromUrl.current = true
+      // Load user-specific column prefs from server on first load
+      ;(async () => {
+        try {
+          const colRes = await http.get('/api/column-prefs', { params: { pageKey: 'tickets' } })
+          const serverCols = colRes.data?.data
+          if (Array.isArray(serverCols) && serverCols.length > 0) setCols(serverCols)
+        } catch {}
+        colsLoaded.current = true
+      })()
     }
     const sp = new URLSearchParams(location.search)
     const qParam = sp.get('q') ?? ''
@@ -298,14 +306,13 @@ export default function SupportTickets() {
     setDueNext60(!!dueWithin)
     if (sortParam) setSort(sortParam)
     if (dirParam) setDir(dirParam)
-    // Load server views (global)
+    // Load user-specific saved views from server
     ;(async () => {
       try {
         const res = await http.get('/api/views', { params: { viewKey: 'tickets' } })
         const items = (res.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
         if (Array.isArray(items)) setSavedViews(items)
         if (items.length === 0) {
-          // Seed sensible defaults
           const seeds = [
             { name: 'Open', config: { status: '', statusMulti: ['open','pending'], breachedOnly: false, dueNext60: false, sort: 'createdAt', dir: 'desc' } },
             { name: 'Breached SLA', config: { status: '', statusMulti: ['open','pending'], breachedOnly: true, dueNext60: false, sort: 'slaDueAt', dir: 'asc' } },
@@ -323,7 +330,12 @@ export default function SupportTickets() {
       } catch {}
     })()
   }, [location.search])
-  React.useEffect(() => { try { localStorage.setItem('TICKETS_COLS', JSON.stringify(cols)) } catch {}; try { localStorage.setItem('TICKETS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {} }, [cols, savedViews])
+  // Persist column prefs to server when changed
+  React.useEffect(() => {
+    if (colsLoaded.current) {
+      http.put('/api/column-prefs', { pageKey: 'tickets', columns: cols }).catch(() => {})
+    }
+  }, [cols])
   // Heartbeat to keep SLA view in sync with system time
   const [nowTs, setNowTs] = React.useState(() => Date.now())
   React.useEffect(() => {

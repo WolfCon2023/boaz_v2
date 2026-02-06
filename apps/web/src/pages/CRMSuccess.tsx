@@ -63,20 +63,10 @@ export default function CRMSuccess() {
     if (q.trim()) params.set('q', q.trim())
     if (healthFilter && healthFilter !== 'all') params.set('health', healthFilter)
     setSearchParams(params, { replace: true })
-    try {
-      localStorage.setItem('SUCCESS_SAVED_VIEWS', JSON.stringify(savedViews))
-    } catch {}
-  }, [q, healthFilter, savedViews, setSearchParams])
+  }, [q, healthFilter, setSearchParams])
 
-  // Load saved views once on mount
+  // Load user-specific saved views from server on mount
   React.useEffect(() => {
-    try {
-      const stored = localStorage.getItem('SUCCESS_SAVED_VIEWS')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed)) setSavedViews(parsed)
-      }
-    } catch {}
     ;(async () => {
       try {
         const res = await http.get('/api/views', { params: { viewKey: 'success' } })

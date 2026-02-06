@@ -375,7 +375,8 @@ export default function CRMInvoices() {
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize))
   const pageItems = React.useMemo(() => visible.slice(page * pageSize, page * pageSize + pageSize), [visible, page, pageSize])
 
-  // Initialize from URL and localStorage once
+  const colsLoaded = React.useRef(false)
+  // Initialize from URL and server-stored preferences once
   React.useEffect(() => {
     if (initializedFromUrl.current) return
     initializedFromUrl.current = true
@@ -386,23 +387,15 @@ export default function CRMInvoices() {
     if (q0) setQ(q0)
     setSort(sort0)
     setDir(dir0)
-    try {
-      const stored = localStorage.getItem('INVOICES_COLS')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setCols(ensureSurveyCol(parsed))
-        }
-      }
-    } catch {}
-    try {
-      const views = localStorage.getItem('INVOICES_SAVED_VIEWS')
-      if (views) {
-        const parsed = JSON.parse(views)
-        if (Array.isArray(parsed)) setSavedViews(parsed)
-      }
-    } catch {}
     ;(async () => {
+      // Load user-specific column preferences from server
+      try {
+        const colRes = await http.get('/api/column-prefs', { params: { pageKey: 'invoices' } })
+        const serverCols = colRes.data?.data
+        if (Array.isArray(serverCols) && serverCols.length > 0) setCols(ensureSurveyCol(serverCols))
+      } catch {}
+      colsLoaded.current = true
+      // Load user-specific saved views from server
       try {
         const res = await http.get('/api/views', { params: { viewKey: 'invoices' } })
         const items = (res.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
@@ -419,7 +412,7 @@ export default function CRMInvoices() {
     })()
   }, [searchParams])
 
-  // Persist to URL/localStorage
+  // Persist URL params and save column prefs to server
   React.useEffect(() => {
     const params: Record<string, string> = {}
     if (q) params.q = q
@@ -428,9 +421,10 @@ export default function CRMInvoices() {
     const colKeys = cols.filter((c) => c.visible).map((c) => c.key).join(',')
     if (colKeys) params.cols = colKeys
     setSearchParams(params, { replace: true })
-    try { localStorage.setItem('INVOICES_COLS', JSON.stringify(cols)) } catch {}
-    try { localStorage.setItem('INVOICES_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
-  }, [q, sort, dir, cols, savedViews, setSearchParams])
+    if (colsLoaded.current) {
+      http.put('/api/column-prefs', { pageKey: 'invoices', columns: cols }).catch(() => {})
+    }
+  }, [q, sort, dir, cols, setSearchParams])
 
   async function saveCurrentView() {
     const viewConfig = { q, sort, dir, cols, pageSize }

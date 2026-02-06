@@ -380,7 +380,8 @@ export default function CRMContacts() {
     },
   })
 
-  // Initialize from URL and localStorage once
+  const colsLoaded = React.useRef(false)
+  // Initialize from URL and server-stored preferences once
   React.useEffect(() => {
     if (initializedFromUrl.current) return
     initializedFromUrl.current = true
@@ -391,21 +392,15 @@ export default function CRMContacts() {
     if (q0) setQ(q0)
     setSort(sort0)
     setDir(dir0)
-    try {
-      const stored = localStorage.getItem('CONTACTS_COLS')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) setCols(ensureSurveyCol(parsed))
-      }
-    } catch {}
-    try {
-      const views = localStorage.getItem('CONTACTS_SAVED_VIEWS')
-      if (views) {
-        const parsed = JSON.parse(views)
-        if (Array.isArray(parsed)) setSavedViews(parsed)
-      }
-    } catch {}
     ;(async () => {
+      // Load user-specific column preferences from server
+      try {
+        const colRes = await http.get('/api/column-prefs', { params: { pageKey: 'contacts' } })
+        const serverCols = colRes.data?.data
+        if (Array.isArray(serverCols) && serverCols.length > 0) setCols(ensureSurveyCol(serverCols))
+      } catch {}
+      colsLoaded.current = true
+      // Load user-specific saved views from server
       try {
         const res = await http.get('/api/views', { params: { viewKey: 'contacts' } })
         const items = (res.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
@@ -422,7 +417,7 @@ export default function CRMContacts() {
     })()
   }, [searchParams])
 
-  // Persist to URL/localStorage
+  // Persist URL params and save column prefs to server
   React.useEffect(() => {
     const params: Record<string, string> = {}
     if (q) params.q = q
@@ -431,9 +426,10 @@ export default function CRMContacts() {
     const colKeys = cols.filter((c) => c.visible).map((c) => c.key).join(',')
     if (colKeys) params.cols = colKeys
     setSearchParams(params, { replace: true })
-    try { localStorage.setItem('CONTACTS_COLS', JSON.stringify(cols)) } catch {}
-    try { localStorage.setItem('CONTACTS_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
-  }, [q, sort, dir, cols, savedViews, setSearchParams])
+    if (colsLoaded.current) {
+      http.put('/api/column-prefs', { pageKey: 'contacts', columns: cols }).catch(() => {})
+    }
+  }, [q, sort, dir, cols, setSearchParams])
 
   async function saveCurrentView() {
     const viewConfig = { q, sort, dir, cols }

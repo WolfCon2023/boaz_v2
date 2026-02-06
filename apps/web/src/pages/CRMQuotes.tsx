@@ -377,7 +377,8 @@ export default function CRMQuotes() {
   const totalPages = Math.max(1, Math.ceil(visible.length / pageSize))
   const pageItems = React.useMemo(() => visible.slice(page * pageSize, page * pageSize + pageSize), [visible, page, pageSize])
 
-  // Initialize from URL/localStorage
+  const colsLoaded = React.useRef(false)
+  // Initialize from URL and server-stored preferences once
   React.useEffect(() => {
     if (initializedFromUrl.current) return
     initializedFromUrl.current = true
@@ -388,15 +389,15 @@ export default function CRMQuotes() {
     if (q0) setQ(q0)
     setSort(sort0)
     setDir(dir0)
-    try {
-      const stored = localStorage.getItem('QUOTES_COLS')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) setCols(ensureSurveyCol(parsed))
-      }
-    } catch {}
-    try { const views = localStorage.getItem('QUOTES_SAVED_VIEWS'); if (views) { const parsed = JSON.parse(views); if (Array.isArray(parsed)) setSavedViews(parsed) } } catch {}
     ;(async () => {
+      // Load user-specific column preferences from server
+      try {
+        const colRes = await http.get('/api/column-prefs', { params: { pageKey: 'quotes' } })
+        const serverCols = colRes.data?.data
+        if (Array.isArray(serverCols) && serverCols.length > 0) setCols(ensureSurveyCol(serverCols))
+      } catch {}
+      colsLoaded.current = true
+      // Load user-specific saved views from server
       try {
         const res = await http.get('/api/views', { params: { viewKey: 'quotes' } })
         const items = (res.data?.data?.items ?? []).map((v: any) => ({ id: String(v._id), name: v.name, config: v.config }))
@@ -413,7 +414,7 @@ export default function CRMQuotes() {
     })()
   }, [searchParams])
 
-  // Persist
+  // Persist URL params and save column prefs to server
   React.useEffect(() => {
     const params: Record<string, string> = {}
     if (q) params.q = q
@@ -422,9 +423,10 @@ export default function CRMQuotes() {
     const colKeys = cols.filter((c)=> c.visible).map((c)=> c.key).join(',')
     if (colKeys) params.cols = colKeys
     setSearchParams(params, { replace: true })
-    try { localStorage.setItem('QUOTES_COLS', JSON.stringify(cols)) } catch {}
-    try { localStorage.setItem('QUOTES_SAVED_VIEWS', JSON.stringify(savedViews)) } catch {}
-  }, [q, sort, dir, cols, savedViews, setSearchParams])
+    if (colsLoaded.current) {
+      http.put('/api/column-prefs', { pageKey: 'quotes', columns: cols }).catch(() => {})
+    }
+  }, [q, sort, dir, cols, setSearchParams])
 
   async function saveCurrentView() {
     const viewConfig = { q, sort, dir, cols }
