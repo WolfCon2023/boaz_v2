@@ -507,6 +507,42 @@ export default function CRMQuotes() {
 
   const [editing, setEditing] = React.useState<Quote | null>(null)
   const [lineItems, setLineItems] = React.useState<QuoteLineItem[]>([])
+
+  // Inline editing state (matches Accounts, Deals, Invoices pattern)
+  const [inlineEditId, setInlineEditId] = React.useState<string | null>(null)
+  const [inlineTitle, setInlineTitle] = React.useState('')
+  const [inlineStatus, setInlineStatus] = React.useState('')
+  const [inlineApprover, setInlineApprover] = React.useState('')
+  const [inlineSignerName, setInlineSignerName] = React.useState('')
+  const [inlineSignerEmail, setInlineSignerEmail] = React.useState('')
+
+  function startInlineEdit(qt: Quote) {
+    setInlineEditId(qt._id)
+    setInlineTitle(qt.title ?? '')
+    setInlineStatus(qt.status ?? '')
+    setInlineApprover(qt.approver ?? '')
+    setInlineSignerName(qt.signerName ?? '')
+    setInlineSignerEmail(qt.signerEmail ?? '')
+  }
+  async function saveInlineEdit() {
+    if (!inlineEditId) return
+    const payload: any = { _id: inlineEditId }
+    payload.title = inlineTitle || undefined
+    payload.status = inlineStatus || undefined
+    payload.approver = inlineApprover || undefined
+    payload.signerName = inlineSignerName || undefined
+    payload.signerEmail = inlineSignerEmail || undefined
+    await update.mutateAsync(payload)
+    cancelInlineEdit()
+  }
+  function cancelInlineEdit() {
+    setInlineEditId(null)
+    setInlineTitle('')
+    setInlineStatus('')
+    setInlineApprover('')
+    setInlineSignerName('')
+    setInlineSignerEmail('')
+  }
   const [qtyDraftById, setQtyDraftById] = React.useState<Record<string, string>>({})
   const [showHistory, setShowHistory] = React.useState(false)
   const editingIdRef = React.useRef<string | null>(null)
@@ -869,14 +905,14 @@ export default function CRMQuotes() {
                     {col.label}
                   </th>
                 ))}
+                <th className="px-4 py-2 whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((row) => (
                 <tr
                   key={row._id}
-                  className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)] cursor-pointer"
-                  onClick={() => setEditing(row)}
+                  className="border-t border-[color:var(--color-border)] hover:bg-[color:var(--color-muted)]"
                 >
                   {cols.filter((c) => c.visible).map((col) => (
                     <td
@@ -885,9 +921,70 @@ export default function CRMQuotes() {
                         col.key === 'quoteNumber' ? 'whitespace-nowrap' : ''
                       }`}
                     >
-                      {getColValue(row, col.key)}
+                      {inlineEditId === row._id ? (
+                        col.key === 'title' ? (
+                          <input
+                            value={inlineTitle}
+                            onChange={(e) => setInlineTitle(e.target.value)}
+                            className="w-full rounded border bg-transparent px-2 py-1 text-sm"
+                          />
+                        ) : col.key === 'status' ? (
+                          <select
+                            value={inlineStatus}
+                            onChange={(e) => setInlineStatus(e.target.value)}
+                            className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-sm"
+                          >
+                            <option value="Draft">Draft</option>
+                            <option value="Submitted for Review">Submitted for Review</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Sent to Signer">Sent to Signer</option>
+                            <option value="Signed">Signed</option>
+                            <option value="Rejected">Rejected</option>
+                          </select>
+                        ) : col.key === 'approver' ? (
+                          <select
+                            value={inlineApprover}
+                            onChange={(e) => setInlineApprover(e.target.value)}
+                            className="w-full rounded border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-sm"
+                          >
+                            <option value="">None</option>
+                            {managers.map((m) => (
+                              <option key={m.id} value={m.email}>{m.name ?? m.email}</option>
+                            ))}
+                          </select>
+                        ) : col.key === 'signerName' ? (
+                          <input
+                            value={inlineSignerName}
+                            onChange={(e) => setInlineSignerName(e.target.value)}
+                            className="w-full rounded border bg-transparent px-2 py-1 text-sm"
+                          />
+                        ) : col.key === 'signerEmail' ? (
+                          <input
+                            value={inlineSignerEmail}
+                            onChange={(e) => setInlineSignerEmail(e.target.value)}
+                            className="w-full rounded border bg-transparent px-2 py-1 text-sm"
+                          />
+                        ) : (
+                          getColValue(row, col.key)
+                        )
+                      ) : (
+                        getColValue(row, col.key)
+                      )}
                     </td>
                   ))}
+                  <td className="px-4 py-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    {inlineEditId === row._id ? (
+                      <div className="flex items-center gap-2">
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={saveInlineEdit}>Save</button>
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={cancelInlineEdit}>Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => startInlineEdit(row)}>Edit</button>
+                        <button className="rounded-lg border px-2 py-1 text-xs" onClick={() => setEditing(row)}>Open</button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
