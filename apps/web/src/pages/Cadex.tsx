@@ -55,6 +55,8 @@ type Appointment = {
   reminderMinutesBefore?: number | null
   reminderEmailSentAt?: string | null
   orgVisible?: boolean
+  locationType?: 'video' | 'phone' | 'in_person' | 'custom'
+  location?: string | null
   startsAt: string
   endsAt: string
   timeZone: string
@@ -162,6 +164,19 @@ function CadexAppointmentDetail({ eventId, colors, onClose }: { eventId: string;
         {isCancelled ? <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-3 py-0.5 text-xs font-semibold text-red-400"><XCircle className="h-3 w-3" /> Cancelled</span> : <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-3 py-0.5 text-xs font-semibold text-green-400"><CheckCircle2 className="h-3 w-3" /> Booked</span>}
         {apt.orgVisible && <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-3 py-0.5 text-xs font-semibold text-blue-400"><Globe className="h-3 w-3" /> Shared with Org</span>}
       </div>
+      {apt.location && (
+        <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)] mb-2">Location</div>
+          <div className="flex items-center gap-2.5">
+            <Globe className="h-4 w-4 text-[color:var(--color-text-muted)] shrink-0" />
+            {/^https?:\/\//.test(apt.location) ? (
+              <a href={apt.location} target="_blank" rel="noopener noreferrer" className="text-sm text-[color:var(--color-primary-600)] hover:underline break-all">{apt.location}</a>
+            ) : (
+              <span className="text-sm">{apt.location}</span>
+            )}
+          </div>
+        </div>
+      )}
       {(apt.attendeeFirstName || apt.attendeeLastName || apt.attendeeEmail) && (
         <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)] mb-3">Attendee</div>
@@ -587,6 +602,7 @@ export default function Cadex() {
   const [bookPhone, setBookPhone] = React.useState('')
   const [bookPreference, setBookPreference] = React.useState<'email' | 'phone' | 'sms'>('email')
   const [bookNotes, setBookNotes] = React.useState('')
+  const [bookLocation, setBookLocation] = React.useState('')
   const [bookScheduledByUserId, setBookScheduledByUserId] = React.useState<string>('')
   const [bookReminderMinutes, setBookReminderMinutes] = React.useState<number>(60)
   const [bookOrgVisible, setBookOrgVisible] = React.useState(false)
@@ -662,6 +678,7 @@ export default function Cadex() {
         attendeeContactPreference: bookPreference,
         scheduledByUserId: bookScheduledByUserId || null,
         notes: bookNotes.trim() || null,
+        location: bookLocation.trim() || null,
         startsAt: startsAt.toISOString(),
         timeZone: tzDraft || 'UTC',
         reminderMinutesBefore: Number.isFinite(bookReminderMinutes) ? bookReminderMinutes : 60,
@@ -682,6 +699,7 @@ export default function Cadex() {
       setBookEmail('')
       setBookPhone('')
       setBookNotes('')
+      setBookLocation('')
       setBookOrgVisible(false)
       await qc.invalidateQueries({ queryKey: ['scheduler', 'appointments'] })
     },
@@ -1746,13 +1764,22 @@ export default function Cadex() {
             </div>
 
             <div className="mt-3 grid gap-3 md:grid-cols-6">
-              <div className="md:col-span-5">
+              <div className="md:col-span-3">
+                <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Location</label>
+                <input
+                  value={bookLocation}
+                  onChange={(e) => setBookLocation(e.target.value)}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  placeholder="e.g. Zoom link, conference room, address…"
+                />
+              </div>
+              <div className="md:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Notes</label>
                 <input
                   value={bookNotes}
                   onChange={(e) => setBookNotes(e.target.value)}
                   className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
-                  placeholder="Optional notes (will be added to the CRM meeting task)"
+                  placeholder="Optional notes"
                 />
               </div>
               <div className="flex items-end justify-end">
@@ -1827,6 +1854,16 @@ export default function Cadex() {
                     <div className="text-xs text-[color:var(--color-text-muted)]">
                       Scheduled by: {a.scheduledByName ? `${a.scheduledByName} — ` : ''}
                       {a.scheduledByEmail}
+                    </div>
+                  ) : null}
+                  {a.location ? (
+                    <div className="text-xs text-[color:var(--color-text-muted)] flex items-center gap-1">
+                      <Globe className="h-3 w-3 shrink-0" />
+                      {/^https?:\/\//.test(a.location) ? (
+                        <a href={a.location} target="_blank" rel="noopener noreferrer" className="text-[color:var(--color-primary-600)] hover:underline truncate">{a.location}</a>
+                      ) : (
+                        <span className="truncate">{a.location}</span>
+                      )}
                     </div>
                   ) : null}
                 </div>
@@ -2197,6 +2234,19 @@ export default function Cadex() {
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-[color:var(--color-text-muted)]" />
                     <span className="text-sm">{selectedAppointment.attendeePhone}</span>
+                  </div>
+                </div>
+              )}
+              {selectedAppointment.location && (
+                <div>
+                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Location</div>
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+                    {/^https?:\/\//.test(selectedAppointment.location) ? (
+                      <a href={selectedAppointment.location} target="_blank" rel="noopener noreferrer" className="text-sm text-[color:var(--color-primary-600)] hover:underline break-all">{selectedAppointment.location}</a>
+                    ) : (
+                      <span className="text-sm">{selectedAppointment.location}</span>
+                    )}
                   </div>
                 </div>
               )}

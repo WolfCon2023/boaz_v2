@@ -66,6 +66,7 @@ type AppointmentDoc = {
   notes?: string | null
   orgVisible?: boolean
   locationType?: 'video' | 'phone' | 'in_person' | 'custom'
+  location?: string | null
   startsAt: Date
   endsAt: Date
   timeZone: string
@@ -774,6 +775,7 @@ internal.get('/appointments', async (req: any, res) => {
         reminderEmailSentAt: d.reminderEmailSentAt?.toISOString?.() ?? null,
         orgVisible: d.orgVisible === true,
         locationType: d.locationType ?? 'video',
+        location: d.location ?? null,
         startsAt: d.startsAt?.toISOString?.() ?? null,
         endsAt: d.endsAt?.toISOString?.() ?? null,
         createdAt: d.createdAt?.toISOString?.() ?? null,
@@ -818,6 +820,7 @@ internal.get('/appointments/:id', async (req: any, res) => {
       reminderEmailSentAt: d.reminderEmailSentAt?.toISOString?.() ?? null,
       orgVisible: d.orgVisible === true,
       locationType: d.locationType ?? 'video',
+      location: d.location ?? null,
       notes: d.notes ?? null,
       startsAt: d.startsAt?.toISOString?.() ?? null,
       endsAt: d.endsAt?.toISOString?.() ?? null,
@@ -841,6 +844,7 @@ const internalBookSchema = z.object({
   attendeeContactPreference: z.enum(['email', 'phone', 'sms']).optional().nullable(),
   scheduledByUserId: z.string().optional().nullable(),
   notes: z.string().max(1500).optional().nullable(),
+  location: z.string().max(500).optional().nullable(),
   orgVisible: z.boolean().optional(),
   startsAt: z.string().min(10),
   timeZone: z.string().min(1).max(64).optional(),
@@ -994,6 +998,7 @@ internal.post('/appointments/book', async (req: any, res) => {
     reminderEmailSentAt: null,
     m365EventId: null,
     notes: parsed.data.notes ? parsed.data.notes.trim() : null,
+    location: parsed.data.location ? parsed.data.location.trim() : (type.locationDetails || null),
     orgVisible: parsed.data.orgVisible === true,
     locationType: type.locationType ?? 'video',
     startsAt: startUtc,
@@ -1189,6 +1194,7 @@ internal.get('/appointments/by-contact/:contactId', async (req: any, res) => {
         timeZone: d.timeZone ?? null,
         status: d.status ?? null,
         locationType: d.locationType ?? 'video',
+        location: d.location ?? null,
         attendeeName: d.attendeeName ?? null,
         attendeeEmail: d.attendeeEmail ?? null,
         attendeePhone: d.attendeePhone ?? null,
@@ -1488,6 +1494,7 @@ publicRouter.post('/book/:slug', async (req, res) => {
     reminderEmailSentAt: null,
     m365EventId: null,
     notes: parsed.data.notes ? parsed.data.notes.trim() : null,
+    location: type.locationDetails || null,
     locationType: type.locationType ?? 'video',
     startsAt: startUtc,
     endsAt: endUtc,

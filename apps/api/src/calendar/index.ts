@@ -70,6 +70,7 @@ calendarRouter.get('/events', async (req: any, res) => {
       timeZone: a.timeZone ?? 'UTC',
       orgVisible: a.orgVisible === true,
       locationType: a.locationType ?? 'video',
+      location: a.location ?? null,
       attendee: {
         firstName: a.attendeeFirstName ?? null,
         lastName: a.attendeeLastName ?? null,
@@ -203,6 +204,7 @@ calendarRouter.get('/events/org', async (req: any, res) => {
       ownerEmail: owner?.email ?? null,
       orgVisible: a.orgVisible === true,
       locationType: a.locationType ?? 'video',
+      location: a.location ?? null,
       title: a.appointmentTypeName ? String(a.appointmentTypeName) : `Appointment: ${a.attendeeName || a.attendeeEmail || ''}`.trim(),
       startsAt: a.startsAt?.toISOString?.() ?? null,
       endsAt: a.endsAt?.toISOString?.() ?? null,
