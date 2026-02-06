@@ -262,8 +262,7 @@ export default function Scheduler() {
   const userAppointmentColor = colorPrefsQ.data?.appointment || '#3b82f6'
 
   // Generate color for appointment type – returns a hex string for inline styles
-  const getAppointmentTypeHex = React.useCallback((typeId: string) => {
-    // Use the user's chosen appointment color as the primary
+  const getAppointmentTypeHex = React.useCallback((_typeId: string) => {
     return userAppointmentColor
   }, [userAppointmentColor])
 
