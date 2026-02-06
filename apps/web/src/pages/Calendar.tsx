@@ -120,7 +120,7 @@ function DetailSkeleton() {
    ═══════════════════════════════════════════════════════════ */
 function AppointmentDetail({
   eventId,
-  lightEvent,
+  lightEvent: _lightEvent,
   colors,
   onClose,
 }: {
