@@ -1033,8 +1033,7 @@ type ApplicationAccessDoc = {
 export const APPLICATION_CATALOG = [
   { key: 'crm', name: 'CRM', description: 'Contacts, deals, pipelines' },
   { key: 'finhub', name: 'FinHub', description: 'Financial Intelligence, Revenue Intelligence, and financial operations' },
-  { key: 'scheduler', name: 'Scheduler', description: 'Calendar and bookings' },
-  { key: 'calendar', name: 'Calendar', description: 'Calendar views, team availability, and meetings' },
+  { key: 'cadex', name: 'Cadex', description: 'Calendar, appointments, scheduling & availability' },
   { key: 'helpdesk', name: 'Helpdesk', description: 'Tickets and SLAs' },
   { key: 'analytics', name: 'Analytics', description: 'Dashboards and reports' },
   { key: 'stratflow', name: 'StratFlow', description: 'Projects and tasks' },
@@ -1103,10 +1102,15 @@ export async function hasApplicationAccess(userId: string, appKey: string): Prom
 
   await ensureUserAppsCollection(db)
 
-  // Implied access: CRM includes Scheduler + Calendar
-  if (key === 'scheduler' || key === 'calendar') {
+  // Implied access: CRM includes Cadex (formerly Scheduler + Calendar)
+  if (key === 'cadex' || key === 'scheduler' || key === 'calendar') {
     const crmAccess = await db.collection<ApplicationAccessDoc>('user_apps').findOne({ userId, appKey: 'crm' } as any)
     if (crmAccess) return true
+    // Also check if user had old scheduler/calendar access or the new cadex access
+    if (key === 'cadex') {
+      const oldAccess = await db.collection<ApplicationAccessDoc>('user_apps').findOne({ userId, appKey: { $in: ['scheduler', 'calendar'] } } as any)
+      if (oldAccess) return true
+    }
   }
 
   const access = await db.collection<ApplicationAccessDoc>('user_apps').findOne({

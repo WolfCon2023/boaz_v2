@@ -72,7 +72,7 @@ When an appointment is booked, BOAZ also creates a **CRM Task (type: meeting)** 
 
 ## ✅ Where to find it
 
-- Internal Scheduler app: **Apps → Scheduler** (\`/apps/scheduler\`)
+- Cadex app: **Apps → Cadex** (\`/apps/cadex\`)
 - Public booking page: \`/schedule/<appointment-type-slug>\`
 
 ---
@@ -151,7 +151,7 @@ Appointment Types define **what** someone can book and generate the **public boo
 
 ## Where to find it
 
-- Scheduler app: **Appointment types** tab (\`/apps/scheduler\`)
+- Cadex app: **Types** tab (\`/apps/cadex\`)
 
 ---
 
@@ -228,7 +228,7 @@ Availability controls **when** your public booking pages show available times.
 
 ## Where to find it
 
-- Scheduler app: **Availability** tab (\`/apps/scheduler\`)
+- Cadex app: **Availability** tab (\`/apps/cadex\`)
 
 ---
 
@@ -286,7 +286,7 @@ The Appointments tab is where you manage bookings and (internally) schedule on b
 
 ## Where to find it
 
-- Scheduler app: **Appointments** tab (\`/apps/scheduler\`)
+- Cadex app: **Appointments** tab (\`/apps/cadex\`)
 - Public booking: \`/schedule/<slug>\`
 
 ---
@@ -348,7 +348,7 @@ Visualize scheduled appointments in Month / Week / Day views.
 
 ## Where to find it
 
-- Scheduler app: **Calendar** tab (\`/apps/scheduler\`)
+- Cadex app: **Calendar** tab (\`/apps/cadex\`)
 
 ---
 

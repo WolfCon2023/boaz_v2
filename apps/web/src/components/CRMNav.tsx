@@ -50,8 +50,7 @@ export function CRMNav() {
       <NavLink to="/apps/crm/renewals" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Renewals</NavLink>
       <NavLink to="/apps/crm/reporting" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Reporting</NavLink>
       <NavLink to="/apps/stratflow" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>StratFlow</NavLink>
-      <NavLink to="/apps/scheduler" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Scheduler</NavLink>
-      <NavLink to="/apps/calendar" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Calendar</NavLink>
+      <NavLink to="/apps/cadex" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Cadex</NavLink>
       {isAdmin && (
         <NavLink to="/apps/crm/integrations" className={({ isActive }) => `${base} ${isActive ? 'bg-[color:var(--color-muted)]' : ''}`}>Integrations</NavLink>
       )}

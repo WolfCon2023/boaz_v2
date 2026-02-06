@@ -95,14 +95,9 @@ export default function CRMHub() {
       href: '/apps/crm/integrations',
     },
     {
-      label: 'Scheduler',
-      desc: 'Appointments, booking links, and CRM meeting tasks',
-      href: '/apps/scheduler',
-    },
-    {
-      label: 'Calendar',
-      desc: 'Unified schedule view across Scheduler + CRM tasks',
-      href: '/apps/calendar',
+      label: 'Cadex',
+      desc: 'Calendar, appointments, scheduling, and availability — all in one place',
+      href: '/apps/cadex',
     },
     { label: 'Surveys & Feedback', desc: 'NPS/CSAT and post‑interaction surveys', href: '/apps/crm/surveys' },
     {

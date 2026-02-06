@@ -963,7 +963,7 @@ export default function CRMContacts() {
               <div className="col-span-full mt-4 rounded-xl border border-[color:var(--color-border)] p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <div className="text-sm font-semibold">Appointments</div>
-                  <a href="/apps/calendar" className="text-xs underline text-[color:var(--color-primary)]">Open Calendar</a>
+                  <a href="/apps/cadex" className="text-xs underline text-[color:var(--color-primary)]">Open Cadex</a>
                 </div>
                 <ContactAppointments contactId={editing._id} />
               </div>
