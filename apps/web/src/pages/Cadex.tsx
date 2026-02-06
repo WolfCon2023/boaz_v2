@@ -1775,10 +1775,11 @@ export default function Cadex() {
               </div>
               <div className="md:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-[color:var(--color-text-muted)]">Notes</label>
-                <input
+                <textarea
                   value={bookNotes}
-                  onChange={(e) => setBookNotes(e.target.value)}
-                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm"
+                  onChange={(e) => { setBookNotes(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px' }}
+                  rows={1}
+                  className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] px-3 py-2 text-sm resize-none overflow-hidden"
                   placeholder="Optional notes"
                 />
               </div>
