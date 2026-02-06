@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download, Database, Layers } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download, Database, Layers, ScrollText } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 import { AdminStratflow } from '@/components/AdminStratflow'
@@ -18,7 +18,7 @@ type Session = {
 
 export default function AdminPortal() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests' | 'access-report' | 'maintenance' | 'stratflow'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests' | 'access-report' | 'maintenance' | 'stratflow' | 'audit-logs'>('sessions')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [registrationRequestStatus, setRegistrationRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
   const [appAccessRequestStatus, setAppAccessRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
@@ -834,6 +834,17 @@ export default function AdminPortal() {
         >
           <Layers className="mr-2 inline h-4 w-4" />
           StratFlow
+        </button>
+        <button
+          onClick={() => setActiveTab('audit-logs')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'audit-logs'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <ScrollText className="mr-2 inline h-4 w-4" />
+          Audit Logs
         </button>
       </div>
 
@@ -1954,6 +1965,7 @@ export default function AdminPortal() {
       {/* Maintenance / Tools */}
       {activeTab === 'maintenance' && <MaintenanceTab isAdmin={isAdmin} message={message} error={error} setMessage={setMessage} setError={setError} />}
       {activeTab === 'stratflow' && <AdminStratflow />}
+      {activeTab === 'audit-logs' && <AuditLogsTab />}
     </div>
   )
 }
@@ -2321,6 +2333,223 @@ function AccessReportView() {
         <div className="mt-4 text-xs text-[color:var(--color-text-muted)]">
           Total users: {reportData.report.length}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Audit Logs Tab ──────────────────────────────────────────────────────
+
+type AuditLogEntry = {
+  _id: string
+  action: string
+  userId?: string | null
+  email?: string | null
+  ipAddress?: string | null
+  userAgent?: string | null
+  meta?: Record<string, any> | null
+  createdAt: string | null
+}
+
+const AUDIT_ACTIONS = [
+  { value: '', label: 'All actions' },
+  { value: 'login_success', label: 'Login success' },
+  { value: 'login_failed', label: 'Login failed' },
+  { value: 'logout', label: 'Logout' },
+  { value: 'token_refresh', label: 'Token refresh' },
+  { value: 'password_change', label: 'Password change' },
+  { value: 'password_reset_request', label: 'Password reset request' },
+  { value: 'password_reset_complete', label: 'Password reset complete' },
+  { value: 'registration_request', label: 'Registration request' },
+  { value: 'session_revoked', label: 'Session revoked' },
+]
+
+function AuditLogsTab() {
+  const queryClient = useQueryClient()
+  const [search, setSearch] = useState('')
+  const [actionFilter, setActionFilter] = useState('')
+  const [page, setPage] = useState(0)
+  const pageSize = 50
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0) }, [search, actionFilter])
+
+  // Fetch audit toggle setting
+  const settingsQ = useQuery<{ data: { enabled: boolean } }>({
+    queryKey: ['admin', 'audit-settings'],
+    queryFn: async () => (await http.get('/api/auth/admin/audit-settings')).data,
+    staleTime: 30_000,
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: async (enabled: boolean) => (await http.patch('/api/auth/admin/audit-settings', { enabled })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'audit-settings'] }),
+  })
+
+  // Fetch audit logs
+  const logsQ = useQuery<{ data: { items: AuditLogEntry[]; total: number; limit: number; offset: number } }>({
+    queryKey: ['admin', 'audit-logs', search, actionFilter, page],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: String(pageSize), offset: String(page * pageSize) })
+      if (search.trim()) params.set('q', search.trim())
+      if (actionFilter) params.set('action', actionFilter)
+      return (await http.get(`/api/auth/admin/audit-logs?${params}`)).data
+    },
+    staleTime: 15_000,
+  })
+
+  const items = logsQ.data?.data.items ?? []
+  const total = logsQ.data?.data.total ?? 0
+  const totalPages = Math.ceil(total / pageSize)
+  const auditEnabled = settingsQ.data?.data.enabled !== false
+
+  function formatAction(action: string) {
+    return action.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  }
+
+  function actionBadgeColor(action: string) {
+    if (action === 'login_success') return 'bg-green-100 text-green-800 border-green-200'
+    if (action === 'login_failed') return 'bg-red-100 text-red-800 border-red-200'
+    if (action === 'logout') return 'bg-gray-100 text-gray-800 border-gray-200'
+    if (action.includes('password')) return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    return 'bg-blue-100 text-blue-800 border-blue-200'
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Toggle + Header */}
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Audit Logging</h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
+              Track user logins, logouts, password changes, and other security events.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-[color:var(--color-text-muted)]">{auditEnabled ? 'Enabled' : 'Disabled'}</span>
+            <button
+              type="button"
+              onClick={() => toggleMutation.mutate(!auditEnabled)}
+              disabled={toggleMutation.isPending || settingsQ.isLoading}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                auditEnabled ? 'bg-[color:var(--color-primary-600)]' : 'bg-[color:var(--color-muted)]'
+              }`}
+              title={auditEnabled ? 'Disable audit logging' : 'Enable audit logging'}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  auditEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Search + Filters */}
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-1 items-center gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--color-text-muted)]" />
+              <input
+                type="text"
+                placeholder="Search by email, IP, user..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] py-2 pl-9 pr-3 text-sm placeholder:text-[color:var(--color-text-muted)] focus:border-[color:var(--color-primary-500)] focus:outline-none"
+              />
+            </div>
+            <select
+              value={actionFilter}
+              onChange={(e) => setActionFilter(e.target.value)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+            >
+              {AUDIT_ACTIONS.map((a) => (
+                <option key={a.value} value={a.value}>{a.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="text-xs text-[color:var(--color-text-muted)]">
+            {logsQ.isFetching ? 'Loading...' : `${total} events`}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[color:var(--color-border)] text-left text-xs text-[color:var(--color-text-muted)]">
+                <th className="px-3 py-2 font-medium">Timestamp</th>
+                <th className="px-3 py-2 font-medium">Action</th>
+                <th className="px-3 py-2 font-medium">Email</th>
+                <th className="px-3 py-2 font-medium">IP Address</th>
+                <th className="px-3 py-2 font-medium">User Agent</th>
+                <th className="px-3 py-2 font-medium">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[color:var(--color-border)]">
+              {items.map((entry) => (
+                <tr key={entry._id} className="hover:bg-[color:var(--color-muted)]">
+                  <td className="whitespace-nowrap px-3 py-2 text-xs">
+                    {entry.createdAt ? formatDateTime(entry.createdAt) : '—'}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium ${actionBadgeColor(entry.action)}`}>
+                      {formatAction(entry.action)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-xs">{entry.email || '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-xs font-mono">{entry.ipAddress || '—'}</td>
+                  <td className="max-w-[200px] truncate px-3 py-2 text-xs text-[color:var(--color-text-muted)]" title={entry.userAgent || ''}>
+                    {entry.userAgent ? entry.userAgent.slice(0, 60) + (entry.userAgent.length > 60 ? '...' : '') : '—'}
+                  </td>
+                  <td className="max-w-[150px] truncate px-3 py-2 text-[10px] text-[color:var(--color-text-muted)]">
+                    {entry.meta ? JSON.stringify(entry.meta) : '—'}
+                  </td>
+                </tr>
+              ))}
+              {!logsQ.isLoading && items.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+                    No audit log entries found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-[color:var(--color-text-muted)]">
+                Page {page + 1} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

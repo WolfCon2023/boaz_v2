@@ -168,6 +168,8 @@ authRouter.post('/login', async (req, res) => {
     const result = await verifyCredentials(parsed.data.email, parsed.data.password)
     if (!result) {
       console.log('Login failed: Invalid credentials for', parsed.data.email)
+      // Audit log: failed login
+      logAuditEvent({ action: 'login_failed', email: parsed.data.email, ipAddress: getClientIp(req), userAgent: getUserAgent(req) })
       return res.status(401).json({ error: 'Invalid credentials' })
     }
     
@@ -198,6 +200,9 @@ authRouter.post('/login', async (req, res) => {
       // Continue anyway - session might work with in-memory fallback
     }
     
+    // Audit log: successful login
+    logAuditEvent({ action: 'login_success', userId: user.id, email: user.email, ipAddress: getClientIp(req), userAgent: getUserAgent(req) })
+
     res.cookie('refresh_token', refresh, { ...cookieOpts, maxAge: 7 * 24 * 3600 * 1000 })
     const body: AuthResponse = { token: access, user }
     res.json(body)
@@ -247,12 +252,19 @@ authRouter.post('/refresh', async (req, res) => {
 
 authRouter.post('/logout', async (req, res) => {
   const rt = req.cookies?.refresh_token || req.body?.refresh_token
+  let logUserId: string | undefined
+  let logEmail: string | undefined
   if (rt) {
-    const payload = verifyAny<{ sub?: string; jti?: string }>(rt)
+    const payload = verifyAny<{ sub?: string; email?: string; jti?: string }>(rt)
+    logUserId = payload?.sub
+    logEmail = payload?.email
     if (payload?.jti && payload?.sub) {
       await revokeSession(payload.jti, payload.sub)
     }
   }
+  // Audit log: logout
+  logAuditEvent({ action: 'logout', userId: logUserId, email: logEmail, ipAddress: getClientIp(req), userAgent: getUserAgent(req) })
+
   res.clearCookie('refresh_token', { ...cookieOpts, maxAge: 0 })
   res.json({ ok: true })
 })
@@ -533,6 +545,9 @@ If you didn't request this, please ignore this email.
       console.error('Failed to send password reset email:', emailErr)
     }
 
+    // Audit log: password reset request
+    logAuditEvent({ action: 'password_reset_request', email: parsed.data.email, ipAddress: getClientIp(req), userAgent: getUserAgent(req) })
+
     // Always return success (security best practice - don't reveal if email exists)
     return res.json({ message: 'If an account exists, a password reset email has been sent.' })
   } catch (err: any) {
@@ -557,6 +572,9 @@ authRouter.post('/forgot-password/reset', async (req, res) => {
     if (!success) {
       return res.status(400).json({ error: 'Invalid or expired token' })
     }
+
+    // Audit log: password reset complete
+    logAuditEvent({ action: 'password_reset_complete', ipAddress: getClientIp(req), userAgent: getUserAgent(req) })
 
     return res.json({ message: 'Password has been reset successfully' })
   } catch (err: any) {
@@ -880,6 +898,9 @@ authRouter.post('/me/change-password', requireAuth, async (req, res) => {
     if (!success) {
       return res.status(401).json({ error: 'Current password is incorrect' })
     }
+
+    // Audit log: password change
+    logAuditEvent({ action: 'password_change', userId: auth.userId, email: auth.email, ipAddress: getClientIp(req), userAgent: getUserAgent(req) })
 
     res.json({ message: 'Password changed successfully' })
   } catch (err: any) {
@@ -2094,4 +2115,142 @@ authRouter.get('/debug/users', async (req, res) => {
   }
 })
 
+// ── Audit Logging ──────────────────────────────────────────────────────
 
+type AuditAction =
+  | 'login_success'
+  | 'login_failed'
+  | 'logout'
+  | 'token_refresh'
+  | 'password_change'
+  | 'password_reset_request'
+  | 'password_reset_complete'
+  | 'registration_request'
+  | 'session_revoked'
+
+async function logAuditEvent(opts: {
+  action: AuditAction
+  userId?: string | null
+  email?: string | null
+  ipAddress?: string | null
+  userAgent?: string | null
+  meta?: Record<string, any> | null
+}) {
+  try {
+    const db = await getDb()
+    if (!db) return
+
+    // Check if audit logging is enabled
+    const setting = await db.collection('app_settings').findOne({ key: 'audit_logging_enabled' })
+    if (setting && setting.value === false) return
+
+    await db.collection('audit_logs').insertOne({
+      action: opts.action,
+      userId: opts.userId || null,
+      email: opts.email || null,
+      ipAddress: opts.ipAddress || null,
+      userAgent: opts.userAgent || null,
+      meta: opts.meta || null,
+      createdAt: new Date(),
+    })
+  } catch {
+    // Never let audit logging failures break the main flow
+  }
+}
+
+// GET /api/auth/admin/audit-logs – paginated, searchable
+authRouter.get('/admin/audit-logs', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(503).json({ data: null, error: 'db_unavailable' })
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200)
+    const offset = Math.max(Number(req.query.offset) || 0, 0)
+    const search = req.query.q ? String(req.query.q).trim() : ''
+    const action = req.query.action ? String(req.query.action).trim() : ''
+
+    const filter: any = {}
+    if (action) {
+      filter.action = action
+    }
+    if (search) {
+      const regex = { $regex: search, $options: 'i' }
+      filter.$or = [
+        { email: regex },
+        { userId: regex },
+        { action: regex },
+        { ipAddress: regex },
+        { userAgent: regex },
+      ]
+    }
+
+    const [items, total] = await Promise.all([
+      db.collection('audit_logs').find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).toArray(),
+      db.collection('audit_logs').countDocuments(filter),
+    ])
+
+    res.json({
+      data: {
+        items: items.map((d: any) => ({
+          _id: String(d._id),
+          action: d.action,
+          userId: d.userId,
+          email: d.email,
+          ipAddress: d.ipAddress,
+          userAgent: d.userAgent,
+          meta: d.meta,
+          createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+        })),
+        total,
+        limit,
+        offset,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    res.status(500).json({ data: null, error: err?.message || 'Failed to fetch audit logs' })
+  }
+})
+
+// GET /api/auth/admin/audit-settings – get audit toggle status
+authRouter.get('/admin/audit-settings', requireAuth, requirePermission('*'), async (_req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(503).json({ data: null, error: 'db_unavailable' })
+
+    const setting = await db.collection('app_settings').findOne({ key: 'audit_logging_enabled' })
+    res.json({ data: { enabled: setting ? setting.value !== false : true }, error: null })
+  } catch (err: any) {
+    res.status(500).json({ data: null, error: err?.message || 'Failed to fetch audit settings' })
+  }
+})
+
+// PATCH /api/auth/admin/audit-settings – toggle audit logging on/off
+authRouter.patch('/admin/audit-settings', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(503).json({ data: null, error: 'db_unavailable' })
+
+    const enabled = Boolean(req.body?.enabled)
+    await db.collection('app_settings').updateOne(
+      { key: 'audit_logging_enabled' },
+      { $set: { key: 'audit_logging_enabled', value: enabled, updatedAt: new Date() } },
+      { upsert: true },
+    )
+
+    // Log the toggle itself
+    const auth = (req as any).auth as { userId: string; email: string } | undefined
+    await logAuditEvent({
+      action: enabled ? 'login_success' : 'logout', // repurpose for meta
+      userId: auth?.userId,
+      email: auth?.email,
+      meta: { settingChanged: 'audit_logging_enabled', newValue: enabled },
+    })
+
+    res.json({ data: { enabled }, error: null })
+  } catch (err: any) {
+    res.status(500).json({ data: null, error: err?.message || 'Failed to update audit settings' })
+  }
+})
+
+export { logAuditEvent, type AuditAction }
