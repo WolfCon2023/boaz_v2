@@ -249,7 +249,25 @@ export default function Scheduler() {
     )
   }, [allAppointments, appointmentSearch])
 
-  // Generate color for appointment type
+  // User calendar color preferences
+  const colorPrefsQ = useQuery<{ appointment?: string; meeting?: string; call?: string } | null>({
+    queryKey: ['user-prefs', 'calendar_colors'],
+    queryFn: async () => {
+      const res = await http.get('/api/user-prefs', { params: { key: 'calendar_colors' } })
+      return res.data?.data ?? null
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  })
+  const userAppointmentColor = colorPrefsQ.data?.appointment || '#3b82f6'
+
+  // Generate color for appointment type – returns a hex string for inline styles
+  const getAppointmentTypeHex = React.useCallback((typeId: string) => {
+    // Use the user's chosen appointment color as the primary
+    return userAppointmentColor
+  }, [userAppointmentColor])
+
+  // Legacy Tailwind-class version kept for non-calendar-tab usage
   const getAppointmentTypeColor = React.useCallback((typeId: string) => {
     const typeIndex = types.findIndex((t) => t._id === typeId)
     const colors = [
@@ -1884,7 +1902,8 @@ export default function Scheduler() {
                               e.stopPropagation()
                               setSelectedAppointment(apt)
                             }}
-                            className={`text-[10px] px-1.5 py-0.5 rounded ${getAppointmentTypeColor(apt.appointmentTypeId)} text-white truncate cursor-pointer hover:opacity-80 transition-opacity shadow-sm`}
+                            style={{ backgroundColor: getAppointmentTypeHex(apt.appointmentTypeId) }}
+                            className="text-[10px] px-1.5 py-0.5 rounded text-white truncate cursor-pointer hover:opacity-80 transition-opacity shadow-sm"
                             title={`${apt.appointmentTypeName || 'Appointment'}: ${apt.attendeeName} at ${timeStr}`}
                           >
                             <div className="font-semibold truncate">{timeStr}</div>
@@ -2009,7 +2028,8 @@ export default function Scheduler() {
                           <div
                             key={apt._id}
                             onClick={() => setSelectedAppointment(apt)}
-                            className={`text-xs px-2 py-1.5 rounded ${getAppointmentTypeColor(apt.appointmentTypeId)} text-white cursor-pointer hover:opacity-80 transition-opacity`}
+                            style={{ backgroundColor: getAppointmentTypeHex(apt.appointmentTypeId) }}
+                            className="text-xs px-2 py-1.5 rounded text-white cursor-pointer hover:opacity-80 transition-opacity"
                           >
                             <div className="font-semibold">{timeStr} - {endTimeStr}</div>
                             <div className="text-[10px] opacity-90">{apt.attendeeName}</div>
@@ -2126,7 +2146,8 @@ export default function Scheduler() {
                           <div
                             key={apt._id}
                             onClick={() => setSelectedAppointment(apt)}
-                            className={`rounded-lg p-3 ${getAppointmentTypeColor(apt.appointmentTypeId)} text-white cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all shadow-md`}
+                            style={{ backgroundColor: getAppointmentTypeHex(apt.appointmentTypeId) }}
+                            className="rounded-lg p-3 text-white cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all shadow-md"
                           >
                             <div className="font-semibold text-sm">
                               {startTime.toLocaleTimeString('en-US', {

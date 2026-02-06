@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Globe, ChevronLeft, ChevronRight, CalendarDays, Grid3x3, List, Clock } from 'lucide-react'
+import { Globe, ChevronLeft, ChevronRight, CalendarDays, Grid3x3, List, Clock, Settings, Check } from 'lucide-react'
 
 type CalendarEvent =
   | {
@@ -36,6 +36,38 @@ type CalendarEvent =
       relatedId?: string | null
     }
 
+type ColorPrefs = {
+  appointment: string
+  meeting: string
+  call: string
+}
+
+const DEFAULT_COLORS: ColorPrefs = {
+  appointment: '#3b82f6', // blue
+  meeting: '#8b5cf6',     // purple
+  call: '#f59e0b',        // amber
+}
+
+const COLOR_SWATCHES = [
+  '#3b82f6', '#2563eb', '#1d4ed8', // blues
+  '#8b5cf6', '#7c3aed', '#6d28d9', // purples
+  '#ec4899', '#db2777', '#be185d', // pinks
+  '#ef4444', '#dc2626', '#b91c1c', // reds
+  '#f59e0b', '#d97706', '#b45309', // ambers
+  '#f97316', '#ea580c', '#c2410c', // oranges
+  '#10b981', '#059669', '#047857', // greens
+  '#14b8a6', '#0d9488', '#0f766e', // teals
+  '#06b6d4', '#0891b2', '#0e7490', // cyans
+  '#6366f1', '#4f46e5', '#4338ca', // indigos
+  '#64748b', '#475569', '#334155', // slates
+]
+
+const CATEGORY_LABELS: Record<keyof ColorPrefs, string> = {
+  appointment: 'Appointments',
+  meeting: 'Meetings',
+  call: 'Calls',
+}
+
 function startOfDay(d: Date) {
   const x = new Date(d)
   x.setHours(0, 0, 0, 0)
@@ -46,8 +78,12 @@ function dateKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function eventColor(e: CalendarEvent) {
-  return e.kind === 'appointment' ? 'bg-blue-600' : 'bg-emerald-600'
+function getEventColorKey(e: CalendarEvent): keyof ColorPrefs {
+  if (e.kind === 'appointment') return 'appointment'
+  const tt = (e as any).taskType
+  if (tt === 'meeting') return 'meeting'
+  if (tt === 'call') return 'call'
+  return 'meeting' // default tasks to meeting color
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -60,11 +96,46 @@ export default function Calendar() {
   const [calendarView, setCalendarView] = React.useState<'month' | 'week' | 'day'>('month')
   const [calendarMonth, setCalendarMonth] = React.useState(new Date())
   const [selectedEvent, setSelectedEvent] = React.useState<CalendarEvent | null>(null)
+  const [showColorSettings, setShowColorSettings] = React.useState(false)
 
-  // Compute date range from calendar navigation for API fetches
+  // ─── Color preferences ───
+  const colorPrefsQ = useQuery<ColorPrefs>({
+    queryKey: ['user-prefs', 'calendar_colors'],
+    queryFn: async () => {
+      const res = await http.get('/api/user-prefs', { params: { key: 'calendar_colors' } })
+      return res.data?.data ?? null
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  })
+
+  const colors: ColorPrefs = React.useMemo(() => ({
+    ...DEFAULT_COLORS,
+    ...(colorPrefsQ.data ?? {}),
+  }), [colorPrefsQ.data])
+
+  const saveColorPref = useMutation({
+    mutationFn: async (newColors: ColorPrefs) => {
+      await http.put('/api/user-prefs', { key: 'calendar_colors', value: newColors })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['user-prefs', 'calendar_colors'] })
+    },
+    onError: () => toast.showToast('Failed to save color preference.', 'error'),
+  })
+
+  function setColor(category: keyof ColorPrefs, hex: string) {
+    const updated = { ...colors, [category]: hex }
+    saveColorPref.mutate(updated)
+  }
+
+  function eventBg(e: CalendarEvent) {
+    return colors[getEventColorKey(e)]
+  }
+
+  // ─── Date range ───
   const { from, to } = React.useMemo(() => {
     if (displayMode === 'list') {
-      // List mode: next 30 days
       const f = startOfDay(new Date())
       return { from: f, to: new Date(f.getTime() + 30 * 24 * 60 * 60 * 1000) }
     }
@@ -86,13 +157,13 @@ export default function Calendar() {
       endOfWeek.setDate(endOfWeek.getDate() + 7)
       return { from: startOfWeek, to: endOfWeek }
     }
-    // day
     const dayStart = startOfDay(new Date(calendarMonth))
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
     return { from: dayStart, to: dayEnd }
   }, [displayMode, calendarView, calendarMonth])
 
+  // ─── M365 ───
   const m365StatusQ = useQuery({
     queryKey: ['calendar', 'm365', 'status'],
     queryFn: async () => (await http.get('/api/calendar/m365/status')).data as { data: { configured: boolean; connected: boolean; email?: string | null } },
@@ -104,10 +175,7 @@ export default function Calendar() {
     mutationFn: async () => (await http.get('/api/calendar/m365/connect')).data as { data: { url: string } },
     onSuccess: (r) => {
       const url = r?.data?.url
-      if (!url) {
-        toast.showToast('Microsoft 365 connect URL not returned.', 'error')
-        return
-      }
+      if (!url) { toast.showToast('Microsoft 365 connect URL not returned.', 'error'); return }
       window.location.href = url
     },
     onError: (err: any) => toast.showToast(err?.response?.data?.error || 'Failed to start Microsoft 365 connect.', 'error'),
@@ -122,6 +190,7 @@ export default function Calendar() {
     onError: () => toast.showToast('Failed to disconnect Microsoft 365.', 'error'),
   })
 
+  // ─── Events ───
   const eventsQ = useQuery({
     queryKey: ['calendar', 'events', view, from.toISOString(), to.toISOString()],
     queryFn: async () => {
@@ -135,7 +204,6 @@ export default function Calendar() {
 
   const events = eventsQ.data?.data.items ?? []
 
-  // Group events by date key for calendar grid views
   const eventsByDate = React.useMemo(() => {
     const map = new Map<string, CalendarEvent[]>()
     for (const e of events) {
@@ -149,7 +217,6 @@ export default function Calendar() {
     return map
   }, [events])
 
-  // Group for list view
   const grouped = React.useMemo(() => {
     const map = new Map<string, CalendarEvent[]>()
     for (const e of events) {
@@ -173,11 +240,9 @@ export default function Calendar() {
     return (
       <div
         key={`${e.kind}-${e.id}`}
-        onClick={(ev) => {
-          ev.stopPropagation()
-          setSelectedEvent(e)
-        }}
-        className={`${compact ? 'text-[10px] px-1.5 py-0.5' : 'text-xs px-2 py-1.5'} rounded ${eventColor(e)} text-white truncate cursor-pointer hover:opacity-80 transition-opacity shadow-sm`}
+        onClick={(ev) => { ev.stopPropagation(); setSelectedEvent(e) }}
+        style={{ backgroundColor: eventBg(e) }}
+        className={`${compact ? 'text-[10px] px-1.5 py-0.5' : 'text-xs px-2 py-1.5'} rounded text-white truncate cursor-pointer hover:opacity-80 transition-opacity shadow-sm`}
         title={`${e.title} at ${timeStr}`}
       >
         <div className="font-semibold truncate">{timeStr}</div>
@@ -189,6 +254,72 @@ export default function Calendar() {
           <span className="text-[9px] opacity-75">Shared</span>
         )}
       </div>
+    )
+  }
+
+  // ─── Color Settings Panel ───
+  function renderColorSettings() {
+    return (
+      <section className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm font-semibold">Event Colors</div>
+          <button
+            type="button"
+            onClick={() => {
+              saveColorPref.mutate({ ...DEFAULT_COLORS })
+              toast.showToast('Colors reset to defaults.', 'success')
+            }}
+            className="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)] underline"
+          >
+            Reset to defaults
+          </button>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {(Object.keys(CATEGORY_LABELS) as Array<keyof ColorPrefs>).map((cat) => (
+            <div key={cat}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-4 w-4 rounded-full border border-white/20" style={{ backgroundColor: colors[cat] }} />
+                <span className="text-xs font-medium">{CATEGORY_LABELS[cat]}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {COLOR_SWATCHES.map((hex) => (
+                  <button
+                    key={hex}
+                    type="button"
+                    onClick={() => setColor(cat, hex)}
+                    className="relative h-6 w-6 rounded-full border border-white/10 hover:scale-110 transition-transform"
+                    style={{ backgroundColor: hex }}
+                    title={hex}
+                  >
+                    {colors[cat] === hex && (
+                      <Check className="absolute inset-0 m-auto h-3.5 w-3.5 text-white drop-shadow" />
+                    )}
+                  </button>
+                ))}
+                <label className="relative h-6 w-6 rounded-full border border-dashed border-[color:var(--color-border)] flex items-center justify-center cursor-pointer hover:scale-110 transition-transform" title="Custom color">
+                  <span className="text-[10px] text-[color:var(--color-text-muted)]">+</span>
+                  <input
+                    type="color"
+                    value={colors[cat]}
+                    onChange={(ev) => setColor(cat, ev.target.value)}
+                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Legend */}
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[color:var(--color-border)] pt-3">
+          <span className="text-xs text-[color:var(--color-text-muted)]">Legend:</span>
+          {(Object.keys(CATEGORY_LABELS) as Array<keyof ColorPrefs>).map((cat) => (
+            <div key={cat} className="flex items-center gap-1.5">
+              <div className="h-3 w-3 rounded-full" style={{ backgroundColor: colors[cat] }} />
+              <span className="text-xs">{CATEGORY_LABELS[cat]}</span>
+            </div>
+          ))}
+        </div>
+      </section>
     )
   }
 
@@ -253,45 +384,36 @@ export default function Calendar() {
         </div>
       </section>
 
-      {/* Toolbar: My/Org toggle + Display mode + Calendar controls */}
+      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         {/* My / Org toggle */}
         <div className="inline-flex rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-1 text-sm">
-          <button
-            type="button"
-            onClick={() => setView('me')}
-            className={`rounded-lg px-3 py-2 ${view === 'me' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
-          >
+          <button type="button" onClick={() => setView('me')} className={`rounded-lg px-3 py-2 ${view === 'me' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}>
             My calendar
           </button>
-          <button
-            type="button"
-            onClick={() => setView('org')}
-            className={`rounded-lg px-3 py-2 ${view === 'org' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
-          >
+          <button type="button" onClick={() => setView('org')} className={`rounded-lg px-3 py-2 ${view === 'org' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}>
             Org calendar
           </button>
         </div>
 
-        {/* Calendar / List display toggle */}
+        {/* Calendar / List toggle */}
         <div className="inline-flex rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-1 text-sm">
-          <button
-            type="button"
-            onClick={() => setDisplayMode('calendar')}
-            className={`rounded-lg px-3 py-2 flex items-center gap-1 ${displayMode === 'calendar' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
-          >
-            <CalendarDays className="h-3.5 w-3.5" />
-            Calendar
+          <button type="button" onClick={() => setDisplayMode('calendar')} className={`rounded-lg px-3 py-2 flex items-center gap-1 ${displayMode === 'calendar' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}>
+            <CalendarDays className="h-3.5 w-3.5" />Calendar
           </button>
-          <button
-            type="button"
-            onClick={() => setDisplayMode('list')}
-            className={`rounded-lg px-3 py-2 flex items-center gap-1 ${displayMode === 'list' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}
-          >
-            <List className="h-3.5 w-3.5" />
-            List
+          <button type="button" onClick={() => setDisplayMode('list')} className={`rounded-lg px-3 py-2 flex items-center gap-1 ${displayMode === 'list' ? 'bg-[color:var(--color-muted)] font-semibold' : ''}`}>
+            <List className="h-3.5 w-3.5" />List
           </button>
         </div>
+
+        {/* Color settings toggle */}
+        <button
+          type="button"
+          onClick={() => setShowColorSettings((v) => !v)}
+          className={`rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-sm flex items-center gap-1.5 hover:bg-[color:var(--color-muted)] ${showColorSettings ? 'bg-[color:var(--color-muted)]' : ''}`}
+        >
+          <Settings className="h-3.5 w-3.5" />Colors
+        </button>
 
         {view === 'org' && (
           <div className="text-xs text-[color:var(--color-text-muted)]">
@@ -299,8 +421,22 @@ export default function Calendar() {
           </div>
         )}
 
-        <div className="ml-auto text-xs text-[color:var(--color-text-muted)]">{eventsQ.isFetching ? 'Refreshing...' : `${events.length} events`}</div>
+        <div className="ml-auto flex items-center gap-3">
+          {/* Inline legend */}
+          <div className="hidden sm:flex items-center gap-3">
+            {(Object.keys(CATEGORY_LABELS) as Array<keyof ColorPrefs>).map((cat) => (
+              <div key={cat} className="flex items-center gap-1">
+                <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colors[cat] }} />
+                <span className="text-[10px] text-[color:var(--color-text-muted)]">{CATEGORY_LABELS[cat]}</span>
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-[color:var(--color-text-muted)]">{eventsQ.isFetching ? 'Refreshing...' : `${events.length} events`}</div>
+        </div>
       </div>
+
+      {/* Color settings panel */}
+      {showColorSettings && renderColorSettings()}
 
       {/* ────────── CALENDAR GRID MODE ────────── */}
       {displayMode === 'calendar' && (
@@ -311,7 +447,6 @@ export default function Calendar() {
               <div className="flex items-center justify-between mb-4">
                 <div className="text-sm font-semibold">Calendar</div>
                 <div className="flex items-center gap-2">
-                  {/* View switcher */}
                   <div className="inline-flex rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-1">
                     <button type="button" onClick={() => setCalendarView('month')} className="px-3 py-1 text-xs rounded bg-[color:var(--color-muted)] font-semibold">
                       <CalendarDays className="h-3 w-3 inline mr-1" />Month
@@ -323,41 +458,18 @@ export default function Calendar() {
                       <Clock className="h-3 w-3 inline mr-1" />Day
                     </button>
                   </div>
-                  {/* Nav */}
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const prev = new Date(calendarMonth)
-                        prev.setMonth(prev.getMonth() - 1)
-                        setCalendarMonth(prev)
-                      }}
-                      className="p-1 rounded hover:bg-[color:var(--color-muted)]"
-                    ><ChevronLeft className="h-4 w-4" /></button>
-                    <div className="font-semibold text-sm min-w-[200px] text-center">
-                      {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = new Date(calendarMonth)
-                        next.setMonth(next.getMonth() + 1)
-                        setCalendarMonth(next)
-                      }}
-                      className="p-1 rounded hover:bg-[color:var(--color-muted)]"
-                    ><ChevronRight className="h-4 w-4" /></button>
-                    <button type="button" onClick={() => setCalendarMonth(new Date())} className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]">
-                      Today
-                    </button>
+                    <button type="button" onClick={() => { const p = new Date(calendarMonth); p.setMonth(p.getMonth() - 1); setCalendarMonth(p) }} className="p-1 rounded hover:bg-[color:var(--color-muted)]"><ChevronLeft className="h-4 w-4" /></button>
+                    <div className="font-semibold text-sm min-w-[200px] text-center">{calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
+                    <button type="button" onClick={() => { const n = new Date(calendarMonth); n.setMonth(n.getMonth() + 1); setCalendarMonth(n) }} className="p-1 rounded hover:bg-[color:var(--color-muted)]"><ChevronRight className="h-4 w-4" /></button>
+                    <button type="button" onClick={() => setCalendarMonth(new Date())} className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]">Today</button>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-7 gap-px border border-[color:var(--color-border)] bg-[color:var(--color-border)]">
                 {DAYS.map((day) => (
-                  <div key={day} className="bg-[color:var(--color-panel)] p-2 text-center text-xs font-semibold text-[color:var(--color-text-muted)]">
-                    {day}
-                  </div>
+                  <div key={day} className="bg-[color:var(--color-panel)] p-2 text-center text-xs font-semibold text-[color:var(--color-text-muted)]">{day}</div>
                 ))}
                 {(() => {
                   const year = calendarMonth.getFullYear()
@@ -365,33 +477,20 @@ export default function Calendar() {
                   const firstDay = new Date(year, month, 1)
                   const startDate = new Date(firstDay)
                   startDate.setDate(startDate.getDate() - firstDay.getDay())
-                  const today = new Date()
-                  today.setHours(0, 0, 0, 0)
+                  const today = new Date(); today.setHours(0, 0, 0, 0)
                   const cells: React.ReactElement[] = []
-
                   for (let i = 0; i < 42; i++) {
-                    const date = new Date(startDate)
-                    date.setDate(startDate.getDate() + i)
+                    const date = new Date(startDate); date.setDate(startDate.getDate() + i)
                     const isCurrentMonth = date.getMonth() === month
                     const isToday = date.getTime() === today.getTime()
                     const dk = dateKey(date)
                     const dayEvents = eventsByDate.get(dk) || []
-
                     cells.push(
-                      <div
-                        key={i}
-                        className={`min-h-[100px] bg-[color:var(--color-panel)] p-1 ${
-                          !isCurrentMonth ? 'opacity-40' : ''
-                        } ${isToday ? 'ring-2 ring-[color:var(--color-primary-600)]' : ''}`}
-                      >
-                        <div className={`text-xs font-semibold mb-1 ${isToday ? 'text-[color:var(--color-primary-600)]' : 'text-[color:var(--color-text-muted)]'}`}>
-                          {date.getDate()}
-                        </div>
+                      <div key={i} className={`min-h-[100px] bg-[color:var(--color-panel)] p-1 ${!isCurrentMonth ? 'opacity-40' : ''} ${isToday ? 'ring-2 ring-[color:var(--color-primary-600)]' : ''}`}>
+                        <div className={`text-xs font-semibold mb-1 ${isToday ? 'text-[color:var(--color-primary-600)]' : 'text-[color:var(--color-text-muted)]'}`}>{date.getDate()}</div>
                         <div className="space-y-1">
                           {dayEvents.slice(0, 3).map((e) => renderEventPill(e, true))}
-                          {dayEvents.length > 3 && (
-                            <div className="text-[10px] text-[color:var(--color-text-muted)] px-1.5">+{dayEvents.length - 3} more</div>
-                          )}
+                          {dayEvents.length > 3 && <div className="text-[10px] text-[color:var(--color-text-muted)] px-1.5">+{dayEvents.length - 3} more</div>}
                         </div>
                       </div>
                     )
@@ -409,64 +508,28 @@ export default function Calendar() {
                 <div className="text-sm font-semibold">Week View</div>
                 <div className="flex items-center gap-2">
                   <div className="inline-flex rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-1">
-                    <button type="button" onClick={() => setCalendarView('month')} className="px-3 py-1 text-xs rounded hover:bg-[color:var(--color-muted)]">
-                      <CalendarDays className="h-3 w-3 inline mr-1" />Month
-                    </button>
-                    <button type="button" onClick={() => setCalendarView('week')} className="px-3 py-1 text-xs rounded bg-[color:var(--color-muted)] font-semibold">
-                      <Grid3x3 className="h-3 w-3 inline mr-1" />Week
-                    </button>
-                    <button type="button" onClick={() => setCalendarView('day')} className="px-3 py-1 text-xs rounded hover:bg-[color:var(--color-muted)]">
-                      <Clock className="h-3 w-3 inline mr-1" />Day
-                    </button>
+                    <button type="button" onClick={() => setCalendarView('month')} className="px-3 py-1 text-xs rounded hover:bg-[color:var(--color-muted)]"><CalendarDays className="h-3 w-3 inline mr-1" />Month</button>
+                    <button type="button" onClick={() => setCalendarView('week')} className="px-3 py-1 text-xs rounded bg-[color:var(--color-muted)] font-semibold"><Grid3x3 className="h-3 w-3 inline mr-1" />Week</button>
+                    <button type="button" onClick={() => setCalendarView('day')} className="px-3 py-1 text-xs rounded hover:bg-[color:var(--color-muted)]"><Clock className="h-3 w-3 inline mr-1" />Day</button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const prev = new Date(calendarMonth)
-                      prev.setDate(prev.getDate() - 7)
-                      setCalendarMonth(prev)
-                    }}
-                    className="p-1 rounded hover:bg-[color:var(--color-muted)]"
-                  ><ChevronLeft className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => { const p = new Date(calendarMonth); p.setDate(p.getDate() - 7); setCalendarMonth(p) }} className="p-1 rounded hover:bg-[color:var(--color-muted)]"><ChevronLeft className="h-4 w-4" /></button>
                   <div className="font-semibold text-sm min-w-[200px] text-center">
-                    {(() => {
-                      const sw = new Date(calendarMonth)
-                      sw.setDate(sw.getDate() - sw.getDay())
-                      const ew = new Date(sw)
-                      ew.setDate(ew.getDate() + 6)
-                      return `${sw.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${ew.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                    })()}
+                    {(() => { const sw = new Date(calendarMonth); sw.setDate(sw.getDate() - sw.getDay()); const ew = new Date(sw); ew.setDate(ew.getDate() + 6); return `${sw.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${ew.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` })()}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = new Date(calendarMonth)
-                      next.setDate(next.getDate() + 7)
-                      setCalendarMonth(next)
-                    }}
-                    className="p-1 rounded hover:bg-[color:var(--color-muted)]"
-                  ><ChevronRight className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => setCalendarMonth(new Date())} className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]">
-                    Today
-                  </button>
+                  <button type="button" onClick={() => { const n = new Date(calendarMonth); n.setDate(n.getDate() + 7); setCalendarMonth(n) }} className="p-1 rounded hover:bg-[color:var(--color-muted)]"><ChevronRight className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => setCalendarMonth(new Date())} className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]">Today</button>
                 </div>
               </div>
 
               <div className="grid grid-cols-7 gap-px border border-[color:var(--color-border)] bg-[color:var(--color-border)]">
                 {(() => {
-                  const startOfWeek = new Date(calendarMonth)
-                  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay())
-                  startOfWeek.setHours(0, 0, 0, 0)
-                  const today = new Date()
-                  today.setHours(0, 0, 0, 0)
-
+                  const startOfWeek = new Date(calendarMonth); startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); startOfWeek.setHours(0, 0, 0, 0)
+                  const today = new Date(); today.setHours(0, 0, 0, 0)
                   return Array.from({ length: 7 }).map((_, dayIndex) => {
-                    const date = new Date(startOfWeek)
-                    date.setDate(startOfWeek.getDate() + dayIndex)
+                    const date = new Date(startOfWeek); date.setDate(startOfWeek.getDate() + dayIndex)
                     const isToday = date.getTime() === today.getTime()
                     const dk = dateKey(date)
                     const dayEvents = (eventsByDate.get(dk) || []).slice().sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-
                     return (
                       <div key={dayIndex} className={`bg-[color:var(--color-panel)] min-h-[400px] ${isToday ? 'ring-2 ring-[color:var(--color-primary-600)]' : ''}`}>
                         <div className={`p-2 border-b border-[color:var(--color-border)] ${isToday ? 'bg-[color:var(--color-primary-soft)]' : ''}`}>
@@ -481,11 +544,7 @@ export default function Calendar() {
                             const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                             const isOrg = view === 'org'
                             return (
-                              <div
-                                key={`${e.kind}-${e.id}`}
-                                onClick={() => setSelectedEvent(e)}
-                                className={`text-xs px-2 py-1.5 rounded ${eventColor(e)} text-white cursor-pointer hover:opacity-80 transition-opacity`}
-                              >
+                              <div key={`${e.kind}-${e.id}`} onClick={() => setSelectedEvent(e)} style={{ backgroundColor: eventBg(e) }} className="text-xs px-2 py-1.5 rounded text-white cursor-pointer hover:opacity-80 transition-opacity">
                                 <div className="font-semibold">{timeStr} - {endStr}</div>
                                 <div className="text-[10px] opacity-90">{e.title}</div>
                                 {isOrg && (e as any).ownerName && <div className="text-[10px] opacity-75">{(e as any).ownerName}</div>}
@@ -509,46 +568,19 @@ export default function Calendar() {
                 <div className="text-sm font-semibold">Day View</div>
                 <div className="flex items-center gap-2">
                   <div className="inline-flex rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-1">
-                    <button type="button" onClick={() => setCalendarView('month')} className="px-3 py-1 text-xs rounded hover:bg-[color:var(--color-muted)]">
-                      <CalendarDays className="h-3 w-3 inline mr-1" />Month
-                    </button>
-                    <button type="button" onClick={() => setCalendarView('week')} className="px-3 py-1 text-xs rounded hover:bg-[color:var(--color-muted)]">
-                      <Grid3x3 className="h-3 w-3 inline mr-1" />Week
-                    </button>
-                    <button type="button" onClick={() => setCalendarView('day')} className="px-3 py-1 text-xs rounded bg-[color:var(--color-muted)] font-semibold">
-                      <Clock className="h-3 w-3 inline mr-1" />Day
-                    </button>
+                    <button type="button" onClick={() => setCalendarView('month')} className="px-3 py-1 text-xs rounded hover:bg-[color:var(--color-muted)]"><CalendarDays className="h-3 w-3 inline mr-1" />Month</button>
+                    <button type="button" onClick={() => setCalendarView('week')} className="px-3 py-1 text-xs rounded hover:bg-[color:var(--color-muted)]"><Grid3x3 className="h-3 w-3 inline mr-1" />Week</button>
+                    <button type="button" onClick={() => setCalendarView('day')} className="px-3 py-1 text-xs rounded bg-[color:var(--color-muted)] font-semibold"><Clock className="h-3 w-3 inline mr-1" />Day</button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const prev = new Date(calendarMonth)
-                      prev.setDate(prev.getDate() - 1)
-                      setCalendarMonth(prev)
-                    }}
-                    className="p-1 rounded hover:bg-[color:var(--color-muted)]"
-                  ><ChevronLeft className="h-4 w-4" /></button>
-                  <div className="font-semibold text-sm min-w-[200px] text-center">
-                    {calendarMonth.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = new Date(calendarMonth)
-                      next.setDate(next.getDate() + 1)
-                      setCalendarMonth(next)
-                    }}
-                    className="p-1 rounded hover:bg-[color:var(--color-muted)]"
-                  ><ChevronRight className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => setCalendarMonth(new Date())} className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]">
-                    Today
-                  </button>
+                  <button type="button" onClick={() => { const p = new Date(calendarMonth); p.setDate(p.getDate() - 1); setCalendarMonth(p) }} className="p-1 rounded hover:bg-[color:var(--color-muted)]"><ChevronLeft className="h-4 w-4" /></button>
+                  <div className="font-semibold text-sm min-w-[200px] text-center">{calendarMonth.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div>
+                  <button type="button" onClick={() => { const n = new Date(calendarMonth); n.setDate(n.getDate() + 1); setCalendarMonth(n) }} className="p-1 rounded hover:bg-[color:var(--color-muted)]"><ChevronRight className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => setCalendarMonth(new Date())} className="rounded-lg border border-[color:var(--color-border)] px-3 py-1 text-xs hover:bg-[color:var(--color-muted)]">Today</button>
                 </div>
               </div>
 
               <div className="border border-[color:var(--color-border)] rounded-lg overflow-hidden">
                 <div className="grid grid-cols-[80px_1fr]">
-                  {/* Hour labels */}
                   <div className="border-r border-[color:var(--color-border)]">
                     {Array.from({ length: 24 }).map((_, hour) => (
                       <div key={hour} className="h-16 bg-[color:var(--color-panel)] p-2 text-xs text-[color:var(--color-text-muted)] border-b border-[color:var(--color-border)]">
@@ -556,45 +588,29 @@ export default function Calendar() {
                       </div>
                     ))}
                   </div>
-                  {/* Events column */}
                   <div className="bg-[color:var(--color-panel)] min-h-[600px] relative">
                     {(() => {
                       const dk = dateKey(calendarMonth)
-                      const dayEvents = events
-                        .filter((e) => dateKey(new Date(e.startsAt)) === dk)
-                        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
-
+                      const dayEvents = events.filter((e) => dateKey(new Date(e.startsAt)) === dk).sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
                       return (
                         <div className="p-4 space-y-3">
-                          {dayEvents.length > 0 ? (
-                            dayEvents.map((e) => {
-                              const start = new Date(e.startsAt)
-                              const end = new Date(e.endsAt)
-                              const isOrg = view === 'org'
-                              return (
-                                <div
-                                  key={`${e.kind}-${e.id}`}
-                                  onClick={() => setSelectedEvent(e)}
-                                  className={`rounded-lg p-3 ${eventColor(e)} text-white cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all shadow-md`}
-                                >
-                                  <div className="font-semibold text-sm">
-                                    {start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - {end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                                  </div>
-                                  <div className="text-sm font-medium mt-1">{e.title}</div>
-                                  {e.kind === 'appointment' && (e as any).attendee?.email && (
-                                    <div className="text-xs opacity-75 mt-1">{(e as any).attendee.email}</div>
-                                  )}
-                                  {isOrg && (e as any).ownerName && <div className="text-xs opacity-75 mt-1">{(e as any).ownerName}</div>}
-                                  {isOrg && e.kind === 'appointment' && (e as any).orgVisible && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] opacity-80 mt-1"><Globe className="h-2.5 w-2.5" /> Shared</span>
-                                  )}
-                                </div>
-                              )
-                            })
-                          ) : (
-                            <div className="text-center text-sm text-[color:var(--color-text-muted)] py-8">
-                              No events scheduled for this day.
-                            </div>
+                          {dayEvents.length > 0 ? dayEvents.map((e) => {
+                            const start = new Date(e.startsAt)
+                            const end = new Date(e.endsAt)
+                            const isOrg = view === 'org'
+                            return (
+                              <div key={`${e.kind}-${e.id}`} onClick={() => setSelectedEvent(e)} style={{ backgroundColor: eventBg(e) }} className="rounded-lg p-3 text-white cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all shadow-md">
+                                <div className="font-semibold text-sm">{start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} - {end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>
+                                <div className="text-sm font-medium mt-1">{e.title}</div>
+                                {e.kind === 'appointment' && (e as any).attendee?.email && <div className="text-xs opacity-75 mt-1">{(e as any).attendee.email}</div>}
+                                {isOrg && (e as any).ownerName && <div className="text-xs opacity-75 mt-1">{(e as any).ownerName}</div>}
+                                {isOrg && e.kind === 'appointment' && (e as any).orgVisible && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] opacity-80 mt-1"><Globe className="h-2.5 w-2.5" /> Shared</span>
+                                )}
+                              </div>
+                            )
+                          }) : (
+                            <div className="text-center text-sm text-[color:var(--color-text-muted)] py-8">No events scheduled for this day.</div>
                           )}
                         </div>
                       )
@@ -615,21 +631,16 @@ export default function Calendar() {
               <div className="border-b border-[color:var(--color-border)] px-4 py-3 text-sm font-semibold">{new Date(day).toDateString()}</div>
               <div className="divide-y divide-[color:var(--color-border)]">
                 {items.map((e) => (
-                  <div
-                    key={`${e.kind}-${e.id}`}
-                    className="px-4 py-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-[color:var(--color-muted)] transition-colors"
-                    onClick={() => setSelectedEvent(e)}
-                  >
+                  <div key={`${e.kind}-${e.id}`} className="px-4 py-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-[color:var(--color-muted)] transition-colors" onClick={() => setSelectedEvent(e)}>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold">{e.title}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] text-white ${eventColor(e)}`}>
-                          {e.kind}
+                        <span className="rounded-full px-2 py-0.5 text-[10px] text-white" style={{ backgroundColor: eventBg(e) }}>
+                          {e.kind === 'appointment' ? 'appointment' : (e as any).taskType || 'task'}
                         </span>
                         {view === 'org' && e.kind === 'appointment' && (e as any).orgVisible && (
                           <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400">
-                            <Globe className="h-2.5 w-2.5" />
-                            Shared
+                            <Globe className="h-2.5 w-2.5" />Shared
                           </span>
                         )}
                         {view === 'org' && (e as any).ownerEmail ? (
@@ -643,23 +654,10 @@ export default function Calendar() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {e.kind === 'appointment' && (
-                        <Link to="/apps/scheduler" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]">
-                          Open Scheduler
-                        </Link>
-                      )}
-                      {e.kind === 'task' && (
-                        <Link to="/apps/crm/tasks" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]">
-                          Open Tasks
-                        </Link>
-                      )}
+                      {e.kind === 'appointment' && <Link to="/apps/scheduler" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]">Open Scheduler</Link>}
+                      {e.kind === 'task' && <Link to="/apps/crm/tasks" className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]">Open Tasks</Link>}
                       {e.kind === 'appointment' && (e as any).contactId ? (
-                        <Link
-                          to={`/apps/crm/contacts?q=${encodeURIComponent(String((e as any).attendee?.email || ''))}`}
-                          className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
-                        >
-                          View Contact
-                        </Link>
+                        <Link to={`/apps/crm/contacts?q=${encodeURIComponent(String((e as any).attendee?.email || ''))}`} className="rounded-lg border border-[color:var(--color-border)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]">View Contact</Link>
                       ) : null}
                     </div>
                   </div>
@@ -668,7 +666,6 @@ export default function Calendar() {
               </div>
             </section>
           ))}
-
           {!grouped.length && !eventsQ.isLoading && (
             <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6 text-sm text-[color:var(--color-text-muted)]">
               No upcoming events found. Create an appointment type in Scheduler and share the booking link.
@@ -680,17 +677,16 @@ export default function Calendar() {
       {/* ────────── Event Detail Popup ────────── */}
       {selectedEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSelectedEvent(null)}>
-          <div
-            className="w-full max-w-lg rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-xl"
-            onClick={(ev) => ev.stopPropagation()}
-          >
+          <div className="w-full max-w-lg rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-xl" onClick={(ev) => ev.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-5 py-4">
               <h2 className="text-lg font-semibold">{selectedEvent.title}</h2>
               <button type="button" onClick={() => setSelectedEvent(null)} className="text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]">&times;</button>
             </div>
             <div className="p-5 space-y-3">
               <div className="flex items-center gap-2 text-sm">
-                <span className={`rounded-full px-2 py-0.5 text-xs text-white ${eventColor(selectedEvent)}`}>{selectedEvent.kind}</span>
+                <span className="rounded-full px-2 py-0.5 text-xs text-white" style={{ backgroundColor: eventBg(selectedEvent) }}>
+                  {selectedEvent.kind === 'appointment' ? 'appointment' : (selectedEvent as any).taskType || 'task'}
+                </span>
                 {selectedEvent.kind === 'appointment' && (selectedEvent as any).orgVisible && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-400">
                     <Globe className="h-3 w-3" /> Shared with org
@@ -699,9 +695,7 @@ export default function Calendar() {
               </div>
               <div>
                 <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Time</div>
-                <div className="text-sm">
-                  {new Date(selectedEvent.startsAt).toLocaleString()} &rarr; {new Date(selectedEvent.endsAt).toLocaleTimeString()}
-                </div>
+                <div className="text-sm">{new Date(selectedEvent.startsAt).toLocaleString()} &rarr; {new Date(selectedEvent.endsAt).toLocaleTimeString()}</div>
               </div>
               {selectedEvent.kind === 'appointment' && (selectedEvent as any).attendee && (
                 <div>
@@ -726,23 +720,13 @@ export default function Calendar() {
               )}
               <div className="flex items-center gap-2 pt-2">
                 {selectedEvent.kind === 'appointment' && (
-                  <Link to="/apps/scheduler" className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={() => setSelectedEvent(null)}>
-                    Open in Scheduler
-                  </Link>
+                  <Link to="/apps/scheduler" className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={() => setSelectedEvent(null)}>Open in Scheduler</Link>
                 )}
                 {selectedEvent.kind === 'task' && (
-                  <Link to="/apps/crm/tasks" className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={() => setSelectedEvent(null)}>
-                    Open in Tasks
-                  </Link>
+                  <Link to="/apps/crm/tasks" className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={() => setSelectedEvent(null)}>Open in Tasks</Link>
                 )}
                 {selectedEvent.kind === 'appointment' && (selectedEvent as any).contactId && (
-                  <Link
-                    to={`/apps/crm/contacts?q=${encodeURIComponent(String((selectedEvent as any).attendee?.email || ''))}`}
-                    className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-                    onClick={() => setSelectedEvent(null)}
-                  >
-                    View Contact
-                  </Link>
+                  <Link to={`/apps/crm/contacts?q=${encodeURIComponent(String((selectedEvent as any).attendee?.email || ''))}`} className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setSelectedEvent(null)}>View Contact</Link>
                 )}
               </div>
             </div>

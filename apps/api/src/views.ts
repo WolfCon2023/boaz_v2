@@ -89,3 +89,32 @@ viewsRouter.put('/column-prefs', requireAuth, async (req, res) => {
   )
   res.json({ data: { ok: true }, error: null })
 })
+
+// ── User Preferences (generic key-value, user-scoped) ───────────────────
+
+// GET /api/user-prefs?key=calendar_colors
+viewsRouter.get('/user-prefs', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.json({ data: null, error: null })
+  const userId = (req as any).auth.userId as string
+  const key = String((req.query.key as string) ?? '').trim()
+  if (!key) return res.status(400).json({ data: null, error: 'invalid_key' })
+  const doc = await db.collection('user_prefs').findOne({ userId, key })
+  res.json({ data: doc?.value ?? null, error: null })
+})
+
+// PUT /api/user-prefs { key, value }
+viewsRouter.put('/user-prefs', requireAuth, async (req, res) => {
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const userId = (req as any).auth.userId as string
+  const { key, value } = req.body ?? {}
+  if (!key || typeof key !== 'string') return res.status(400).json({ data: null, error: 'invalid_key' })
+  if (value === undefined) return res.status(400).json({ data: null, error: 'invalid_value' })
+  await db.collection('user_prefs').updateOne(
+    { userId, key },
+    { $set: { userId, key, value, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
+    { upsert: true },
+  )
+  res.json({ data: { ok: true }, error: null })
+})
