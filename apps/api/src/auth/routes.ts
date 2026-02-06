@@ -2253,4 +2253,91 @@ authRouter.patch('/admin/audit-settings', requireAuth, requirePermission('*'), a
   }
 })
 
+// ── Activity Logging Admin Routes ───────────────────────────────────────
+
+// GET /api/auth/admin/activity-logs – paginated, searchable
+authRouter.get('/admin/activity-logs', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(503).json({ data: null, error: 'db_unavailable' })
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200)
+    const offset = Math.max(Number(req.query.offset) || 0, 0)
+    const search = req.query.q ? String(req.query.q).trim() : ''
+    const method = req.query.method ? String(req.query.method).trim().toUpperCase() : ''
+
+    const filter: any = {}
+    if (method) filter.method = method
+    if (search) {
+      const regex = { $regex: search, $options: 'i' }
+      filter.$or = [
+        { email: regex },
+        { userId: regex },
+        { path: regex },
+        { ipAddress: regex },
+        { method: regex },
+      ]
+    }
+
+    const [items, total] = await Promise.all([
+      db.collection('activity_logs').find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).toArray(),
+      db.collection('activity_logs').countDocuments(filter),
+    ])
+
+    res.json({
+      data: {
+        items: items.map((d: any) => ({
+          _id: String(d._id),
+          method: d.method,
+          path: d.path,
+          statusCode: d.statusCode,
+          userId: d.userId,
+          email: d.email,
+          ipAddress: d.ipAddress,
+          userAgent: d.userAgent,
+          durationMs: d.durationMs,
+          createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null,
+        })),
+        total,
+        limit,
+        offset,
+      },
+      error: null,
+    })
+  } catch (err: any) {
+    res.status(500).json({ data: null, error: err?.message || 'Failed to fetch activity logs' })
+  }
+})
+
+// GET /api/auth/admin/activity-settings – get activity logging toggle status
+authRouter.get('/admin/activity-settings', requireAuth, requirePermission('*'), async (_req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(503).json({ data: null, error: 'db_unavailable' })
+
+    const setting = await db.collection('app_settings').findOne({ key: 'activity_logging_enabled' })
+    res.json({ data: { enabled: setting ? setting.value !== false : true }, error: null })
+  } catch (err: any) {
+    res.status(500).json({ data: null, error: err?.message || 'Failed to fetch activity settings' })
+  }
+})
+
+// PATCH /api/auth/admin/activity-settings – toggle activity logging on/off
+authRouter.patch('/admin/activity-settings', requireAuth, requirePermission('*'), async (req, res) => {
+  try {
+    const db = await getDb()
+    if (!db) return res.status(503).json({ data: null, error: 'db_unavailable' })
+
+    const enabled = Boolean(req.body?.enabled)
+    await db.collection('app_settings').updateOne(
+      { key: 'activity_logging_enabled' },
+      { $set: { key: 'activity_logging_enabled', value: enabled, updatedAt: new Date() } },
+      { upsert: true },
+    )
+    res.json({ data: { enabled }, error: null })
+  } catch (err: any) {
+    res.status(500).json({ data: null, error: err?.message || 'Failed to update activity settings' })
+  }
+})
+
 export { logAuditEvent, type AuditAction }

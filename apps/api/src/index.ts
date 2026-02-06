@@ -99,9 +99,76 @@ const corsMiddleware = cors({
 app.use(corsMiddleware)
 app.options('*', corsMiddleware)
 import cookieParser from 'cookie-parser'
+import { verifyAny } from './auth/jwt.js'
 app.use(express.json({ limit: '1mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
+
+// ── Activity Logging Middleware ─────────────────────────────────────────
+// Logs all authenticated mutating API requests (POST, PATCH, PUT, DELETE)
+// after the response is sent so it never blocks the request.
+app.use('/api', (req, res, next) => {
+  // Only log mutating methods
+  const method = req.method.toUpperCase()
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next()
+
+  // Capture timing
+  const startTime = Date.now()
+
+  // Hook into response finish to log after the response is sent
+  res.on('finish', () => {
+    // Fire-and-forget async logging
+    ;(async () => {
+      try {
+        const db = await getDb()
+        if (!db) return
+
+        // Check if activity logging is enabled
+        const setting = await db.collection('app_settings').findOne({ key: 'activity_logging_enabled' })
+        if (setting && setting.value === false) return
+
+        // Extract user from auth header (decode without middleware dependency)
+        let userId: string | null = null
+        let email: string | null = null
+        const authHeader = req.headers.authorization
+        if (authHeader?.startsWith('Bearer ')) {
+          const payload = verifyAny<{ sub: string; email: string }>(authHeader.slice(7))
+          if (payload) {
+            userId = payload.sub
+            email = payload.email
+          }
+        }
+
+        const ipAddress =
+          (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+          req.headers['x-real-ip'] as string ||
+          req.socket?.remoteAddress ||
+          null
+
+        // Derive a human-readable resource label from the URL path
+        const path = req.originalUrl.split('?')[0] || req.path
+        const durationMs = Date.now() - startTime
+
+        await db.collection('activity_logs').insertOne({
+          method,
+          path,
+          statusCode: res.statusCode,
+          userId,
+          email,
+          ipAddress,
+          userAgent: req.headers['user-agent'] || null,
+          durationMs,
+          createdAt: new Date(),
+        })
+      } catch {
+        // Never let activity logging break the app
+      }
+    })()
+  })
+
+  next()
+})
+
 app.use('/api/auth', authRouter)
 app.use('/api/crm', crmRouter)
 // Public quote routes (no auth required) - must be before /api/crm/quotes

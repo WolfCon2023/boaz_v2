@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download, Database, Layers, ScrollText } from 'lucide-react'
+import { Monitor, Trash2, User, Filter, UserPlus, Users, Search, Edit2, X, Key, Mail, CheckCircle, XCircle, Clock, Shield, FolderOpen, FileText, Download, Database, Layers, ScrollText, Activity } from 'lucide-react'
 import { http } from '@/lib/http'
 import { formatDateTime } from '@/lib/dateFormat'
 import { AdminStratflow } from '@/components/AdminStratflow'
@@ -18,7 +18,7 @@ type Session = {
 
 export default function AdminPortal() {
   const queryClient = useQueryClient()
-  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests' | 'access-report' | 'maintenance' | 'stratflow' | 'audit-logs'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'users' | 'registration-requests' | 'access-management' | 'app-access-requests' | 'access-report' | 'maintenance' | 'stratflow' | 'audit-logs' | 'activity-logs'>('sessions')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [registrationRequestStatus, setRegistrationRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
   const [appAccessRequestStatus, setAppAccessRequestStatus] = useState<'pending' | 'approved' | 'rejected' | undefined>(undefined)
@@ -845,6 +845,17 @@ export default function AdminPortal() {
         >
           <ScrollText className="mr-2 inline h-4 w-4" />
           Audit Logs
+        </button>
+        <button
+          onClick={() => setActiveTab('activity-logs')}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'activity-logs'
+              ? 'border-b-2 border-[color:var(--color-primary-600)] text-[color:var(--color-primary-600)]'
+              : 'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]'
+          }`}
+        >
+          <Activity className="mr-2 inline h-4 w-4" />
+          Activity Logs
         </button>
       </div>
 
@@ -1966,6 +1977,7 @@ export default function AdminPortal() {
       {activeTab === 'maintenance' && <MaintenanceTab isAdmin={isAdmin} message={message} error={error} setMessage={setMessage} setError={setError} />}
       {activeTab === 'stratflow' && <AdminStratflow />}
       {activeTab === 'audit-logs' && <AuditLogsTab />}
+      {activeTab === 'activity-logs' && <ActivityLogsTab />}
     </div>
   )
 }
@@ -2555,3 +2567,220 @@ function AuditLogsTab() {
   )
 }
 
+// ── Activity Logs Tab ───────────────────────────────────────────────────
+
+type ActivityLogEntry = {
+  _id: string
+  method: string
+  path: string
+  statusCode: number
+  userId?: string | null
+  email?: string | null
+  ipAddress?: string | null
+  userAgent?: string | null
+  durationMs?: number | null
+  createdAt: string | null
+}
+
+const ACTIVITY_METHODS = [
+  { value: '', label: 'All methods' },
+  { value: 'POST', label: 'POST' },
+  { value: 'PATCH', label: 'PATCH' },
+  { value: 'PUT', label: 'PUT' },
+  { value: 'DELETE', label: 'DELETE' },
+]
+
+function ActivityLogsTab() {
+  const queryClient = useQueryClient()
+  const [search, setSearch] = useState('')
+  const [methodFilter, setMethodFilter] = useState('')
+  const [page, setPage] = useState(0)
+  const pageSize = 50
+
+  useEffect(() => { setPage(0) }, [search, methodFilter])
+
+  // Fetch activity toggle setting
+  const settingsQ = useQuery<{ data: { enabled: boolean } }>({
+    queryKey: ['admin', 'activity-settings'],
+    queryFn: async () => (await http.get('/api/auth/admin/activity-settings')).data,
+    staleTime: 30_000,
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: async (enabled: boolean) => (await http.patch('/api/auth/admin/activity-settings', { enabled })).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'activity-settings'] }),
+  })
+
+  // Fetch activity logs
+  const logsQ = useQuery<{ data: { items: ActivityLogEntry[]; total: number; limit: number; offset: number } }>({
+    queryKey: ['admin', 'activity-logs', search, methodFilter, page],
+    queryFn: async () => {
+      const params = new URLSearchParams({ limit: String(pageSize), offset: String(page * pageSize) })
+      if (search.trim()) params.set('q', search.trim())
+      if (methodFilter) params.set('method', methodFilter)
+      return (await http.get(`/api/auth/admin/activity-logs?${params}`)).data
+    },
+    staleTime: 15_000,
+  })
+
+  const items = logsQ.data?.data.items ?? []
+  const total = logsQ.data?.data.total ?? 0
+  const totalPages = Math.ceil(total / pageSize)
+  const activityEnabled = settingsQ.data?.data.enabled !== false
+
+  function methodBadge(m: string) {
+    if (m === 'POST') return 'bg-green-100 text-green-800 border-green-200'
+    if (m === 'PATCH' || m === 'PUT') return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    if (m === 'DELETE') return 'bg-red-100 text-red-800 border-red-200'
+    return 'bg-gray-100 text-gray-800 border-gray-200'
+  }
+
+  function statusColor(code: number) {
+    if (code >= 200 && code < 300) return 'text-green-600'
+    if (code >= 400 && code < 500) return 'text-yellow-600'
+    if (code >= 500) return 'text-red-600'
+    return ''
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Toggle + Header */}
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Activity Logging</h2>
+            <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">
+              Track all user actions across the application (creates, updates, deletes).
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-[color:var(--color-text-muted)]">{activityEnabled ? 'Enabled' : 'Disabled'}</span>
+            <button
+              type="button"
+              onClick={() => toggleMutation.mutate(!activityEnabled)}
+              disabled={toggleMutation.isPending || settingsQ.isLoading}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                activityEnabled ? 'bg-[color:var(--color-primary-600)]' : 'bg-[color:var(--color-muted)]'
+              }`}
+              title={activityEnabled ? 'Disable activity logging' : 'Enable activity logging'}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  activityEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Search + Filters + Table */}
+      <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-1 items-center gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--color-text-muted)]" />
+              <input
+                type="text"
+                placeholder="Search by email, path, IP..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg)] py-2 pl-9 pr-3 text-sm placeholder:text-[color:var(--color-text-muted)] focus:border-[color:var(--color-primary-500)] focus:outline-none"
+              />
+            </div>
+            <select
+              value={methodFilter}
+              onChange={(e) => setMethodFilter(e.target.value)}
+              className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-3 py-2 text-sm"
+            >
+              {ACTIVITY_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="text-xs text-[color:var(--color-text-muted)]">
+            {logsQ.isFetching ? 'Loading...' : `${total} events`}
+          </div>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[color:var(--color-border)] text-left text-xs text-[color:var(--color-text-muted)]">
+                <th className="px-3 py-2 font-medium">Timestamp</th>
+                <th className="px-3 py-2 font-medium">Method</th>
+                <th className="px-3 py-2 font-medium">Path</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">User</th>
+                <th className="px-3 py-2 font-medium">IP Address</th>
+                <th className="px-3 py-2 font-medium">Duration</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[color:var(--color-border)]">
+              {items.map((entry) => (
+                <tr key={entry._id} className="hover:bg-[color:var(--color-muted)]">
+                  <td className="whitespace-nowrap px-3 py-2 text-xs">
+                    {entry.createdAt ? formatDateTime(entry.createdAt) : '—'}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold ${methodBadge(entry.method)}`}>
+                      {entry.method}
+                    </span>
+                  </td>
+                  <td className="max-w-[280px] truncate px-3 py-2 text-xs font-mono" title={entry.path}>
+                    {entry.path}
+                  </td>
+                  <td className={`whitespace-nowrap px-3 py-2 text-xs font-semibold ${statusColor(entry.statusCode)}`}>
+                    {entry.statusCode}
+                  </td>
+                  <td className="px-3 py-2 text-xs">{entry.email || '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-xs font-mono">{entry.ipAddress || '—'}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-xs text-[color:var(--color-text-muted)]">
+                    {entry.durationMs != null ? `${entry.durationMs}ms` : '—'}
+                  </td>
+                </tr>
+              ))}
+              {!logsQ.isLoading && items.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-3 py-8 text-center text-sm text-[color:var(--color-text-muted)]">
+                    No activity log entries found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-xs text-[color:var(--color-text-muted)]">
+              Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-[color:var(--color-text-muted)]">
+                Page {page + 1} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="rounded-lg border border-[color:var(--color-border)] px-3 py-1.5 text-xs hover:bg-[color:var(--color-muted)] disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
