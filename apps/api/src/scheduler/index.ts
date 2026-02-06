@@ -826,6 +826,52 @@ internal.get('/appointments', async (req: any, res) => {
   })
 })
 
+// GET /api/scheduler/appointments/:id – single appointment detail
+internal.get('/appointments/:id', async (req: any, res) => {
+  const id = String(req.params.id || '')
+  if (!ObjectId.isValid(id)) return res.status(400).json({ data: null, error: 'invalid_id' })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const auth = req.auth as { userId: string; email: string }
+  const d = await db.collection('appointments').findOne({ _id: new ObjectId(id), ownerUserId: auth.userId } as any) as any
+  if (!d) return res.status(404).json({ data: null, error: 'not_found' })
+  res.json({
+    data: {
+      ...d,
+      _id: String(d._id),
+      appointmentTypeId: String(d.appointmentTypeId),
+      appointmentTypeName: d.appointmentTypeName ?? null,
+      appointmentTypeSlug: d.appointmentTypeSlug ?? null,
+      cancelReason: d.cancelReason ?? null,
+      cancelledAt: d.cancelledAt?.toISOString?.() ?? null,
+      cancelledByUserId: d.cancelledByUserId ?? null,
+      cancelEmailSentAt: d.cancelEmailSentAt?.toISOString?.() ?? null,
+      contactId: d.contactId ?? null,
+      attendeeFirstName: d.attendeeFirstName ?? null,
+      attendeeLastName: d.attendeeLastName ?? null,
+      attendeeEmail: d.attendeeEmail ?? null,
+      attendeePhone: d.attendeePhone ?? null,
+      attendeeContactPreference: d.attendeeContactPreference ?? null,
+      scheduledByUserId: d.scheduledByUserId ?? null,
+      scheduledByName: d.scheduledByName ?? null,
+      scheduledByEmail: d.scheduledByEmail ?? null,
+      inviteEmailSentAt: d.inviteEmailSentAt?.toISOString?.() ?? null,
+      reminderMinutesBefore: d.reminderMinutesBefore ?? null,
+      reminderEmailSentAt: d.reminderEmailSentAt?.toISOString?.() ?? null,
+      orgVisible: d.orgVisible === true,
+      notes: d.notes ?? null,
+      startsAt: d.startsAt?.toISOString?.() ?? null,
+      endsAt: d.endsAt?.toISOString?.() ?? null,
+      timeZone: d.timeZone ?? 'UTC',
+      source: d.source ?? null,
+      status: d.cancelledAt ? 'cancelled' : 'booked',
+      createdAt: d.createdAt?.toISOString?.() ?? null,
+      updatedAt: d.updatedAt?.toISOString?.() ?? null,
+    },
+    error: null,
+  })
+})
+
 const internalBookSchema = z.object({
   appointmentTypeId: z.string().min(6),
   contactId: z.string().optional().nullable(),

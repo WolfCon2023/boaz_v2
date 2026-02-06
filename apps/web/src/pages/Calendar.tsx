@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Globe, ChevronLeft, ChevronRight, CalendarDays, Grid3x3, List, Clock, Settings, Check, User, Mail } from 'lucide-react'
+import { Globe, ChevronLeft, ChevronRight, CalendarDays, Grid3x3, List, Clock, Settings, Check, User, Mail, Phone, FileText, AlertCircle, CheckCircle2, XCircle, Tag } from 'lucide-react'
 import { Modal } from '@/components/Modal'
 
 type CalendarEvent =
@@ -88,6 +88,441 @@ function getEventColorKey(e: CalendarEvent): keyof ColorPrefs {
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/* ═══════════════════════════════════════════════════════════
+   Detail skeleton shown while fetching full record
+   ═══════════════════════════════════════════════════════════ */
+function DetailSkeleton() {
+  return (
+    <div className="animate-pulse space-y-5">
+      {/* Time banner skeleton */}
+      <div className="h-16 rounded-xl bg-[color:var(--color-muted)]" />
+      {/* Grid skeleton */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {[1, 2, 3, 4, 5, 6].map(i => (
+          <div key={i} className="space-y-2">
+            <div className="h-3 w-20 rounded bg-[color:var(--color-muted)]" />
+            <div className="h-4 w-full rounded bg-[color:var(--color-muted)]" />
+          </div>
+        ))}
+      </div>
+      {/* Actions skeleton */}
+      <div className="flex gap-3 justify-end pt-4">
+        <div className="h-9 w-32 rounded-lg bg-[color:var(--color-muted)]" />
+        <div className="h-9 w-28 rounded-lg bg-[color:var(--color-muted)]" />
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Appointment Detail View (fetched from scheduler API)
+   ═══════════════════════════════════════════════════════════ */
+function AppointmentDetail({
+  eventId,
+  lightEvent,
+  colors,
+  onClose,
+}: {
+  eventId: string
+  lightEvent: CalendarEvent
+  colors: ColorPrefs
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+
+  const aptQ = useQuery({
+    queryKey: ['scheduler-appointment-detail', eventId],
+    queryFn: async () => {
+      const res = await http.get(`/api/scheduler/appointments/${eventId}`)
+      return res.data?.data ?? res.data
+    },
+    enabled: !!eventId,
+  })
+
+  const toggleOrgVisible = useMutation({
+    mutationFn: async (visible: boolean) => {
+      const res = await http.patch(`/api/scheduler/appointments/${eventId}/visibility`, { orgVisible: visible })
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scheduler-appointment-detail', eventId] })
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] })
+      toast.showToast('Visibility updated', 'success')
+    },
+  })
+
+  const apt = aptQ.data
+  if (aptQ.isLoading || !apt) return <DetailSkeleton />
+
+  const start = new Date(apt.startsAt)
+  const end = new Date(apt.endsAt)
+  const isCancelled = !!(apt.cancelledAt || apt.cancelReason)
+  const accentColor = colors.appointment
+
+  return (
+    <div className="space-y-5">
+      {/* ── Time Banner ── */}
+      <div className="rounded-xl p-4 text-white" style={{ backgroundColor: accentColor }}>
+        <div className="text-lg font-bold">
+          {start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+        </div>
+        <div className="text-sm mt-1 opacity-90">
+          {start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+          {' – '}
+          {end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+          {apt.timeZone ? ` (${apt.timeZone})` : ''}
+        </div>
+      </div>
+
+      {/* ── Status Badges ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-block rounded-full px-3 py-0.5 text-xs font-semibold text-white" style={{ backgroundColor: accentColor }}>
+          {apt.appointmentTypeName || 'Appointment'}
+        </span>
+        {isCancelled ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-3 py-0.5 text-xs font-semibold text-red-400">
+            <XCircle className="h-3 w-3" /> Cancelled
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-3 py-0.5 text-xs font-semibold text-green-400">
+            <CheckCircle2 className="h-3 w-3" /> Booked
+          </span>
+        )}
+        {apt.orgVisible && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-3 py-0.5 text-xs font-semibold text-blue-400">
+            <Globe className="h-3 w-3" /> Shared with Org
+          </span>
+        )}
+      </div>
+
+      {/* ── Attendee Section ── */}
+      {(apt.attendeeFirstName || apt.attendeeLastName || apt.attendeeEmail) && (
+        <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)] mb-3">Attendee</div>
+          <div className="space-y-2.5">
+            {(apt.attendeeFirstName || apt.attendeeLastName) && (
+              <div className="flex items-center gap-2.5">
+                <User className="h-4 w-4 text-[color:var(--color-text-muted)] shrink-0" />
+                <span className="text-sm font-medium">{[apt.attendeeFirstName, apt.attendeeLastName].filter(Boolean).join(' ')}</span>
+              </div>
+            )}
+            {apt.attendeeEmail && (
+              <div className="flex items-center gap-2.5">
+                <Mail className="h-4 w-4 text-[color:var(--color-text-muted)] shrink-0" />
+                <a href={`mailto:${apt.attendeeEmail}`} className="text-sm text-[color:var(--color-primary-600)] hover:underline">{apt.attendeeEmail}</a>
+              </div>
+            )}
+            {apt.attendeePhone && (
+              <div className="flex items-center gap-2.5">
+                <Phone className="h-4 w-4 text-[color:var(--color-text-muted)] shrink-0" />
+                <span className="text-sm">{apt.attendeePhone}</span>
+              </div>
+            )}
+            {apt.attendeeContactPreference && (
+              <div className="flex items-center gap-2.5">
+                <Tag className="h-4 w-4 text-[color:var(--color-text-muted)] shrink-0" />
+                <span className="text-sm capitalize">Prefers {apt.attendeeContactPreference}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Info Grid ── */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {apt.scheduledByName && (
+          <div>
+            <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Scheduled By</div>
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+              <span className="text-sm">{apt.scheduledByName}{apt.scheduledByEmail ? ` (${apt.scheduledByEmail})` : ''}</span>
+            </div>
+          </div>
+        )}
+        {apt.source && (
+          <div>
+            <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Source</div>
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+              <span className="text-sm capitalize">{apt.source}</span>
+            </div>
+          </div>
+        )}
+        {apt.reminderMinutesBefore != null && (
+          <div>
+            <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Reminder</div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+              <span className="text-sm">{apt.reminderMinutesBefore} minutes before</span>
+            </div>
+          </div>
+        )}
+        {apt.createdAt && (
+          <div>
+            <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Created</div>
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+              <span className="text-sm">{new Date(apt.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Notes ── */}
+      {apt.notes && (
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)] mb-2">Notes</div>
+          <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-sm whitespace-pre-wrap">
+            {apt.notes}
+          </div>
+        </div>
+      )}
+
+      {/* ── Org Visibility Toggle ── */}
+      <div className="flex items-center gap-3 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4">
+        <Globe className="h-5 w-5 text-[color:var(--color-text-muted)]" />
+        <div className="flex-1">
+          <div className="text-sm font-medium">Organization Visible</div>
+          <div className="text-xs text-[color:var(--color-text-muted)]">Show this appointment on the organization calendar</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => toggleOrgVisible.mutate(!apt.orgVisible)}
+          disabled={toggleOrgVisible.isPending}
+          className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${apt.orgVisible ? 'bg-[color:var(--color-primary-600)]' : 'bg-[color:var(--color-muted)]'}`}
+        >
+          <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-200 ${apt.orgVisible ? 'translate-x-5' : 'translate-x-0'}`} />
+        </button>
+      </div>
+
+      {/* ── Cancel Reason ── */}
+      {isCancelled && apt.cancelReason && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+          <div className="flex items-center gap-2 text-red-400 text-xs font-semibold uppercase tracking-wide mb-1">
+            <AlertCircle className="h-4 w-4" /> Cancel Reason
+          </div>
+          <div className="text-sm">{apt.cancelReason}</div>
+        </div>
+      )}
+
+      {/* ── Actions Footer ── */}
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-[color:var(--color-border)]">
+        {apt.contactId && (
+          <Link
+            to={`/apps/crm/contacts?q=${encodeURIComponent(String(apt.attendeeEmail || ''))}`}
+            className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)] transition-colors"
+            onClick={onClose}
+          >
+            View Contact
+          </Link>
+        )}
+        <Link
+          to="/apps/scheduler"
+          className="rounded-lg px-4 py-2 text-sm text-white transition-colors" style={{ backgroundColor: accentColor }}
+          onClick={onClose}
+        >
+          Open in Scheduler
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Task Detail View (fetched from CRM tasks API)
+   ═══════════════════════════════════════════════════════════ */
+function TaskDetail({
+  eventId,
+  lightEvent,
+  colors,
+  onClose,
+}: {
+  eventId: string
+  lightEvent: CalendarEvent
+  colors: ColorPrefs
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+
+  const taskQ = useQuery({
+    queryKey: ['crm-task-detail', eventId],
+    queryFn: async () => {
+      const res = await http.get(`/api/crm/tasks/${eventId}`)
+      return res.data?.data ?? res.data
+    },
+    enabled: !!eventId,
+  })
+
+  const markComplete = useMutation({
+    mutationFn: async () => {
+      const res = await http.put(`/api/crm/tasks/${eventId}`, { status: 'completed' })
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm-task-detail', eventId] })
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] })
+      toast.showToast('Task marked as complete', 'success')
+    },
+  })
+
+  const task = taskQ.data
+  if (taskQ.isLoading || !task) return <DetailSkeleton />
+
+  const taskType: string = task.type || (lightEvent as any).taskType || 'task'
+  const colorKey: keyof ColorPrefs = taskType === 'meeting' ? 'meeting' : taskType === 'call' ? 'call' : 'meeting'
+  const accentColor = colors[colorKey]
+
+  const dueDate = task.dueAt ? new Date(task.dueAt) : null
+  const isCompleted = task.status === 'completed'
+
+  const priorityColors: Record<string, string> = {
+    low: 'bg-blue-500/20 text-blue-400',
+    normal: 'bg-yellow-500/20 text-yellow-400',
+    high: 'bg-orange-500/20 text-orange-400',
+  }
+
+  const statusColors: Record<string, string> = {
+    open: 'bg-gray-500/20 text-gray-400',
+    in_progress: 'bg-blue-500/20 text-blue-400',
+    completed: 'bg-green-500/20 text-green-400',
+    cancelled: 'bg-red-500/20 text-red-400',
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* ── Time Banner ── */}
+      <div className="rounded-xl p-4 text-white" style={{ backgroundColor: accentColor }}>
+        <div className="text-lg font-bold">
+          {dueDate
+            ? dueDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+            : 'No due date'}
+        </div>
+        {dueDate && (
+          <div className="text-sm mt-1 opacity-90">
+            Due at {dueDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Status & Type Badges ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-block rounded-full px-3 py-0.5 text-xs font-semibold text-white capitalize" style={{ backgroundColor: accentColor }}>
+          {taskType}
+        </span>
+        {task.status && (
+          <span className={`inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-xs font-semibold capitalize ${statusColors[task.status] || 'bg-gray-500/20 text-gray-400'}`}>
+            {task.status === 'completed' && <CheckCircle2 className="h-3 w-3" />}
+            {task.status.replace(/_/g, ' ')}
+          </span>
+        )}
+        {task.priority && (
+          <span className={`inline-flex items-center gap-1 rounded-full px-3 py-0.5 text-xs font-semibold capitalize ${priorityColors[task.priority] || 'bg-gray-500/20 text-gray-400'}`}>
+            <AlertCircle className="h-3 w-3" /> {task.priority}
+          </span>
+        )}
+      </div>
+
+      {/* ── Description ── */}
+      {task.description && (
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)] mb-2">Description</div>
+          <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-sm whitespace-pre-wrap">
+            {task.description}
+          </div>
+        </div>
+      )}
+
+      {/* ── Info Grid ── */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {(task.ownerName || (lightEvent as any).ownerName) && (
+          <div>
+            <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Owner / Assigned To</div>
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+              <span className="text-sm">{task.ownerName || (lightEvent as any).ownerName}</span>
+            </div>
+          </div>
+        )}
+        {task.relatedType && task.relatedId && (
+          <div>
+            <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Related {task.relatedType}</div>
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+              <Link
+                to={`/apps/crm/${task.relatedType === 'contact' ? 'contacts' : task.relatedType === 'account' ? 'accounts' : task.relatedType === 'deal' ? 'deals' : task.relatedType + 's'}`}
+                className="text-sm text-[color:var(--color-primary-600)] hover:underline capitalize"
+                onClick={onClose}
+              >
+                View {task.relatedType}
+              </Link>
+            </div>
+          </div>
+        )}
+        {task.createdAt && (
+          <div>
+            <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Created</div>
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+              <span className="text-sm">{new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </div>
+          </div>
+        )}
+        {task.updatedAt && (
+          <div>
+            <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Last Updated</div>
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-[color:var(--color-text-muted)]" />
+              <span className="text-sm">{new Date(task.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Notes ── */}
+      {task.notes && task.notes !== task.description && (
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-text-muted)] mb-2">Notes</div>
+          <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] p-4 text-sm whitespace-pre-wrap">
+            {task.notes}
+          </div>
+        </div>
+      )}
+
+      {/* ── Actions Footer ── */}
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-[color:var(--color-border)]">
+        {!isCompleted && (
+          <button
+            type="button"
+            onClick={() => markComplete.mutate()}
+            disabled={markComplete.isPending}
+            className="rounded-lg border border-green-600 px-4 py-2 text-sm text-green-500 hover:bg-green-500/10 transition-colors flex items-center gap-1.5"
+          >
+            <CheckCircle2 className="h-4 w-4" /> Mark Complete
+          </button>
+        )}
+        {task.relatedType && task.relatedId && (
+          <Link
+            to={`/apps/crm/${task.relatedType === 'contact' ? 'contacts' : task.relatedType === 'account' ? 'accounts' : task.relatedType === 'deal' ? 'deals' : task.relatedType + 's'}`}
+            className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)] transition-colors capitalize"
+            onClick={onClose}
+          >
+            View {task.relatedType}
+          </Link>
+        )}
+        <Link
+          to="/apps/crm/tasks"
+          className="rounded-lg px-4 py-2 text-sm text-white transition-colors" style={{ backgroundColor: accentColor }}
+          onClick={onClose}
+        >
+          Open in Tasks
+        </Link>
+      </div>
+    </div>
+  )
+}
 
 export default function Calendar() {
   const toast = useToast()
@@ -679,118 +1114,25 @@ export default function Calendar() {
       <Modal
         open={!!selectedEvent}
         onClose={() => setSelectedEvent(null)}
-        title="Event Details"
-        subtitle={selectedEvent?.title || ''}
+        title={selectedEvent?.title || 'Event Details'}
+        subtitle={selectedEvent?.kind === 'appointment' ? 'Appointment' : selectedEvent?.kind === 'task' ? 'Task' : ''}
         width="56rem"
       >
-        {selectedEvent && (
-          <div className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Type</div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-block rounded px-2 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: eventBg(selectedEvent) }}>
-                    {selectedEvent.kind === 'appointment' ? 'Appointment' : ((selectedEvent as any).taskType === 'call' ? 'Call' : ((selectedEvent as any).taskType === 'meeting' ? 'Meeting' : 'Task'))}
-                  </span>
-                  {selectedEvent.kind === 'appointment' && (selectedEvent as any).orgVisible && (
-                    <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
-                      <Globe className="h-3 w-3" /> Shared
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Start Time</div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-[color:var(--color-text-muted)]" />
-                  <span className="text-sm">
-                    {new Date(selectedEvent.startsAt).toLocaleString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                      year: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">End Time</div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-[color:var(--color-text-muted)]" />
-                  <span className="text-sm">
-                    {new Date(selectedEvent.endsAt).toLocaleString('en-US', {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-              </div>
-              {selectedEvent.kind === 'appointment' && (selectedEvent as any).attendee?.name && (
-                <div>
-                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Attendee</div>
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-[color:var(--color-text-muted)]" />
-                    <span className="text-sm font-semibold">{(selectedEvent as any).attendee.name}</span>
-                  </div>
-                </div>
-              )}
-              {selectedEvent.kind === 'appointment' && (selectedEvent as any).attendee?.email && (
-                <div>
-                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Email</div>
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-[color:var(--color-text-muted)]" />
-                    <span className="text-sm">{(selectedEvent as any).attendee.email}</span>
-                  </div>
-                </div>
-              )}
-              {(selectedEvent as any).ownerName && (
-                <div>
-                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Owner</div>
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-[color:var(--color-text-muted)]" />
-                    <span className="text-sm">{(selectedEvent as any).ownerName}{(selectedEvent as any).ownerEmail ? ` (${(selectedEvent as any).ownerEmail})` : ''}</span>
-                  </div>
-                </div>
-              )}
-              {selectedEvent.kind === 'task' && (selectedEvent as any).taskType && (
-                <div>
-                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Task Type</div>
-                  <span className="text-sm capitalize">{(selectedEvent as any).taskType}</span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[color:var(--color-border)]">
-              {selectedEvent.kind === 'appointment' && (
-                <Link
-                  to="/apps/scheduler"
-                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
-                  onClick={() => setSelectedEvent(null)}
-                >
-                  Open in Scheduler
-                </Link>
-              )}
-              {selectedEvent.kind === 'task' && (
-                <Link
-                  to="/apps/crm/tasks"
-                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
-                  onClick={() => setSelectedEvent(null)}
-                >
-                  Open in Tasks
-                </Link>
-              )}
-              {selectedEvent.kind === 'appointment' && (selectedEvent as any).contactId && (
-                <Link
-                  to={`/apps/crm/contacts?q=${encodeURIComponent(String((selectedEvent as any).attendee?.email || ''))}`}
-                  className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
-                  onClick={() => setSelectedEvent(null)}
-                >
-                  View Contact
-                </Link>
-              )}
-            </div>
-          </div>
+        {selectedEvent && selectedEvent.kind === 'appointment' && (
+          <AppointmentDetail
+            eventId={selectedEvent.id}
+            lightEvent={selectedEvent}
+            colors={colors}
+            onClose={() => setSelectedEvent(null)}
+          />
+        )}
+        {selectedEvent && selectedEvent.kind === 'task' && (
+          <TaskDetail
+            eventId={selectedEvent.id}
+            lightEvent={selectedEvent}
+            colors={colors}
+            onClose={() => setSelectedEvent(null)}
+          />
         )}
       </Modal>
     </div>
