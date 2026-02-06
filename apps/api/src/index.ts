@@ -64,6 +64,8 @@ import { financialRouter } from './financial/index.js'
 import { requireAuth } from './auth/rbac.js'
 
 const app = express()
+// Trust Railway's reverse proxy so req.ip resolves to the real client IP
+app.set('trust proxy', true)
 const normalize = (s: string) => s.trim().replace(/\/$/, '').toLowerCase()
 const allowedOriginsRaw = env.ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
 const allowedOrigins = allowedOriginsRaw.map(normalize)
