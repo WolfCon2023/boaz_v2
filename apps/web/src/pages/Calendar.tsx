@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import { useToast } from '@/components/Toast'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Globe, ChevronLeft, ChevronRight, CalendarDays, Grid3x3, List, Clock, Settings, Check } from 'lucide-react'
+import { Globe, ChevronLeft, ChevronRight, CalendarDays, Grid3x3, List, Clock, Settings, Check, User, Mail, Calendar as CalendarIcon } from 'lucide-react'
+import { Modal } from '@/components/Modal'
 
 type CalendarEvent =
   | {
@@ -674,65 +675,130 @@ export default function Calendar() {
         </div>
       )}
 
-      {/* ────────── Event Detail Popup ────────── */}
-      {selectedEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSelectedEvent(null)}>
-          <div className="w-full max-w-lg rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)] shadow-xl" onClick={(ev) => ev.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-5 py-4">
-              <h2 className="text-lg font-semibold">{selectedEvent.title}</h2>
-              <button type="button" onClick={() => setSelectedEvent(null)} className="text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text)]">&times;</button>
-            </div>
-            <div className="p-5 space-y-3">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="rounded-full px-2 py-0.5 text-xs text-white" style={{ backgroundColor: eventBg(selectedEvent) }}>
-                  {selectedEvent.kind === 'appointment' ? 'appointment' : (selectedEvent as any).taskType || 'task'}
+      {/* ────────── Event Detail Modal ────────── */}
+      <Modal
+        open={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        title={selectedEvent?.title || 'Event Details'}
+        subtitle={
+          selectedEvent ? (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="rounded-full px-2.5 py-0.5 text-[11px] font-medium text-white" style={{ backgroundColor: selectedEvent ? eventBg(selectedEvent) : undefined }}>
+                {selectedEvent.kind === 'appointment' ? 'Appointment' : ((selectedEvent as any).taskType === 'call' ? 'Call' : 'Meeting')}
+              </span>
+              {selectedEvent.kind === 'appointment' && (selectedEvent as any).orgVisible && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-[11px] text-blue-400">
+                  <Globe className="h-3 w-3" /> Shared with org
                 </span>
-                {selectedEvent.kind === 'appointment' && (selectedEvent as any).orgVisible && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-400">
-                    <Globe className="h-3 w-3" /> Shared with org
-                  </span>
-                )}
-              </div>
-              <div>
-                <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Time</div>
-                <div className="text-sm">{new Date(selectedEvent.startsAt).toLocaleString()} &rarr; {new Date(selectedEvent.endsAt).toLocaleTimeString()}</div>
-              </div>
-              {selectedEvent.kind === 'appointment' && (selectedEvent as any).attendee && (
+              )}
+            </div>
+          ) : undefined
+        }
+        width="36rem"
+      >
+        {selectedEvent && (
+          <div className="space-y-5">
+            {/* Time */}
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+              <div className="flex items-start gap-3">
+                <CalendarIcon className="h-5 w-5 mt-0.5 text-[color:var(--color-text-muted)] shrink-0" />
                 <div>
-                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Attendee</div>
-                  <div className="text-sm">
-                    {(selectedEvent as any).attendee.name && <span className="font-semibold">{(selectedEvent as any).attendee.name}</span>}
-                    {(selectedEvent as any).attendee.email && <span className="text-[color:var(--color-text-muted)] ml-2">{(selectedEvent as any).attendee.email}</span>}
+                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Date &amp; Time</div>
+                  <div className="text-sm font-semibold">
+                    {new Date(selectedEvent.startsAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  </div>
+                  <div className="text-sm text-[color:var(--color-text-muted)]">
+                    {new Date(selectedEvent.startsAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                    {' '}&mdash;{' '}
+                    {new Date(selectedEvent.endsAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Details grid */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {/* Attendee (appointments only) */}
+              {selectedEvent.kind === 'appointment' && (selectedEvent as any).attendee && (
+                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+                  <div className="flex items-start gap-3">
+                    <User className="h-5 w-5 mt-0.5 text-[color:var(--color-text-muted)] shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Attendee</div>
+                      {(selectedEvent as any).attendee.name && (
+                        <div className="text-sm font-semibold truncate">{(selectedEvent as any).attendee.name}</div>
+                      )}
+                      {(selectedEvent as any).attendee.email && (
+                        <div className="text-xs text-[color:var(--color-text-muted)] truncate">{(selectedEvent as any).attendee.email}</div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
+
+              {/* Owner */}
               {(selectedEvent as any).ownerName && (
-                <div>
-                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Owner</div>
-                  <div className="text-sm">{(selectedEvent as any).ownerName} {(selectedEvent as any).ownerEmail ? `(${(selectedEvent as any).ownerEmail})` : ''}</div>
+                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+                  <div className="flex items-start gap-3">
+                    <Mail className="h-5 w-5 mt-0.5 text-[color:var(--color-text-muted)] shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Owner</div>
+                      <div className="text-sm font-semibold truncate">{(selectedEvent as any).ownerName}</div>
+                      {(selectedEvent as any).ownerEmail && (
+                        <div className="text-xs text-[color:var(--color-text-muted)] truncate">{(selectedEvent as any).ownerEmail}</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {/* Task Type (tasks only) */}
+              {selectedEvent.kind === 'task' && (
+                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--color-bg)] p-4">
+                  <div className="flex items-start gap-3">
+                    <Clock className="h-5 w-5 mt-0.5 text-[color:var(--color-text-muted)] shrink-0" />
+                    <div>
+                      <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Task Type</div>
+                      <div className="text-sm font-semibold capitalize">{(selectedEvent as any).taskType || 'Task'}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-1">
+              {selectedEvent.kind === 'appointment' && (
+                <Link
+                  to="/apps/scheduler"
+                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+                  onClick={() => setSelectedEvent(null)}
+                >
+                  Open in Scheduler
+                </Link>
               )}
               {selectedEvent.kind === 'task' && (
-                <div>
-                  <div className="text-xs font-medium text-[color:var(--color-text-muted)] mb-1">Task Type</div>
-                  <div className="text-sm capitalize">{(selectedEvent as any).taskType || 'Task'}</div>
-                </div>
+                <Link
+                  to="/apps/crm/tasks"
+                  className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]"
+                  onClick={() => setSelectedEvent(null)}
+                >
+                  Open in Tasks
+                </Link>
               )}
-              <div className="flex items-center gap-2 pt-2">
-                {selectedEvent.kind === 'appointment' && (
-                  <Link to="/apps/scheduler" className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={() => setSelectedEvent(null)}>Open in Scheduler</Link>
-                )}
-                {selectedEvent.kind === 'task' && (
-                  <Link to="/apps/crm/tasks" className="rounded-lg bg-[color:var(--color-primary-600)] px-4 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]" onClick={() => setSelectedEvent(null)}>Open in Tasks</Link>
-                )}
-                {selectedEvent.kind === 'appointment' && (selectedEvent as any).contactId && (
-                  <Link to={`/apps/crm/contacts?q=${encodeURIComponent(String((selectedEvent as any).attendee?.email || ''))}`} className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]" onClick={() => setSelectedEvent(null)}>View Contact</Link>
-                )}
-              </div>
+              {selectedEvent.kind === 'appointment' && (selectedEvent as any).contactId && (
+                <Link
+                  to={`/apps/crm/contacts?q=${encodeURIComponent(String((selectedEvent as any).attendee?.email || ''))}`}
+                  className="rounded-lg border border-[color:var(--color-border)] px-4 py-2 text-sm hover:bg-[color:var(--color-muted)]"
+                  onClick={() => setSelectedEvent(null)}
+                >
+                  View Contact
+                </Link>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }
