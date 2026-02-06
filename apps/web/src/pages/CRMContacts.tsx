@@ -90,8 +90,8 @@ export default function CRMContacts() {
     { key: 'officePhone', visible: true, label: 'Office' },
     { key: 'isPrimary', visible: true, label: 'Primary' },
     { key: 'primaryPhone', visible: true, label: 'Primary phone' },
-    { key: 'tasks', visible: true, label: 'Tasks' },
-    { key: 'surveyStatus', visible: true, label: 'Survey' },
+    { key: 'tasks', visible: false, label: 'Tasks' },
+    { key: 'surveyStatus', visible: false, label: 'Survey' },
   ]
   function ensureSurveyCol(cols: ColumnDef[]): ColumnDef[] {
     let next = cols
@@ -185,6 +185,32 @@ export default function CRMContacts() {
   }
 
   const [editing, setEditing] = React.useState<Contact | null>(null)
+  const [createErrors, setCreateErrors] = React.useState<Record<string, string>>({})
+  const [editErrors, setEditErrors] = React.useState<Record<string, string>>({})
+
+  function validateEmail(email: string): string | null {
+    if (!email) return null // email is optional
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) return 'Invalid email format (must contain @)'
+    return null
+  }
+  function validatePhone(phone: string, label: string): string | null {
+    if (!phone) return null
+    const digitsOnly = phone.replace(/[\s\-().+]/g, '')
+    if (digitsOnly.length < 7 || !/^\d+$/.test(digitsOnly)) return `${label} must be a valid phone number`
+    return null
+  }
+  function validateContactFields(fields: { name?: string; email?: string; mobilePhone?: string; officePhone?: string }, requireName: boolean): Record<string, string> {
+    const errors: Record<string, string> = {}
+    if (requireName && !fields.name?.trim()) errors.name = 'Name is required'
+    const emailErr = validateEmail(fields.email ?? '')
+    if (emailErr) errors.email = emailErr
+    const mobileErr = validatePhone(fields.mobilePhone ?? '', 'Mobile phone')
+    if (mobileErr) errors.mobilePhone = mobileErr
+    const officeErr = validatePhone(fields.officePhone ?? '', 'Office phone')
+    if (officeErr) errors.officePhone = officeErr
+    return errors
+  }
 
   const items = data?.pages.flatMap((p) => p.data.items) ?? []
   const total = data?.pages[0]?.data.total
@@ -573,29 +599,69 @@ export default function CRMContacts() {
         <CRMHelpButton tag="crm:contacts" />
       </div>
       <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--color-panel)]">
-        <form className="flex flex-wrap items-center gap-2 p-4" onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); create.mutate({ name: String(fd.get('name')||''), email: String(fd.get('email')||'' )|| undefined, company: String(fd.get('company')||'')|| undefined, mobilePhone: String(fd.get('mobilePhone')||'')|| undefined, officePhone: String(fd.get('officePhone')||'')|| undefined, isPrimary: fd.get('isPrimary') === 'on', primaryPhone: (fd.get('primaryPhone') as 'mobile'|'office'|null) || undefined }); (e.currentTarget as HTMLFormElement).reset() }}>
-          <input name="name" required placeholder="Name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <input name="email" placeholder="Email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <input name="company" placeholder="Company" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <input name="mobilePhone" placeholder="Mobile phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <input name="officePhone" placeholder="Office phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isPrimary" /> Primary contact</label>
-            <label className="flex items-center gap-2 text-sm">
-              Primary phone:
-              <select
-                name="primaryPhone"
-                className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)] font-semibold [&>option]:text-[color:var(--color-text)] [&>option]:bg-[color:var(--color-panel)]"
-              >
-                <option value="">Select</option>
-                <option value="mobile">Mobile</option>
-                <option value="office">Office</option>
-              </select>
-            </label>
+        <form className="p-4" onSubmit={(e) => {
+          e.preventDefault()
+          const fd = new FormData(e.currentTarget)
+          const name = String(fd.get('name') || '').trim()
+          const email = String(fd.get('email') || '').trim()
+          const company = String(fd.get('company') || '').trim()
+          const mobilePhone = String(fd.get('mobilePhone') || '').trim()
+          const officePhone = String(fd.get('officePhone') || '').trim()
+          const errors = validateContactFields({ name, email, mobilePhone, officePhone }, true)
+          if (Object.keys(errors).length > 0) {
+            setCreateErrors(errors)
+            return
+          }
+          setCreateErrors({})
+          create.mutate({
+            name,
+            email: email || undefined,
+            company: company || undefined,
+            mobilePhone: mobilePhone || undefined,
+            officePhone: officePhone || undefined,
+            isPrimary: fd.get('isPrimary') === 'on',
+            primaryPhone: (fd.get('primaryPhone') as 'mobile' | 'office' | null) || undefined,
+          })
+          ;(e.currentTarget as HTMLFormElement).reset()
+        }}>
+          <div className="flex flex-wrap items-start gap-2">
+            <div className="flex flex-col">
+              <input name="name" required placeholder="Name *" className={`rounded-lg border bg-transparent px-3 py-2 text-sm ${createErrors.name ? 'border-red-500' : 'border-[color:var(--color-border)]'}`} onChange={() => createErrors.name && setCreateErrors((e) => { const { name: _, ...rest } = e; return rest })} />
+              {createErrors.name && <span className="mt-0.5 text-[11px] text-red-500">{createErrors.name}</span>}
+            </div>
+            <div className="flex flex-col">
+              <input name="email" placeholder="Email" className={`rounded-lg border bg-transparent px-3 py-2 text-sm ${createErrors.email ? 'border-red-500' : 'border-[color:var(--color-border)]'}`} onChange={() => createErrors.email && setCreateErrors((e) => { const { email: _, ...rest } = e; return rest })} />
+              {createErrors.email && <span className="mt-0.5 text-[11px] text-red-500">{createErrors.email}</span>}
+            </div>
+            <div className="flex flex-col">
+              <input name="company" placeholder="Company" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+            </div>
+            <div className="flex flex-col">
+              <input name="mobilePhone" placeholder="Mobile phone" className={`rounded-lg border bg-transparent px-3 py-2 text-sm ${createErrors.mobilePhone ? 'border-red-500' : 'border-[color:var(--color-border)]'}`} onChange={() => createErrors.mobilePhone && setCreateErrors((e) => { const { mobilePhone: _, ...rest } = e; return rest })} />
+              {createErrors.mobilePhone && <span className="mt-0.5 text-[11px] text-red-500">{createErrors.mobilePhone}</span>}
+            </div>
+            <div className="flex flex-col">
+              <input name="officePhone" placeholder="Office phone" className={`rounded-lg border bg-transparent px-3 py-2 text-sm ${createErrors.officePhone ? 'border-red-500' : 'border-[color:var(--color-border)]'}`} onChange={() => createErrors.officePhone && setCreateErrors((e) => { const { officePhone: _, ...rest } = e; return rest })} />
+              {createErrors.officePhone && <span className="mt-0.5 text-[11px] text-red-500">{createErrors.officePhone}</span>}
+            </div>
+            <div className="flex items-center gap-4 py-2">
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isPrimary" /> Primary contact</label>
+              <label className="flex items-center gap-2 text-sm">
+                Primary phone:
+                <select
+                  name="primaryPhone"
+                  className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-panel)] px-2 py-1 text-sm text-[color:var(--color-text)] font-semibold [&>option]:text-[color:var(--color-text)] [&>option]:bg-[color:var(--color-panel)]"
+                >
+                  <option value="">Select</option>
+                  <option value="mobile">Mobile</option>
+                  <option value="office">Office</option>
+                </select>
+              </label>
+            </div>
+            <button className="ml-auto rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">
+              Add contact
+            </button>
           </div>
-          <button className="ml-auto rounded-lg bg-[color:var(--color-primary-600)] px-3 py-2 text-sm text-white hover:bg-[color:var(--color-primary-700)]">
-            Add contact
-          </button>
         </form>
         <div className="flex items-center justify-between px-4 gap-2">
           <div className="flex items-center gap-2">
@@ -834,31 +900,54 @@ export default function CRMContacts() {
           </div>
         </div>
       </div>
-      <Modal open={!!editing} onClose={() => setEditing(null)} title="Edit contact" width="40rem">
+      <Modal open={!!editing} onClose={() => { setEditing(null); setEditErrors({}) }} title="Edit contact" width="40rem">
         {editing && (
           <form
               className="grid gap-2 sm:grid-cols-2"
               onSubmit={(e) => {
                 e.preventDefault()
                 const fd = new FormData(e.currentTarget)
+                const name = String(fd.get('name') || '').trim()
+                const email = String(fd.get('email') || '').trim()
+                const company = String(fd.get('company') || '').trim()
+                const mobilePhone = String(fd.get('mobilePhone') || '').trim()
+                const officePhone = String(fd.get('officePhone') || '').trim()
+                const errors = validateContactFields({ name, email, mobilePhone, officePhone }, true)
+                if (Object.keys(errors).length > 0) {
+                  setEditErrors(errors)
+                  return
+                }
+                setEditErrors({})
                 update.mutate({
                   _id: editing._id,
-                  name: String(fd.get('name') || '') || undefined,
-                  email: String(fd.get('email') || '') || undefined,
-                  company: String(fd.get('company') || '') || undefined,
-                  mobilePhone: String(fd.get('mobilePhone') || '') || undefined,
-                  officePhone: String(fd.get('officePhone') || '') || undefined,
+                  name: name || undefined,
+                  email: email || undefined,
+                  company: company || undefined,
+                  mobilePhone: mobilePhone || undefined,
+                  officePhone: officePhone || undefined,
                   isPrimary: fd.get('isPrimary') === 'on',
                   primaryPhone: (fd.get('primaryPhone') as 'mobile' | 'office' | null) || undefined,
                 })
                 setEditing(null)
               }}
             >
-              <input name="name" defaultValue={editing.name ?? ''} placeholder="Name" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-              <input name="email" defaultValue={editing.email ?? ''} placeholder="Email" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+              <div className="flex flex-col">
+                <input name="name" defaultValue={editing.name ?? ''} placeholder="Name *" className={`rounded-lg border bg-transparent px-3 py-2 text-sm ${editErrors.name ? 'border-red-500' : 'border-[color:var(--color-border)]'}`} onChange={() => editErrors.name && setEditErrors((e) => { const { name: _, ...rest } = e; return rest })} />
+                {editErrors.name && <span className="mt-0.5 text-[11px] text-red-500">{editErrors.name}</span>}
+              </div>
+              <div className="flex flex-col">
+                <input name="email" defaultValue={editing.email ?? ''} placeholder="Email" className={`rounded-lg border bg-transparent px-3 py-2 text-sm ${editErrors.email ? 'border-red-500' : 'border-[color:var(--color-border)]'}`} onChange={() => editErrors.email && setEditErrors((e) => { const { email: _, ...rest } = e; return rest })} />
+                {editErrors.email && <span className="mt-0.5 text-[11px] text-red-500">{editErrors.email}</span>}
+              </div>
               <input name="company" defaultValue={editing.company ?? ''} placeholder="Company" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-              <input name="mobilePhone" defaultValue={editing.mobilePhone ?? ''} placeholder="Mobile phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
-              <input name="officePhone" defaultValue={editing.officePhone ?? ''} placeholder="Office phone" className="rounded-lg border border-[color:var(--color-border)] bg-transparent px-3 py-2 text-sm" />
+              <div className="flex flex-col">
+                <input name="mobilePhone" defaultValue={editing.mobilePhone ?? ''} placeholder="Mobile phone" className={`rounded-lg border bg-transparent px-3 py-2 text-sm ${editErrors.mobilePhone ? 'border-red-500' : 'border-[color:var(--color-border)]'}`} onChange={() => editErrors.mobilePhone && setEditErrors((e) => { const { mobilePhone: _, ...rest } = e; return rest })} />
+                {editErrors.mobilePhone && <span className="mt-0.5 text-[11px] text-red-500">{editErrors.mobilePhone}</span>}
+              </div>
+              <div className="flex flex-col">
+                <input name="officePhone" defaultValue={editing.officePhone ?? ''} placeholder="Office phone" className={`rounded-lg border bg-transparent px-3 py-2 text-sm ${editErrors.officePhone ? 'border-red-500' : 'border-[color:var(--color-border)]'}`} onChange={() => editErrors.officePhone && setEditErrors((e) => { const { officePhone: _, ...rest } = e; return rest })} />
+                {editErrors.officePhone && <span className="mt-0.5 text-[11px] text-red-500">{editErrors.officePhone}</span>}
+              </div>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="isPrimary" defaultChecked={Boolean(editing.isPrimary)} /> Primary contact
               </label>
