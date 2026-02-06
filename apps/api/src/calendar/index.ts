@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { ObjectId } from 'mongodb'
 import { z } from 'zod'
 import { getDb } from '../db.js'
-import { requireAuth, requireApplication, requirePermission } from '../auth/rbac.js'
+import { requireAuth, requireApplication } from '../auth/rbac.js'
 import { m365Router } from './m365.js'
 
 export const calendarRouter = Router()
@@ -68,6 +68,7 @@ calendarRouter.get('/events', async (req: any, res) => {
       startsAt: a.startsAt?.toISOString?.() ?? null,
       endsAt: a.endsAt?.toISOString?.() ?? null,
       timeZone: a.timeZone ?? 'UTC',
+      orgVisible: a.orgVisible === true,
       attendee: {
         firstName: a.attendeeFirstName ?? null,
         lastName: a.attendeeLastName ?? null,
@@ -102,8 +103,12 @@ calendarRouter.get('/events', async (req: any, res) => {
 })
 
 // GET /api/calendar/events/org?from=ISO&to=ISO
-// Org-wide view (requires users.read). This is the "whole organization" calendar.
-calendarRouter.get('/events/org', requirePermission('users.read'), async (req: any, res) => {
+// Org calendar visible to all authenticated users.
+// Shows:
+//   - Appointments marked orgVisible: true (from anyone)
+//   - The current user's own appointments (always)
+//   - For managers/admins: all appointments from their direct reports (reportsTo)
+calendarRouter.get('/events/org', async (req: any, res) => {
   const parsed = rangeSchema.safeParse({ from: req.query.from, to: req.query.to })
   if (!parsed.success) return res.status(400).json({ data: null, error: 'invalid_range', details: parsed.error.flatten() })
 
@@ -116,24 +121,48 @@ calendarRouter.get('/events/org', requirePermission('users.read'), async (req: a
   const db = await getDb()
   if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
 
+  const auth = req.auth as { userId: string; email: string }
+
+  // Find direct reports (users whose reportsTo matches the current user)
+  const directReports = await db
+    .collection('users')
+    .find({ reportsTo: auth.userId } as any)
+    .project({ _id: 1 } as any)
+    .toArray()
+  const directReportIds = directReports.map((u: any) => String(u._id))
+
+  // Build the set of userIds whose ALL appointments are visible to this user
+  const fullAccessUserIds = [auth.userId, ...directReportIds]
+
+  // Query appointments: orgVisible=true OR owned by fullAccessUserIds
+  const appointmentFilter: any = {
+    status: { $ne: 'cancelled' },
+    startsAt: { $lt: to },
+    endsAt: { $gt: from },
+    $or: [
+      { orgVisible: true },
+      { ownerUserId: { $in: fullAccessUserIds } },
+    ],
+  }
+
+  // Query tasks: only for self + direct reports (tasks don't have orgVisible)
+  const taskFilter: any = {
+    ownerUserId: { $in: fullAccessUserIds },
+    dueAt: { $gte: from, $lt: to },
+    status: { $in: ['open', 'in_progress'] },
+    type: { $in: ['meeting', 'call'] },
+  }
+
   const [appointments, tasks] = await Promise.all([
     db
       .collection('appointments')
-      .find({
-        status: { $ne: 'cancelled' },
-        startsAt: { $lt: to },
-        endsAt: { $gt: from },
-      } as any)
+      .find(appointmentFilter)
       .sort({ startsAt: 1 } as any)
       .limit(5000)
       .toArray(),
     db
       .collection('crm_tasks')
-      .find({
-        dueAt: { $gte: from, $lt: to },
-        status: { $in: ['open', 'in_progress'] },
-        type: { $in: ['meeting', 'call'] },
-      } as any)
+      .find(taskFilter)
       .sort({ dueAt: 1 } as any)
       .limit(5000)
       .toArray(),
@@ -171,6 +200,7 @@ calendarRouter.get('/events/org', requirePermission('users.read'), async (req: a
       ownerUserId: ownerUserId || null,
       ownerName: owner?.name ?? null,
       ownerEmail: owner?.email ?? null,
+      orgVisible: a.orgVisible === true,
       title: a.appointmentTypeName ? String(a.appointmentTypeName) : `Appointment: ${a.attendeeName || a.attendeeEmail || ''}`.trim(),
       startsAt: a.startsAt?.toISOString?.() ?? null,
       endsAt: a.endsAt?.toISOString?.() ?? null,

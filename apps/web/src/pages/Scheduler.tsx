@@ -6,7 +6,7 @@ import { useToast } from '@/components/Toast'
 import { useConfirm } from '@/components/ConfirmDialog'
 import { KBHelpButton } from '@/components/KBHelpButton'
 import { Modal } from '@/components/Modal'
-import { Calendar, ChevronLeft, ChevronRight, Search, X, Edit, Trash2, Clock, User, Mail, Phone, CalendarDays, Grid3x3, List } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Search, X, Edit, Trash2, Clock, User, Mail, Phone, CalendarDays, Grid3x3, List, Globe } from 'lucide-react'
 import { generateBookingSlots } from '@/lib/schedulerSlots'
 
 type AppointmentType = {
@@ -54,6 +54,7 @@ type Appointment = {
   inviteEmailSentAt?: string | null
   reminderMinutesBefore?: number | null
   reminderEmailSentAt?: string | null
+  orgVisible?: boolean
   startsAt: string
   endsAt: string
   timeZone: string
@@ -221,6 +222,15 @@ export default function Scheduler() {
       toast.showToast('Appointment cancelled.', 'success')
     },
     onError: () => toast.showToast('Failed to cancel appointment.', 'error'),
+  })
+
+  const toggleOrgVisible = useMutation({
+    mutationFn: async (args: { id: string; orgVisible: boolean }) =>
+      (await http.patch(`/api/scheduler/appointments/${encodeURIComponent(args.id)}/visibility`, { orgVisible: args.orgVisible })).data,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['scheduler', 'appointments'] })
+    },
+    onError: () => toast.showToast('Failed to update visibility.', 'error'),
   })
 
   const availability = availabilityQ.data?.data
@@ -394,6 +404,7 @@ export default function Scheduler() {
   const [bookNotes, setBookNotes] = React.useState('')
   const [bookScheduledByUserId, setBookScheduledByUserId] = React.useState<string>('')
   const [bookReminderMinutes, setBookReminderMinutes] = React.useState<number>(60)
+  const [bookOrgVisible, setBookOrgVisible] = React.useState(false)
 
   const contactSearchQ = useQuery<{ data: { items: ContactSearchRow[] } }>({
     queryKey: ['scheduler', 'contact-search', bookContactQuery],
@@ -469,6 +480,7 @@ export default function Scheduler() {
         startsAt: startsAt.toISOString(),
         timeZone: tzDraft || 'UTC',
         reminderMinutesBefore: Number.isFinite(bookReminderMinutes) ? bookReminderMinutes : 60,
+        orgVisible: bookOrgVisible,
       })
       return res.data
     },
@@ -485,6 +497,7 @@ export default function Scheduler() {
       setBookEmail('')
       setBookPhone('')
       setBookNotes('')
+      setBookOrgVisible(false)
       await qc.invalidateQueries({ queryKey: ['scheduler', 'appointments'] })
     },
     onError: (err: any) => {
@@ -1575,6 +1588,18 @@ export default function Scheduler() {
                 </button>
               </div>
             </div>
+            <div className="mt-3 flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bookOrgVisible}
+                  onChange={(e) => setBookOrgVisible(e.target.checked)}
+                  className="h-4 w-4 rounded border-[color:var(--color-border)] accent-[color:var(--color-primary-600)]"
+                />
+                <span className="text-[color:var(--color-text-muted)]">Visible on org calendar</span>
+              </label>
+              <span className="text-[10px] text-[color:var(--color-text-muted)]">(When enabled, all users can see this appointment in the org calendar)</span>
+            </div>
           </div>
 
           <div className="divide-y divide-[color:var(--color-border)]">
@@ -1621,6 +1646,16 @@ export default function Scheduler() {
                   ) : null}
                 </div>
                 <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" title="Visible on org calendar">
+                    <input
+                      type="checkbox"
+                      checked={a.orgVisible === true}
+                      onChange={(e) => toggleOrgVisible.mutate({ id: a._id, orgVisible: e.target.checked })}
+                      className="h-3.5 w-3.5 rounded border-[color:var(--color-border)] accent-[color:var(--color-primary-600)]"
+                    />
+                    <Globe className="h-3 w-3 text-[color:var(--color-text-muted)]" />
+                    <span className="text-[color:var(--color-text-muted)]">Org</span>
+                  </label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"

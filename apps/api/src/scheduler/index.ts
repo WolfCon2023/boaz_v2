@@ -64,6 +64,7 @@ type AppointmentDoc = {
   reminderEmailSentAt?: Date | null
   m365EventId?: string | null
   notes?: string | null
+  orgVisible?: boolean
   startsAt: Date
   endsAt: Date
   timeZone: string
@@ -814,6 +815,7 @@ internal.get('/appointments', async (req: any, res) => {
         inviteEmailSentAt: d.inviteEmailSentAt?.toISOString?.() ?? null,
         reminderMinutesBefore: d.reminderMinutesBefore ?? null,
         reminderEmailSentAt: d.reminderEmailSentAt?.toISOString?.() ?? null,
+        orgVisible: d.orgVisible === true,
         startsAt: d.startsAt?.toISOString?.() ?? null,
         endsAt: d.endsAt?.toISOString?.() ?? null,
         createdAt: d.createdAt?.toISOString?.() ?? null,
@@ -834,6 +836,7 @@ const internalBookSchema = z.object({
   attendeeContactPreference: z.enum(['email', 'phone', 'sms']).optional().nullable(),
   scheduledByUserId: z.string().optional().nullable(),
   notes: z.string().max(1500).optional().nullable(),
+  orgVisible: z.boolean().optional(),
   startsAt: z.string().min(10),
   timeZone: z.string().min(1).max(64).optional(),
   reminderMinutesBefore: z.number().int().min(0).max(7 * 24 * 60).optional().nullable(),
@@ -986,6 +989,7 @@ internal.post('/appointments/book', async (req: any, res) => {
     reminderEmailSentAt: null,
     m365EventId: null,
     notes: parsed.data.notes ? parsed.data.notes.trim() : null,
+    orgVisible: parsed.data.orgVisible === true,
     startsAt: startUtc,
     endsAt: endUtc,
     timeZone: tz,
@@ -1033,6 +1037,22 @@ internal.post('/appointments/book', async (req: any, res) => {
     .catch(() => null)
 
   res.status(201).json({ data: { _id: String(doc._id) }, error: null })
+})
+
+// PATCH /api/scheduler/appointments/:id/visibility – toggle orgVisible
+internal.patch('/appointments/:id/visibility', async (req: any, res) => {
+  const id = String(req.params.id || '')
+  if (!ObjectId.isValid(id)) return res.status(400).json({ data: null, error: 'invalid_id' })
+  const db = await getDb()
+  if (!db) return res.status(500).json({ data: null, error: 'db_unavailable' })
+  const auth = req.auth as { userId: string; email: string }
+  const orgVisible = req.body?.orgVisible === true
+  const result = await db.collection('appointments').updateOne(
+    { _id: new ObjectId(id), ownerUserId: auth.userId } as any,
+    { $set: { orgVisible, updatedAt: new Date() } } as any,
+  )
+  if (result.matchedCount === 0) return res.status(404).json({ data: null, error: 'not_found' })
+  res.json({ data: { ok: true, orgVisible }, error: null })
 })
 
 // POST /api/scheduler/appointments/:id/cancel
