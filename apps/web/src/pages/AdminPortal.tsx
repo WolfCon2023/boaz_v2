@@ -2381,7 +2381,7 @@ function AuditLogsTab() {
   const [search, setSearch] = useState('')
   const [actionFilter, setActionFilter] = useState('')
   const [page, setPage] = useState(0)
-  const pageSize = 50
+  const pageSize = 25
 
   // Reset page when filters change
   useEffect(() => { setPage(0) }, [search, actionFilter])
@@ -2595,7 +2595,7 @@ function ActivityLogsTab() {
   const [search, setSearch] = useState('')
   const [methodFilter, setMethodFilter] = useState('')
   const [page, setPage] = useState(0)
-  const pageSize = 50
+  const pageSize = 25
 
   useEffect(() => { setPage(0) }, [search, methodFilter])
 
